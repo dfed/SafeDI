@@ -565,7 +565,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			],
 		)
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()
@@ -862,7 +862,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		var thrownError: (any Error)?
 		var filesToDelete = filesToDelete
 		do {
-			try await SeamFillSharing.$observer.withValue({ continuation.yield($0) }) {
+			try await SeamFillSharing.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesToDelete)
 			}
 		} catch {

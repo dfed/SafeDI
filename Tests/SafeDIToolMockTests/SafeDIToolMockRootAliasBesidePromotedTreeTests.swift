@@ -131,9 +131,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 12)
-			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf
-			        #sourceLocation()
+			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf // Declared as Screen.leafProtocol
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafProtocol) } else { Promoted(leafProtocol: leafProtocol) }
 			        return Screen(leaf: leaf, leafProtocol: leafProtocol_LeafProtocol, promoted: promoted)
 			    }
@@ -226,9 +224,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 13)
-			        let leafProtocol_LeafProtocol: LeafProtocol = leaf
-			        #sourceLocation()
+			        let leafProtocol_LeafProtocol: LeafProtocol = leaf // Declared as Screen.leafProtocol
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafProtocol) } else { Promoted(leafProtocol: leafProtocol) }
 			        return Screen(leaf: leaf, leafProtocol: leafProtocol_LeafProtocol, promoted: promoted)
 			    }
@@ -324,9 +320,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			    ) -> Screen {
 			        let leafProtocol: OtherProtocol? = safeDIOverrides.leafProtocol
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 13)
-			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf
-			        #sourceLocation()
+			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf // Declared as Screen.leafProtocol
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafProtocol) } else { Promoted(leafProtocol: leafProtocol) }
 			        return Screen(leaf: leaf, leafProtocol: leafProtocol_LeafProtocol, promoted: promoted)
 			    }
@@ -407,9 +401,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let valueBuilder: ErasedInstantiator<(), AnyValue>? = safeDIOverrides.valueBuilder
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 10)
-			        let valueBuilderAlias_ErasedInstantiator__Void__AnyValue: ErasedInstantiator<(), AnyValue>? = valueBuilder
-			        #sourceLocation()
+			        let valueBuilderAlias_ErasedInstantiator__Void__AnyValue: ErasedInstantiator<(), AnyValue>? = valueBuilder // Declared as Screen.valueBuilderAlias
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(valueBuilderAlias) } else { Promoted(valueBuilderAlias: valueBuilderAlias) }
 			        return Screen(valueBuilderAlias: valueBuilderAlias_ErasedInstantiator__Void__AnyValue, promoted: promoted)
 			    }
@@ -511,9 +503,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 12)
-			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf
-			        #sourceLocation()
+			        let leafProtocol_LeafProtocol: LeafProtocol? = leaf // Declared as Screen.leafProtocol
 			        func __safeDI_promoted() -> Promoted {
 			            let inner = if let safeDIBuilder = safeDIOverrides.promoted.inner { safeDIBuilder(leafProtocol) } else { Inner(leafProtocol: leafProtocol) }
 			            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(inner) } else { Promoted(inner: inner) }
@@ -613,9 +603,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            if let safeDIBuilder = __safeDI_leafBuilder__safeDIBuilder { safeDIBuilder() } else { Leaf() }
 			        }
 			        let leafBuilder = SendableInstantiator<Leaf>(__safeDI_leafBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let leafBuilderAlias: SendableInstantiator<Leaf> = leafBuilder
-			        #sourceLocation()
+			        let leafBuilderAlias: SendableInstantiator<Leaf> = leafBuilder // Declared as Screen.leafBuilderAlias
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafBuilderAlias, leafBuilder) } else { Promoted(leafBuilderAlias: leafBuilderAlias, leafBuilder: leafBuilder) }
 			        return Screen(leafBuilderAlias: leafBuilderAlias, promoted: promoted)
 			    }
@@ -705,9 +693,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			            if let safeDIBuilder = safeDIOverrides.leafBuilder { safeDIBuilder() } else { Leaf() }
 			        }
 			        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let leafBuilderAlias: Instantiator<Leaf> = leafBuilder
-			        #sourceLocation()
+			        let leafBuilderAlias: Instantiator<Leaf> = leafBuilder // Declared as Screen.leafBuilderAlias
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafBuilderAlias) } else { Promoted(leafBuilderAlias: leafBuilderAlias) }
 			        return Screen(leafBuilderAlias: leafBuilderAlias, promoted: promoted)
 			    }
@@ -796,9 +782,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 10)
-			        let leafAlias: Leaf = leaf
-			        #sourceLocation()
+			        let leafAlias: Leaf = leaf // Declared as Screen.leafAlias
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafAlias) } else { Promoted(leafAlias: leafAlias) }
 			        return Screen(leaf: leaf, leafAlias: leafAlias, promoted: promoted)
 			    }
@@ -887,9 +871,7 @@ struct SafeDIToolMockRootAliasBesidePromotedTreeTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 10)
-			        let leafAlias: Leaf? = leaf
-			        #sourceLocation()
+			        let leafAlias: Leaf? = leaf // Declared as Screen.leafAlias
 			        let promoted = if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leafAlias) } else { Promoted(leafAlias: leafAlias) }
 			        return Screen(leaf: leaf, leafAlias: leafAlias, promoted: promoted)
 			    }

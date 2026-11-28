@@ -140,6 +140,7 @@ extension ScopeGenerator {
 				typesDeclaredEscaping: signature.typesDeclaredEscaping,
 				unreadTypeComment: publicMockContext.unreadTypeComment,
 				namesForwardedTypes: true,
+				declaresLevelsWithoutScope: true,
 			) {
 				lines.append(declaration)
 				lines.append("")
@@ -349,7 +350,7 @@ extension MockLowering.Walk {
 		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as a
 		// seam's site does.
 		lines.append(GeneratedCodeText.indentingNonEmptyLines(
-			of: ScopeGenerator.buildSiteCode(
+			of: HoleSitePlaces.buildSiteCode(
 				of: property,
 				at: site,
 				routeMembers: generator.siteRouteMembers,

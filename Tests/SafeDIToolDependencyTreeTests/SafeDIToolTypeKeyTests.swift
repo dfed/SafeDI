@@ -1014,48 +1014,44 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + """
 		extension Root {
 		    public convenience init() {
-		        @Sendable nonisolated func __safeDI_t2Builder(t1: T1, t0: T1?) -> T2 {
-		            @Sendable nonisolated func __safeDI_t1Builder(t0: T0?) -> T1 {
-		                let t2Builder = SendableInstantiator<T2> {
-		                    __safeDI_t2Builder(t1: $0, t0: nil)
-		                }
-		                #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
-		                let anyT1Alias: AnyT1? = AnyT1(t1)
-		                #sourceLocation()
-		                return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
-		            }
+		        @Sendable nonisolated func __safeDI_t2Builder(t1: T1) -> T2 {
 		            let t1Builder = SendableInstantiator<T1> {
-		                __safeDI_t1Builder(t0: $0)
+		                __safeDI_t1Builder(t0: $0, t1: t1)
 		            }
-		            return T2(t1: t1, t1Builder: t1Builder, t0: t0)
+		            return T2(t1: t1, t1Builder: t1Builder, t0: nil)
+		        }
+		        @Sendable nonisolated func __safeDI_t1Builder(t0: T0?, t1: T1) -> T1 {
+		            let t2Builder = SendableInstantiator<T2> {
+		                __safeDI_t2Builder(t1: $0)
+		            }
+		            let anyT1Alias: AnyT1? = AnyT1(t1) // Declared as T1.anyT1Alias
+		            return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
 		        }
 		        let t2Builder = SendableInstantiator<T2> {
-		            __safeDI_t2Builder(t1: $0, t0: nil)
+		            __safeDI_t2Builder(t1: $0)
+		        }
+		        func __safeDI_t1Builder_(t1: T1) -> T2 {
+		            let t1Builder = SendableInstantiator<T1> {
+		                __safeDI_t1Builder__(t0: $0, t1: t1)
+		            }
+		            return T2(t1: t1, t1Builder: t1Builder, t0: nil)
+		        }
+		        @Sendable nonisolated func __safeDI_t1Builder__(t0: T0?, t1: T1?) -> T1 {
+		            let t2Builder = SendableInstantiator<T2> {
+		                __safeDI_t2Builder_(t1: $0)
+		            }
+		            let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) } // Declared as T1.anyT1Alias
+		            return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
+		        }
+		        @Sendable nonisolated func __safeDI_t2Builder_(t1: T1) -> T2 {
+		            let t1Builder = SendableInstantiator<T1> {
+		                __safeDI_t1Builder__(t0: $0, t1: t1)
+		            }
+		            return T2(t1: t1, t1Builder: t1Builder, t0: nil)
 		        }
 		        func __safeDI_t0Builder() -> T0 {
-		            func __safeDI_t1Builder(t1: T1) -> T2 {
-		                @Sendable nonisolated func __safeDI_t1Builder(t0: T0?, t1: T1?) -> T1 {
-		                    @Sendable nonisolated func __safeDI_t2Builder(t1: T1) -> T2 {
-		                        let t1Builder = SendableInstantiator<T1> {
-		                            __safeDI_t1Builder(t0: $0, t1: t1)
-		                        }
-		                        return T2(t1: t1, t1Builder: t1Builder, t0: nil)
-		                    }
-		                    let t2Builder = SendableInstantiator<T2> {
-		                        __safeDI_t2Builder(t1: $0)
-		                    }
-		                    #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
-		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) }
-		                    #sourceLocation()
-		                    return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
-		                }
-		                let t1Builder = SendableInstantiator<T1> {
-		                    __safeDI_t1Builder(t0: $0, t1: t1)
-		                }
-		                return T2(t1: t1, t1Builder: t1Builder, t0: nil)
-		            }
 		            let t1Builder = Instantiator<T2> {
-		                __safeDI_t1Builder(t1: $0)
+		                __safeDI_t1Builder_(t1: $0)
 		            }
 		            return T0(t1Builder: t1Builder, t2Builder: t2Builder)
 		        }

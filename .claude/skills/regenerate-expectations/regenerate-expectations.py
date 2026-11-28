@@ -48,7 +48,8 @@ A changed literal is explained when normalize(rewrite(rename(old))) == normalize
 the residual difference of those two strings, which is what no rule predicts. A rules file whose pattern can match
 the empty string, whose rename key is empty, or whose names repeat is rejected.
 
-Report. REPORT/report.txt, in path and line order: counts, changed outputs no literal matched, each rule's hits,
+Report. REPORT/literals.json lists every changed literal (path, line, tests, outcome: explained, unexplained or
+manual). REPORT/report.txt, in path and line order: counts, changed outputs no literal matched, each rule's hits,
 unexplained residual diffs, manual items with their reasons, base records no literal matched, changed literals
 whose call skipped compile verification, a sample of N explained literals (--sample, default 5), and how many test
 functions and records were mapped. Two runs over the same inputs write the same bytes.
@@ -91,6 +92,8 @@ import re
 import sys
 
 MANIFEST_NAME = "tests-manifest.json"
+# The file of the report directory that lists every changed literal with its tests and outcome.
+LITERALS_NAME = "literals.json"
 HEADER_NAME = "generated-file-header.txt"
 # The file `ExpectationRecording` writes into a record directory when the run has compile verification off. Keep in
 # step with `ExpectationRecording.compileVerificationSkippedFileName`.
@@ -802,6 +805,17 @@ def tile_fragments(literals, content, header):
             line_ends.extend(match.start() for match in re.finditer("\n", content[start:]))
             line_ends.append(len(content) - start)
         return [start + end for end in line_ends if start + end > position]
+    non_whitespace_prefix = []  # made when the first interpolated literal needs it
+
+    def non_whitespace_before(position):
+        """How many characters other than whitespace `content` holds before `position`."""
+        if not non_whitespace_prefix:
+            count = 0
+            non_whitespace_prefix.append(0)
+            for character in content:
+                count += not character.isspace()
+                non_whitespace_prefix.append(count)
+        return non_whitespace_prefix[position]
     solutions = {}  # position → (count of tilings from it, capped at two; the first)
     fragments_at = {}  # position → [(fragment, the position after it)] for each fragment a tiling from it starts with
 
@@ -816,7 +830,20 @@ def tile_fragments(literals, content, header):
                     text = literal.plain_text
                     ends = [position + len(text)] if content.startswith(text, position) and non_whitespace_count(text) >= SHORTEST_ANCHOR else []
                 elif literal.parts[0][1] and content.startswith(literal.parts[0][1], position):
-                    ends = ends_after(position)
+                    # `match_literal` takes only a body that ends with the literal's last text, and whose captures
+                    # hold no more characters other than whitespace than its own text does, so a body holds at most
+                    # twice the text's. Every other line end is left out before its regular expression runs, which
+                    # otherwise backtracks through every way of splitting a body thousands of lines long: on 14,760
+                    # records of one suite, this took the run from more than half an hour to half a minute.
+                    last = literal.parts[-1][1]
+                    anchor = non_whitespace_count(literal.plain_text)
+                    ends = []
+                    if anchor >= SHORTEST_ANCHOR:
+                        for end in ends_after(position):
+                            if non_whitespace_before(end) - non_whitespace_before(position) > 2 * anchor:
+                                break
+                            if content.endswith(last, position, end):
+                                ends.append(end)
                 else:
                     ends = []
                 for end in ends:
@@ -1649,6 +1676,13 @@ def write_report(arguments, rules, summary, explained, unexplained, manual, asse
     os.makedirs(arguments.report, exist_ok=True)
     with open(os.path.join(arguments.report, "report.txt"), "w", encoding="utf-8") as report_file:
         report_file.write("\n".join(lines) + "\n")
+    # Which tests each changed literal belongs to, for review-expectation-diffs: a test that fails with none of its
+    # literals here fails for a reason no expectation shows.
+    literals = [{"path": item[0], "line": item[1], "tests": list(item[2]), "outcome": outcome}
+                for outcome, items in (("explained", explained), ("unexplained", unexplained), ("manual", manual)) for item in items]
+    with open(os.path.join(arguments.report, LITERALS_NAME), "w", encoding="utf-8") as literals_file:
+        json.dump(sorted(literals, key=lambda literal: (literal["path"], literal["line"])), literals_file, indent=1, ensure_ascii=False)
+        literals_file.write("\n")
 
 
 def mapping_statistics(base_generation, mapped_record_keys, unmapped_reasons, outcomes, resolver, fragment_records):

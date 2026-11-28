@@ -64,15 +64,14 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 			    public init(exportService: ExportService, uploaderBuilder: @escaping () -> any Uploader) {
-			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: .init(__safeDI_noScope: uploaderBuilder))
+			        @Sendable nonisolated func __safeDI_noScope_ExportFeature_SafeDICarrierScope_Uploader<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> ExportFeature.__safeDI_UploaderCarrier<__safeDI_Built> {
+			            .init(uploader: { _, _ in __safeDI_builder() })
+			        }
+			        self.init(__safeDI_exportService: exportService, __safeDI_uploaderBuilder: __safeDI_noScope_ExportFeature_SafeDICarrierScope_Uploader(uploaderBuilder))
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -192,10 +191,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public init(uploader: @escaping () -> __safeDI_Built) {
 			            self.uploader = uploader
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -204,10 +199,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_UploaderCarrier_Panel<__safeDI_Built>) {
 			            self.panelBuilder = panelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -396,10 +387,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, LazilyInstantiated<Logger>, Analytics, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -491,10 +478,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, LazilyInstantiated<Logger?>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -694,10 +677,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<Report>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -785,10 +764,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -861,7 +836,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		)
 		let app = Self.app(declarations: Self.uploaderBuildingJobs, jobDeclarations: ["@Received let exportService: any Exporting"], handWrittenFill: nil)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
-		let seamPath = try #require(output.modules["Feature"]).fixtures.compilerPath(of: "ExportFeature.swift")
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [integration == .moduleInfo ? "Feature.swift" : "ExportFeature+SafeDI.swift": generatedFileHeader + """
 		extension ExportFeature {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -871,18 +845,12 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        public init(uploader: @escaping (any Exporting, Instantiator<ExportScreen>) -> __safeDI_Built) {
 		            self.uploader = uploader
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(uploader: { _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
-		        #sourceLocation(file: "\(seamPath)", line: 9)
-		        let exportService: any Exporting = __safeDI_exportService_()
-		        #sourceLocation()
+		        let exportService: any Exporting = __safeDI_exportService_() // Declared as ExportFeature.exportService
 		        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService)
 		        }
@@ -960,10 +928,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 		            self.uploader = uploader
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(uploader: { _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -990,10 +954,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 		        public init(exportFeature: ExportFeature.__safeDI_UploaderCarrier<__safeDI_Built>) {
 		            self.exportFeature = exportFeature
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(exportFeature: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -1026,10 +986,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 		            self.uploader = uploader
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(uploader: { _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1056,10 +1012,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 		        public init(exportFeature: ExportFeature.__safeDI_UploaderCarrier<__safeDI_Built>) {
 		            self.exportFeature = exportFeature
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(exportFeature: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -1146,10 +1098,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -1261,10 +1209,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			        public init(uploader: @escaping (LazilyInstantiated<ExportService>, Instantiator<ExportScreen>) -> __safeDI_Built) {
 			            self.uploader = uploader
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(uploader: { _, _ in __safeDI_builder() })
 			        }
 			    }
 

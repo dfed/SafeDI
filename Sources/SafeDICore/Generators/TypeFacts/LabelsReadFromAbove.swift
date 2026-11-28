@@ -65,3 +65,11 @@ struct LabelsReadFromAbove: Sendable {
 	private let reads: ReadsFromAbove
 	private let labels: [String]
 }
+
+/// What the tests read of the validation walk's answers to the same question: set by the tests, never by the tool.
+public enum LabelsReadFromAboveObservation {
+	/// Called once per scope the validation walk asks `labelsReadFromAbove(by:)` of, with the scope's type, the labels the
+	/// walk remembered for it, and the least sets the rule has, found a component at a time (`LabelsReadFromAbove`) and by
+	/// passes over every scope it reaches until none adds a label, each sorted.
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ type: String, _ remembered: [String], _ byComponent: [String], _ byPasses: [String]) -> Void>?
+}

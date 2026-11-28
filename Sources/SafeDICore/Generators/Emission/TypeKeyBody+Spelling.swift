@@ -48,6 +48,11 @@ extension TypeKeyLayout {
 			}
 		}
 		var allocator = GeneratedNameAllocator(reserving: namesInScope)
+		// A function's parameters are declarations of its body, where a function or a local of a parameter's name would be
+		// hidden by it, or hide it: every name the layout claims is apart from every parameter a call hands.
+		for owner in membersByClass.indices {
+			allocator.reserve(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
+		}
 		functionNames = membersByClass.indices.map { owner in
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
@@ -164,8 +169,49 @@ extension TypeKeyLayout {
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
-			return record.text
+			guard let call = record.call else { return record.text }
+			return spelledInPlace(call, inClass: owner, at: index)
 		}
+	}
+
+	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
+	/// of its result. Each argument is read as the declaration visible there, which the function captures.
+	func spelledInPlace(_ call: InPlaceCall, inClass owner: Int, at index: Int) -> String? {
+		let record = call.record
+		guard let argumentValues = spelledArgumentValues(record.arguments, replacedAt: record.argumentValues, inClass: owner, before: index, sourceAtMember: { member, position in
+			guard case let .alias(memberRecord) = bodies[member].statements[index], let memberCall = memberRecord.call else { return nil }
+			return memberCall.record.arguments[position].source
+		}) else { return nil }
+		var statements = call.statementsBeforeLeadingStatement
+		if let leadingStatement = record.leadingStatement {
+			statements.append(.text("\(ScopeGenerator.standardIndent)\(leadingStatement.spelled)"))
+		}
+		statements += call.statementsAfterLeadingStatement
+		let function = SafeDICore.Statement.function(BuilderNode(
+			name: record.functionName,
+			isSendable: record.isSendable,
+			parameters: [],
+			typesDeclaredEscaping: record.typesDeclaredEscaping,
+			returnType: record.concreteType,
+			body: BuilderBody(statements: statements),
+			value: .construction(record.target, arguments: Self.labeled(argumentValues, of: record.arguments)),
+			lineEnd: record.lineEnd,
+		)).spelled
+		let declaration = BindingDeclaration(
+			property: record.property,
+			rule: .constant(
+				isErased: record.isErased,
+				constructedTypeIsPropertyType: record.concreteType.asSource == record.property.typeDescription.asSource,
+				hasBuilderFunction: true,
+				isExtension: record.isExtension,
+			),
+		)
+		let binding = SafeDICore.Statement.binding(
+			declaration,
+			Expression.call(function: record.functionName, arguments: "").erased(to: record.property.typeDescription.unwrapped, where: record.isErased),
+			lineEnd: "",
+		)
+		return GeneratedCode.sequence([function, binding.spelled, .text("\n")]).spelled()
 	}
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
@@ -176,7 +222,7 @@ extension TypeKeyLayout {
 		var arguments = [String]()
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
 			guard let parameterType = parameterTypes[callee][label],
-			      let value = spelledArgument(label, passedTo: parameterType, inClass: owner, before: index)
+			      let value = spelledArgument(label, passing: passedDeclaration(label, toParameterOf: callee, inClass: owner, before: index), to: parameterType)
 			else { return nil }
 			arguments.append("\(label.spelledAsArgumentLabel): \(value)")
 		}
@@ -218,11 +264,13 @@ extension TypeKeyLayout {
 		     .sendableLazilyInstantiated:
 			return "\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(ScopeGenerator.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: arguments.joined(separator: ", "), erasedToConcreteExistential: isErased))"
 		case .constant:
+			// A binding to a builder function's call is annotated unless its value is erased, whatever type the function
+			// returns (`BindingDeclaration.AnnotationRule.constant`), so no type is compared here.
 			let declaration = BindingDeclaration(
 				property: property,
 				rule: .constant(
 					isErased: isErased,
-					constructedTypeIsPropertyType: (representative.functionReturnType ?? representative.concreteType).asSource == property.typeDescription.asSource,
+					constructedTypeIsPropertyType: false,
 					hasBuilderFunction: true,
 					isExtension: isExtension,
 				),
@@ -231,11 +279,11 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What a call made before the statement at `index` of `owner`'s body passes a parameter `label` of type
-	/// `parameterType`: its nearest declaration, `nil`, or a wrapper made of a value where the parameter takes a wrapper.
-	func spelledArgument(_ label: String, passedTo parameterType: TypeDescription, inClass owner: Int, before index: Int) -> String? {
-		let declaration = typeLookUp(label, inClass: owner, before: index)
-		guard let declaredType = type(of: declaration) else {
+	/// What a call passes a parameter `label` of type `parameterType` where it passes `declaration`
+	/// (`passedDeclaration(_:toParameterOf:inClass:before:)`): the declaration, `nil`, or a wrapper made of a value where
+	/// the parameter takes a wrapper.
+	func spelledArgument(_ label: String, passing declaration: TypeDeclaration, to parameterType: TypeDescription) -> String? {
+		guard let declaredType = type(of: declaration, label: label) else {
 			return parameterType.isOptional ? "nil" : nil
 		}
 		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
@@ -263,7 +311,7 @@ extension TypeKeyLayout {
 				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
-				if let declaredType = type(of: declaration) {
+				if let declaredType = type(of: declaration, label: read.label) {
 					guard let spelled = Self.spelledRead(read, declaredAs: declaredType) else { return nil }
 					value = spelled
 				} else {

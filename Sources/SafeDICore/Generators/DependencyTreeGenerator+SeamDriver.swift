@@ -203,7 +203,6 @@ extension DependencyTreeGenerator {
 				construction: .foreignModule,
 				in: visible.instantiables,
 				plainTypeDeclarations: visible.plainTypeDeclarations,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
 				seams: seams.resolution(seenByModuleNamed: module.moduleName),
@@ -249,7 +248,6 @@ extension DependencyTreeGenerator {
 			construction: .ownSeams(validatedWorld.passed),
 			in: typeDescriptionToFulfillingInstantiableMap,
 			plainTypeDeclarations: plainTypeDeclarations,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			fixedSignatures: seamRoots.compactMapValues(\.self),
 			callerModule: seams.currentModule,
 			seams: seams,
@@ -278,7 +276,6 @@ extension DependencyTreeGenerator {
 				construction: .ownSeams(validatedWorld.passed),
 				in: callersVisibleInstantiables,
 				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: seams.currentModule,
 				seams: seams,
@@ -302,16 +299,6 @@ extension DependencyTreeGenerator {
 				let ownSignature = ownSeamRoot?.signature
 				let callersFailed = callersComputation.failedSeams.contains(seamType)
 				let callersSignature: SeamSignature? = callersFailed ? nil : (callersComputation.seamRoots[seamType] ?? nil)?.signature
-				// Test only, deleted before merge: the tests check that comparing the call shapes with a hole per case finds what
-				// comparing them with a hole per site does.
-				if let observer = SeamPlaceLevels.observer {
-					var comparison = SeamPlaceLevels(seamType: seamType, places: [])
-					comparison.callShapeComparison = .init(
-						differsPerSite: callersFailed || ownSignature?.callShapeHeldPerSite != callersSignature?.callShapeHeldPerSite,
-						differsPerCase: callersFailed || ownSignature?.callShape != callersSignature?.callShape,
-					)
-					observer(comparison)
-				}
 				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { continue }
 				let labelsCallersFailedOn = callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil
 				if let declaration = Self.unseenDeclarationToName(
@@ -475,6 +462,8 @@ extension DependencyTreeGenerator {
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
+		plansCyclesPerType: Bool,
+		drawsTrees: Bool,
 	) async throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
 		var (seamRoots, firstPassTrees) = try await computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
@@ -486,7 +475,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: generatedSeamTypes,
 			callerModule: seams.currentModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: emittingModuleToCheck,
 			builtInlineSeamComment: { self.builtInlineSeamComment(for: $0) },
 		)
@@ -509,7 +497,7 @@ extension DependencyTreeGenerator {
 			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
 			      let seamRoot = seamRoots[seamType] ?? nil
 			else { continue }
-			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, callerModule: seams.currentModule, aliasDeclarationReferences: aliasDeclarationReferences)))
+			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, callerModule: seams.currentModule)))
 		}
 		// Creating a generator starts generating its code, so every construction must be known to compile first: a
 		// root's tree constructs a seam with the tier of its generated initializer the root's module can reach, and a
@@ -521,28 +509,21 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
-		var rootScopeGenerators = [RootScopeInfo]()
-		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
-			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			let rootScope = ConstructionScope(table: table, record: record)
-			try rootScopeGenerators.append(RootScopeInfo(
-				typeDescription: typeDescription,
-				instantiable: scope.instantiable,
-				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				built: .tree(record.createScopeGenerator(
-					in: table,
-					lazilyInstantiatedInstanceProperties: [],
-					erasedToConcreteExistential: false,
-					declaredTypeNames: declaredTypeNames,
-					constructionMemo: &constructionMemo,
-				)),
-				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
-				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
-				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
-				// out from them until node records make a seam call (`NodeRecords`).
-				rootScope: RootScopeInfo.kept(rootScope),
-			))
-		}
+		// A root is built as in a module without seams: today's tree per path, or its per-type plan past the limit, where
+		// each seam its tree calls is a leaf. What a scope of the seam world receives is collected apart from the
+		// validated scopes'.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		var rootScopeGenerators = try await rootTrees(
+			of: rootScopesToGenerate.rootScopes,
+			frozenScopeMap: seamWorld.frozenScopeMap,
+			plansCyclesPerType: plansCyclesPerType,
+			drawsTrees: drawsTrees,
+			// A test compares the records of a seam world's production root with its tree's places, and no run lays it out
+			// from them until node records make a seam call (`NodeRecords`).
+			readersOfEveryTree: nil,
+			constructionMemo: &constructionMemo,
+			cache: &receivedPropertiesCache,
+		)
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
@@ -595,7 +576,9 @@ extension DependencyTreeGenerator {
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
 				rootScope: rootScope,
-				ownSeamRoot: finalSeamRoot,
+				// Held only beside the root's scope, where node records are made of it: a run keeps a root's info for
+				// every seam, and holding each seam's root in it grew what a run of many seams allocates by about 1%.
+				ownSeamRoot: rootScope == nil ? nil : finalSeamRoot,
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -771,7 +754,6 @@ extension DependencyTreeGenerator {
 		construction: SignatureConstruction,
 		in instantiables: [TypeDescription: Instantiable],
 		plainTypeDeclarations: [PlainTypeDeclaration],
-		aliasDeclarationReferences: AliasDeclarationReferences,
 		fixedSignatures: [TypeDescription: ScopeGenerator.SeamRoot],
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
@@ -802,7 +784,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: ownSeamTypes,
 			callerModule: callerModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 			builtInlineSeamComment: builtInlineSeamComment,
 		)
@@ -883,7 +864,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: ownSeamTypes,
 			callerModule: callerModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 			builtInlineSeamComment: builtInlineSeamComment,
 			proof: proof,
@@ -1001,7 +981,6 @@ extension DependencyTreeGenerator {
 		let ownSeamTypes: Set<TypeDescription>
 		let callerModule: ModuleIdentity
 		let seams: SeamResolution
-		let aliasDeclarationReferences: AliasDeclarationReferences
 		let checkingModule: EmittingModule?
 		let builtInlineSeamComment: @Sendable (Instantiable) -> String?
 		let proof: TypeAccessProof
@@ -1042,7 +1021,6 @@ extension DependencyTreeGenerator {
 		let ownSeamTypes = context.ownSeamTypes
 		let callerModule = context.callerModule
 		let seams = context.seams
-		let aliasDeclarationReferences = context.aliasDeclarationReferences
 		let checkingModule = context.checkingModule
 		let builtInlineSeamComment = context.builtInlineSeamComment
 		let construction = context.construction
@@ -1102,13 +1080,12 @@ extension DependencyTreeGenerator {
 				ownSeamTypes: ownSeamTypes,
 				callerModule: callerModule,
 				seams: seams,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				checkingModule: checkingModule,
 				builtInlineSeamComment: builtInlineSeamComment,
 			)
 			let scopeInstantiables = scopeMap.mapValues(\.instantiable)
 			let rootScopes = componentSeams.map { seam in
-				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, callerModule: callerModule)
 			}
 			let fulfillingKey = { (hole: SeamSignature.Hole) in
 				Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
@@ -1515,7 +1492,6 @@ extension DependencyTreeGenerator {
 		ownSeamTypes: Set<TypeDescription>,
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 		checkingModule: EmittingModule?,
 		builtInlineSeamComment: (Instantiable) -> String?,
 	) -> [TypeDescription: Scope] {
@@ -1614,7 +1590,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			} else {
-				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, callerModule: callerModule)
 			}
 		}
 		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
@@ -1664,7 +1640,6 @@ extension DependencyTreeGenerator {
 		from typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
 		callerModule: ModuleIdentity,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 	) {
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -1690,12 +1665,12 @@ extension DependencyTreeGenerator {
 					))
 				}
 			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-				scope.propertiesToGenerate.append(.aliased(
-					dependency.property,
+				scope.propertiesToGenerate.append(Self.aliasedDependency(
+					dependency,
 					fulfilledBy: fulfillingProperty,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: onlyIfAvailable,
-					declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
+					declaredBy: scope.instantiable,
 				))
 			case .forwarded, .received:
 				continue
@@ -1711,7 +1686,6 @@ extension DependencyTreeGenerator {
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
 		callerModule: ModuleIdentity,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 	) -> Scope {
 		let rootScope = Scope(instantiable: seam)
 		populatePropertiesToGenerate(
@@ -1719,7 +1693,6 @@ extension DependencyTreeGenerator {
 			from: typeDescriptionToScopeMap,
 			instantiables: instantiables,
 			callerModule: callerModule,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 		)
 		return rootScope
 	}
@@ -1738,7 +1711,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> (generator: ScopeGenerator, rootScope: ConstructionScope) {
-		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties, _) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1758,10 +1731,15 @@ extension DependencyTreeGenerator {
 	}
 
 	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
-	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
-	static func seamRootDeclarations(of seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included; and, for the
+	/// seam's node records, the labels of those held in a wrapper that is not `Sendable`.
+	static func seamRootDeclarations(
+		of seam: Instantiable,
+		seamRoot: ScopeGenerator.SeamRoot,
+	) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, nonSendableWrapperLabels: Set<String>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
+		var nonSendableWrapperLabels = Set<String>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seam)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
@@ -1780,8 +1758,19 @@ extension DependencyTreeGenerator {
 			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
+			// A `@Sendable` function of the tree that reads a parameter held in a wrapper that is not `Sendable` captures
+			// it, as `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)` declares them: a wrapper parameter, or
+			// the memo of a deferred one that no `@Sendable` function was found to read.
+			let isHeldInNonSendableWrapper = if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[property.label] == nil {
+				!isSendable
+			} else {
+				!property.propertyType.isConstant && !property.propertyType.isSendable
+			}
+			if isHeldInNonSendableWrapper {
+				nonSendableWrapperLabels.insert(property.label)
+			}
 		}
-		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties, nonSendableWrapperLabels)
 	}
 
 	/// A seam's tree kept for emission, with the modules its file imports for the types it builds, read from the
@@ -2677,12 +2666,12 @@ public enum SeamSignatureObservation {
 	/// Called, when set, for each seam whose first signature pass settled it without the pass that confirms it
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
-	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	@TaskLocal public static var confirmsSkippedPasses: TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void>?
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
 	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
-	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+	@TaskLocal public static var observesLevels: TaskLocalFunction<@Sendable (SeamSignatureLevel) -> Void>?
 }
 
 /// One level of a module's seam components, as `seamSignatures` settles it.
@@ -2703,7 +2692,7 @@ public struct SeamSignatureLevel: Equatable, Sendable {
 public enum SeamTreeReuseObservation {
 	/// Called, when set, for each seam whose tree emission made again, with the code of that tree and of the tree built
 	/// anew as emission builds every other seam's: the two must be the same text.
-	@TaskLocal public static var comparesBuiltTrees: (@Sendable (ReusedSeamTree) -> Void)?
+	@TaskLocal public static var comparesBuiltTrees: TaskLocalFunction<@Sendable (ReusedSeamTree) -> Void>?
 }
 
 /// A seam whose tree emission made again from its first signature pass's, with the code of both trees.

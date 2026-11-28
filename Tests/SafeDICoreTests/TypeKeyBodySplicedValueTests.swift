@@ -119,6 +119,60 @@ struct TypeKeyBodySplicedValueTests {
 	}
 
 	@Test
+	func statements_keepsEachPlacesOwnFunction_whenTwoPlacesDifferOnlyInTheFunctionTheySplice() throws {
+		// Both bodies declare both functions; `c` splices the first and `d` the second.
+		let declarations = [Self.fillDeclaration, Self.declaration(ofFunction: "__safeDI_otherFill")]
+		var c = Self.builtRecord(label: "c", typeName: "C", children: declarations)
+		c.argumentValues = [0: Self.splicedBuilder]
+		var d = Self.builtRecord(label: "d", typeName: "C", children: declarations)
+		d.argumentValues = [0: .spliced([.value(.read(Self.idRead)), .text(".map { .init($0) } ?? "), .declaredFunction("__safeDI_otherFill"), .text("()")])]
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: [
+			.place(PlacePlan(code: .text("let id = 1"), record: .alias(AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 1", reads: [])))),
+			.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
+			.place(PlacePlan(code: .text("let d = C()"), record: .built(d))),
+		]))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c() -> C {
+		            func __safeDI_fill() -> Builder { Builder() }
+		            func __safeDI_otherFill() -> Builder { Builder() }
+		            return C(builder: id.map { .init($0) } ?? __safeDI_fill())
+		        }
+		        let c: C = __safeDI_c()
+		        func __safeDI_d() -> C {
+		            func __safeDI_fill() -> Builder { Builder() }
+		            func __safeDI_otherFill() -> Builder { Builder() }
+		            return C(builder: id.map { .init($0) } ?? __safeDI_otherFill())
+		        }
+		        let d: C = __safeDI_d()
+		""")
+	}
+
+	@Test
+	func statements_keepsThePathKeysBody_whenAnInlinePlaceSplicesAFunctionAStatementAfterItDeclares() {
+		// `b`'s body builds `c` inline, splicing `__safeDI_fill`, and only then declares the function.
+		var c = Self.builtRecord(label: "c", typeName: "C", hasFunction: false)
+		c.argumentValues = [0: Self.splicedBuilder]
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody(arguments: [Self.cRead], children: [.place(PlacePlan(code: .text("let c = C()"), record: .built(c))), Self.fillDeclaration]) { _ in }) == nil)
+	}
+
+	@Test
+	func statements_spellsTheFunctionsCall_whenAnInlinePlaceSplicesAFunctionAStatementBeforeItDeclares() throws {
+		var c = Self.builtRecord(label: "c", typeName: "C", hasFunction: false)
+		c.argumentValues = [0: Self.splicedBuilder]
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(arguments: [Self.cRead], children: [Self.fillDeclaration, .place(PlacePlan(code: .text("let c = C()"), record: .built(c)))]) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b() -> B {
+		            func __safeDI_fill() -> Builder { Builder() }
+		            let c = C(builder: id.map { .init($0) } ?? __safeDI_fill())
+		            return B(builder: nil, c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
 	func statements_spellsTheCallOfASplicedValue_whenAnArgumentCallsAMemberOfIt() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(children: [Self.fillDeclaration]) { built in
 			built.argumentValues = [0: .call("make", of: .spliced([.declaredFunction("__safeDI_fill"), .text("()")]), arguments: [Self.idRead], argumentsWrapper: nil)]
@@ -205,8 +259,9 @@ struct TypeKeyBodySplicedValueTests {
 		return .place(PlacePlan(code: .text(text), record: .alias(record)))
 	}
 
-	/// A place `<label>: <typeName>` in a function of its own that passes a builder, whose body builds `children`.
-	private static func builtRecord(label: String, typeName: String, children: [GeneratedCode] = []) -> BuiltPlaceRecord {
+	/// A place `<label>: <typeName>` that passes a builder, in a function of its own where `hasFunction`, whose body builds
+	/// `children`.
+	private static func builtRecord(label: String, typeName: String, hasFunction: Bool = true, children: [GeneratedCode] = []) -> BuiltPlaceRecord {
 		BuiltPlaceRecord(
 			property: Property(label: label, typeDescription: .simple(name: typeName)),
 			isErased: false,
@@ -221,7 +276,7 @@ struct TypeKeyBodySplicedValueTests {
 			isSendable: false,
 			typesDeclaredEscaping: [],
 			lineEnd: "",
-			hasFunction: true,
+			hasFunction: hasFunction,
 			children: children,
 			node: PlanNode(),
 		)

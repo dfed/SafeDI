@@ -1628,6 +1628,35 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe(path: "root.hub.outer"))
 	}
 
+	// MARK: What the facts require of a seam's caller
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_factsRequireOfCallerWrapperOfMemoHandedOnCarriedRoute_whenFillReadsSendableValueAndWrapper() async throws {
+		// `Root` fills the place of `Gizmo` that `Outer` passes up from inside its fill of `Inner`'s place, with `GizmoImpl`,
+		// which receives `token` and builds `WrapperReader`, which receives its wrapper. `Inner`'s level, on the carried
+		// route, hands the fill the memo of its deferred `token`, so the fill binds that memo's `token: Token` in place of
+		// the place's field, `Outer`'s wrapper: the wrapper's read is the caller's, as the tree's fill reads it.
+		let modules = Self.carriedWrapperModules(gizmoReadsValueToo: true)
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Root" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+		let call = try #require(report.nodes.firstIndex { $0.construction == "seamCall" })
+		let fillEdges = report.nodes[call].edgeFacts.filter(\.isFill)
+
+		#expect(report.nodes[0].required == [])
+		#expect(report.nodes[0].requiredIncludingFills == ["token: SendableLazilyInstantiated<Token>"])
+		#expect(fillEdges.map(\.boundFromScopeStruct) == [["gizmo: Gizmo", "gizmo: Gizmo?", "token: Token", "token: Token?"]])
+		#expect(fillEdges.map(\.hiddenFromCaller) == [["gizmo: Gizmo", "gizmo: Gizmo?", "token: Token", "token: Token?"]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

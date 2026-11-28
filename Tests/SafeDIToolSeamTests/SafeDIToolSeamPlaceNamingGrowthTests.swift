@@ -104,7 +104,7 @@ struct SafeDIToolSeamPlaceNamingGrowthTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"])
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		// The lattice's routes grow exponentially with its side, so the per-site walk is not compared (`SeamPlaceTreeRoutes`).
-		_ = try await SeamPlaceTreeRoutes.$areCompared.withValue(false) { try await NodeRecordsObservation.$observer.withValue({ report in
+		_ = try await SeamPlaceTreeRoutes.$areCompared.withValue(false) { try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
 			guard report.root == "Hub" else { return }
 			for line in report.placesDraftDifferences ?? [] where line.hasPrefix("report: naming: ") {
 				continuation.yield(line)

@@ -666,7 +666,8 @@ struct SeamPlacesDrafts: Sendable {
 				return self != before
 			}
 		}
-		let callCount = (0..<world.variantCount).reduce(0) { $0 + world.calls(of: VariantID($1)).count }
+		// Indexed by a call's position among every variant's calls, made-again calls included (`callOffset(of:)`).
+		let callCount = world.variants.callOffset(of: world.variantCount)
 		var buildsInLine = [Bool](repeating: false, count: callCount)
 		var closesCycle = [Bool](repeating: false, count: callCount)
 		var above = [Above](repeating: Above(), count: world.variantCount)
@@ -799,7 +800,8 @@ struct SeamPlacesDrafts: Sendable {
 			differences.append("case \(storedKey): stored, not drafted")
 		}
 		// The naming fold's work beside the seam's size, which a growth row reads.
-		let callCount = (0..<world.variantCount).reduce(0) { $0 + world.calls(of: VariantID($1)).count }
+		// Indexed by a call's position among every variant's calls, made-again calls included (`callOffset(of:)`).
+		let callCount = world.variants.callOffset(of: world.variantCount)
 		differences.append("report: naming: \(namingWork) work, \(cases.count) cases, \(cases.reduce(0) { $0 + $1.namingRoute.count }) route steps, \(world.variantCount) variants, \(callCount) calls")
 		return differences
 	}

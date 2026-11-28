@@ -32,7 +32,7 @@ struct ConstructionLogReleaseTests {
 		let (elementCountsKept, continuation) = AsyncStream.makeStream(of: Int.self)
 		await withCheckedContinuation { (finished: CheckedContinuation<Void, Never>) in
 			let thread = Thread {
-				ConstructionLogStorage.$observer.withValue({ continuation.yield($0) }) {
+				ConstructionLogStorage.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					// Every read is answered above the tree, so each place keeps all of them, more than a copied run holds,
 					// and freezes its log into a segment that refers to the segment of the place beneath. Each place reads a
 					// label of its own first, so telling its log from a copied run reads only the places nearest it.

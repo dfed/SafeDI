@@ -58,7 +58,7 @@ struct SafeDIToolVersionTests {
 		  scan                    Scan Swift files to discover SafeDI roots and mocks,
 		                          producing a manifest for code generation.
 		  query                   Answer a question about the `@Instantiable` types in
-		                          a set of modules (beta).
+		                          a set of modules (`needs` in beta, `graph` in alpha).
 		  dump                    Print a `.safedi` module info file or the cache
 		                          `scan` writes for `generate` as JSON, or explain why
 		                          SafeDITool cannot read it.

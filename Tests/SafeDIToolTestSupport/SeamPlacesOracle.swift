@@ -21,7 +21,7 @@
 import Foundation
 import SafeDICore
 
-/// Test only, deleted before merge: the differential oracle of a seam's places by case. Today's per-site walk gives each
+/// Deleted when places come from facts: the differential oracle of a seam's places by case. Today's per-site walk gives each
 /// place's lists in full records (`SeamSignature.Hole`); the place graph (`SeamSignature.Places`) gives them per case, through
 /// its query. Every test and every fuzzer graph compares the two, so a step that moves a reader from the per-site lists to
 /// the graph moves onto answers already proven equal.

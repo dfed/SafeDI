@@ -80,9 +80,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		    public init() {
 		        let user = User()
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let account: User = user
-		            #sourceLocation()
+		            let account: User = user // Declared as Profile.account
 		            return Profile(account: account)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -128,9 +126,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = nil
-		            #sourceLocation()
+		            let style: Theme? = nil // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -187,9 +183,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile(theme: Theme?) -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = theme
-		            #sourceLocation()
+		            let style: Theme? = theme // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        func __safeDI_screenBuilder(theme: Theme?) -> Screen {
@@ -200,6 +194,62 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		            __safeDI_screenBuilder(theme: $0)
 		        }
 		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+		"""])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenTypeRenamesBuilderOnlyIfAvailableThatNoSiblingBuilds() async throws {
+		// `Detail` receives `tokenBuilder` as `authTokenBuilder` only if available, and builds no `tokenBuilder` of its own:
+		// a rename no loop of builders can hold, bound from its fulfilling property as a rename of a value is.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(tokenBuilder: Instantiator<Token>, detail: Detail) {
+				        self.tokenBuilder = tokenBuilder
+				        self.detail = detail
+				    }
+				    @Instantiated let tokenBuilder: Instantiator<Token>
+				    @Instantiated let detail: Detail
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(authTokenBuilder: Instantiator<Token>?) {
+				        self.authTokenBuilder = authTokenBuilder
+				    }
+				    @Received(fulfilledByDependencyNamed: "tokenBuilder", ofType: Instantiator<Token>.self, onlyIfAvailable: true) let authTokenBuilder: Instantiator<Token>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_tokenBuilder() -> Token {
+		            Token()
+		        }
+		        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+		        func __safeDI_detail() -> Detail {
+		            let authTokenBuilder: Instantiator<Token>? = tokenBuilder // Declared as Detail.authTokenBuilder
+		            return Detail(authTokenBuilder: authTokenBuilder)
+		        }
+		        let detail: Detail = __safeDI_detail()
+		        self.init(tokenBuilder: tokenBuilder, detail: detail)
 		    }
 		}
 		"""])
@@ -220,7 +270,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

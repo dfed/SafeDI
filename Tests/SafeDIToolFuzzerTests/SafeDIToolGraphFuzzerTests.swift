@@ -358,7 +358,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func seamSmokeSeeds_judgeLevelFunctionCaptures_withSameCountsWithAndWithoutCompiles() async throws {
 		// The level function capture check reads the generated text, so the call in `GraphFuzzerOracle.results(of:)` puts the
 		// same findings and counts on each accepted graph's result whether or not the run compiles: these literals hold in
-		// both modes.
+		// both modes. The level function counts include the functions a seam's plain initializer and a `{ nil }` fill declare,
+		// one per level each builds from the builder it is handed.
 		let captures = try await seamSmokeResults.value.reduce(into: [UInt64: GraphFuzzerLevelFunctionCaptures]()) { captures, result in
 			captures[result.fixture.seed] = result.levelFunctionCaptures
 		}
@@ -366,35 +367,35 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(captures == [
 			1: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
 			16: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 26, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
-			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 76, namedMemberClosureCount: 11, conversionFunctionCount: 0, fillFunctionCount: 1),
-			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 68, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
+			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 59, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 203, namedMemberClosureCount: 11, conversionFunctionCount: 0, fillFunctionCount: 1),
+			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 151, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 3),
 			92: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			93: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 67, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 0),
-			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 62, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
-			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 67, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
-			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 40, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 0),
-			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 52, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
-			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 39, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 66, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
-			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 154, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 2),
-			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
-			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 50, namedMemberClosureCount: 12, conversionFunctionCount: 0, fillFunctionCount: 2),
-			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 80, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
-			468: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 63, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1),
-			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 75, namedMemberClosureCount: 26, conversionFunctionCount: 0, fillFunctionCount: 11),
-			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 96, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 1),
-			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 42, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
-			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 81, namedMemberClosureCount: 16, conversionFunctionCount: 0, fillFunctionCount: 3),
+			93: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 183, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 0),
+			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 158, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
+			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 145, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 109, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 0),
+			180: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 118, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 1),
+			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 113, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 162, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			273: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 462, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 2),
+			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 101, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 2),
+			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 161, namedMemberClosureCount: 34, conversionFunctionCount: 0, fillFunctionCount: 2),
+			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 200, namedMemberClosureCount: 15, conversionFunctionCount: 0, fillFunctionCount: 2),
+			468: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 157, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 1),
+			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 190, namedMemberClosureCount: 43, conversionFunctionCount: 0, fillFunctionCount: 11),
+			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 235, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 1),
+			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 89, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
+			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 190, namedMemberClosureCount: 22, conversionFunctionCount: 0, fillFunctionCount: 3),
 			881: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			892: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 100, namedMemberClosureCount: 19, conversionFunctionCount: 0, fillFunctionCount: 7),
-			934: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 54, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
-			969: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 77, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 11),
-			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 83, namedMemberClosureCount: 25, conversionFunctionCount: 0, fillFunctionCount: 4),
-			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 91, namedMemberClosureCount: 9, conversionFunctionCount: 0, fillFunctionCount: 4),
+			892: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 243, namedMemberClosureCount: 19, conversionFunctionCount: 0, fillFunctionCount: 7),
+			934: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 129, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 1),
+			969: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 177, namedMemberClosureCount: 18, conversionFunctionCount: 0, fillFunctionCount: 11),
+			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 239, namedMemberClosureCount: 53, conversionFunctionCount: 0, fillFunctionCount: 4),
+			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 211, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 4),
 			1_837: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
-			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 102, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 4),
-			1_986: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 87, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 294, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 4),
+			1_986: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 219, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
 		])
 	}
 
@@ -514,11 +515,6 @@ struct SafeDIToolGraphFuzzerTests {
 		(
 			"        self.init(holeSeam: .init(holeService: holeService), holeTicket: holeTicket)\n",
 			"        self.init(holeSeam: .init(holeService: holeService, holeTicket: holeTicket))\n",
-		),
-		// A statement moved out of the `#sourceLocation` run it was in, in one block.
-		(
-			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        let holeService = HoleImpl()\n        #sourceLocation()\n        return HoleSeam(holeService: holeService)\n    }\n",
-			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        #sourceLocation()\n        let holeService = HoleImpl()\n        return HoleSeam(holeService: holeService)\n    }\n",
 		),
 		// A statement moved from one function's body to another's.
 		(
@@ -1644,27 +1640,21 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyBySourceLocationAndPluginHeader() {
-		// Only a flow that knows the compiler's spelling of an alias's file refers to it with a `#sourceLocation`
-		// directive, and every file the plugin writes opens with its header.
-		let withDirective = Self.rootInitializer.replacingOccurrences(
-			of: "        let authToken: S31_Secret = token\n",
-			with: "        #sourceLocation(file: \"/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift\", line: 8)\n        let authToken: S31_Secret = token\n        #sourceLocation()\n",
-		)
+	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByPluginHeader() {
+		// Every file the plugin writes opens with its header.
 		let withHeader = GraphFuzzerOracle.generatedFileHeaderLines.joined(separator: "\n") + "\n" + Self.rootInitializer
 		let runs = Self.integrationRuns(
-			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withDirective], warnings: []),
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
 			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withHeader], warnings: []),
 		)
-		#expect(withDirective != withHeader)
+		#expect(Self.rootInitializer != withHeader)
 		#expect(runs.integrationsDisagreeFailure == nil)
 	}
 
 	@Test
 	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByCommentsOneFlowWritesForWhatItCannotKnow() {
-		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, a seam call carries a
-		// comment saying what each flow does when the call does not compile, and a run without a target graph names the
-		// types it counts as `public` because it reads no declaration of them.
+		// A seam call carries a comment saying what each flow does when the call does not compile, and a run without a
+		// target graph names the types it counts as `public` because it reads no declaration of them.
 		let withUnreadTypeComment = Self.rootInitializer
 			.replacingOccurrences(
 				of: "    public convenience init() {",
@@ -1672,13 +1662,12 @@ struct SafeDIToolGraphFuzzerTests {
 			)
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self" + MultiModuleIntegration.moduleInfo.seamCallComment(type: "S31_Screen", declaringModule: "FuzzFeature"))
 		let withComments = Self.rootInitializer
-			.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret = token // Declared at Sources/FuzzApp/S31_Root.swift:8")
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self // If this line does not compile, add the SafeDI plugin to the target that declares S31_Screen.")
 		let runs = Self.integrationRuns(
 			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withUnreadTypeComment], warnings: []),
 			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withComments], warnings: []),
 		)
-		#expect(withComments.components(separatedBy: " // ").count == 3)
+		#expect(withComments.components(separatedBy: " // ").count == 2)
 		#expect(withUnreadTypeComment != Self.rootInitializer)
 		#expect(runs.integrationsDisagreeFailure == nil)
 	}
@@ -2964,9 +2953,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let typeErrorSeed: UInt64 = 1_000_000_001
 		let loweringErrorSeed: UInt64 = 1_000_000_002
 		let warningSeed: UInt64 = 1_000_000_003
-		let redirectedWarningSeed: UInt64 = 1_000_000_004
 		let fixtureWarningSeed: UInt64 = 1_000_000_005
-		let redirectedWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: redirectedWarningSeed)
 		let fixtureWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: fixtureWarningSeed)
 		let toolRuns = [
 			// A type error, which the type checker reports.
@@ -2983,19 +2970,9 @@ struct SafeDIToolGraphFuzzerTests {
 			"""),
 			// A warning in the generated file, which compiles.
 			Self.probeGraph(seed: warningSeed, generatedCode: "func drawsWarning() {\n\tlet unused = 1\n}\n"),
-			// A warning the compiler reports at the fixture's declaration, where a `#sourceLocation` directive in
-			// the generated file attributes the line, as the tool's directives name the fixtures it was given.
-			Self.probeGraph(seed: redirectedWarningSeed, generatedCode: """
-			func drawsWarningAtDeclaration() {
-				#sourceLocation(file: "/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift", line: 3)
-				let unused = 1
-				#sourceLocation()
-			}
-
-			"""),
-			// A warning the fixture draws too, which is not the generated code's to avoid. The two graphs above draw the
-			// same message in their generated code and still fail, which pins that only a graph's own fixture excuses
-			// its warning, although every graph is in the one compile.
+			// A warning the fixture draws too, which is not the generated code's to avoid. The graph above draws the same
+			// message in its generated code and still fails, which pins that only a graph's own fixture excuses its
+			// warning, although every graph is in the one compile.
 			Self.probeGraph(
 				seed: fixtureWarningSeed,
 				fixtureDeclarations: "func \(fixtureWarningPrefix)drawsWarning() {\n\tlet unused = 1\n}\n",
@@ -3005,13 +2982,11 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
-		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed, redirectedWarningSeed])
+		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed])
 		#expect(failures[typeErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[loweringErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[warningSeed]?.kind == .generatedCodeDrawsWarning)
 		#expect(failures[warningSeed]?.details.contains("Broken.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
-		#expect(failures[redirectedWarningSeed]?.kind == .generatedCodeDrawsWarning)
-		#expect(failures[redirectedWarningSeed]?.details.hasPrefix("/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
@@ -3603,33 +3578,23 @@ struct SafeDIToolGraphFuzzerTests {
 		    public convenience init() {
 		        let t1 = S731_T1()
 		        @Sendable nonisolated func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
-		            #sourceLocation(file: "S731_Link0.swift", line: 8)
-		            let t1AliasAlias: S731_T1? = t1Alias
-		            #sourceLocation()
+		            let t1AliasAlias: S731_T1? = t1Alias // Declared as S731_Link0.t1AliasAlias
 		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
 		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
 		        }
 		        @Sendable nonisolated func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
-		            #sourceLocation(file: "S731_Link1.swift", line: 7)
-		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
-		            #sourceLocation()
+		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias // Declared as S731_Link1.t1AliasAliasAlias
 		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
 		        }
 		        @Sendable nonisolated func __safeDI_lazyT0() -> S731_T0 {
-		            #sourceLocation(file: "S731_T0.swift", line: 9)
-		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
-		            #sourceLocation()
-		            #sourceLocation(file: "S731_T0.swift", line: 10)
-		            let t1Alias: S731_T1? = t1
-		            #sourceLocation()
+		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1) // Declared as S731_T0.anyT1Alias
+		            let t1Alias: S731_T1? = t1 // Declared as S731_T0.t1Alias
 		            let link0: S731_Link0 = __safeDI_link0(t1Alias: t1Alias)
 		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
 		        func __safeDI_t2Builder() -> S731_T2 {
-		            #sourceLocation(file: "S731_T2.swift", line: 7)
-		            let t1Alias: S731_T1? = t1
-		            #sourceLocation()
+		            let t1Alias: S731_T1? = t1 // Declared as S731_T2.t1Alias
 		            return S731_T2(t1Alias: t1Alias)
 		        }
 		        let t2Builder = Instantiator<S731_T2>(__safeDI_t2Builder)
@@ -3736,17 +3701,11 @@ struct SafeDIToolGraphFuzzerTests {
 		                if let safeDIBuilder = safeDIOverrides.t2.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
 		            }
 		            let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
-		            #sourceLocation(file: "S2420_T2.swift", line: 10)
-		            let t6Alias: S2420_T6? = t6
-		            #sourceLocation()
+		            let t6Alias: S2420_T6? = t6 // Declared as S2420_T2.t6Alias
 		            func __safeDI_link0() -> S2420_Link0 {
-		                #sourceLocation(file: "S2420_Link0.swift", line: 8)
-		                let t6AliasAlias: S2420_T6? = t6Alias
-		                #sourceLocation()
+		                let t6AliasAlias: S2420_T6? = t6Alias // Declared as S2420_Link0.t6AliasAlias
 		                func __safeDI_link1() -> S2420_Link1 {
-		                    #sourceLocation(file: "S2420_Link1.swift", line: 8)
-		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
-		                    #sourceLocation()
+		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias // Declared as S2420_Link1.t6AliasAliasAlias
 		                    let link2 = if let safeDIBuilder = safeDIOverrides.t2.link0.link1.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
 		                    return if let safeDIBuilder = safeDIOverrides.t2.link0.link1.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
 		                }
@@ -3955,9 +3914,7 @@ struct SafeDIToolGraphFuzzerTests {
 		        func __safeDI_passedLabelScope() -> S99_PassedLabelScope {
 		            let passedTracker = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedTracker { safeDIBuilder() } else { S99_PassedLabelTracker() }
 		            func __safeDI_passedSibling() -> S99_PassedLabelSibling {
-		                #sourceLocation(file: "S99_PassedLabelSibling.swift", line: 8)
-		                let passedTrackerAlias: S99_PassedLabelTracker? = passedTracker
-		                #sourceLocation()
+		                let passedTrackerAlias: S99_PassedLabelTracker? = passedTracker // Declared as S99_PassedLabelSibling.passedTrackerAlias
 		                let passedLeaf = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.passedLeaf { safeDIBuilder(passedTrackerAlias) } else { S99_PassedLabelLeaf(passedTrackerAlias: passedTrackerAlias) }
 		                return if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.safeDIBuilder { safeDIBuilder(passedTrackerAlias, passedLeaf) } else { S99_PassedLabelSibling(passedTrackerAlias: passedTrackerAlias, passedLeaf: passedLeaf) }
 		            }
@@ -6550,7 +6507,6 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(unresolved):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(resolved):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(linux):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
-		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "            #sourceLocation(file: \"\(resolved)\", line: 8)") == "            #sourceLocation(file: \"<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift\", line: 8)")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "chain: S12_Root0 -> S12_T1 at \(unresolved) and \(resolved)") == "chain: S12_Root0 -> S12_T1 at <fixture-directory>/Graph/Sources/Alpha/S12_T1.swift and <fixture-directory>/Graph/Sources/Alpha/S12_T1.swift")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "/Users/someone/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one") == "/Users/someone/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 	}
@@ -6687,6 +6643,27 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: GraphFuzzerLongRunConfiguration.current != nil, "Set SAFEDI_GRAPH_FUZZER_ITERATIONS or SAFEDI_GRAPH_FUZZER_SEEDS to run"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func longRun_findsNoUnknownFailures_whenEnabledByEnvironment() async throws {
+		// The runs of the tool in this process report each production root that reaches a cycle with its plan's bodies
+		// (`PlanBodiesObservation`): the report's last line counts those roots, those that hold a twin, which stay built
+		// per path, and the bodies their plans build. A graph is run several times, so the counts are of roots of runs.
+		let (planStream, planContinuation) = AsyncStream.makeStream(of: (bodyCount: Int, holdsTwin: Bool).self)
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { _, bodiesOfPlan, _, twinValues in
+			planContinuation.yield((bodiesOfPlan.count, !twinValues.isEmpty))
+		}) {
+			try await longRun()
+		}
+		planContinuation.finish()
+		var (cyclicRootCount, twinRootCount, bodyCount) = (0, 0, 0)
+		for await plan in planStream {
+			cyclicRootCount += 1
+			twinRootCount += plan.holdsTwin ? 1 : 0
+			bodyCount += plan.bodyCount
+		}
+		GraphFuzzerReport(path: GraphFuzzerLongRunConfiguration.current?.reportPath).append("per-type-plan cyclic-roots=\(cyclicRootCount) twin-roots=\(twinRootCount) bodies=\(bodyCount)")
+	}
+
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private func longRun() async throws {
 		let configuration = try #require(GraphFuzzerLongRunConfiguration.current)
 		let report = GraphFuzzerReport(path: configuration.reportPath)
 		func reportProblem(_ problem: String) {
@@ -7004,6 +6981,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
 		// whole corpus checks the floor below.
 		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
+		// What the per-type facts' parameters differ by from the functions the tree writes, against no pin: the functions
+		// (and their roots) a parameter that every call passes `nil` is dropped from, and the parameters the facts name
+		// that the tree captures, by the calls into their variant (none, one, two or more).
+		let parameterCounts = TypeFactsChecks.ParameterTally.shared.counts
+		report.append("parameter-facts \(parameterCounts.droppedParameterFunctions) \(parameterCounts.droppedParameterRoots) \(parameterCounts.capturedParametersByCalls.map(String.init).joined(separator: " ")) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {
@@ -7173,9 +7155,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_186, 2_314, 2_420, 2_449, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x7036001E6A7C6CCE
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4098F3D0FBB10271
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -7185,15 +7167,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x621CFB8CC4F3014
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xF94F7E5D7106E65E
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x498249530FB88E0F
+	static let corpusFixtureHash: UInt64 = 0xCB8F6B707975A3AA
 
-	static let corpusPartitionHash: UInt64 = 0x6E9B72CF03F27B48
+	static let corpusPartitionHash: UInt64 = 0x412BBB9D33C6D0DC
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -7215,10 +7197,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.sendableLazilyInstantiatedProperty: 200,
 		.erasedLazilyInstantiatedProperty: 216,
 		.forwardedLazilyInstantiatedProperty: 328,
-		.receivedLazilyInstantiatedInstance: 277,
-		.forwardedProperty: 1_686,
+		.receivedLazilyInstantiatedInstance: 363,
+		.forwardedProperty: 1_714,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_522,
+		.requiredReceive: 2_533,
 		.requiredOptionalReceive: 371,
 		.onlyIfAvailableReceive: 2_287,
 		.requiredAlias: 1_365,
@@ -7252,8 +7234,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedTupleBuilderReceivedByMockedType: 137,
 		.multipleRoots: 2_083,
 		.generateMock: 2_490,
-		.lazyCycle: 1_420,
-		.constantCycleCloser: 157,
+		.lazyCycle: 1_524,
+		.constantCycleCloser: 301,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
 		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 40,
@@ -7282,6 +7264,17 @@ struct SafeDIToolGraphFuzzerTests {
 		.instantiableStruct: 544,
 		.additionalMockToGenerate: 653,
 		.generateDependencyTree: 0,
+		.twinsOverSharedScreen: 98,
+		.twinsOverSharedScreenValueFirst: 52,
+		.twinsOverSharedScreenWrapperFirst: 46,
+		.twinsOverSharedScreenSendableWrapper: 20,
+		.twinsOverSharedScreenScreenReceivesOnlyIfAvailable: 36,
+		.twinsOverSharedScreenScreenBuildsPanel: 32,
+		.twinsOverSharedScreenFirstThroughInstantiator: 46,
+		.twinsOverSharedScreenTopOpensSecond: 44,
+		.twinsOverSharedScreenThemeInSameForm: 37,
+		.twinsOverSharedScreenThemeInMixedForms: 29,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 16,
 	]
 
 	/// The graphs of seeds `0..<seedCount` drawn with `features`, and what is pinned about them. Each generator
@@ -7437,8 +7430,8 @@ struct SafeDIToolGraphFuzzerTests {
 			.requiredReceiveOfUncreatedAlias: 40,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
-			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 181,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_915,
+			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 276,
 			.promotedDependencyReceivedByTwoOrMoreTypes: 565,
 			.onlyIfAvailableAliasOfPromotedDependency: 122,
 			.requiredAliasOfPromotedDependency: 402,
@@ -7501,7 +7494,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isSharedFillBodyShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isTwinShape || $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isOptionalPlaceShape || $0.isReadThroughViewShape || $0.isSeamCallReachedOnTwoPathsShape || $0.isSendableFillKeptInItsCallShape || $0.isRootDispatcherHandingCallersValueShape || $0.isSharedFillBodyShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -7553,17 +7546,17 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_090, conversions: 0, fills: 422)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_528, conversions: 0, fills: 422)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
 	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 640, judgedWithNamed: 399, named: 1_075, conversions: 0, fills: 504)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
+	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 704, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x1313E68FFFFF5176
+	static let seamCorpusFixtureHash: UInt64 = 0xE931F95B8AB97C0D
 	static let seamCorpusAcceptedSeedCount = 609
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x38D97AC726E69107
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7730,7 +7723,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsSendableWrapper: 14,
 		.carriedLevelFillReadsSendableWrapperAlone: 14,
 		.reenteredFillSendableCall: 13,
-		.seamDependencyChainReadThroughView: 11,
+		.seamDependencyChainReadThroughView: 12,
 		.seamDependencyReadThroughView: 77,
 		.spelledAliasNamingProtocolWithoutAny: 23,
 		.spelledAliasOnlyReceiveOfMockedChild: 13,
@@ -7762,6 +7755,24 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamRingOfSendableInstantiators: 15,
 		.seamRingWithoutRootValues: 27,
 		.seamRingRooted: 29,
+		.twinsOverSharedScreen: 50,
+		.twinsOverSharedScreenValueFirst: 27,
+		.twinsOverSharedScreenWrapperFirst: 23,
+		.twinsOverSharedScreenSendableWrapper: 12,
+		.twinsOverSharedScreenScreenReceivesOnlyIfAvailable: 17,
+		.twinsOverSharedScreenScreenBuildsPanel: 15,
+		.twinsOverSharedScreenFirstThroughInstantiator: 27,
+		.twinsOverSharedScreenTopOpensSecond: 21,
+		.twinsOverSharedScreenInSeam: 50,
+		.twinsOverSharedScreenThemeInSameForm: 15,
+		.twinsOverSharedScreenThemeInMixedForms: 14,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 12,
+		.holeSeamCallReachedOnTwoPaths: 68,
+		.holeSendableFillKeptInItsCallCallsSeamItFills: 26,
+		.holeRootDispatcherHandsCallersValue: 65,
+		.holeFillBodySharedByCallsAtTwoDepths: 75,
+		.holeFillBodySharedByPlacesAtTwoLevels: 39,
+		.holeFillBodySharedReadsValueLevelBindsAgain: 16,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -7840,7 +7851,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x89196AB0BDCA7106
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6A12D32FAF1F5234
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -8239,6 +8250,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalPlaceBesideRequiredPlace: 154,
 		.optionalPlaceReceivedRequired: 295,
 		.optionalPlaceSeamMocked: 74,
+		.twinsOverSharedScreen: 195,
+		.twinsOverSharedScreenValueFirst: 98,
+		.twinsOverSharedScreenWrapperFirst: 97,
+		.twinsOverSharedScreenSendableWrapper: 57,
+		.twinsOverSharedScreenScreenReceivesOnlyIfAvailable: 56,
+		.twinsOverSharedScreenScreenBuildsPanel: 73,
+		.twinsOverSharedScreenFirstThroughInstantiator: 101,
+		.twinsOverSharedScreenTopOpensSecond: 71,
+		.twinsOverSharedScreenInSeam: 195,
+		.twinsOverSharedScreenThemeInSameForm: 67,
+		.twinsOverSharedScreenThemeInMixedForms: 70,
+		.twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder: 49,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -9193,6 +9216,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.valueFormsBesidePublicMockCallRenamed: 63,
 		.valueFormsBesidePublicMockCallTwoWrapperForms: 19,
 		.valueFormsBesidePublicMockCallUnbuildableValue: 119,
+		.twinsPublicMock: 110,
+		.twinsPublicMockValueFirst: 52,
+		.twinsPublicMockWrapperFirst: 58,
+		.twinsPublicMockSendableWrapper: 16,
+		.twinsPublicMockScreenReceivesOnlyIfAvailable: 26,
+		.twinsPublicMockScreenBuildsPanel: 38,
+		.twinsPublicMockFirstThroughInstantiator: 47,
+		.twinsPublicMockTopOpensSecond: 50,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -9231,7 +9262,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xBBFB2E79AE7331A2
+	static let publicMockCorpusFixtureHash: UInt64 = 0x4B62019C2E64D2F1
 	static let publicMockCorpusAcceptedSeedCount = 854
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xA0030516C7DF62F
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -9293,7 +9324,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x69CB45E5EEDAF5F7
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4630BAEFC2B8DBD1
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -9301,19 +9332,23 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 836, 947],
+			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
 		// `SelfStep`, whose two names the move across wrapper names now and then puts on either side of `Instantiator`, and in
 		// the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`), and in the shared-construction draw's
-		// cycle through `ShareService` and `ShareTicker`.
+		// cycle through `ShareService` and `ShareTicker`, and in the twin draw's cycle through `TwinModel` and `TwinSecond`
+		// (`drawTwinsPublicMock`; 474 and 836 are listed with their other reasons below). Release 2.4.1 generates the same
+		// mocks for these graphs. ROADMAP section 0's row 5, which gives every back-edge a slot, removes every seed listed
+		// under this reason.
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 649, 653,
-				677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
+				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 551, 561, 566, 572, 574, 583, 595, 598, 612, 616,
+				619, 649, 653, 655, 677, 697, 726, 749, 818, 825, 832, 833, 875, 884, 887, 899, 907, 909, 934, 944,
+				946, 956, 974,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -9356,19 +9391,19 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 156, 242, 326, 327, 474, 629, 731, 821, 881, 983],
+			seeds: [18, 22, 156, 242, 326, 327, 629, 731, 821, 881, 983],
 		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockFormsNamedApartOrderReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
-			seeds: [47, 221, 381, 452, 880, 886],
+			seeds: [47, 221, 381, 452, 474, 880, 886],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [12, 65, 407],
+			seeds: [12, 65, 407, 836],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(passedUpBuildersNamedApartReason); and \(lazyCycleConfigurationFieldReason)",
@@ -9659,6 +9694,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.twoLeavesReceiveUnnameableDependency: 43,
 		.twoPublicMockTypes: 299,
 		.typeInExtensionOfInstantiable: 219,
+		.twinsPublicMock: 130,
+		.twinsPublicMockValueFirst: 61,
+		.twinsPublicMockWrapperFirst: 69,
+		.twinsPublicMockSendableWrapper: 22,
+		.twinsPublicMockScreenReceivesOnlyIfAvailable: 33,
+		.twinsPublicMockScreenBuildsPanel: 46,
+		.twinsPublicMockFirstThroughInstantiator: 59,
+		.twinsPublicMockTopOpensSecond: 57,
 	]
 
 	/// Seed 2760, whose mock of `S2760_T2` the tool rejected until a mock passed `nil` to a receive only if available that

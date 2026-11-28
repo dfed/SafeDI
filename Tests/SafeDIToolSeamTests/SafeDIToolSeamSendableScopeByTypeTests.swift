@@ -77,10 +77,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>) {
 			            self.shell = shell
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -89,10 +85,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(widget: @escaping (Part, SendableInstantiator<Panel>) -> __safeDI_Built) {
 			            self.widget = widget
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -103,10 +95,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(widget: @escaping (String, Part) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -116,10 +104,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
 			            self.shell_Sendable = shell_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -128,10 +112,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
 			            self.panelBuilder = panelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -234,10 +214,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell<__safeDI_Built>) {
 			            self.shell_Sendable = shell_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
-			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -246,10 +222,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(widgetBuilder: @escaping @Sendable () -> SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
 			            self.widgetBuilder = widgetBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Int, __safeDI_Built>.Builder) {
-			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
 			    }
 
@@ -334,10 +306,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell: __safeDI_WidgetCarrier_Shell<__safeDI_Built>) {
 			            self.shell = shell
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(shell: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -346,10 +314,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(plainPanelBuilder: @escaping (SendableInstantiator<Panel>) -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
 			            self.plainPanelBuilder = plainPanelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(plainPanelBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -360,10 +324,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(widget: @escaping (String) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -373,10 +333,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
 			            self.shell_Sendable = shell_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -385,10 +341,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
 			            self.panelBuilder = panelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -492,10 +444,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(widget: @escaping (String) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -504,10 +452,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
 			            self.panelBuilder = panelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -590,10 +534,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(widget: @escaping (String) -> __safeDI_Built) {
 			            self.widget = widget
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(widget: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -602,10 +542,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(shell_Sendable: __safeDI_WidgetSendableCarrier_Shell<__safeDI_Built>) {
 			            self.shell_Sendable = shell_Sendable
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -618,10 +554,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            self.screen_Sendable_ = screen_Sendable_
 			            self.screen_Sendable = screen_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(screen_Sendable_: .init(__safeDI_noScope: __safeDI_builder), screen_Sendable: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -630,10 +562,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(panelBuilder: @escaping @Sendable () -> __safeDI_WidgetCarrier_Panel<__safeDI_Built>) {
 			            self.panelBuilder = panelBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(panelBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -817,10 +745,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(api: @escaping () -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -830,10 +754,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(mid_Sendable: __safeDI_ApiSendableCarrier_Mid<__safeDI_Built>) {
 			            self.mid_Sendable = mid_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(mid_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -842,10 +762,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(screenBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 			            self.screenBuilder = screenBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(screenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1034,10 +950,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(api: @escaping (Tag) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1047,10 +959,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(aBuilder_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>) {
 			            self.aBuilder_Sendable = aBuilder_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1059,10 +967,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(cBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_C<__safeDI_Built>) {
 			            self.cBuilder = cBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(cBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -1343,10 +1247,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		        public init(hub_Sendable: Hub.__safeDI_ApiSendableCarrier<__safeDI_Built>) {
 		            self.hub_Sendable = hub_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1504,10 +1404,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        public init(shell_Sendable: __safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<__safeDI_Built>) {
 			            self.shell_Sendable = shell_Sendable
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
-			            self.init(shell_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1516,10 +1412,6 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			        public init(widgetBuilder: @escaping @Sendable () -> SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
 			            self.widgetBuilder = widgetBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Shell_Scope, __safeDI_Built>.Builder) {
-			            self.init(widgetBuilder: { __safeDI_builder })
 			        }
 			    }
 

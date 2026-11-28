@@ -27,7 +27,7 @@ import SafeDICore
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct Query: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
-		abstract: "Answer a question about the `@Instantiable` types in a set of modules (beta).",
+		abstract: "Answer a question about the `@Instantiable` types in a set of modules (`needs` in beta, `graph` in alpha).",
 		subcommands: [QueryNeeds.self, QueryGraph.self],
 	)
 }
@@ -92,12 +92,6 @@ public struct QueryNeeds: AsyncParsableCommand {
 				importStatements: [],
 				mockImportStatements: [],
 				typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
-				// No code is generated, so no alias declaration is referenced.
-				aliasDeclarationReferences: AliasDeclarationReferences(
-					declarationFilePaths: [],
-					compilerFilePaths: nil,
-					commentFilePath: { $0 },
-				),
 				// The query describes no one build whose mock condition would decide whether the mock is compiled, so it
 				// checks the hand-written mocks the mock calls as a build that compiles the mock does.
 				compilesGeneratedMocks: true,
@@ -515,16 +509,10 @@ struct ParsedQueryModule {
 		}
 		// A file that cannot be opened reports the file system's error as `generate` does.
 		let data = try Data(contentsOf: path.asFileURL)
-		// The query prints lines, so it reads the positions file beside a module info file that stores them in one. Where
-		// that file is missing or does not pair, the report leaves out the lines and columns it would have read there, as
-		// it does for any declaration whose line it does not know, rather than print a stale one or fail.
+		// A module info file stores no line or column, so the report leaves out the lines of its declarations, as it does
+		// for any declaration whose line it does not know.
 		do {
-			return try ModuleInfoFile.reading(
-				moduleInfoData: data,
-				readingView: false,
-				positionsData: try? Data(contentsOf: ModuleInfoFile.positionsFilePath(ofModuleInfoAt: path).asFileURL),
-				reattachesPositions: true,
-			).file
+			return try ModuleInfoFile.reading(moduleInfoData: data, readingView: false)
 		} catch {
 			throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
@@ -736,8 +724,8 @@ public struct QueryErrorReport: Encodable, Sendable {
 		init(_ diagnostic: SourceDiagnostic) {
 			severity = diagnostic.severity.rawValue
 			filePath = diagnostic.location?.filePath
-			line = diagnostic.location?.lineAndColumn?.line
-			column = diagnostic.location?.lineAndColumn?.column
+			line = diagnostic.location?.position?.line
+			column = diagnostic.location?.position?.column
 			message = diagnostic.message
 		}
 

@@ -1400,15 +1400,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(serviceBuilder: @escaping () -> any Service) {
-		        self.init(__safeDI_serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_ServiceCarrier<__safeDI_Built> {
+		            .init(service: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Service(serviceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1419,7 +1418,10 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    package init(serviceBuilder: Thing?, serviceBuilder_: @escaping () -> any Service) {
-		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceBuilder_: .init(__safeDI_noScope: serviceBuilder_))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_ServiceCarrier<__safeDI_Built> {
+		            .init(service: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceBuilder_: __safeDI_noScope_Host_SafeDICarrierScope_Service(serviceBuilder_))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1508,15 +1510,14 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        public init(service: @escaping @Sendable () -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(serviceSendableBuilder: @escaping @Sendable () -> any Service) {
-		        self.init(__safeDI_serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Host.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+		            .init(service: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceSendableBuilder: __safeDI_noScope_Host_SafeDISendableCarrierScope_Service(serviceSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1527,7 +1528,10 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    package init(serviceBuilder: Thing?, serviceSendableBuilder: @escaping @Sendable () -> any Service) {
-		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceSendableBuilder: .init(__safeDI_noScope: serviceSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Host.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+		            .init(service: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_serviceBuilder: serviceBuilder, __safeDI_serviceSendableBuilder: __safeDI_noScope_Host_SafeDISendableCarrierScope_Service(serviceSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

@@ -79,9 +79,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			],
 			moduleMembershipArguments: ["--module-name", "Feature"],
 		)
-		// The root's world calls the seam, which node records refuse as a construction; the seam's own world they accept.
+		// Node records make the records of the root's world, which calls the seam, and of the seam's own world.
 		#expect(forcers == """
-		Root\tseam world, kind construction
+		Root\tseam world
 		Screen\tseam world
 		roots that built a tree: 2 of 2
 
@@ -90,8 +90,9 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRecordsOfRootCannotBeLaidOut() async throws {
-		// A root with no dependencies has no generated initializer, so the engine lays out nothing from its records.
+	mutating func generate_buildsNoTree_whenRootBuildsNothing() async throws {
+		// A root with no dependencies has no generated initializer: its node records lay it out as nothing, as its tree
+		// would write it, so nothing forces its tree.
 		let (forcers, _) = try await treeForcers(of: [
 			"""
 			@Instantiable(isRoot: true)
@@ -101,8 +102,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 			""",
 		])
 		#expect(forcers == """
-		Root\tkind notLaidOut
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
@@ -111,10 +112,10 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
-		// One variant of `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as
-		// a value: its one record would be wrong beneath one of them.
+		// `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as a value. The
+		// two forms key apart, so `Reader` has two variants, which a production world refuses.
 		#expect(forcers == """
-		Root\tkind callsAnswerAVariantApart
+		Root\tkind nodeHasSeveralVariants
 		roots that built a tree: 1 of 1
 
 		""")
@@ -126,7 +127,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: false))
 		// The same world with the root's properties swapped: the refusal does not follow which parent is declared first.
 		#expect(forcers == """
-		Root\tkind callsAnswerAVariantApart
+		Root\tkind nodeHasSeveralVariants
 		roots that built a tree: 1 of 1
 
 		""")
@@ -137,11 +138,13 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// `Plain`, a root node records lay out, and `Looping`, a root they refuse, since a type of its tree builds itself
-	/// again through an `Instantiator`.
+	/// again through an `Instantiator` and a type beneath it receives a `LazilyInstantiated` wrapper.
 	private static let plainAndLoopingRoots = [
 		seamFixtureType(named: "Looping", isRoot: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
 		seamFixtureType(named: "Plain", isRoot: true, declarations: ["@Instantiated let service: Service"]),
-		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>"]),
+		seamFixtureType(named: "Step", declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let tag: LazilyInstantiated<Tag>", "@Instantiated let detail: Detail"]),
+		seamFixtureType(named: "Detail", declarations: ["@Received let tag: LazilyInstantiated<Tag>"]),
+		seamFixtureType(named: "Tag", declarations: []),
 		seamFixtureType(named: "Service", declarations: []),
 	]
 
@@ -167,7 +170,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,

@@ -257,10 +257,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        public init(leaf: @escaping (SendableInstantiator<D>) -> __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 				            self.leaf = leaf
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(leaf: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-				        }
 				    }
 
 				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -269,10 +265,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
@@ -3070,10 +3062,6 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				        public init(api: @escaping () -> __safeDI_Built) {
 				            self.api = api
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 

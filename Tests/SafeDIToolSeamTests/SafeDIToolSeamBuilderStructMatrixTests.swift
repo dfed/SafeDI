@@ -59,10 +59,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.aBuilder = aBuilder
 		            self.bBuilder = bBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder), bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -71,10 +67,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(detailBuilder: @escaping (Logger, Tag) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -85,10 +77,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(detailBuilder: @escaping (Logger) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -98,15 +86,23 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(aBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api_A_Scope(__safeDI_builder), bBuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_B_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_A_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_A<__safeDI_Built> {
+		            .init(detailBuilder: { _, _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_B_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_B<__safeDI_Built> {
+		            .init(detailBuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder) })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -224,10 +220,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(aBuilder: __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.aBuilder = aBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -236,10 +228,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(api: @escaping (Logger) -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -250,10 +238,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping (Logger) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -262,10 +246,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(aBuilder_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>) {
 		            self.aBuilder_Sendable = aBuilder_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(aBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -276,15 +256,26 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(workerBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Worker<__safeDI_Built>) {
 		            self.workerBuilder = workerBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api, apiSendableBuilder: @escaping @Sendable () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder), __safeDI_apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(aBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api_A_Scope(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_A_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_A<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDISendableCarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Home.__safeDI_ApiSendableCarrier<__safeDI_Built> {
+		            .init(aBuilder_Sendable: __safeDI_noScope_Home_SafeDISendableCarrierScope_Api_A_Scope(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDISendableCarrierScope_Api_A_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Home.__safeDI_ApiSendableCarrier_A<__safeDI_Built> {
+		            .init(workerBuilder: { __safeDI_noScope_Home_SafeDICarrierScope_Api_Worker_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Worker_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Worker<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder), __safeDI_apiSendableBuilder: __safeDI_noScope_Home_SafeDISendableCarrierScope_Api(apiSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -382,10 +373,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(detailBuilder: @escaping (Navigator) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -394,10 +381,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(leafBuilder: @escaping (__safeDI_DetailValues2) -> __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
 		            self.leafBuilder = leafBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(leafBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -408,15 +391,20 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(detailBuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		            .init(leafBuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Leaf_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Leaf_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Leaf<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -503,15 +491,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Service_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -522,7 +509,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    package convenience init(theme: Theme?, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_theme: theme, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_theme: theme, __safeDI_apiBuilder: __safeDI_noScope_Service_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -619,15 +609,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Service_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -638,7 +627,10 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    internal convenience init(color: Color?, apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_color: color, __safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { _ in __safeDI_builder() })
+		        }
+		        self.init(__safeDI_color: color, __safeDI_apiBuilder: __safeDI_noScope_Service_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -694,15 +686,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    package convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Service_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -805,10 +796,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(detailBuilder: @escaping (Navigator) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -818,15 +805,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(detailBuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -899,10 +888,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(detail: __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detail = detail
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -911,10 +896,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -925,15 +906,20 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(workerBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Worker<__safeDI_Built>) {
 		            self.workerBuilder = workerBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiSendableBuilder: @escaping @Sendable () -> any Api) {
-		        self.init(__safeDI_apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDISendableCarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Home.__safeDI_ApiSendableCarrier<__safeDI_Built> {
+		            .init(workerBuilder: { __safeDI_noScope_Home_SafeDICarrierScope_Api_Worker_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Worker_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Worker<__safeDI_Built> {
+		            .init(detail: __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope(__safeDI_builder))
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier_Detail<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiSendableBuilder: __safeDI_noScope_Home_SafeDISendableCarrierScope_Api(apiSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1005,10 +991,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(innermost_Sendable: Innermost.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 		            self.innermost_Sendable = innermost_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(innermost_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1036,10 +1018,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(service: @escaping (Logger) -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1048,10 +1026,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(detailBuilder: @escaping @Sendable () -> __safeDI_ServiceCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -1090,10 +1064,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 		    }
@@ -1107,10 +1077,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		            public init(inner_serviceSendableBuilder: @escaping @Sendable (inner_serviceSendableBuilder_Values) -> Inner.__safeDI_ServiceSendableCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.inner_serviceSendableBuilder = inner_serviceSendableBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.init(inner_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -1205,10 +1171,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(innermost_Sendable: Innermost.__safeDI_ServiceSendableCarrier<__safeDI_Built>) {
 		            self.innermost_Sendable = innermost_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(innermost_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1236,10 +1198,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(service: @escaping (Logger) -> __safeDI_Built) {
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1249,10 +1207,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(stackBuilder_Sendable: __safeDI_ServiceSendableCarrier_Stack<__safeDI_Built>) {
 		            self.stackBuilder_Sendable = stackBuilder_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(stackBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1261,10 +1215,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(cardBuilder: @escaping @Sendable () -> __safeDI_ServiceCarrier_Card<__safeDI_Built>) {
 		            self.cardBuilder = cardBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(cardBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -1342,10 +1292,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(innermost: Innermost.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.innermost = innermost
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(innermost: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1373,10 +1319,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(aBuilder: @escaping (Logger) -> __safeDI_ServiceCarrier_A<__safeDI_Built>) {
 		            self.aBuilder = aBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1386,10 +1328,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(bBuilder: @escaping (Tag) -> __safeDI_ServiceCarrier_B<__safeDI_Built>) {
 		            self.bBuilder = bBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(bBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1398,10 +1336,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(service: @escaping (Badge) -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -1484,10 +1418,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(innermost: Innermost.__safeDI_ServiceCarrier<__safeDI_Built>) {
 		            self.innermost = innermost
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(innermost: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1515,10 +1445,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(detailBuilder: @escaping (Logger) -> __safeDI_ServiceCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1527,10 +1453,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
 		        }
 		    }
 
@@ -1825,15 +1747,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiBuilder: @escaping () -> any Api) {
-		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_ApiCarrier<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiBuilder: __safeDI_noScope_Home_SafeDICarrierScope_Api(apiBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1856,10 +1777,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1869,15 +1786,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(workerBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Worker<__safeDI_Built>) {
 		            self.workerBuilder = workerBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(apiSendableBuilder: @escaping @Sendable () -> any Api) {
-		        self.init(__safeDI_apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_SendableHome_SafeDISendableCarrierScope_Api<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> SendableHome.__safeDI_ApiSendableCarrier<__safeDI_Built> {
+		            .init(workerBuilder: { __safeDI_noScope_SendableHome_SafeDICarrierScope_Api_Worker_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_SendableHome_SafeDICarrierScope_Api_Worker_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> SendableHome.__safeDI_ApiCarrier_Worker<__safeDI_Built> {
+		            .init(api: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_apiSendableBuilder: __safeDI_noScope_SendableHome_SafeDISendableCarrierScope_Api(apiSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1949,10 +1868,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(panel: @escaping () -> __safeDI_Built) {
 		            self.panel = panel
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(panel: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1962,15 +1877,17 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(heldBuilder: @escaping @Sendable () -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.heldBuilder = heldBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(heldBuilder: { __safeDI_builder })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(panelBuilder: @escaping () -> Panel, panelSendableBuilder: @escaping SendableInstantiator<Panel>.Builder) {
-		        self.init(__safeDI_panelBuilder: .init(__safeDI_noScope: panelBuilder), __safeDI_panelSendableBuilder: .init(__safeDI_noScope: panelSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Panel<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_PanelCarrier<__safeDI_Built> {
+		            .init(panel: { __safeDI_builder() })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDISendableCarrierScope_Panel<__safeDI_Built>(_ __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) -> Host.__safeDI_PanelSendableCarrier<__safeDI_Built> {
+		            .init(heldBuilder: { __safeDI_builder })
+		        }
+		        self.init(__safeDI_panelBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Panel(panelBuilder), __safeDI_panelSendableBuilder: __safeDI_noScope_Host_SafeDISendableCarrierScope_Panel(panelSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2045,10 +1962,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(held: @escaping () -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.held = held
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(held: { __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2057,10 +1970,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(panel: @escaping () -> __safeDI_Built) {
 		            self.panel = panel
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(panel: { __safeDI_builder() })
 		        }
 		    }
 
@@ -2071,15 +1980,20 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(workerBuilder: @escaping @Sendable () -> __safeDI_PanelCarrier_Worker<__safeDI_Built>) {
 		            self.workerBuilder = workerBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(workerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(panelBuilder: @escaping Instantiator<Panel>.Builder, panelSendableBuilder: @escaping @Sendable () -> Panel) {
-		        self.init(__safeDI_panelBuilder: .init(__safeDI_noScope: panelBuilder), __safeDI_panelSendableBuilder: .init(__safeDI_noScope: panelSendableBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Panel<__safeDI_Built>(_ __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) -> Host.__safeDI_PanelCarrier<__safeDI_Built> {
+		            .init(held: { __safeDI_builder })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDISendableCarrierScope_Panel<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Host.__safeDI_PanelSendableCarrier<__safeDI_Built> {
+		            .init(workerBuilder: { __safeDI_noScope_Host_SafeDICarrierScope_Panel_Worker_Scope(__safeDI_builder) })
+		        }
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Panel_Worker_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_PanelCarrier_Worker<__safeDI_Built> {
+		            .init(panel: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_panelBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Panel(panelBuilder), __safeDI_panelSendableBuilder: __safeDI_noScope_Host_SafeDISendableCarrierScope_Panel(panelSendableBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2164,15 +2078,14 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.panel = panel
 		            self.held = held
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(panel: { __safeDI_builder() }, held: { _ in { _ in __safeDI_builder() } })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public convenience init(panelBuilder: @escaping () -> Panel) {
-		        self.init(__safeDI_panelBuilder: .init(__safeDI_noScope: panelBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Host_SafeDICarrierScope_Panel<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Host.__safeDI_PanelCarrier<__safeDI_Built> {
+		            .init(panel: { __safeDI_builder() }, held: { _ in { _ in __safeDI_builder() } })
+		        }
+		        self.init(__safeDI_panelBuilder: __safeDI_noScope_Host_SafeDICarrierScope_Panel(panelBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2252,10 +2165,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.home = home
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2283,10 +2192,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder = screenBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2297,10 +2202,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping (Int) -> __safeDI_Built, next: @escaping (Int, any Api) -> __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.api = api
 		            self.next = next
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -2408,10 +2309,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.home = home
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2420,10 +2317,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(home_Sendable: Home.__safeDI_ApiSendableCarrier<__safeDI_Built>) {
 		            self.home_Sendable = home_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(home_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -2452,10 +2345,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder = screenBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2464,10 +2353,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -2478,10 +2363,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(screenBuilder_Sendable: __safeDI_ApiSendableCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder_Sendable = screenBuilder_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(screenBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2490,10 +2371,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(again: @escaping @Sendable () -> __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.again = again
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(again: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -2588,10 +2465,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(hub_Sendable: Hub.__safeDI_ApiSendableCarrier<__safeDI_Built>) {
 		            self.hub_Sendable = hub_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(hub_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2619,10 +2492,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(api: @escaping (A) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2632,10 +2501,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(a_Sendable: __safeDI_ApiSendableCarrier_A<__safeDI_Built>) {
 		            self.a_Sendable = a_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(a_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2644,10 +2509,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(bBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_B<__safeDI_Built>) {
 		            self.bBuilder = bBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(bBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -2735,10 +2596,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(home: Home.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.home = home
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(home: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2747,10 +2604,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(home_Sendable: Home.__safeDI_ApiSendableCarrier<__safeDI_Built>) {
 		            self.home_Sendable = home_Sendable
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(home_Sendable: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -2779,10 +2632,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.screenBuilder = screenBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2794,10 +2643,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.api = api
 		            self.next = next
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() }, next: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -2806,10 +2651,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		        public init(sendableScreenBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_Screen<__safeDI_Built>) {
 		            self.sendableScreenBuilder = sendableScreenBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(sendableScreenBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -2931,10 +2772,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.init(gadget: { _ in __safeDI_builder() })
-		                }
 		            }
 		        }
 
@@ -2944,10 +2781,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.__safeDI_ServiceCarrier<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.inner_serviceBuilder = inner_serviceBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.init(inner_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 		            }
 		        }
 		    }
@@ -3004,10 +2837,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            self.screenBuilder = screenBuilder
 		            self.service = service
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder), service: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3018,10 +2847,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		        public init(service: @escaping (Int) -> __safeDI_Built, next: @escaping (Int, any Service) -> __safeDI_ServiceCarrier_Screen<__safeDI_Built>) {
 		            self.service = service
 		            self.next = next
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { _ in __safeDI_builder() }, next: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -3108,10 +2933,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			        public init(alpha: @escaping () -> __safeDI_Built) {
 			            self.alpha = alpha
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(alpha: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3120,10 +2941,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 			        public init(zeta: @escaping (any Alpha) -> __safeDI_Built) {
 			            self.zeta = zeta
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(zeta: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -3165,10 +2982,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -3182,10 +2995,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -3197,10 +3006,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            public init(inner_alphaBuilder: @escaping (inner_alphaBuilder_Values) -> Inner.__safeDI_AlphaCarrier<SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<__safeDI_Built>>, inner_zetaBuilder: @escaping (inner_zetaBuilder_Values) -> Inner.__safeDI_ZetaCarrier<SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.inner_alphaBuilder = inner_alphaBuilder
 			                self.inner_zetaBuilder = inner_zetaBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.init(inner_alphaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, inner_zetaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3298,10 +3103,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			        public init(alpha: @escaping (any Zeta) -> __safeDI_Built) {
 			            self.alpha = alpha
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(alpha: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3310,10 +3111,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 			        public init(zeta: @escaping () -> __safeDI_Built) {
 			            self.zeta = zeta
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(zeta: { __safeDI_builder() })
 			        }
 			    }
 
@@ -3355,10 +3152,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -3372,10 +3165,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -3387,10 +3176,6 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 			            public init(inner_alphaBuilder: @escaping (inner_alphaBuilder_Values) -> Inner.__safeDI_AlphaCarrier<SafeDIScope_Gadget.DefaultAlpha_Scope.__safeDI_Builder<__safeDI_Built>>, inner_zetaBuilder: @escaping (inner_zetaBuilder_Values) -> Inner.__safeDI_ZetaCarrier<SafeDIScope_Gadget.DefaultZeta_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.inner_alphaBuilder = inner_alphaBuilder
 			                self.inner_zetaBuilder = inner_zetaBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.init(inner_alphaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, inner_zetaBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }

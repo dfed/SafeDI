@@ -2172,6 +2172,44 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holeScreen")
 	}
 
+	/// Twins over a shared screen beneath a seam (`addingTwinsOverSharedScreen`), one case per `TwinShape`, whose count in
+	/// accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`).
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenInSeam
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+
+	/// The feature of the seam corpus that `shape` is.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerSeamDrawFeature {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .inSeam: .twinsOverSharedScreenInSeam
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		}
+	}
+
+	/// Whether `addingTwinsOverSharedScreen` draws this shape.
+	var isTwinShape: Bool {
+		rawValue.hasPrefix("twinsOverSharedScreen")
+	}
+
 	/// Whether `addingHoleShapes` draws this case of two routes whose fill reads a value one route binds lazily and the
 	/// caller holds by value, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least
 	/// ten each.
@@ -3023,6 +3061,9 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
+			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
+			twinRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.twinRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
@@ -3110,6 +3151,10 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTwinsOverSharedScreen(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
@@ -3609,6 +3654,14 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
+		/// shape of that tree.
+		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingScreensLaidOutFromPerTypePlan`'s tree gains `PlanJob`, and where.
+		private var perTypePlanJobRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTwinsOverSharedScreen`'s choices: whether a graph gains `TwinRoot`'s tree, and every shape of
+		/// that tree.
+		private var twinRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
@@ -8678,6 +8731,240 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
+		// MARK: Screens laid out from the per-type plan
+
+		/// Adds, to one base corpus graph in twenty, `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
+		/// (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)` finds nothing in it), which the corpus's other
+		/// draws almost never are. `PlanRoot` instantiates one or two services by value and opens `PlanScreen0` through an
+		/// instantiator. Three to five screens open the next one around a ring through instantiators, and now and then
+		/// another screen too, so every screen is in one cycle. `PlanScreen0` instantiates one or two models, which the other
+		/// screens now and then receive, a value their own cycle declares again each time it builds `PlanScreen0`; a screen
+		/// now and then receives a service only the root declares, and forwards a value of its own (`planId<i>`), which its
+		/// opener's instantiator is called with. A screen now and then builds `PlanPane<i>` by value, which opens a screen
+		/// through an instantiator, a member of the cycle built by value; and one graph in three, one screen builds
+		/// `PlanDetail` by value, which builds `PlanPart`, a tree outside the cycle built once. Each type's properties are in
+		/// an order of their own, and the draw keeps at most `maximumScreenBuildersBeyondRing` builders beyond the ring's,
+		/// a screen's own or a pane's. In a graph of `Sendable` types the screens open one another through
+		/// `SendableInstantiator`s, the only instantiators such a type can store. In a graph whose wrappers may be
+		/// `Sendable`, six in ten of these graphs have one screen build `PlanJob` through a `SendableInstantiator`, whose
+		/// `@Sendable` builder function the plan's code declares: in a
+		/// graph of `Sendable` types `PlanJob` receives a service only the root declares, which that function captures, and
+		/// otherwise nothing, since no other type of the draw is `Sendable` there. The draw holds none of what keeps a root on
+		/// today's tree: no seam, rename, optional, value received only if available, received instantiator, lazy wrapper,
+		/// erasure, function type, label held in two forms, tree outside the cycles built twice, label a screen receives that
+		/// another type of the root's tree declares outside its cycle, or wrapper that is not `Sendable` a `@Sendable`
+		/// function could capture. `perTypePlanRandom` draws only for this pass, after every other, and only in the base
+		/// corpus, whose value oracle compares `PlanRoot()` with its mock; `perTypePlanJobRandom` draws only `PlanJob`, so
+		/// that the draw's other graphs are drawn as before.
+		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `PlanRoot`'s tree holds no wrapper that is not `Sendable` where a `@Sendable` function could capture it, whatever
+			// the graph's other types hold.
+			guard features.isEmpty,
+			      perTypePlanRandom.percentChance(5)
+			else { return declarations }
+			var declarations = declarations
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				// Each type's properties in an order of their own, so that no order the walk relies on is always drawn.
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, perTypePlanRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+				))
+			}
+			// A graph whose types all conform to `Sendable` stores only `Sendable` wrappers, so its screens open one another
+			// through `SendableInstantiator`s.
+			let screenInstantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func screenBuilder(_ screen: Int) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "planScreen\(screen)Builder", type: "\(screenInstantiator)<\(prefix)PlanScreen\(screen)>")
+			}
+			let screenCount = perTypePlanRandom.integer(in: 3...5)
+			let serviceCount = perTypePlanRandom.integer(in: 1...2)
+			let modelCount = perTypePlanRandom.integer(in: 1...2)
+			let services = (0..<serviceCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planService\($0)", type: "\(prefix)PlanService\($0)") }
+			let models = (0..<modelCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planModel\($0)", type: "\(prefix)PlanModel\($0)") }
+			for index in 0..<serviceCount {
+				append("PlanService\(index)", [])
+			}
+			for index in 0..<modelCount {
+				append("PlanModel\(index)", [])
+			}
+			let detailScreen = perTypePlanRandom.percentChance(33) ? perTypePlanRandom.integer(in: 0...(screenCount - 1)) : nil
+			// The builders beyond the ring's, a screen's own or a pane's, each drawn as before and kept only while fewer
+			// than `maximumScreenBuildersBeyondRing` are, so that the graphs within it draw as they did.
+			var screenBuildersBeyondRingCount = 0
+			for screen in 0..<screenCount {
+				var properties = [screenBuilder((screen + 1) % screenCount)]
+				for other in 0..<screenCount where other != screen && other != (screen + 1) % screenCount && perTypePlanRandom.percentChance(20) && screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+					screenBuildersBeyondRingCount += 1
+					properties.append(screenBuilder(other))
+				}
+				if screen == 0 {
+					properties += models
+				} else {
+					properties += models.filter { _ in perTypePlanRandom.percentChance(50) }.map {
+						PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+					}
+					if perTypePlanRandom.percentChance(30) {
+						properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "planId\(screen)", type: "Int"))
+					}
+				}
+				properties += services.filter { _ in perTypePlanRandom.percentChance(40) }.map {
+					PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+				}
+				if screen != 0, perTypePlanRandom.percentChance(30) {
+					let paneScreen = perTypePlanRandom.integer(in: 0...(screenCount - 1))
+					let paneReceivesModel = perTypePlanRandom.percentChance(50)
+					if screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+						screenBuildersBeyondRingCount += 1
+						properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planPane\(screen)", type: "\(prefix)PlanPane\(screen)"))
+						var paneProperties = [screenBuilder(paneScreen)]
+						if paneReceivesModel {
+							paneProperties.append(PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type))
+						}
+						append("PlanPane\(screen)", paneProperties)
+					}
+				}
+				if detailScreen == screen {
+					properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planDetail", type: "\(prefix)PlanDetail"))
+				}
+				append("PlanScreen\(screen)", properties)
+			}
+			if detailScreen != nil {
+				append("PlanDetail", [
+					PropertyDeclaration(attribute: "@Instantiated", label: "planPart", type: "\(prefix)PlanPart"),
+					PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type),
+				])
+				append("PlanPart", [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)])
+			}
+			append("PlanRoot", isRoot: true, services + [screenBuilder(0)])
+			// Drawn after every other choice, from a stream of its own and without the shuffle above, so that every graph
+			// without it is drawn as before.
+			if sendability != .nonSendable, perTypePlanJobRandom.percentChance(60) {
+				let jobScreen = perTypePlanJobRandom.integer(in: 0...(screenCount - 1))
+				if let index = declarations.firstIndex(where: { $0.name == "\(prefix)PlanScreen\(jobScreen)" }) {
+					let jobBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "planJobBuilder", type: "SendableInstantiator<\(prefix)PlanJob>")
+					declarations[index].properties.insert(jobBuilder, at: perTypePlanJobRandom.integer(in: 0...declarations[index].properties.count))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)PlanJob",
+					instantiableArguments: [],
+					// Only a graph of `Sendable` types declares a `Sendable` service the job's function can capture.
+					properties: sendability == .sendable ? [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)] : [],
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			return declarations
+		}
+
+		/// How many builders beyond the ring's `addingScreensLaidOutFromPerTypePlan` draws at most. The value comparator
+		/// calls each builder twice and follows one until it is twice on a path, so its traversals of the ring grow
+		/// exponentially with these builders: with two, a ring of five screens and `PlanJob` take at most 4,382 of a probe's
+		/// 10,000 (`DifferentialValueLimits.traversalsPerProbe`), and with three, without `PlanJob`, as many as 42,056.
+		private static let maximumScreenBuildersBeyondRing = 2
+
+		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
+		private static let perTypePlanJobRandomSeedMask: UInt64 = 0x506C616E4A6F62
+
+		// MARK: Twins over a shared screen
+
+		/// Adds `TwinRoot`'s tree, in which one label is declared as a value by one parent and as a lazy wrapper by another,
+		/// above a screen both parents build, on a cycle: twins (`PerTypePlan.twins`, `CallPlaceShadow.twinValues`), the
+		/// shape `TwinIdentityChecks` judges, which the corpora drew in no root before. `TwinRoot` builds `TwinFirst` by
+		/// value or through an instantiator, and now and then opens `TwinSecond` too. `TwinFirst` declares `twinModel` in
+		/// one form and `TwinSecond` in the other (`LazilyInstantiated`, or `SendableLazilyInstantiated` where the graph's
+		/// wrappers may be `Sendable`), the value first on the path or the wrapper first, and each builds `TwinScreen`,
+		/// which receives `twinModel` by value, required or only if available, and now and then builds `TwinPanel`, which
+		/// receives it too. `TwinModel` opens `TwinSecond` through an instantiator, so the cycle closes on `TwinSecond`'s
+		/// declaration of the model, whichever twin a path built first. Each type's properties are in an order of their
+		/// own. In the seam corpus `TwinRoot` builds `TwinSeam`, a seam whose own tree holds the twins, and in the base
+		/// corpus the root holds them. `twinRandom` draws only for this pass, after every other, so that every graph without
+		/// the tree is drawn as before; the public mock corpus draws the same tree beneath a public mock
+		/// (`GraphFuzzerPublicMockDraw`'s twins).
+		private mutating func addingTwinsOverSharedScreen(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let drawsSeam = features.contains(.generateDependencyTree)
+			guard twinRandom.percentChance(drawsSeam ? 10 : 4) else { return declarations }
+			var declarations = declarations
+			// A graph of `Sendable` types stores only `Sendable` wrappers; a mixed graph draws the wrapper kind per graph.
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: twinRandom.percentChance(50)
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], leading: [PropertyDeclaration] = [], _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, twinRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: (isRoot ? ["isRoot: true"] : []) + arguments,
+					properties: leading + properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let modelName = "\(prefix)TwinModel"
+			let valueModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: modelName)
+			let lazyModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: "\(lazyWrapper)<\(modelName)>")
+			let valueFirst = twinRandom.percentChance(50)
+			let screen = PropertyDeclaration(attribute: "@Instantiated", label: "twinScreen", type: "\(prefix)TwinScreen")
+			let secondBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "twinSecondBuilder", type: "\(instantiator)<\(prefix)TwinSecond>")
+			let screenReceive = twinRandom.percentChance(70)
+				? PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "twinModel", type: modelName + "?")
+			let buildsPanel = twinRandom.percentChance(40)
+			let firstBuiltThroughInstantiator = twinRandom.percentChance(50)
+			let rootOpensSecond = twinRandom.percentChance(40)
+			// Two rolls of their own: four graphs in ten give both parents a declaration of `twinTheme` in one form, by value,
+			// which `TwinModel`, the twins' type, receives, so each twin reads its own parent's theme; of the rest, four in
+			// ten declare it by value on `TwinFirst` and as the lazy wrapper on `TwinSecond`, so the twins read it in two
+			// forms. Where the lazy twin is a `SendableLazilyInstantiated`, one graph in five draws the one form and the rest
+			// the two forms, so that enough graphs read a label in two forms inside a `@Sendable` builder.
+			let themeInSameForm = twinRandom.percentChance(isSendable ? 20 : 40)
+			let themeInMixedForms = twinRandom.percentChance(isSendable ? 100 : 40) && !themeInSameForm
+			let readsTheme = themeInSameForm || themeInMixedForms
+			let themeName = "\(prefix)TwinTheme"
+			let valueTheme = PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: themeName)
+			let firstTheme = readsTheme ? [valueTheme] : []
+			let secondTheme = themeInMixedForms
+				? [PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: "\(lazyWrapper)<\(themeName)>")]
+				: firstTheme
+			append("TwinFirst", leading: firstTheme, [valueFirst ? valueModel : lazyModel, screen])
+			append("TwinSecond", leading: secondTheme, [valueFirst ? lazyModel : valueModel, screen])
+			append("TwinModel", [secondBuilder] + (readsTheme ? [PropertyDeclaration(attribute: "@Received", label: "twinTheme", type: themeName)] : []))
+			if readsTheme {
+				append("TwinTheme", [])
+			}
+			append("TwinScreen", [screenReceive] + (buildsPanel ? [PropertyDeclaration(attribute: "@Instantiated", label: "twinPanel", type: "\(prefix)TwinPanel")] : []))
+			if buildsPanel {
+				append("TwinPanel", [PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)])
+			}
+			var treeProperties = [firstBuiltThroughInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "twinFirstBuilder", type: "\(instantiator)<\(prefix)TwinFirst>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "twinFirst", type: "\(prefix)TwinFirst")]
+			if rootOpensSecond {
+				treeProperties.append(secondBuilder)
+			}
+			if drawsSeam {
+				append("TwinSeam", arguments: ["generateDependencyTree: true"], treeProperties)
+				append("TwinRoot", isRoot: true, [PropertyDeclaration(attribute: "@Instantiated", label: "twinSeam", type: "\(prefix)TwinSeam")])
+			} else {
+				append("TwinRoot", isRoot: true, treeProperties)
+			}
+			return declarations
+		}
+
+		private static let twinRandomSeedMask: UInt64 = 0x5477696E53686172
+
 		// MARK: Readers of a renamed lazy instance
 
 		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
@@ -8686,9 +8973,9 @@ enum GraphFuzzerGenerator {
 		/// the instance under every one of them, in an order drawn apart from the labels'. So creating `RenamedLazyTop`
 		/// creates the value, and the warning that says so names the reader's receive declared first
 		/// (`InstantiationAnalysis`' `recordReads(whileCreating:)`), never the first label. The multi-module partition
-		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files that
-		/// store positions apart reads the receives' places by their order in the reader's file alone, and must name the
-		/// same one (`SplitPositionsRun`). `renamedLazyReaderRandom` draws only for this pass, after every other, and only
+		/// puts the reader in a module beneath the root's when it splits the tree, where a run over module info files, which
+		/// store no line or column, reads the receives' places by their rank in the reader's file alone, and must name the
+		/// same one. `renamedLazyReaderRandom` draws only for this pass, after every other, and only
 		/// in the base corpus.
 		private mutating func addingReadersOfRenamedLazyInstance(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.isEmpty, renamedLazyReaderRandom.percentChance(12) else { return declarations }
@@ -11665,6 +11952,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
+	/// Twins over a shared screen in a root's own tree (`addingTwinsOverSharedScreen`), one case per `TwinShape` the base
+	/// corpus draws.
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
 	case generateDependencyTree
 
 	/// The features only a graph drawn with the `generateDependencyTree` generator feature has.
@@ -11673,6 +11973,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// The features a graph drawn without any generator feature can have, which the smoke batch must exercise.
 	static var baseCases: [GraphFuzzerFeature] {
 		allCases.filter { !seamCases.contains($0) }
+	}
+
+	/// The feature of the base corpus that `shape` is, where a root's own tree holds the twins.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerFeature? {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		case .inSeam: nil
+		}
 	}
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
@@ -12327,6 +12645,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if !mockOnlyExtendedTypeNames.intersection(productionTypeNames).isDisjoint(with: receivedTypes) {
 			features.insert(.mockOnlyExtensionOfReceivedType)
 		}
+		let twinShapes = TwinShape.shapes(of: fixture)
+		if !twinShapes.contains(.inSeam) {
+			features.formUnion(twinShapes.compactMap(GraphFuzzerFeature.twinsOverSharedScreen))
+		}
 		return features
 	}
 
@@ -12944,6 +13266,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		features.formUnion(TwinShape.shapes(of: fixture).map(GraphFuzzerSeamDrawFeature.twinsOverSharedScreen))
 		return features
 	}
 
@@ -14492,8 +14815,7 @@ struct GraphFuzzerOutcomeDifference: Equatable {
 	/// `code` with the items of each of its lists and blocks in sorted order: each balanced `(…)`, `[…]` and generic `<…>`
 	/// group split at its own top-level commas, and each `{…}` block split at its own newlines and semicolons into its
 	/// declarations and statements (a multi-line one, whose other lines are inside a nested group or block, stays one
-	/// item, as does an `#if` region with everything up to its `#endif` and a `#sourceLocation(file:…)` run up to its
-	/// `#sourceLocation()`), each item put in this form itself and trimmed,
+	/// item, as does an `#if` region with everything up to its `#endif`), each item put in this form itself and trimmed,
 	/// and the items sorted, while everything outside the groups and blocks keeps its order. So two files compare equal
 	/// when they differ only in the order of siblings within one list or one block, recursively: an item moved to
 	/// another list or block, a value swapped between two calls, a changed nesting, a respelled type or a value moved to
@@ -14658,15 +14980,13 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]
 	}
 
-	/// `items` with each `#if` item and those after it up to its `#endif`, and each `#sourceLocation(file:…)` item and those
-	/// after it up to the `#sourceLocation()` that ends it, joined into one, in their order.
+	/// `items` with each `#if` item and those after it up to its `#endif` joined into one, in their order.
 	private static func joiningRegions(of items: [String]) -> [String] {
 		var joined = [String]()
 		var region = [String]()
 		var depth = 0
 		for item in items {
-			let opensRegion = item.hasPrefix("#if") || (item.hasPrefix("#sourceLocation(") && item != "#sourceLocation()")
-			if opensRegion {
+			if item.hasPrefix("#if") {
 				depth += 1
 			}
 			if depth > 0 {
@@ -14674,7 +14994,7 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			} else {
 				joined.append(item)
 			}
-			if item.hasPrefix("#endif") || item == "#sourceLocation()", depth > 0 {
+			if item.hasPrefix("#endif"), depth > 0 {
 				depth -= 1
 				if depth == 0 {
 					joined.append(region.joined(separator: "; "))
@@ -15033,6 +15353,7 @@ struct GraphFuzzerFailure: Equatable {
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
 		case readTwinDiffers = "the graph with each type SafeDI reads no declaration of declared public where SafeDI reads it gives other results"
+		case lineShiftChangesOutput = "the graph with every declaration moved down and to the right gives other results than its positions in diagnostics"
 		/// The tool accepts a graph with a hole and the same graph without its second place of a hole
 		/// (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), and a builder label, scope type or case name it generates
 		/// for the graph without the place is gone from what it generates for the graph with it: a hand-written caller that
@@ -15899,6 +16220,8 @@ struct GraphFuzzerToolRuns {
 	///     run, with its rename undone, when the graph names a type no declaration SafeDI reads declares.
 	///   - readTwinPluginOutcome: The outcome of the read twin as `pluginOutcome` was run, with its rename undone, when the
 	///     graph has both.
+	///   - lineShiftRuns: The run `firstOutcome` is of, with the module info it wrote, and the run of the graph with every
+	///     line shifted (`GraphFuzzerLineShift.shifted(_:)`), for a graph of the seam or public mock corpus.
 	///   - valueOracle: The value oracle's run of a base corpus graph the tool accepts.
 	///   - withoutSecondHolePlaceOutcome: The outcome of the graph without its second place of a hole
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondHolePlace`), when it has one, with the place it leaves out.
@@ -15937,6 +16260,7 @@ struct GraphFuzzerToolRuns {
 		recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
+		lineShiftRuns: (run: GraphFuzzerToolRun, shiftedRun: GraphFuzzerToolRun)? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
@@ -15980,8 +16304,11 @@ struct GraphFuzzerToolRuns {
 		self.recomputedSignaturesOutcome = recomputedSignaturesOutcome
 		self.readTwinOutcome = readTwinOutcome
 		self.readTwinPluginOutcome = readTwinPluginOutcome
+		self.lineShiftRuns = lineShiftRuns
 		self.valueOracle = valueOracle
 	}
+
+	let lineShiftRuns: (run: GraphFuzzerToolRun, shiftedRun: GraphFuzzerToolRun)?
 
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
@@ -16247,6 +16574,18 @@ struct GraphFuzzerToolRuns {
 			)
 		}
 		return nil
+	}
+
+	/// The failure of a graph whose run with every line shifted differs from its run as drawn beyond the diagnostics'
+	/// positions (`GraphFuzzerLineShift.difference(between:and:)`), or `nil`; a graph of the base corpus is judged by
+	/// `GraphFuzzerMultiModuleRuns.lineShiftFailure`.
+	var lineShiftFailure: GraphFuzzerFailure? {
+		guard let lineShiftRuns, let difference = GraphFuzzerLineShift.difference(between: lineShiftRuns.run, and: lineShiftRuns.shiftedRun) else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .lineShiftChangesOutput,
+			details: "With every declaration moved down and to the right, the graph changes \(difference).\nAs drawn:\n\(lineShiftRuns.run.outcome.description)\nShifted:\n\(lineShiftRuns.shiftedRun.outcome.description)",
+		)
 	}
 
 	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
@@ -16849,7 +17188,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.carrierMemberReadApartFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.lineShiftFailure, runs.multiModuleRuns.compactMap(\.lineShiftFailure).first, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.rootFunctionKeyFailure, runs.placesJudgedByAnotherPlacesFillFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure, runs.queryUnfulfilledFailure, runs.queryDeletionFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -17683,21 +18022,22 @@ enum GraphFuzzerOracle {
 		// The call of `addingPlacesOfOneCaseShapes`' seam must build one fill for its case
 		// (`placesJudgedByAnotherPlacesFillFailure`).
 		let (fillsOfCallsStream, fillsOfCallsContinuation) = AsyncStream.makeStream(of: SeamFillSharing.FillsOfCall.self)
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
+		let (((firstRun, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
-					try await ValidationWalkObservation.$observer.withValue({ observation in
+					try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { observation in
 						if case .skippedCleanSubtree = observation {
 							skippedSubtreesContinuation.yield()
 						}
 					}) {
-						try await SeamFillSharing.$observer.withValue({ fillsOfCallsContinuation.yield($0) }) {
-							try await toolOutcome(of: fixture)
+						try await SeamFillSharing.$observer.withValue(TaskLocalFunction { fillsOfCallsContinuation.yield($0) }) {
+							try await toolRun(of: fixture)
 						}
 					}
 				})
 			})
 		})
+		let firstOutcome = firstRun.outcome
 		fillsOfCallsContinuation.finish()
 		var fillsOfCalls = [SeamFillSharing.FillsOfCall]()
 		for await fills in fillsOfCallsStream {
@@ -17739,6 +18079,12 @@ enum GraphFuzzerOracle {
 		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && (fixture.declaresSeam || GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic))
 			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
 			: nil
+		// A graph of the seam or public mock corpus is run again with every line of every file shifted, which must change
+		// nothing but the diagnostics' positions (`lineShiftFailure`). The base corpus's graphs are shifted where they are
+		// split across modules (`GraphFuzzerMultiModuleRuns.lineShiftFailure`), whose run writes `.safedi` files.
+		let lineShiftedRun: GraphFuzzerToolRun? = GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty
+			? nil
+			: try await toolRun(of: fixture, shiftingLines: true)
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
 		// type `public` where SafeDI reads it, under each flow the graph is run under: SafeDI counts the type as `public`, so
 		// the two must agree but for the comment naming it (`readTwinFailure`).
@@ -17856,6 +18202,7 @@ enum GraphFuzzerOracle {
 			recomputedSignaturesOutcome: recomputedSignaturesOutcome,
 			readTwinOutcome: readTwinOutcome,
 			readTwinPluginOutcome: readTwinPluginOutcome,
+			lineShiftRuns: lineShiftedRun.map { (run: firstRun, shiftedRun: $0) },
 			valueOracle: valueOracle,
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
@@ -17891,17 +18238,22 @@ enum GraphFuzzerOracle {
 	/// The tool's outcome for `fixture`, as `toolOutcome(of:fileNames:integration:listsTransitiveDependencies:)` gives it,
 	/// with the name of the module whose `generate` rejected a graph split across modules: `nil` where the tool accepts the
 	/// graph, or where the graph is in one module, which is then the module that rejects it.
-	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	///
+	/// - Parameter shiftingLines: Whether the files the tool reads hold the fixture's content with every line shifted
+	///   (`GraphFuzzerLineShift.shifted(_:)`), while the files' names, modules, and the callers the oracle adds stay the
+	///   fixture's.
+	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false, shiftingLines: Bool = false) async throws -> GraphFuzzerToolRun {
 		// A stored block that does not read back is reported by the run's harness, which knows no seed (`StoredBlockDecodeChecks`).
 		try await StoredBlockDecodeChecks.$runDescription.withValue("graph fuzzer seed \(fixture.seed)") {
-			try await toolRunOfGraph(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
+			try await toolRunOfGraph(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures, shiftingLines: shiftingLines)
 		}
 	}
 
-	/// See `toolRun(of:fileNames:integration:listsTransitiveDependencies:discardingStoredSeamSignatures:)`.
-	private static func toolRunOfGraph(of fixture: GraphFuzzerFixture, fileNames: [String]?, integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	/// See `toolRun(of:fileNames:integration:listsTransitiveDependencies:discardingStoredSeamSignatures:shiftingLines:)`.
+	private static func toolRunOfGraph(of fixture: GraphFuzzerFixture, fileNames: [String]?, integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool, shiftingLines: Bool) async throws -> GraphFuzzerToolRun {
+		let swiftFileContent = shiftingLines ? fixture.swiftFileContent.map(GraphFuzzerLineShift.shifted(_:)) : fixture.swiftFileContent
 		if let modules = fixture.modules {
-			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
+			return try await splitToolRun(of: fixture, swiftFileContent: swiftFileContent, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -17911,8 +18263,8 @@ enum GraphFuzzerOracle {
 		}
 		do {
 			let output = try await executeSafeDIToolTest(
-				swiftFileContent: fileNames == nil ? fixture.swiftFileContent : [],
-				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, fixture.swiftFileContent)) } ?? [:],
+				swiftFileContent: fileNames == nil ? swiftFileContent : [],
+				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, swiftFileContent)) } ?? [:],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
@@ -17921,15 +18273,15 @@ enum GraphFuzzerOracle {
 				recordDirectory: nil,
 			)
 			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
-			return (.accepted(
+			return GraphFuzzerToolRun(outcome: .accepted(
 				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess),
 				warnings: output.warnings.map { normalize("\($0)") },
-			), nil)
+			), rejectingModuleName: nil)
 		} catch let error as SafeDIToolTestError {
 			let directory = try fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures, seed: fixture.seed)
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
 			filesToDelete.append(directory)
-			return (.rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), nil)
+			return GraphFuzzerToolRun(outcome: .rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)")), rejectingModuleName: nil)
 		} catch {
 			// `executeSafeDIToolTest` wraps every error `generate` throws, so this is the harness failing, such as a
 			// fixture it could not write: not the tool rejecting the graph.
@@ -17948,7 +18300,8 @@ enum GraphFuzzerOracle {
 	/// reaches a place through a seam beneath the seam's module (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
 	/// Each generated file is keyed by its module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is
 	/// the first module's error, if any, with that module's name.
-	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	/// The files hold `swiftFileContent`, the fixture's content or its shifted content, in the fixture's order.
+	private static func splitToolRun(of fixture: GraphFuzzerFixture, swiftFileContent: [String], modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> GraphFuzzerToolRun {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -17961,7 +18314,7 @@ enum GraphFuzzerOracle {
 			ModuleFixture(
 				name: module.name,
 				packageName: module.packageName,
-				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
+				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], swiftFileContent[$0]) }),
 				dependencies: (dependencyLists[module] ?? []).map(\.name),
 				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
 			)
@@ -17986,20 +18339,24 @@ enum GraphFuzzerOracle {
 				}
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
 			}
-			return (.accepted(
-				generatedFiles: addingOverrideClosureCallers(
-					to: addingPublicMockCallers(
-						to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+			return GraphFuzzerToolRun(
+				outcome: .accepted(
+					generatedFiles: addingOverrideClosureCallers(
+						to: addingPublicMockCallers(
+							to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+							of: fixture,
+						),
 						of: fixture,
 					),
-					of: fixture,
+					warnings: warnings,
 				),
-				warnings: warnings,
-			), nil)
+				rejectingModuleName: nil,
+				moduleInfoTexts: GraphFuzzerLineShift.moduleInfoTexts(of: output.modules),
+			)
 		} catch let error as SafeDIToolMultiModuleTestError {
 			// The harness registers the fixture root for deletion before it writes anything.
 			let normalize = normalizer(fixtureDirectory: filesToDelete.first?.path ?? "")
-			return (.rejected(diagnostics: normalize("\(error.underlyingError)")), error.moduleName)
+			return GraphFuzzerToolRun(outcome: .rejected(diagnostics: normalize("\(error.underlyingError)")), rejectingModuleName: error.moduleName, moduleInfoTexts: GraphFuzzerLineShift.moduleInfoTexts(of: error.outputs))
 		} catch {
 			throw GraphFuzzerInfrastructureError(description: "The test harness failed for seed \(fixture.seed) before or after SafeDITool ran: \(error)")
 		}
@@ -18059,8 +18416,7 @@ enum GraphFuzzerOracle {
 	/// The top-level declarations each module of a split graph generates, by module name, on which the SwiftPM plugin
 	/// flow and the module-info flow must agree: every generated file but the oracle's own callers, in blocks that begin
 	/// where a line begins as `integrationComparedBlockStarts` say. What the flows spell differently is dropped first:
-	/// `#sourceLocation` directives, which only a flow that knows the compiler's spelling of a path emits, the header
-	/// lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
+	/// the header lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
 	/// `integrationSpecificTrailingComments`. The blocks are
 	/// a set, since the plugin repeats a module's imports in every file it writes, where a combined output states them
 	/// once.
@@ -18078,8 +18434,7 @@ enum GraphFuzzerOracle {
 			}
 			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
 				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-				guard !trimmedLine.hasPrefix("#sourceLocation"),
-				      !generatedFileHeaderLines.contains(trimmedLine),
+				guard !generatedFileHeaderLines.contains(trimmedLine),
 				      !integrationSpecificCommentLines.contains(where: { trimmedLine.hasPrefix($0) })
 				else { continue }
 				let code = integrationSpecificTrailingComments.reduce(line) { code, comment in
@@ -18173,11 +18528,9 @@ enum GraphFuzzerOracle {
 	/// How the comment naming the types SafeDI counts as `public` because it reads no declaration of them begins.
 	static let unreadTypeCommentPrefix = "// SafeDI counts `"
 
-	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
-	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
-	/// directive, and the comment a seam call carries saying what to do when it does not compile, which each flow words
-	/// for its own integration.
-	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
+	/// The trailing comments generated code carries in one flow and not the other: the comment a seam call carries saying
+	/// what to do when it does not compile, which each flow words for its own integration.
+	static let integrationSpecificTrailingComments = [" // If this line does not compile, add the SafeDI plugin", " // If this line does not compile, compile the code SafeDI generates"]
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
 	/// hashing differently, or `nil` when both processes give the same output.
@@ -18689,12 +19042,12 @@ enum GraphFuzzerOracle {
 	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
 	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
 	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
-	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
+	/// The path appears in generated code only in comments, so the code still compiles.
 	static func normalizer(fixtureDirectory: String) -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
 		guard !uniqueComponent.isEmpty else { return { $0 } }
-		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
-		// `#sourceLocation` directives spell it.
+		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics spell
+		// it, and as an older release's `#sourceLocation` directives do, which release acceptance compares.
 		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
 		return { text in
 			guard text.contains(uniqueComponent) else { return text }
@@ -18922,7 +19275,7 @@ enum GraphFuzzerOracle {
 		}
 
 		/// Whether `fileName` belongs to this unit: a fixture staged as `input_<index>_<prefix>…`, a generated file
-		/// named `<prefix>…`, or a fixture named in a `#sourceLocation` directive.
+		/// named `<prefix>…`, or a fixture named in an older release's `#sourceLocation` directive.
 		func contains(fileName: Substring) -> Bool {
 			let typeNamePrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			return fileName.hasPrefix(typeNamePrefix) || fileName.contains("_\(typeNamePrefix)")
@@ -18963,9 +19316,9 @@ enum GraphFuzzerOracle {
 
 		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
 		/// `unit` passed, which reports every warning in `unit`'s files, and those its fixture draws.
-		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) throws {
+		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) {
 			inputWarningMessages[unit.seed, default: []].formUnion(warningMessagesInputsDraw(inCompilerOutput: compilerOutput, inputFiles: unit.inputFiles))
-			let warnings = try warningsOnlyGeneratedCodeDraws(
+			let warnings = warningsOnlyGeneratedCodeDraws(
 				inCompilerOutput: compilerOutput,
 				generatedFiles: unit.generatedFiles,
 				inputFiles: unit.inputFiles,
@@ -19007,7 +19360,7 @@ enum GraphFuzzerOracle {
 			let result = try await compile(remainingUnits)
 			guard result.exitCode != 0 else {
 				for unit in remainingUnits {
-					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
+					compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
 				}
 				break
 			}
@@ -19045,7 +19398,7 @@ enum GraphFuzzerOracle {
 					if unitResult.exitCode != 0 {
 						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					} else {
-						try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
+						compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
 						compilingUnits.append(unit)
 					}
 				}

@@ -33,6 +33,14 @@ struct TypeFactsPlaces {
 		var reads = ConstructionLog()
 		/// What the generator built at the place decided, once the place is finished.
 		var generator: TypeFactsGeneratorFacts?
+		/// For a fill, whether its call's generator builds it in a `@Sendable` function
+		/// (`ScopeGenerator.buildsInSendableFunction(ofFill:)`), once the call's place is finished; `nil` for any other place.
+		var fillBuildsInSendableFunction: Bool?
+		/// For a fill, its key (`ScopeGenerator.fillKey(of:)`), which names the place it fills; `nil` for any other place.
+		var fillKey: String?
+		/// For a fill, the memo its call's generator hands it of each label some route hands it a memo of
+		/// (`TypeFactsReport.handedMemoDescription(of:deferral:)`), by label; `nil` for any other place.
+		var fillHandedMemos: [String]?
 	}
 
 	private(set) var places = [Place]()
@@ -52,6 +60,22 @@ struct TypeFactsPlaces {
 	/// Records what the generator built at the place at `index` decided.
 	mutating func record(_ index: Int, generator: ScopeGenerator) {
 		places[index].generator = TypeFactsGeneratorFacts(generator)
+		// A call decides which of its fills are `@Sendable`. The places of its fills, each finished before it, are its place's
+		// children that are fills, in the order of its generators of fills: two fills of one call can fill places of one
+		// property, which so does not tell them apart. A fill's own generator holds the call whose fills it holds.
+		let call = if case .fill = generator.scopeData, let child = generator.propertiesToGenerate.first {
+			child
+		} else {
+			generator
+		}
+		let fills = call.propertiesToGenerate.filter { $0.fillHole != nil }
+		guard !fills.isEmpty else { return }
+		let fillPlaces = places.indices.dropFirst(index + 1).filter { places[$0].parent == index && places[$0].declaration.key.isFill }
+		for (fillPlace, fill) in zip(fillPlaces, fills) where fillPlaces.count == fills.count {
+			places[fillPlace].fillBuildsInSendableFunction = call.buildsInSendableFunction(ofFill: fill)
+			places[fillPlace].fillKey = fill.fillKey
+			places[fillPlace].fillHandedMemos = fill.fillFields.filter { fill.fillLabelsHandedAsMemo.contains($0.property.label) }.sorted { $0.property.label < $1.property.label }.map { TypeFactsReport.handedMemoDescription(of: $0.property, deferral: $0.deferral) }
+		}
 	}
 }
 
@@ -90,6 +114,7 @@ struct TypeFactsGeneratorFacts: Sendable {
 			false
 		}
 		callsPublicMock = generator.publicMockCall != nil
+		cycleParameters = generator.cycleParameters.map(\.property)
 	}
 
 	let childCount: Int
@@ -107,6 +132,8 @@ struct TypeFactsGeneratorFacts: Sendable {
 	let constructsWithHandWrittenMock: Bool
 	let callsSeam: Bool
 	let callsPublicMock: Bool
+	/// The parameters of the place's builder function that a cycle closing on it passes, in the function's order.
+	let cycleParameters: [Property]
 }
 
 /// A world's graph beside the places one build of its tree made, for a test to compare (`ConstructionMemoOracle`): each
@@ -125,6 +152,7 @@ public struct TypeFactsReport: Sendable {
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
+		holesArePlaces = graph.holesArePlaces
 		projection = graph.projection
 		world = Self.projection(of: graph)
 		var variantCounts = [Int](repeating: 0, count: graph.declarationCount)
@@ -133,7 +161,41 @@ public struct TypeFactsReport: Sendable {
 		}
 		variantCountsByNode = variantCounts
 		variantNodes = (0..<graph.variantCount).map { Int(graph.declaration(of: VariantID($0))) }
+		variantFamilies = (0..<graph.variantCount).map { "\(graph.family(of: VariantID($0)))" }
+		variantBuildsInSendableFunction = (0..<graph.variantCount).map { graph.buildsInSendableFunction(VariantID($0)) }
+		var variantOneFunctionGroups = [Int?](repeating: nil, count: graph.variantCount)
+		for (group, members) in graph.oneFunctionGroups.enumerated() {
+			for member in members {
+				variantOneFunctionGroups[member] = group
+			}
+		}
+		self.variantOneFunctionGroups = variantOneFunctionGroups
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
+		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
+		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
+		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
+			sources.map { source in
+				switch source.kind {
+				case .none, .passedThrough:
+					"\(source.kind)"
+				case .bound:
+					"bound \(graph.answer(source.answer).form)"
+				}
+			}
+		}
+		variantCallSources = (0..<graph.variantCount).map { variant in
+			graph.calls(of: VariantID(variant)).indices.map { call in
+				sourceDescriptions(graph.sources(ofCall: call - graph.calls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
+			}
+		}
+		variantMadeAgainCallSources = (0..<graph.variantCount).map { variant in
+			graph.madeAgainCalls(of: VariantID(variant)).indices.map { call in
+				sourceDescriptions(graph.sources(ofMadeAgainCall: call - graph.madeAgainCalls(of: VariantID(variant)).startIndex, of: VariantID(variant)))
+			}
+		}
+		loopMembersSharedApart = graph.loopMembersSharedApart.map(Int.init)
+		let arrivals = TypeFactsReadArrivals(world: graph)
+		variantParameters = (0..<graph.variantCount).map { graph.parameters(of: VariantID($0), arrivals: arrivals).map(\.property.spelledWithoutAny) }
 		columnElementCount = graph.columnElementCount
 		edgeCount = graph.graph.edgeCount
 		func spelled(_ row: BitRows, of index: Int, _ spelling: (Int32) -> String) -> [String] {
@@ -150,6 +212,10 @@ public struct TypeFactsReport: Sendable {
 		func type(_ id: Int32) -> String {
 			graph.typeTable[Int(id)].asSource
 		}
+		var fillByEdge = [Int32: TypeFactsFill]()
+		for fill in graph.fills {
+			fillByEdge[fill.edge] = fill
+		}
 		nodes = graph.graph.nodes.indices.map { index in
 			let edgeFacts = graph.edgeFacts(from: index)
 			return Node(
@@ -162,7 +228,7 @@ public struct TypeFactsReport: Sendable {
 				cycleKeyID: Int(graph.cycleIDs[index]),
 				twin: Int(graph.twins[index]),
 				edges: graph.graph.edges(from: index).map(Int.init),
-				edgeFacts: edgeFacts.map { edge in
+				edgeFacts: zip(graph.graph.edgeIndices(from: index), edgeFacts).map { edgeIndex, edge in
 					Edge(
 						buildPosition: Int(edge.buildPosition),
 						loop: Int(edge.loop),
@@ -170,9 +236,21 @@ public struct TypeFactsReport: Sendable {
 						isFill: edge.isFill,
 						isCallEdge: edge.isCallEdge,
 						bindingsBefore: Int(edge.bindingsBefore),
+						boundFromScopeStruct: graph.receives.boundFromScopeStruct(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
+						hiddenFromCaller: graph.receives.hiddenFromCaller(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
+						fillHoleIsSendable: fillByEdge[Int32(edgeIndex)]?.holeIsSendable ?? false,
+						fillBuildsInSendableFunction: fillByEdge[Int32(edgeIndex)]?.buildsInSendableFunction ?? false,
+						fillKey: fillByEdge[Int32(edgeIndex)].map { graph.fillKeyTexts[Int($0.key)] },
+						fillHandedMemos: fillByEdge[Int32(edgeIndex)].map { fill in
+							graph.fillHandedMemos[Int(fill.handedMemoStart)..<Int(fill.handedMemoStart + fill.handedMemoCount)].map { memo in
+								Self.handedMemoDescription(of: graph.propertyTable[Int(memo.property)], deferral: memo.deferral)
+							}
+						} ?? [],
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
+				madeAgain: graph.madeAgain(from: DeclarationID(index)).map(Int.init),
+				madeAgainLabels: graph.madeAgainLabels(from: DeclarationID(index)).map { graph.labelTexts[Int($0)] },
 				bindings: graph.worldBindings(of: index).map { binding in
 					"\(graph.labelTexts[Int(binding.label)]): \(property(binding.property))"
 				},
@@ -184,11 +262,13 @@ public struct TypeFactsReport: Sendable {
 				fillCount: graph.fills.count { TypeFactsGraph.source(ofEdge: Int($0.edge), in: graph.graph) == index },
 				received: spelled(graph.receives.received, of: index, propertyWithoutAny),
 				required: spelled(graph.receives.required, of: index, propertyWithoutAny),
+				requiredIncludingFills: spelled(graph.receives.requiredIncludingFills, of: index, propertyWithoutAny),
 				onlyIfAvailableUnwrapped: spelled(graph.receives.onlyIfAvailableUnwrapped, of: index, propertyWithoutAny),
 				requiredAliasFulfilling: spelled(graph.receives.requiredAliasFulfilling, of: index, propertyWithoutAny),
 				typesDeclaredEscaping: spelled(graph.typesDeclaredEscaping, of: index, type),
 				typesBeneath: spelled(graph.typesBeneath, of: index, type),
 				holdsHoleBeneath: graph.holesBeneath.contains(0, inRow: index),
+				holdsCaseBeneath: graph.casesBeneath.contains(0, inRow: index),
 				builtType: type(graph.builtTypes[index]),
 				isOnCycle: graph.graph.isOnCycle(index),
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
@@ -223,6 +303,9 @@ public struct TypeFactsReport: Sendable {
 				cycleReads: cycleReads,
 				builtType: place.declaration.scope.instantiable.concreteInstantiable.asSource,
 				generator: place.generator.map(Generator.init),
+				fillBuildsInSendableFunction: place.fillBuildsInSendableFunction,
+				fillKey: place.fillKey,
+				fillHandedMemos: place.fillHandedMemos,
 			)
 		}
 	}
@@ -235,6 +318,25 @@ public struct TypeFactsReport: Sendable {
 		public let isFill: Bool
 		public let isCallEdge: Bool
 		public let bindingsBefore: Int
+		/// What a fill binds from its site's scope struct along the edge (`TypeFactsReceives.boundFromScopeStruct(atEdge:)`).
+		public let boundFromScopeStruct: [String]
+		/// Those of `boundFromScopeStruct` that hide the fill's reads from the caller (`TypeFactsReceives.hiddenFromCaller(atEdge:)`).
+		public let hiddenFromCaller: [String]
+		/// For a fill edge, whether the seam the fill is passed to takes it `@Sendable` (`TypeFactsFill.holeIsSendable`).
+		public let fillHoleIsSendable: Bool
+		/// For a fill edge, whether the fill builds in a `@Sendable` function (`TypeFactsFill.buildsInSendableFunction`).
+		public let fillBuildsInSendableFunction: Bool
+		/// For a fill edge, the fill's key (`ScopeGenerator.fillKey(of:)`); `nil` for any other edge.
+		public let fillKey: String?
+		/// For a fill edge, the memo the fill takes of each label some route hands it a memo of (`TypeFactsFill.handedMemoStart`),
+		/// by label, as `handedMemoDescription(of:deferral:)` spells it; empty for any other edge.
+		public let fillHandedMemos: [String]
+	}
+
+	/// A memo a fill takes (`ScopeGenerator.FillDispatcher.HandedMemo`) as the report spells it: its property, then its
+	/// deferral, whose `isSendable` says whether it is a `SendableLazilyInstantiated`.
+	static func handedMemoDescription(of property: Property, deferral: SeamSignature.Parameter.Deferral) -> String {
+		"\(property.spelledWithoutAny), \(deferral)"
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.
@@ -253,6 +355,7 @@ public struct TypeFactsReport: Sendable {
 			constructsWithHandWrittenMock = facts.constructsWithHandWrittenMock
 			callsSeam = facts.callsSeam
 			callsPublicMock = facts.callsPublicMock
+			cycleParameters = facts.cycleParameters.map(\.spelledWithoutAny)
 		}
 
 		public let childCount: Int
@@ -268,6 +371,7 @@ public struct TypeFactsReport: Sendable {
 		public let constructsWithHandWrittenMock: Bool
 		public let callsSeam: Bool
 		public let callsPublicMock: Bool
+		public let cycleParameters: [String]
 	}
 
 	public struct Node: Sendable {
@@ -293,6 +397,10 @@ public struct TypeFactsReport: Sendable {
 		public let edgeFacts: [Edge]
 		/// How many of `edges`, the first ones, are properties the node's scope lists; the rest are fills.
 		public let instantiatedEdgeCount: Int
+		/// The positions of the members of loops of builders its body makes again, in the order it rebinds them.
+		public let madeAgain: [Int]
+		/// The label its body rebinds each of those as, which its own argument for that label always passes.
+		public let madeAgainLabels: [String]
 		/// The node's bindings in binding order, `label: property`.
 		public let bindings: [String]
 		/// The module declaring each binding, parallel to `bindings`.
@@ -305,12 +413,16 @@ public struct TypeFactsReport: Sendable {
 		public let fillCount: Int
 		public let received: [String]
 		public let required: [String]
+		/// `required` with the receives inside fills counted (`TypeFactsReceives.requiredIncludingFills`).
+		public let requiredIncludingFills: [String]
 		public let onlyIfAvailableUnwrapped: [String]
 		public let requiredAliasFulfilling: [String]
 		public let typesDeclaredEscaping: [String]
 		/// The types the node's subtree builds, its own included.
 		public let typesBeneath: [String]
 		public let holdsHoleBeneath: Bool
+		/// In a seam's own tree, whether a hole is beneath the node along every edge, fills included.
+		public let holdsCaseBeneath: Bool
 		public let builtType: String
 		public let isOnCycle: Bool
 		/// What the node's subtree reads from above it, as `Read` descriptions.
@@ -327,7 +439,6 @@ public struct TypeFactsReport: Sendable {
 			(.mockRootPin, "mockRootPin"),
 			(.mockRootRecord, "mockRootRecord"),
 			(.mockRootBinding, "mockRootBinding"),
-			(.madeAgain, "madeAgain"),
 		]
 		return Set(named.filter { owed.contains($0.0) }.map(\.1))
 	}
@@ -350,6 +461,13 @@ public struct TypeFactsReport: Sendable {
 		public let builtType: String
 		/// What the place's generator decided, or `nil` where the walk recorded none.
 		public let generator: Generator?
+		/// For a fill, whether its call's generator builds it in a `@Sendable` function; `nil` for any other place.
+		public let fillBuildsInSendableFunction: Bool?
+		/// For a fill, its key (`ScopeGenerator.fillKey(of:)`); `nil` for any other place.
+		public let fillKey: String?
+		/// For a fill, the memo its call's generator hands it of each label some route hands it a memo of, by label; `nil` for
+		/// any other place.
+		public let fillHandedMemos: [String]?
 	}
 
 	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
@@ -372,6 +490,8 @@ public struct TypeFactsReport: Sendable {
 	public let columnElementCount: Int
 	public let edgeCount: Int
 	public let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	public let holesArePlaces: Bool
 	/// The graph as text, a line per node (`TypeFactsGraph.projection`).
 	public let projection: String
 	public let nodes: [Node]
@@ -383,8 +503,27 @@ public struct TypeFactsReport: Sendable {
 	public let variantCountsByNode: [Int]
 	/// Each variant's node.
 	public let variantNodes: [Int]
+	/// Each variant's family (`VariantFamily`), spelled as its case.
+	public let variantFamilies: [String]
+	/// Per variant, whether a call builds its body inside a `@Sendable` function, folded over every call into it.
+	public let variantBuildsInSendableFunction: [Bool]
+	/// Per variant, the group of twins' variants one function serves that it is in, which share the mark of any family.
+	public let variantOneFunctionGroups: [Int?]
 	/// The variant each edge of a variant's node calls, in edge order.
 	public let variantCalls: [[Int]]
+	/// The variant each made-again call of a variant calls, in the order its node rebinds the members.
+	public let variantMadeAgainCalls: [[Int]]
+	/// Whether each variant is called by exactly one call, a made-again call counted, and off every cycle.
+	public let variantIsCalledOnce: [Bool]
+	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
+	/// `bound` with the answer's form.
+	public let variantCallSources: [[[String]]]
+	/// As `variantCallSources`, for each made-again call.
+	public let variantMadeAgainCallSources: [[[String]]]
+	/// The loop members whose parents' loops make different members again.
+	public let loopMembersSharedApart: [Int]
+	/// The parameters each variant's function takes for what its subtree reads from above (`TypeFactsWorld.parameters(of:)`).
+	public let variantParameters: [[String]]
 
 	/// The world read through its interface only, as text: what a consumer of the frozen accessors sees.
 	private static func projection(of world: some TypeFactsWorld) -> String {
@@ -401,6 +540,13 @@ public struct TypeFactsReport: Sendable {
 			line += " reads [\(world.reads(of: declaration).map { "\(world.read($0).channel.name)" }.joined(separator: ", "))]"
 			line += " labels \(Array(world.labels(of: declaration)))"
 			lines.append(line)
+			let madeAgain = world.madeAgain(from: declaration)
+			if !madeAgain.isEmpty {
+				lines.append("d\(index) makes again \(Array(madeAgain)) as labels \(Array(world.madeAgainLabels(from: declaration)))")
+			}
+		}
+		if !world.loopMembersSharedApart.isEmpty {
+			lines.append("loop members shared apart \(world.loopMembersSharedApart)")
 		}
 		lines.append("roots \((0..<world.rootCount).map(world.rootVariant))")
 		for index in 0..<world.variantCount {
@@ -419,6 +565,10 @@ public struct TypeFactsReport: Sendable {
 			line += world.isCalledOnce(variant) ? " once" : ""
 			line += " outcomes \(world.outcomes(of: variant).map { "\($0)" }) bound before \(Array(world.boundBefore(of: variant)))"
 			lines.append(line)
+			let madeAgainCalls = world.madeAgainCalls(of: variant)
+			if !madeAgainCalls.isEmpty {
+				lines.append("v\(index) makes again \(Array(madeAgainCalls)) sources [\(madeAgainCalls.indices.map { "\(world.sources(ofMadeAgainCall: $0 - madeAgainCalls.startIndex, of: variant).map(\.kind))" }.joined(separator: ", "))]")
+			}
 		}
 		return lines.joined(separator: "\n")
 	}
@@ -446,7 +596,7 @@ extension ConstructionLog.Read {
 			"\(ReadChannel.optional.name)(\(property.label))"
 		case let .passesNil(property, _, _):
 			"\(ReadChannel.mock.name)(\(property.label))"
-		case .declarationClosedOn, .cycleParameterContext:
+		case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
 			nil
 		}
 	}

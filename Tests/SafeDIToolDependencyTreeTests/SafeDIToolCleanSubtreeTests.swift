@@ -1079,7 +1079,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	private static func observingValidationWalk(skippingCleanSubtrees: Bool, _ generate: () async throws -> Outcome) async throws -> Run {
 		let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
 		let outcome = try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(skippingCleanSubtrees) {
-			try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await generate()
 			}
 		}
@@ -1102,14 +1102,12 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 		return Run(outcome: outcome, validatedScopeCount: validatedScopeCount, skippedSubtreeCount: skippedSubtreeCount, keyedSubtreeCount: keyedSubtreeCount)
 	}
 
-	/// `description` with each fixture's directory left out of a diagnostic's location and of a `#sourceLocation`, so two
-	/// runs' diagnostics, or generated files, compare equal.
+	/// `description` with each fixture's directory left out of a diagnostic's location, so two runs' diagnostics compare
+	/// equal.
 	private static func withFixtureNames(_ description: String) -> String {
 		description.split(separator: "\n", omittingEmptySubsequences: false).map { line in
 			if let swiftRange = line.range(of: ".swift:"), let slash = line[..<swiftRange.lowerBound].lastIndex(of: "/") {
 				String(line[line.index(after: slash)...])
-			} else if let fileRange = line.range(of: "#sourceLocation(file: \""), let slash = line.lastIndex(of: "/") {
-				String(line[..<fileRange.upperBound]) + line[line.index(after: slash)...]
 			} else {
 				String(line)
 			}

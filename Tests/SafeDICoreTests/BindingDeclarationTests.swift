@@ -18,23 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// Test only, deleted before merge: the fill findings of one `validateFills` call judged two ways, once per place as today
-/// and once per case and answer (`fillFindings(…byCase: true)`), which the differential oracle of the tests compares. Nothing
-/// generated reads it. A call judges by case only while a test observes the levels (`SeamPlaceLevels.observer`), on which
-/// the comparison rides, so the tests set no task-local value of their own around `generate()` (`serialization.md`).
-public struct FillCaseJudgementComparison: Sendable {
-	public init(perPlace: [String], byCase: [String]) {
-		self.perPlace = perPlace
-		self.byCase = byCase
-	}
+import Testing
+@testable import SafeDICore
 
-	/// Each finding's diagnostics, formatted, in the order `validateFills` reports them, judged once per place.
-	public let perPlace: [String]
-	/// The same, judged once per case and answer, by the place whose route sorts first in source order.
-	public let byCase: [String]
-
-	/// Whether the two judgements report the same diagnostics in the same order.
-	public var agrees: Bool {
-		perPlace == byCase
+struct BindingDeclarationTests {
+	@Test
+	func spelled_annotatesOpaqueTypeAsExistential_whenPropertyIsReceivedAsOpaqueParameter() {
+		// A local cannot spell `some P` for a value an override closure returns as `any P`, which the parameter accepts.
+		let declaration = BindingDeclaration(
+			property: Property(label: "service", typeDescription: .some(.simple(name: "Service"))),
+			rule: .constant(isErased: false, constructedTypeIsPropertyType: false, hasBuilderFunction: true, isExtension: false),
+		)
+		#expect(declaration.spelled == "let service: any Service")
 	}
 }

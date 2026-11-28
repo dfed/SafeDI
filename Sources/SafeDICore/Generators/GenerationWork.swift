@@ -126,6 +126,10 @@ public struct GenerationWork: Sendable {
 		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
 		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
+		/// Finding which fills of a world's calls build in a `@Sendable` function (`TypeFactsFillSendability`): each node and
+		/// edge the one walk of the world's graph visits, each key a call adds or resolves, and each key a summary hands its
+		/// parent. A node stands for every place of its declaration, so the declarations and the keys count, not the paths.
+		case foldingFillSendability
 		/// Walking a tree for the fills `DependencyTreeGenerator.validateFills` judges: each generator the walk visits, each
 		/// child it queues, and each label it carries or clears of what the calls of enclosing public mock calls hide. The
 		/// walk enters only a generator whose subtree holds a call or a fill.
@@ -138,6 +142,16 @@ public struct GenerationWork: Sendable {
 		/// (`DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`): each generator of a fill's tree the walk visits, with
 		/// the declarations on its path it hands its children.
 		case findingDeclarationsHiddenByReenteringCalls
+		/// Resolving what the module that declares a public mock sees (`SeamResolution.ForeignPublicMock.visibleDeclarations`),
+		/// which reads every declaration of that module and of each module it depends on directly: each resolution counts
+		/// one. A walk of the places built inline resolved it again at each scope beneath the public mock, so a mock root
+		/// beneath another module's public mock spent seconds where every other root spent milliseconds; each walk resolves
+		/// each module once.
+		case resolvingWhatAPublicMocksModuleSees
+		/// Finding the facts producers still owe each declaration of a world (`TypeFactsGraph.owedFactsByNode`): each
+		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
+		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
+		case findingOwedFacts
 	}
 
 	/// The step that did the work.
@@ -146,7 +160,7 @@ public struct GenerationWork: Sendable {
 	public let elementCount: Int
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (GenerationWork) -> Void>?
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {

@@ -552,9 +552,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		    public convenience init() {
 		        let service = Feature.Service()
 		        func __safeDI_consumer() -> Feature.Consumer {
-		            #sourceLocation(file: "\(output.fixtures["Service.swift"])", line: 15)
-		            let serviceProtocol: ServiceProtocol = service
-		            #sourceLocation()
+		            let serviceProtocol: ServiceProtocol = service // Declared as Feature.Consumer.serviceProtocol
 		            return Feature.Consumer(serviceProtocol: serviceProtocol)
 		        }
 		        let consumer: Feature.Consumer = __safeDI_consumer()
@@ -614,9 +612,7 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 		        }
 		        let serviceBuilder = Instantiator<Feature.Service>(__safeDI_serviceBuilder)
 		        func __safeDI_consumer() -> Feature.Consumer {
-		            #sourceLocation(file: "\(output.fixtures["Service.swift"])", line: 13)
-		            let renamedServiceBuilder: Instantiator<Feature.Service> = serviceBuilder
-		            #sourceLocation()
+		            let renamedServiceBuilder: Instantiator<Feature.Service> = serviceBuilder // Declared as Feature.Consumer.renamedServiceBuilder
 		            return Feature.Consumer(renamedServiceBuilder: renamedServiceBuilder)
 		        }
 		        let consumer: Feature.Consumer = __safeDI_consumer()

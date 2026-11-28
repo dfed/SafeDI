@@ -98,9 +98,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child(x: X?) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -173,9 +171,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child(x: X?) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -263,9 +259,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			            return X(grand: grand, b: b)
 			        }
 			        func __safeDI_b() -> B {
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as B.ax
 			            return B(ax: ax)
 			        }
 			        func __safeDI_holderBuilder(x: X?) -> Holder {
@@ -327,9 +321,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let token = Token()
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let token: Token? = nil
-			            #sourceLocation()
+			            let token: Token? = nil // Declared as Child.token
 			            let grand = Grand(token: token)
 			            return Child(token: token, grand: grand)
 			        }
@@ -392,15 +384,11 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_optionalSpelling(token: Secret?) -> OptionalSpelling {
-			            #sourceLocation(file: "\(output.fixtures["OptionalSpelling.swift"])", line: 2)
-			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			            #sourceLocation()
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) } // Declared as OptionalSpelling.auth
 			            return OptionalSpelling(auth: auth)
 			        }
 			        func __safeDI_plainSpelling(token: Secret?) -> PlainSpelling {
-			            #sourceLocation(file: "\(output.fixtures["PlainSpelling.swift"])", line: 2)
-			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			            #sourceLocation()
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) } // Declared as PlainSpelling.auth
 			            return PlainSpelling(auth: auth)
 			        }
 			        func __safeDI_holderBuilder(token: Secret?) -> Holder {
@@ -468,9 +456,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_sub() -> Sub {
-			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 2)
-			            let token: (any Auth)? = nil
-			            #sourceLocation()
+			            let token: (any Auth)? = nil // Declared as Sub.token
 			            let reader = Reader(token: token)
 			            return Sub(token: token, reader: reader)
 			        }
@@ -603,9 +589,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            let grand = Grand(ax: ax)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -681,9 +665,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Top {
 			    public convenience init() {
 			        func __safeDI_child(service: Service) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let sa: Service? = service
-			            #sourceLocation()
+			            let sa: Service? = service // Declared as Child.sa
 			            let holder: Holder = __safeDI_holder(sa: sa)
 			            return Child(sa: sa, holder: holder)
 			        }
@@ -769,19 +751,17 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_aBuilder(x: X?) -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
-			            #sourceLocation()
+			            let anyX: AnyX? = (x as X?).map { AnyX($0) } // Declared as A.anyX
 			            let grand = Grand(anyX: anyX)
-			            func __safeDI_midBuilder() -> Mid {
-			                let x = X()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(x: x)
-			                }
-			                return Mid(x: x, aBuilder: aBuilder)
-			            }
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 			            return A(anyX: anyX, grand: grand, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)
@@ -847,24 +827,359 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_aBuilder(x: X?) -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let anyX: AnyX? = (x as X?).map { AnyX($0) }
-			            #sourceLocation()
+			            let anyX: AnyX? = (x as X?).map { AnyX($0) } // Declared as A.anyX
 			            let grand = Grand(anyX: anyX)
-			            func __safeDI_midBuilder() -> Mid {
-			                let x = X()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(x: x)
-			                }
-			                return Mid(x: x, aBuilder: aBuilder)
-			            }
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 			            return A(anyX: anyX, grand: grand, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)
 			        }
 			        self.init(x: x, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_laysOutEachEntryApart_whenPlainAliasOfCycleParameterIsOptionalAtOneEntryOnly() async throws {
+		// The root enters `A`'s cycle at `A`, where the rename `y` reads the cycle parameter `x`, optional, and at `Mid`,
+		// where it reads `Mid`'s `x` by value. Both write `let y: X? = x`, yet each entry gets functions of its own, and the
+		// root is still laid out by type rather than per path.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable public final class A: Instantiable {
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(y: X?, midBuilder: Instantiator<Mid>) { self.y = y; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Mid: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public init(x: X, aBuilder: Instantiator<A>) { self.x = x; self.aBuilder = aBuilder }
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(x: X, aBuilder: Instantiator<A>, midBuilder: Instantiator<Mid>) { self.x = x; self.aBuilder = aBuilder; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class X: Instantiable { public init() {} }
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_aBuilder(x: X?) -> A {
+			            let y: X? = x // Declared as A.y
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(y: y, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        func __safeDI_midBuilder_() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder_(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder_(x: X) -> A {
+			            let y: X? = x // Declared as A.y
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder_)
+			            return A(y: y, midBuilder: midBuilder)
+			        }
+			        let midBuilder = Instantiator<Mid>(__safeDI_midBuilder_)
+			        self.init(x: x, aBuilder: aBuilder, midBuilder: midBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_laysOutEachEntryApart_whenErasedAliasOfCycleParameterIsOptionalAtOneEntryOnly() async throws {
+		// As above, with a rename that erases, whose two entries write different text.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable public final class A: Instantiable {
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let anyX: AnyX?
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(anyX: AnyX?, midBuilder: Instantiator<Mid>) { self.anyX = anyX; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Mid: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public init(x: X, aBuilder: Instantiator<A>) { self.x = x; self.aBuilder = aBuilder }
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(x: X, aBuilder: Instantiator<A>, midBuilder: Instantiator<Mid>) { self.x = x; self.aBuilder = aBuilder; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				public protocol XProtocol {}
+				public struct AnyX { public init(_ x: XProtocol) { self.x = x }; let x: XProtocol }
+				@Instantiable public final class X: Instantiable, XProtocol { public init() {} }
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_aBuilder(x: X?) -> A {
+			            let anyX: AnyX? = (x as X?).map { AnyX($0) } // Declared as A.anyX
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(anyX: anyX, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        func __safeDI_midBuilder_() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder_(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder_(x: X) -> A {
+			            let anyX: AnyX? = AnyX(x) // Declared as A.anyX
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder_)
+			            return A(anyX: anyX, midBuilder: midBuilder)
+			        }
+			        let midBuilder = Instantiator<Mid>(__safeDI_midBuilder_)
+			        self.init(x: x, aBuilder: aBuilder, midBuilder: midBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_keepsCycleParameterRequired_whenTypeBesideOnlyIfAvailableAliasRequiresIt() async throws {
+		// As above, with `A`'s `Leaf` requiring `x` itself: the parameter is `x: X` at both entries.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable public final class A: Instantiable {
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+				    @Instantiated let leaf: Leaf
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(y: X?, leaf: Leaf, midBuilder: Instantiator<Mid>) { self.y = y; self.leaf = leaf; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Leaf: Instantiable {
+				    @Received let x: X
+				    public init(x: X) { self.x = x }
+				}
+				""",
+				"""
+				@Instantiable public final class Mid: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public init(x: X, aBuilder: Instantiator<A>) { self.x = x; self.aBuilder = aBuilder }
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let aBuilder: Instantiator<A>
+				    @Instantiated let midBuilder: Instantiator<Mid>
+				    public init(x: X, aBuilder: Instantiator<A>, midBuilder: Instantiator<Mid>) { self.x = x; self.aBuilder = aBuilder; self.midBuilder = midBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class X: Instantiable { public init() {} }
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_aBuilder(x: X) -> A {
+			            let y: X? = x // Declared as A.y
+			            let leaf = Leaf(x: x)
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(y: y, leaf: leaf, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			        self.init(x: x, aBuilder: aBuilder, midBuilder: midBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_keepsValueRequiredByCallerOfRename_whenAnotherEntryHandsTheRenameAnOptional() async throws {
+		// `H` is built beneath `Root`'s `x` and beneath `Mid`'s, and reads `x` only by passing it to `A`, whose rename reads
+		// it only if available. `Other` builds `A` too, beneath its forwarded `x: X?`. Each `A` reads its value apart, so
+		// the one `Other` builds takes `x: X?`, while `H` and the `A` it builds keep `x: X`, as the root laid out before.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable public final class A: Instantiable {
+				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+				    public init(y: X?) { self.y = y }
+				}
+				""",
+				"""
+				@Instantiable public final class H: Instantiable {
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class Mid: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let h: H
+				    public init(x: X, h: H) { self.x = x; self.h = h }
+				}
+				""",
+				"""
+				@Instantiable public final class Other: Instantiable {
+				    @Forwarded let x: X?
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public init(x: X?, aBuilder: Instantiator<A>) { self.x = x; self.aBuilder = aBuilder }
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true) public final class Root: Instantiable {
+				    @Instantiated let x: X
+				    @Instantiated let h: H
+				    @Instantiated let mid: Mid
+				    @Instantiated let otherBuilder: Instantiator<Other>
+				    public init(x: X, h: H, mid: Mid, otherBuilder: Instantiator<Other>) { self.x = x; self.h = h; self.mid = mid; self.otherBuilder = otherBuilder }
+				}
+				""",
+				"""
+				@Instantiable public final class X: Instantiable { public init() {} }
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_h(x: X) -> H {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return H(aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder(x: X) -> A {
+			            let y: X? = x // Declared as A.y
+			            return A(y: y)
+			        }
+			        let h: H = __safeDI_h(x: x)
+			        func __safeDI_mid() -> Mid {
+			            let x = X()
+			            let h: H = __safeDI_h(x: x)
+			            return Mid(x: x, h: h)
+			        }
+			        let mid: Mid = __safeDI_mid()
+			        func __safeDI_aBuilder_(x: X?) -> A {
+			            let y: X? = x // Declared as A.y
+			            return A(y: y)
+			        }
+			        func __safeDI_otherBuilder(x: X?) -> Other {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder_(x: x)
+			            }
+			            return Other(x: x, aBuilder: aBuilder)
+			        }
+			        let otherBuilder = Instantiator<Other> {
+			            __safeDI_otherBuilder(x: $0)
+			        }
+			        self.init(x: x, h: h, mid: mid, otherBuilder: otherBuilder)
 			    }
 			}
 			""",
@@ -916,9 +1231,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            let grand = Grand(ax: nil)
 			            return Child(ax: ax, grand: grand)
 			        }
@@ -975,9 +1288,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let ax: X? = nil
-			            #sourceLocation()
+			            let ax: X? = nil // Declared as Child.ax
 			            return Child(ax: ax)
 			        }
 			        func __safeDI_holderBuilder(x: LazilyInstantiated<X>?) -> Holder {
@@ -1040,16 +1351,12 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			    public convenience init() {
 			        let x = X()
 			        func __safeDI_a() -> A {
-			            #sourceLocation(file: "\(output.fixtures["A.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as A.ax
 			            return A(ax: ax)
 			        }
 			        let a: A = __safeDI_a()
 			        func __safeDI_b() -> B {
-			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
-			            let ax: X? = x
-			            #sourceLocation()
+			            let ax: X? = x // Declared as B.ax
 			            return B(ax: ax)
 			        }
 			        let b: B = __safeDI_b()
@@ -1137,9 +1444,7 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			        let secretToken: Token? = safeDIOverrides.secretToken
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			            let token: Token? = secretToken
-			            #sourceLocation()
+			            let token: Token? = secretToken // Declared as Child.token
 			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(token) } else { Grand(token: token) }
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(token, grand) } else { Child(token: token, grand: grand) }
 			        }

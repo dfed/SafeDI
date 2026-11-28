@@ -238,7 +238,7 @@ struct TypeFactsOutcomesTests {
 			rootAnswer: { _ in nil },
 			binding: { edge, _ in firstEdgeOfEachParent.firstIndex(of: edge).map { VariantBinding(answer: 7, declaration: Int32(1 + $0)) } },
 			family: { _, family in family },
-			key: { _, answer in answer },
+			key: { _, answer, _ in answer },
 		)
 		let outcomes = TypeFactsOutcomes(.init(
 			variants: variants,

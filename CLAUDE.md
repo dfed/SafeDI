@@ -139,7 +139,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | "Serialization": `.safedi` files, the scan cache, `BinaryCoding` | `.claude/rules/serialization.md` |
 | a workflow, a CI job, runners, timeouts, `verify.yml`, the coverage gate | `.claude/rules/ci.md` |
 | CI's cache of passed compile checks, its identity, the sharing workflow | `.claude/rules/passed-compile-checks.md` |
-| "File path spelling": any path comparison, `#sourceLocation`, `// Declared at` | `.claude/rules/file-paths.md` |
+| "File path spelling": any path comparison, the paths a diagnostic prints, finding another module’s file again | `.claude/rules/file-paths.md` |
 | "Validation boundaries": a diagnostic, a macro check, a plugin check | `.claude/rules/validation-boundaries.md` |
 | reserved names, nested-type qualification, identifier spelling, `any` | `.claude/rules/reserved-names-and-spelling.md` |
 | "Cycle mechanisms": cycle closing, builder function names, sibling order, deep walks | `.claude/rules/cycle-generation.md` |
@@ -152,6 +152,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-carriers.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
+| a tree's plan by declaration (`Generators/CycleTree`) | `.claude/rules/cycle-tree-per-type.md` |
 | the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `construction-memo-calls.md`, `emission-decisions.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |

@@ -897,26 +897,24 @@ struct SafeDIToolSeamRootFunctionTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Stager_StageOwner_Scope_service(_ scope_analytics: Analytics) -> any Service {
-		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope_analytics)
+		            return __safeDI_fillBody_A29A969974526AED(analytics: scope_analytics)
 		        }
-		        @Sendable nonisolated func __safeDI_fillBody_3DA0D783809250A2(analytics: Analytics) -> any Service {
+		        @Sendable nonisolated func __safeDI_fillBody_A29A969974526AED(analytics: Analytics) -> any Service {
 		            func __safeDI_service() -> LiveService {
-		                #sourceLocation(file: "\(rootPath)", line: 6)
-		                let stats: Analytics = analytics
-		                #sourceLocation()
+		                let stats: Analytics = analytics // Declared as LiveService.stats
 		                return LiveService(stats: stats)
 		            }
 		            let service: any Service = __safeDI_service()
 		            return service
 		        }
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Home_DeepImpl_Scope_service(_ scope: Home.SafeDIScope_Service.DeepImpl_Scope.service_Values) -> any Service {
-		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope.analytics)
+		            return __safeDI_fillBody_A29A969974526AED(analytics: scope.analytics)
 		        }
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_StageOwner_Stager_StageOwner_Scope_service(_ scope_analytics: Analytics) -> any Service {
-		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope_analytics)
+		            return __safeDI_fillBody_A29A969974526AED(analytics: scope_analytics)
 		        }
 		        @Sendable nonisolated func __safeDI_serviceSendableBuilder_DeepImpl_Home_DeepImpl_Scope_service(_ scope: Home.SafeDIScope_Service.DeepImpl_Scope.service_Values) -> any Service {
-		            return __safeDI_fillBody_3DA0D783809250A2(analytics: scope.analytics)
+		            return __safeDI_fillBody_A29A969974526AED(analytics: scope.analytics)
 		        }
 		        func __safeDI_home() -> Home {
 		            _ = Home.__safeDI_Home_BA1C0D484BB01770.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.

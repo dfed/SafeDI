@@ -473,25 +473,6 @@ extension SeamSignature.Places.Declaration {
 		).keepingChild(of: self)
 	}
 
-	/// The declaration marked as a fill's field bound from a parameter of the filled seam, or not.
-	func withFieldOfSeamParameter(_ isFieldOfSeamParameter: Bool) -> Self {
-		Self(
-			field: field,
-			isBoundBeforeNextProperty: isBoundBeforeNextProperty,
-			builtAfter: builtAfter,
-			reason: reason,
-			isForwarded: isForwarded,
-			cycleParameterOrigin: cycleParameterOrigin,
-			alias: alias,
-			isBoundFromCallersArgument: isBoundFromCallersArgument,
-			isCycleParameter: isCycleParameter,
-			isReboundByBuilderFunction: isReboundByBuilderFunction,
-			isFieldOfSeamParameter: isFieldOfSeamParameter,
-			fillFieldHiding: fillFieldHiding,
-			buildability: buildability,
-		).keepingChild(of: self)
-	}
-
 	/// The declaration with `other`'s child facts, if it has any.
 	private func keepingChild(of other: Self) -> Self {
 		other.child.map(asChild) ?? self

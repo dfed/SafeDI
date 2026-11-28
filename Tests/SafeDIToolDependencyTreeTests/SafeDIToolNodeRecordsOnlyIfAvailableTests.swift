@@ -171,9 +171,10 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsNodeOfSeveralVariants_whenTwoCallsOfOneTypeFindValueAndNil() async throws {
+	mutating func generate_laysOutRootAsTheTreeDoes_whenTwoCallsOfOneTypeFindValueAndNil() async throws {
 		// `Badge` is built inside `first`, before `session`, which requires `first`, and inside `second`, after it: one
-		// variant under rule 1, which one place per variant cannot write as the tree writes each.
+		// variant under rule 1, whose read is the value. Its place is inline at both calls, so the call inside `first`
+		// writes `nil`, as the tree writes it.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
@@ -229,15 +230,16 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 				""",
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsBuilderLoop_whenTypeReceivesInstantiatorThatBuildsItOnlyIfAvailable() async throws {
-		// `Editor` receives `editorBuilder`, the `Instantiator` being built around it, which the tree rebinds where the loop
-		// holds only builders.
-		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+	mutating func generate_laysOutRootAsTheTreeDoes_whenTypeReceivesInstantiatorThatBuildsItOnlyIfAvailable() async throws {
+		// `Editor` receives `editorBuilder`, the `Instantiator` being built around it: a loop of one, whose function begins by
+		// making `editorBuilder` again, so its read only if available reads that.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
 				@Instantiable(isRoot: true)
@@ -259,7 +261,94 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 				""",
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.map(\.refusal) == ["builderLoop"])
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_editorBuilder() -> Editor {
+			            let editorBuilder = Instantiator<Editor>(__safeDI_editorBuilder)
+			            return Editor(editorBuilder: editorBuilder)
+			        }
+			        let editorBuilder = Instantiator<Editor>(__safeDI_editorBuilder)
+			        self.init(editorBuilder: editorBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenLoopMemberReceivesSiblingsBuilderOnlyIfAvailable() async throws {
+		// `A` receives `bBuilder` only if available and `B` receives `aBuilder`: `A`'s function begins by making `bBuilder`
+		// again, which its construction reads, though the root builds `bBuilder` after `aBuilder`.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let bBuilder: Instantiator<B>?"]),
+				seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenTypeReceivesBuilderBuiltAfterItOnlyIfAvailableOutsideItsLoop() async throws {
+		// `T4` receives `t2Builder` only if available, which the root builds after `t4Builder`, since `t2Builder` waits on
+		// `t3`, which requires `t4Builder`. No loop makes `t2Builder` again, so `T4` is passed `nil`, while its receive of
+		// `t4Builder` reads the rebinding at its own top.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t3: T3", "@Instantiated let t2Builder: Instantiator<T2>", "@Instantiated let t4Builder: Instantiator<T4>"]),
+				seamFixtureType(named: "T2", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let t3: T3?"]),
+				seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received let t4Builder: Instantiator<T4>"]),
+				seamFixtureType(named: "T4", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let t4Builder: Instantiator<T4>?", "@Received(onlyIfAvailable: true) let t2Builder: Instantiator<T2>?"]),
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t4Builder() -> T4 {
+			            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			            return T4(t4Builder: t4Builder, t2Builder: nil)
+			        }
+			        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
+			        let t3 = T3(t4Builder: t4Builder)
+			        func __safeDI_t2Builder() -> T2 {
+			            T2(t3: t3)
+			        }
+			        let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
+			        self.init(t3: t3, t2Builder: t2Builder, t4Builder: t4Builder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	// MARK: Private
@@ -274,7 +363,7 @@ struct SafeDIToolNodeRecordsOnlyIfAvailableTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

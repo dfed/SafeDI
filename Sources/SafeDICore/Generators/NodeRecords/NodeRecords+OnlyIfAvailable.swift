@@ -21,7 +21,8 @@
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
 	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole or an instantiated dependency it does not build; `nil` for any other node.
+	/// scope declares a hole or an instantiated dependency it does not build, and the refusal of the wrapper it is built in,
+	/// which its record reads of the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -41,7 +42,7 @@ extension NodeRecords {
 			}
 		}
 		let refusals: [NodeRecordRefusal] = declaresHole || !scope.instantiatedDependenciesNotGenerated.isEmpty ? [.renameOrHole] : []
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: [.onlyIfAvailable, .renameOrHole], refusals: refusals)
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: refusals)
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
@@ -74,10 +75,11 @@ extension NodeRecords {
 /// `propertiesGeneratedLater` a scope's children are generated with find them for today's tree.
 ///
 /// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
-/// called where the read is `nil` and where it is a value, while each place of today's tree writes the one it reads. A
-/// world in which two calls of one variant find different answers is refused (`nodeHasSeveralVariants`) until its places
-/// are made per call. Only the labels some receive only if available reads are followed, so a world without one costs
-/// nothing.
+/// called where the read is `nil` and where it is a value. Off every cycle, such a variant reads the value: its function
+/// takes the label as one optional parameter, and the call that finds no declaration passes `nil`
+/// (`context(merging:with:)`). A world in which two calls of one variant see different declarations of one label, or in
+/// which a member of a cycle is called both ways, is refused (`nodeHasSeveralVariants`). Only the labels some receive
+/// only if available reads are followed, so a world without one costs nothing.
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 ///
@@ -93,6 +95,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`); empty for any other root.
 	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
+		// The labels a rename only if available is fulfilled by.
+		var renamedLabels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) where world.kind(of: declaration) != .alias && world.kind(of: declaration) != .hole {
 			for dependency in world.scope(of: declaration).instantiable.dependencies {
 				switch dependency.source {
@@ -100,6 +104,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					labels.insert(dependency.property.label)
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable: true):
 					labels.insert(fulfillingProperty.label)
+					renamedLabels.insert(fulfillingProperty.label)
 				case .instantiated, .forwarded, .received(onlyIfAvailable: false), .aliased(_, _, onlyIfAvailable: false):
 					break
 				}
@@ -125,13 +130,23 @@ struct OnlyIfAvailableAnswers: Sendable {
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
 			// A rename or a hole is a leaf of the scope that declares it, which reads for it (below).
-			guard let context = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
+			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
+			// A member of a loop of builders begins its builder function by binding each member it makes again
+			// (`NodeRecords.loopRebindings(of:in:)`), so its construction and everything inside it read those bindings.
+			var context = callContext
+			for member in world.madeAgain(from: declaration) {
+				if let property = world.property(of: member), labels.contains(property.label) {
+					context[property.label] = [Binding(property: property, state: .available)]
+				}
+			}
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
 			var contextInside = context
 			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
+			// A variant is read again where a later call answers a label its first call did not.
+			unavailablePropertiesByVariant[Int(variant)] = []
 			let calls = world.calls(of: variant)
 			let edges = world.edges(from: declaration)
 			let positionByEdgeIndex = world.edgeFacts(from: declaration).map(\.buildPosition)
@@ -152,17 +167,33 @@ struct OnlyIfAvailableAnswers: Sendable {
 					childBindingsByLabel[property.label, default: []].append(Binding(property: property, state: state))
 				}
 				for (label, bindings) in childBindingsByLabel {
-					calleeContext[label] = bindings
+					calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
-					guard existingContext == calleeContext else { throw .nodeHasSeveralVariants }
+					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
+					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call: each
+					// call passes what it sees, so a label one call answers is merged where the member's function takes it as a
+					// parameter, and refused where the function captures it. The label is then the shared function's optional
+					// parameter, not one of its cycle parameters (`cycleParameters(of:)` holds only labels declared between it and
+					// a closer); the facts' outcomes are a superset of what the function takes, so a value read where the tree
+					// passes `nil` shows as a difference of the place's arguments. A rename only if available is bound where its
+					// scope is built, to the declaration or to `nil`, by one statement for every call, so a label one fulfills is
+					// not taken as a parameter.
+					guard labelsOneCallAnswers.isEmpty || ((!world.isOnCycle(world.declaration(of: callee)) || Self.takesAsParameters(labelsOneCallAnswers, callee, in: world)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+						throw .nodeHasSeveralVariants
+					}
+					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
+					// A call that answers a label another call does not: the variant, and everything it calls, is read again.
+					guard mergedContext != existingContext else { continue }
+					contextByVariant[Int(callee)] = mergedContext
+					variantsToVisit.append(callee)
 				} else {
 					contextByVariant[Int(callee)] = calleeContext
 					variantsToVisit.append(callee)
 				}
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				if try Self.binding(reading: dependency.property, in: context) == nil {
+				if Self.binding(reading: dependency.property, in: context) == nil {
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 				}
 			}
@@ -174,7 +205,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					let binding: Property? = if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
 						createdBinding
 					} else {
-						try Self.binding(reading: fulfillingProperty, in: context)
+						Self.binding(reading: fulfillingProperty, in: context)
 					}
 					if let binding {
 						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)
@@ -187,6 +218,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 		}
 		self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
 		self.renameBindingByVariant = renameBindingByVariant
+	}
+
+	/// Whether `variant`'s tree reads each of `labels` from above, and its function takes every such read as a parameter
+	/// (`TypeFactsOutcome.parameter`).
+	private static func takesAsParameters(_ labels: Set<String>, _ variant: VariantID, in world: some NodeRecordSources) -> Bool {
+		var labelsTaken = Set<String>()
+		for (read, outcome) in zip(world.reads(of: world.declaration(of: variant)), world.outcomes(of: variant)) where labels.contains(world.text(ofLabel: world.read(read).label)) {
+			guard outcome == .parameter else { return false }
+			labelsTaken.insert(world.text(ofLabel: world.read(read).label))
+		}
+		return labelsTaken == labels
 	}
 
 	/// How a rename only if available is bound where its scope is built.
@@ -202,18 +244,44 @@ struct OnlyIfAvailableAnswers: Sendable {
 		renameBindingByVariant[Int(variant)]
 	}
 
+	/// What a call sees of a label its caller's children declare as `bindings`, which are nearer than `shadowed`, what the
+	/// caller sees of the label: the children built before the call, and each `Instantiator` not built yet, which a loop
+	/// of builders may give the read (`binding(reading:in:)`). A child not built yet gives a read nothing, so it is left
+	/// out, and a call that sees only such children sees no declaration (`nil`), as a call does whose caller declares none;
+	/// where a declaration above is available, though, the children hide it, which the mark `hiddenAvailable` keeps.
+	private static func nearestBindings(_ bindings: [Binding], shadowing shadowed: [Binding]?) -> [Binding]? {
+		var nearest = bindings.filter { $0.state == .available || $0.property.propertyType.isInstantiator }
+		if !nearest.contains(where: { $0.state == .available }), let hidden = shadowed?.first(where: { $0.state == .available || $0.state == .hiddenAvailable }) {
+			nearest.append(Binding(property: hidden.property, state: .hiddenAvailable))
+		}
+		return nearest.isEmpty ? nil : nearest
+	}
+
+	/// What a variant sees of each followed label, where one call of it sees `existing` and another `other`. A label one
+	/// call sees no declaration of takes what the other call sees: the variant's function takes the label as one optional
+	/// parameter, which the call that sees nothing passes `nil` (the engine's `TypeKeyBody.spelledArgument`), so one
+	/// variant serves a call that answers a read only if available and a call that does not. Each merge only adds a
+	/// label, so the result does not depend on the order the calls are met in.
+	/// - Throws: `nodeHasSeveralVariants` where the two calls see different declarations of one label.
+	private static func context(merging existing: [String: [Binding]], with other: [String: [Binding]]) throws(NodeRecordRefusal) -> [String: [Binding]] {
+		var merged = existing
+		for (label, bindings) in other {
+			if let existingBindings = existing[label] {
+				guard existingBindings == bindings else { throw .nodeHasSeveralVariants }
+			} else {
+				merged[label] = bindings
+			}
+		}
+		return merged
+	}
+
 	/// The declaration in `context` a read only if available of `property` is passed, or `nil` where none is available.
-	private static func binding(reading property: Property, in context: [String: [Binding]]) throws(NodeRecordRefusal) -> Property? {
-		let providingBindings = (context[property.label] ?? []).filter { binding in
-			ScopeGenerator.provides(binding.property, aFormReadBy: property)
-		}
-		if let available = providingBindings.first(where: { $0.state == .available }) {
-			return available.property
-		}
-		// An `Instantiator` still being built, or built after the branch, is given to the read where its loop of builders
-		// holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
-		guard !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
-		return nil
+	/// A declaration still being built, or built after the branch, is passed nothing: where the tree passes a builder of
+	/// its loop instead, the loop's member rebinds it at its top, which its context holds (`TypeFactsWorld.madeAgain(from:)`).
+	private static func binding(reading property: Property, in context: [String: [Binding]]) -> Property? {
+		(context[property.label] ?? []).first { binding in
+			binding.state == .available && ScopeGenerator.provides(binding.property, aFormReadBy: property)
+		}?.property
 	}
 
 	/// The properties `variant`'s construction is passed `nil` for.
@@ -230,6 +298,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 			case beingBuilt
 			/// Built after the call's branch.
 			case builtLater
+			/// Available above the node whose children hide it: no read is given it, and the engine's look-up would find it.
+			case hiddenAvailable
 		}
 
 		let property: Property

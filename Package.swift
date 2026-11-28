@@ -94,7 +94,6 @@ let package = Package(
 				"SafeDICore/Generators",
 				"SafeDICore/Utilities",
 				"SafeDICore/Extensions/ImportDeclSyntaxExtensions.swift",
-				"SafeDICore/Models/AliasDeclarationReferences.swift",
 				"SafeDICore/Models/ConstructionScope.swift",
 				"SafeDICore/Models/CycleParameter.swift",
 				"SafeDICore/Models/ImportStatement.swift",
@@ -173,8 +172,8 @@ let package = Package(
 		),
 		.binaryTarget(
 			name: "SafeDIToolBinary",
-			url: "https://github.com/dfed/SafeDI/releases/download/2.4.1/SafeDITool.artifactbundle.zip",
-			checksum: "c6b158f60f0b6f2076913d30ccbd3784429f2aa729a9b0e99b52c73a66766fa6",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.4.2/SafeDITool.artifactbundle.zip",
+			checksum: "8fefdc2fee496d4d4ee25ab8644eac6b68d941dd3893adc1fb866f88d7f834b5",
 		),
 		// The tool's commands live in a library, and the executable only runs them, so that
 		// what tests the commands depends on a library, which every build system builds

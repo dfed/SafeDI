@@ -266,9 +266,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public convenience init() {
 			        let x = X(renamed: nil)
-			        #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
-			        let renamed: X? = x
-			        #sourceLocation()
+			        let renamed: X? = x // Declared as Mid.renamed
 			        @inline(never) func __safeDI_aBuilder() -> A {
 			            @inline(never) func __safeDI_midBuilder() -> Mid {
 			                _ = Mid.__safeDI_Mid_CBF29CE484222325.self
@@ -298,9 +296,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        }
 			        func __safeDI_midBuilder() -> Mid {
 			            let x = X(renamed: nil)
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Mid.swift"])", line: 10)
-			            let renamed: X? = x
-			            #sourceLocation()
+			            let renamed: X? = x // Declared as Mid.renamed
 			            let aBuilder = Instantiator<A> {
 			                __safeDI_aBuilder(renamed: renamed)
 			            }
@@ -352,14 +348,12 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder() -> ErasedInstantiator<(), AnyRouting>.Builder {
-		            return __safeDI_fillBody_BB5D89F3C3E3578A()
+		            return __safeDI_fillBody_70D4DB0CC12BFC0C()
 		        }
-		        func __safeDI_fillBody_BB5D89F3C3E3578A() -> ErasedInstantiator<(), AnyRouting>.Builder {
+		        func __safeDI_fillBody_70D4DB0CC12BFC0C() -> ErasedInstantiator<(), AnyRouting>.Builder {
 		            func __safeDI_routerBuilder() -> Router {
 		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(appOutput.fixtures["Router.swift"])", line: 11)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Router.renamed
 		                return Router(x: x, renamed: renamed)
 		            }
 		            return { _ in AnyRouting(__safeDI_routerBuilder()) }
@@ -378,9 +372,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(appOutput.fixtures["Mid.swift"])", line: 12)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -406,9 +398,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(inlineAppOutput.fixtures["Mid.swift"])", line: 10)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -422,9 +412,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        }
 		        func __safeDI_routerBuilder() -> Router {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(inlineAppOutput.fixtures["Router.swift"])", line: 9)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Router.renamed
 		            return Router(x: x, renamed: renamed)
 		        }
 		        let aBuilder = Instantiator<A> {

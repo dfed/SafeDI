@@ -41,7 +41,7 @@ final class ScopeRecord: Sendable {
 			fulfilledBy: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 		)
 	}
 
@@ -68,6 +68,10 @@ final class ScopeRecord: Sendable {
 	let builtInlineSeamComment: String?
 	/// See `Scope.isUnavailableDependency`.
 	let isUnavailableDependency: Bool
+	/// See `Scope.isCallPlace`.
+	let isCallPlace: Bool
+	/// See `Scope.callPlaceRequiredAliasFulfillingProperties`.
+	let callPlaceRequiredAliasFulfillingProperties: Set<Property>
 	/// See `Scope.seamCall`.
 	let seamCall: SeamCall?
 	/// See `Scope.publicMockCall`.
@@ -119,6 +123,8 @@ final class ScopeRecord: Sendable {
 		self.concreteTypeID = concreteTypeID
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		isUnavailableDependency = scope.isUnavailableDependency
+		isCallPlace = scope.isCallPlace
+		callPlaceRequiredAliasFulfillingProperties = scope.callPlaceRequiredAliasFulfillingProperties
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
 		self.propertiesToGenerate = propertiesToGenerate
@@ -378,6 +384,18 @@ struct FrozenScopeMap {
 		return reached
 	}
 
+	/// This map with `scopes` and every scope they reach frozen in it, in the order given: every tree frozen from the map
+	/// it returns names each of them by one record, so a construction memo shared by those trees reuses their places.
+	func freezing(scopes: [Scope]) -> FrozenScopeMap {
+		var frozenScopeMap = self
+		for scope in scopes {
+			_ = frozenScopeMap.id(of: scope)
+		}
+		frozenScopeMap.freezePendingScopes()
+		frozenScopeMap.table.interner = internerSpace.snapshot()
+		return frozenScopeMap
+	}
+
 	/// The record of `scope` – a mock root's or a seam's root, which is in no map, or a root the map holds – frozen against
 	/// the table, and the table its children are found in: this one, with a record appended for each scope it refers to
 	/// that the map did not hold.
@@ -568,17 +586,17 @@ public enum ScopeTableObservation {
 	/// When set, each freeze takes its map's entries, and each signature pass's overlay its pass map's, in the order this
 	/// returns, a permutation of the positions of as many entries as it is passed, so that a test can show a table does not
 	/// depend on the order entries arrive in.
-	@TaskLocal public static var entryOrder: (@Sendable (_ entryCount: Int) -> [Int])?
+	@TaskLocal public static var entryOrder: TaskLocalFunction<@Sendable (_ entryCount: Int) -> [Int]>?
 	/// Called with each table a map freezes, and each table a signature pass assembles (`FrozenScopeMap.overlaying`), as text
 	/// (`ScopeTable.projection`).
-	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ projection: String) -> Void>?
 	/// When set, called once per seam signature pass with each key whose record in the pass's table, assembled from the base
 	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and
 	/// each key outside the pass's map that names a record: the overlay oracle. Empty when the two agree.
-	@TaskLocal public static var overlayOracle: (@Sendable (_ mismatches: [String]) -> Void)?
+	@TaskLocal public static var overlayOracle: TaskLocalFunction<@Sendable (_ mismatches: [String]) -> Void>?
 	/// Called once per seam signature pass with the types, by `asSource` in sorted order, of the seam calls whose records
 	/// the pass's table takes from the pass's map rather than the base's (`FrozenScopeMap.overlaying`).
-	@TaskLocal public static var overlaidCallRecords: (@Sendable (_ calledTypes: [String]) -> Void)?
+	@TaskLocal public static var overlaidCallRecords: TaskLocalFunction<@Sendable (_ calledTypes: [String]) -> Void>?
 }
 
 extension TypeDescription {

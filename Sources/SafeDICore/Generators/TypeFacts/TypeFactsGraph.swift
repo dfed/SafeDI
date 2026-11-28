@@ -136,7 +136,16 @@ struct TypeFactsGraph: Sendable {
 		var edgeEntries = [Int32]()
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
+		// Each call that passes fills, with what the memos it hands them read (`FillsOfCall`).
+		var fillsOfCalls = [FillsOfCall]()
+		// Each call that passes fills, with the fills and dispatchers that decide which are `@Sendable`
+		// (`TypeFactsFillSendability`), their keys by dense IDs.
+		var sendabilityCalls = [TypeFactsFillSendability.Call]()
+		var fillKeys = TypeFactsInterner<String>()
+		// The walk asks for a node's edges once, in node order, so this counts the nodes.
+		var nodeIndex: Int32 = -1
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
+			nodeIndex += 1
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
 			for (index, propertyToGenerate) in declaration.scope.propertiesToGenerate.enumerated() {
@@ -151,11 +160,17 @@ struct TypeFactsGraph: Sendable {
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(false)
 			}
+			var fillEdges = [(edge: Int32, hole: SeamSignature.Hole)]()
 			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
-				fillHoles.append((Int32(edgeEntries.count), hole))
+				fillEdges.append((Int32(edgeEntries.count), hole))
 				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(true)
+			}
+			if !fillEdges.isEmpty {
+				fillHoles += fillEdges
+				fillsOfCalls.append(FillsOfCall(scope: declaration.scope, fillEdges: fillEdges))
+				sendabilityCalls.append(Self.sendabilityCall(of: declaration.scope, at: nodeIndex, fillEdges: fillEdges, keys: &fillKeys))
 			}
 			return targets
 		}
@@ -316,6 +331,46 @@ struct TypeFactsGraph: Sendable {
 			requiredRows.columns(inRow: node).forEach(insert)
 			onlyIfAvailableRows.columns(inRow: node).forEach(insert)
 		}
+		// What a seam's caller is asked for counts the receives inside the fills its tree's seam calls pass
+		// (`ScopeGenerator.requiredReceivedProperties`), so a second fold follows every edge. A world without fills
+		// shares the first.
+		// Along a fill edge, what the fill binds from the site's scope struct hides the fill's reads of it from the caller:
+		// the place's fields, but where some route hands the fill a memo, the memo's (`FillsOfCall.structBindings`).
+		let requiredIncludingFillsRows: BitRows
+		let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
+		// The memo each fill takes of each label some route hands it one of (`TypeFactsFill.handedMemoStart`).
+		var handedMemoByLabelByEdge = [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
+		if fillHoles.isEmpty {
+			requiredIncludingFillsRows = requiredRows
+			fillStructRows = nil
+		} else {
+			var fillStructBindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
+			let propertyValues = properties.values
+			for fillsOfCall in fillsOfCalls {
+				let (bindingsByEdge, memoByLabelByEdge) = fillsOfCall.structBindings { edge in
+					Set(received.columns(inRow: Int(graph.edgeTargets[Int(edge)])).map { propertyValues[Int($0)] })
+				}
+				fillStructBindingsByEdge.merge(bindingsByEdge) { bindings, _ in bindings }
+				handedMemoByLabelByEdge.merge(memoByLabelByEdge) { memoByLabel, _ in memoByLabel }
+			}
+			// A property no node reads or declares has no ID, and hides nothing.
+			func rows(_ selected: (ScopeGenerator.FillStructBindings) -> Set<Property>) -> BitRows {
+				BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
+					for case let id? in (fillStructBindingsByEdge[Int32(edge)].map(selected) ?? []).map(properties.existingID(of:)) {
+						insert(id)
+						propertiesByUnwrapped[id]?.forEach(insert)
+					}
+				}
+			}
+			let hiddenFromCaller = rows(\.hiddenFromCaller)
+			requiredIncludingFillsRows = ReadsFromAbove(
+				graph: graph,
+				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownRequired[node].forEach(insert) },
+				hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
+				hiddenAtEdge: hiddenFromCaller,
+			).rows
+			fillStructRows = (rows(\.bound), hiddenFromCaller)
+		}
 		let onlyIfAvailableUnwrapped = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
 			let requiredUnwrapped = Set(requiredRows.columns(inRow: node).map { propertyFactsOfNodes.unwrapped[Int($0)] })
 			for property in onlyIfAvailableUnwrappedIncludingRequired.columns(inRow: node) where !requiredUnwrapped.contains(property) {
@@ -397,7 +452,7 @@ struct TypeFactsGraph: Sendable {
 				requiredAliasFulfilling = requiredAliasFulfillingRows()
 			}
 		}
-		let receives = TypeFactsReceives(received: received, required: requiredRows, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
+		let receives = TypeFactsReceives(received: received, required: requiredRows, requiredIncludingFills: requiredIncludingFillsRows, fillStructRows: fillStructRows, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
 
 		// The other union facts: the types built beneath, the names declared `@escaping` beneath, and whether a hole is.
 		let noneHidden = BitRows(rowCount: nodes.count, columnCount: types.values.count) { _, _ in }
@@ -430,6 +485,17 @@ struct TypeFactsGraph: Sendable {
 		// A hole is a place only in a seam's own tree or a public mock's: in any other world it is a property passed `nil`.
 		let rootInstantiable = nodes[0].scope.instantiable
 		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
+		// Whether a hole is beneath each node along every edge, fills included: a body whose subtree reads a case, its own or
+		// through a fill it hands a seam it calls, reads it from the carrier of the function that encloses it.
+		let casesBeneath = holesArePlaces && !forMockGeneration ? ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: nodes.count, columnCount: 1) { node, insert in
+				if nodes[node].key.leaf == .hole {
+					insert(0)
+				}
+			},
+			hidden: BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in },
+		).rows : BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in }
 		// A hole inside a fill is a place too, whose siblings in the fill's tree start before it.
 		let worldHoldsHoles = holesArePlaces && nodes.contains { $0.key.leaf == .hole }
 		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
@@ -437,6 +503,14 @@ struct TypeFactsGraph: Sendable {
 		// The order each scope builds its children in, and the loops of builders among them.
 		var positions = [Int32](repeating: -1, count: graph.edgeCount)
 		var loops = [Int32](repeating: -1, count: graph.edgeCount)
+		// What each node makes again as a member of a loop of builders, under the first parent that builds it, and whether
+		// another parent's loop makes other members of it again (or none). Where two parents make the same members again,
+		// the first parent's edges stand for both: a node's key holds the property it is built as, so each parent's edge
+		// to a member declares that one property, in one wrapper, and so gives the call one family.
+		var madeAgainUnderParent = [[LoopTarget]?](repeating: nil, count: nodes.count)
+		var loopParentByMember = [Int32](repeating: -1, count: nodes.count)
+		var isSharedApart = [Bool](repeating: false, count: nodes.count)
+		var hasLoop = false
 		for index in nodes.indices {
 			let edges = graph.edgeIndices(from: index)
 			let childEdges = edges.filter(followsEdge)
@@ -459,6 +533,36 @@ struct TypeFactsGraph: Sendable {
 			// A loop is named by its first member's position, which a member ordered before it does not know yet.
 			for (child, edge) in childEdges.enumerated() where order.loopByChild[child] >= 0 {
 				loops[edge] = positions[childEdges[order.loopByChild[child]]]
+			}
+			// Each member a child rebinds is a call of that member's node, sorted by property as the rebindings are. A rename
+			// has no body and is no node a call reaches: a loop with one is refused where it is written.
+			for (child, edge) in childEdges.enumerated() {
+				let member = Int(graph.edgeTargets[edge])
+				var targets = [(property: Property, target: LoopTarget)]()
+				if nodes[member].key.leaf == .none {
+					for rebound in order.reboundByChild[child] {
+						let reboundEdge = childEdges[rebound]
+						let target = Int(graph.edgeTargets[reboundEdge])
+						guard nodes[target].key.leaf == .none, let property = nodes[target].property else { continue }
+						targets.append((property, LoopTarget(node: Int32(target), label: labels.id(of: property.label), parentEdge: Int32(reboundEdge))))
+					}
+				}
+				// In the order the member's body first receives each, as `ScopeGenerator.reboundProperties` rebinds them.
+				let positions = targets.isEmpty ? [:] : Self.firstReceivePositions(of: Set(targets.map(\.property.label)), beneath: member, in: graph)
+				let sortedTargets = targets.sorted {
+					(positions[$0.property.label] ?? Int.max, $0.property) < (positions[$1.property.label] ?? Int.max, $1.property)
+				}.map(\.target)
+				hasLoop = hasLoop || !sortedTargets.isEmpty
+				if let earlier = madeAgainUnderParent[member] {
+					if earlier.map(\.node) != sortedTargets.map(\.node) {
+						isSharedApart[member] = true
+					}
+				} else {
+					madeAgainUnderParent[member] = sortedTargets
+					if !sortedTargets.isEmpty {
+						loopParentByMember[member] = Int32(index)
+					}
+				}
 			}
 			// A child that lists a property a sibling before it lists is never built: it follows the children built.
 			var unbuiltPosition = Int32(order.orderedIndices.count)
@@ -605,10 +709,25 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
-		// The fills each call passes, with their fill paths.
+		// The fills each call passes, with their fill paths and whether each builds in a `@Sendable` function.
+		let fillBuildsInSendableFunction = TypeFactsFillSendability.buildsInSendableFunction(
+			in: graph,
+			edgeIsFill: edgeIsFill,
+			opensSendableFunction: nodes.map { node in
+				switch Self.opens(node) {
+				case .sendableInstantiatorBuilder, .sendableLazyWrapper:
+					true
+				case .none, .instantiatorBuilder, .otherSendableFunction:
+					false
+				}
+			},
+			calls: sendabilityCalls,
+			keyCount: fillKeys.values.count,
+		)
 		var fills = [TypeFactsFill]()
 		var fillPathEntries = [TypeFactsFillPathEntry]()
 		var fillSitePathLabels = [Int32]()
+		var fillHandedMemos = [TypeFactsHandedMemo]()
 		for (edge, hole) in fillHoles {
 			let source = Self.source(ofEdge: Int(edge), in: graph)
 			let stackStart = Int32(fillPathEntries.count)
@@ -618,6 +737,11 @@ struct TypeFactsGraph: Sendable {
 			let sitePathStart = Int32(fillSitePathLabels.count)
 			for property in hole.pathBeforePropertyInItsFill {
 				fillSitePathLabels.append(labels.id(of: property.label))
+			}
+			// By label, so no dictionary's order reaches the column.
+			let handedMemoStart = Int32(fillHandedMemos.count)
+			for (label, memo) in (handedMemoByLabelByEdge[edge] ?? [:]).sorted(by: { $0.key < $1.key }) {
+				fillHandedMemos.append(TypeFactsHandedMemo(label: labels.id(of: label), property: properties.id(of: memo.property), deferral: memo.deferral))
 			}
 			fills.append(TypeFactsFill(
 				edge: edge,
@@ -629,6 +753,11 @@ struct TypeFactsGraph: Sendable {
 				stackCount: Int32(fillPathEntries.count) - stackStart,
 				sitePathStart: sitePathStart,
 				sitePathCount: Int32(fillSitePathLabels.count) - sitePathStart,
+				holeIsSendable: hole.isSendable,
+				buildsInSendableFunction: fillBuildsInSendableFunction[Int(edge)],
+				key: fillKeys.id(of: ScopeGenerator.fillKey(of: hole)),
+				handedMemoStart: handedMemoStart,
+				handedMemoCount: Int32(fillHandedMemos.count) - handedMemoStart,
 			))
 		}
 
@@ -637,8 +766,14 @@ struct TypeFactsGraph: Sendable {
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
 		var readInterner = TypeFactsInterner<Read>()
+		// The forms each node's own receives only if available declare, by label and kind, as columns of their own.
+		var formInterner = TypeFactsInterner<OnlyIfAvailableForm>()
+		var ownFormsByNode = [[Int32]]()
 		let ownReadsByNode = nodes.map { node in
-			Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels).map { readInterner.id(of: $0) }
+			var ownForms = [OnlyIfAvailableForm]()
+			let reads = Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels, formsReadOnlyIfAvailable: &ownForms).map { readInterner.id(of: $0) }
+			ownFormsByNode.append(ownForms.map { formInterner.id(of: $0) })
+			return reads
 		}
 		let own = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
 			ownReadsByNode[index].forEach(insert)
@@ -652,9 +787,62 @@ struct TypeFactsGraph: Sendable {
 				readsByLabel[Int(binding.label)].forEach(insert)
 			}
 		}
+		// A node shared apart makes nothing again, and a stage that writes from nodes refuses its world.
+		var madeAgainByNode = [[LoopTarget]]()
+		var membersSharedApart = [Int32]()
+		if hasLoop {
+			for node in nodes.indices {
+				if isSharedApart[node] {
+					membersSharedApart.append(Int32(node))
+					madeAgainByNode.append([])
+					loopParentByMember[node] = -1
+				} else {
+					madeAgainByNode.append(madeAgainUnderParent[node] ?? [])
+				}
+			}
+		}
+		loopMembersSharedApart = membersSharedApart
+		let madeAgain: MadeAgainEdges?
+		let readsOwn: BitRows
+		let readsHidden: BitRows
+		if hasLoop {
+			// A member binds each label it rebinds at the top of its body, before every other statement, so it hides them
+			// from the nodes above it, and its made-again calls are edges of the closure.
+			func reboundReads(of index: Int, _ insert: (Int32) -> Void) {
+				for target in madeAgainByNode[index] {
+					readsByLabel[Int(target.label)].forEach(insert)
+				}
+			}
+			readsHidden = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
+				hidden.columns(inRow: index).forEach(insert)
+				reboundReads(of: index, insert)
+			}
+			// The rebinding shadows the label for the member's own type too: its receive of a member it makes again reads the
+			// rebinding, never what is above. Only the read of the label it is built as, `value` of its own label, still
+			// reaches above, where its parent's declaration is being built.
+			readsOwn = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
+				let shadowed = Set(madeAgainByNode[index].lazy.filter { $0.node != Int32(index) }.flatMap { readsByLabel[Int($0.label)] })
+				for read in own.columns(inRow: index) where !shadowed.contains(read) {
+					insert(read)
+				}
+			}
+			madeAgain = MadeAgainEdges(
+				graph: graph,
+				targetsByNode: madeAgainByNode.map { $0.map(\.node) },
+				labelsByNode: madeAgainByNode.map { $0.map(\.label) },
+				parentEdgesByNode: madeAgainByNode.map { $0.map(\.parentEdge) },
+				rebound: BitRows(rowCount: nodes.count, columnCount: readInterner.values.count, columnsOfRow: reboundReads),
+			)
+		} else {
+			madeAgain = nil
+			readsOwn = own
+			readsHidden = hidden
+		}
+		self.madeAgain = madeAgain
 
 		self.graph = graph
 		self.forMockGeneration = forMockGeneration
+		self.holesArePlaces = holesArePlaces
 		self.constructions = constructions
 		self.kinds = kinds
 		self.nodeProperties = nodeProperties
@@ -667,6 +855,7 @@ struct TypeFactsGraph: Sendable {
 		self.typesBeneath = typesBeneath
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		self.holesBeneath = holesBeneath
+		self.casesBeneath = casesBeneath
 		self.parentOffsets = parentOffsets
 		self.parents = parents
 		self.fills = fills
@@ -686,15 +875,35 @@ struct TypeFactsGraph: Sendable {
 		}
 		self.passUpOffsets = passUpOffsets
 		self.passUps = passUps
+		self.fillHandedMemos = fillHandedMemos
 		self.propertyFacts = propertyFacts
+		owedFactsByNode = Self.owedFacts(of: graph, forMockGeneration: forMockGeneration)
 		propertyTable = properties.values
 		typeTable = types.values
 		moduleNames = modules.values
 		declarationLocations = locations.values
-		let reads = ReadsFromAbove(graph: graph, own: own, hidden: hidden)
+		let reads = ReadsFromAbove(graph: graph, own: readsOwn, hidden: readsHidden, madeAgain: madeAgain)
 		self.reads = reads
+		// The forms of each label each node's subtree reads only if available from above it, the reads its variants'
+		// parameters serve, folded as the reads are.
+		var formsByLabel = [[Int32]](repeating: [], count: labels.values.count)
+		for (id, form) in formInterner.values.enumerated() {
+			formsByLabel[Int(form.label)].append(Int32(id))
+		}
+		let formsReadFromAbove = ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: nodes.count, columnCount: formInterner.values.count) { index, insert in
+				ownFormsByNode[index].forEach(insert)
+			},
+			hidden: BitRows(rowCount: nodes.count, columnCount: formInterner.values.count) { index, insert in
+				for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
+					formsByLabel[Int(binding.label)].forEach(insert)
+				}
+			},
+		)
 		readTable = readInterner.values
 		labelTexts = labels.values
+		fillKeyTexts = fillKeys.values
 		var readColumn = [Int32]()
 		var readOffsets = [Int32]()
 		var labelColumn = [Int32]()
@@ -718,12 +927,41 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties)
+		let edgeOpens = edgeFacts.map(\.opens)
+		let answers = Self.answers(
+			of: graph,
+			reads: reads,
+			readTable: readInterner.values,
+			labels: labels,
+			bindings: bindings,
+			bindingOffsets: bindingOffsets,
+			bindingsBefore: bindingsBefore,
+			properties: properties,
+			forms: (table: formInterner.values, readFromAbove: formsReadFromAbove),
+			// Production bodies have one variant, `@Sendable` a mark folded over call edges (`TypeFactsOutcomes`), so the
+			// root's `.plain` reaches every node. A mock's body reads its overrides from a local bound before the `@Sendable`
+			// function that encloses it, and its parent's configuration where none does, so a mock keys by its family. In a
+			// seam's own tree, a body holding a hole reads its cases from the `@Sendable` carrier inside a `@Sendable`
+			// function and from the plain one outside, so it keys by its family too, as does a body that hands such a body to a
+			// seam it calls as a fill; a body holding none stays one variant.
+			family: Self.familyOfCall(
+				forMockGeneration: forMockGeneration,
+				holesArePlaces: holesArePlaces,
+				casesBeneath: casesBeneath,
+				edgeTargets: graph.edgeTargets,
+				edgeOpens: edgeOpens,
+			),
+			madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) },
+		)
 		answerIsBeingBuilt = answers.isBeingBuilt
+		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
 		answerKeys = answers.keys
 		answerProperties = answers.properties
 		variants = answers.variants
+		let oneFunctionGroups = Self.twinGroups(of: answers.variants, cycleIDs: cycleIDs, twins: twins, isOnCycle: graph.isOnCycle, readColumn: readColumn, readOffsets: readOffsets)
+		self.oneFunctionGroups = oneFunctionGroups
+		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: oneFunctionGroups)
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
@@ -770,11 +1008,55 @@ struct TypeFactsGraph: Sendable {
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
 
+	/// The variants one function serves, twins' bodies of one key (`twinGroups(of:cycleIDs:twins:isOnCycle:readColumn:readOffsets:)`).
+	let oneFunctionGroups: [[Int]]
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function (`sendableMarks(of:graph:edgeOpens:oneFunctionGroups:)`).
+	let variantBuildsInSendableFunction: [Bool]
+
 	/// What each read of each variant comes to in its body.
 	let outcomes: TypeFactsOutcomes
 
 	/// Whether each answer ID's declaration is still being built where it answers.
 	let answerIsBeingBuilt: [Bool]
+
+	/// Whether each answer ID is a member of a loop of builders that the node answering makes again at its top.
+	let answerIsMadeAgain: [Bool]
+
+	/// The world's made-again calls, `nil` where it has no loop of builders.
+	let madeAgain: MadeAgainEdges?
+
+	/// The members of loops of builders whose parents' loops make different members again, in node order: they make
+	/// nothing again, and a stage that writes from nodes refuses the world.
+	let loopMembersSharedApart: [Int32]
+
+	/// The position at which the body of `member`'s builder function first receives each of `labels`: its own type's
+	/// receives, then its tree's, depth first in edge order, each node once, as `ScopeGenerator.reboundProperties` walks
+	/// the scope's generators. A rename or a hole is met among the receives of the type that declares it.
+	private static func firstReceivePositions(of labels: Set<String>, beneath member: Int, in graph: OrderedGraph<TypeFactsDeclaration>) -> [String: Int] {
+		var positions = [String: Int]()
+		var visited = Set<Int>()
+		var stack = [member]
+		while positions.count < labels.count, let node = stack.popLast() {
+			guard visited.insert(node).inserted else { continue }
+			if graph.nodes[node].key.leaf == .none {
+				for (property, _) in ScopeGenerator.receivesFromAbove(ofOwnDependencies: graph.nodes[node].scope.instantiable.dependencies)
+					where labels.contains(property.label) && positions[property.label] == nil
+				{
+					positions[property.label] = positions.count
+				}
+			}
+			stack.append(contentsOf: graph.edges(from: node).reversed().map(Int.init))
+		}
+		return positions
+	}
+
+	/// A member of a loop of builders a node makes again: its node, its label, and the parent's edge that builds it.
+	private struct LoopTarget {
+		let node: Int32
+		let label: Int32
+		let parentEdge: Int32
+	}
 
 	/// Each answer ID's text, which only a report reads.
 	let answerTexts: [String]
@@ -793,6 +1075,35 @@ struct TypeFactsGraph: Sendable {
 	static let optionalSendableLazilyInstantiatedParameterKey: Int32 = -4
 
 	/// The key rule 1 gives an answer declared with `kind`.
+	/// The fills and dispatchers of a call that decide which of its fills are `@Sendable` (`TypeFactsFillSendability.Call`):
+	/// each fill edge's place, and the dispatchers the tree declares for the call where no enclosing call declares one of
+	/// their enums (`ScopeGenerator.FillDispatcher.dispatchers(of:filledSites:enclosingDispatchers:fillNames:names:innerScopeNameByKey:carriedInnerScopesByKey:enclosingCarriedInnerScopes:decidesPerRoute:)`),
+	/// as `FillsOfCall` declares them: their names, which decide nothing here, from an allocator of their own.
+	private static func sendabilityCall(of scope: ConstructionScope, at node: Int32, fillEdges: [(edge: Int32, hole: SeamSignature.Hole)], keys: inout TypeFactsInterner<String>) -> TypeFactsFillSendability.Call {
+		let fills = fillEdges.map { edge, hole in
+			TypeFactsFillSendability.Fill(edge: edge, key: keys.id(of: ScopeGenerator.fillKey(of: hole)), holeIsSendable: hole.isSendable)
+		}
+		var dispatchers = [TypeFactsFillSendability.Dispatcher]()
+		if let calledBuilders = scope.calledBuilders {
+			var names = GeneratedNameAllocator(reserving: [])
+			for dispatcher in ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Set(fillEdges.map(\.hole.site)),
+				enclosingDispatchers: [:],
+				fillNames: [:],
+				names: &names,
+				decidesPerRoute: scope.publicMockCall != nil,
+			) {
+				dispatchers.append(TypeFactsFillSendability.Dispatcher(
+					key: keys.id(of: dispatcher.key),
+					isSendableFamily: dispatcher.isSendableFamily,
+					targets: dispatcher.cases.compactMap { $0.target.map { keys.id(of: $0.key) } },
+				))
+			}
+		}
+		return TypeFactsFillSendability.Call(node: node, fills: fills, dispatchers: dispatchers)
+	}
+
 	static func optionalParameterKey(of kind: Property.PropertyType?) -> Int32 {
 		switch kind {
 		case .lazilyInstantiated:
@@ -801,6 +1112,22 @@ struct TypeFactsGraph: Sendable {
 			optionalSendableLazilyInstantiatedParameterKey
 		case nil, .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
 			optionalParameterKey
+		}
+	}
+
+	/// A form a receive only if available reads its label in: the label, and the kind of the receive's unwrapped type.
+	struct OnlyIfAvailableForm: Hashable, Sendable {
+		init(label: Int32, kind: Property.PropertyType) {
+			self.label = label
+			self.kind = Self.position(of: kind)
+		}
+
+		let label: Int32
+		/// The kind's position among `Property.PropertyType.allCases`, which is not `Sendable`.
+		let kind: Int
+
+		static func position(of kind: Property.PropertyType) -> Int {
+			Property.PropertyType.allCases.firstIndex(of: kind) ?? -1
 		}
 	}
 
@@ -818,14 +1145,33 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+	///
+	/// A member of a loop of builders binds each member it makes again at the top of its body, before every edge and at
+	/// each made-again call, with the forms its parent declares that member with, made again: an answer that keys as the
+	/// wrapper alone, as one being built does (rule 2), so a member made again keys as its parent's call of it does.
+	private static func answers(
+		of graph: OrderedGraph<TypeFactsDeclaration>,
+		reads: ReadsFromAbove,
+		readTable: [Read],
+		labels: TypeFactsInterner<String>,
+		bindings: [TypeFactsWorldBinding],
+		bindingOffsets: [Int32],
+		bindingsBefore: [Int32],
+		properties: TypeFactsInterner<Property>,
+		forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove),
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
+		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
+	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
+		var isMadeAgain = [Bool]()
 		var keys = [Int32]()
 		var kinds = [Property.PropertyType]()
 		var answerProperties = [Int32]()
-		func answer(text: String, beingBuilt: Bool, keyText: String, kind: Property.PropertyType, property: Int32) -> Int32 {
+		// Whether a wrapper answering a read only if available is in the one form the callee's subtree reads the label in.
+		var isInReadForm = [Bool]()
+		func answer(text: String, beingBuilt: Bool, madeAgain: Bool = false, keyText: String, kind: Property.PropertyType, property: Int32, inReadForm: Bool = false) -> Int32 {
 			let keyID: Int32
 			if let existing = answerIDByText[keyText] {
 				keyID = existing
@@ -835,7 +1181,9 @@ struct TypeFactsGraph: Sendable {
 				texts.append(keyText)
 				// A constant's key text is its full text, so this entry is the answer itself where the texts are equal.
 				isBeingBuilt.append(text == keyText && beingBuilt)
+				isMadeAgain.append(text == keyText && madeAgain)
 				kinds.append(kind)
+				isInReadForm.append(inReadForm)
 				keys.append(keyID)
 				answerProperties.append(property)
 			}
@@ -849,7 +1197,9 @@ struct TypeFactsGraph: Sendable {
 			answerIDByText[text] = id
 			texts.append(text)
 			isBeingBuilt.append(beingBuilt)
+			isMadeAgain.append(madeAgain)
 			kinds.append(kind)
+			isInReadForm.append(inReadForm)
 			keys.append(keyID)
 			answerProperties.append(property)
 			return id
@@ -873,67 +1223,221 @@ struct TypeFactsGraph: Sendable {
 		for index in graph.nodes.indices {
 			edgeTargets.append(contentsOf: graph.edges(from: index))
 		}
+		// Each member's rebound labels, with the property and forms its parent declares the member's own property with: a
+		// mock's root can declare one label in two forms, and the member rebinds the one it is built as.
+		var reboundByLabelByNode = [[Int32: (property: Int32, forms: String, kind: Property.PropertyType)]](repeating: [:], count: madeAgain == nil ? 0 : graph.nodes.count)
+		if let madeAgain {
+			for (index, targets) in madeAgain.targetsByNode.enumerated() where !targets.isEmpty {
+				let parentForms = graph.nodes[Int(madeAgain.parentByMember[index])].scope.sortedDeclaredPropertyForms
+				for target in targets {
+					let property = graph.nodes[Int(target.node)].property
+					if let declared = parentForms.first(where: { $0.property == property }), let propertyID = properties.existingID(of: declared.property) {
+						reboundByLabelByNode[index][target.label] = (propertyID, declared.forms.sorted().map(\.asSource).joined(separator: ", "), declared.property.propertyType)
+					}
+				}
+			}
+		}
+		/// The answer `node` binds at its top for a read of a label it rebinds, or `nil` for any other read. A member is a
+		/// builder, so the answer keys as the wrapper alone (rule 2).
+		func madeAgainAnswer(at node: Int, for read: Read) -> VariantBinding? {
+			guard read.channel.asksAboutLabel, !reboundByLabelByNode.isEmpty, let declaration = reboundByLabelByNode[node][read.label] else {
+				return nil
+			}
+			let keyText = "\(read.channel.name) \(declaration.forms)"
+			return VariantBinding(answer: answer(text: "\(keyText) made again", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind, property: declaration.property), declaration: Int32(node))
+		}
+		func binding(at edge: Int, of readID: Int32) -> VariantBinding? {
+			// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
+			let read = readTable[Int(readID)]
+			let node = Int(sourceByEdge[edge])
+			let child = graph.nodes[Int(edgeTargets[edge])]
+			// A child answers its own label's read as the declaration being built, by the property it is built as; any
+			// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
+			// call does not answer it, and else by the member the node rebinds at its top under the label.
+			// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
+			// spelling.
+			let bound: Property?
+			let beingBuilt: Bool
+			if let property = child.property, labels.existingID(of: property.label) == read.label {
+				bound = property
+				beingBuilt = true
+			} else {
+				let start = Int(bindingOffsets[node])
+				bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
+				beingBuilt = false
+			}
+			guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else {
+				return madeAgainAnswer(at: node, for: read)
+			}
+			let kind = declaration.property.propertyType
+			let declarationForms = declaration.forms
+			// Rule 1: a wrapper answering a read only if available passes through the optional parameter `nil` passes
+			// through where every form the callee's subtree reads the label in, from above it, is the wrapper's.
+			let target = Int(edgeTargets[edge])
+			var inReadForm = false
+			if kind.isLazilyInstantiated, read.channel == .optional || read.channel == .optionalValue {
+				inReadForm = true
+				forms.readFromAbove.rows.forEachColumn(inRow: target) { form, _ in
+					if forms.table[Int(form)].label == read.label, forms.table[Int(form)].kind != OnlyIfAvailableForm.position(of: kind) {
+						inReadForm = false
+					}
+				}
+			}
+			let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")\(inReadForm ? " in the form read" : "")"
+			// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
+			// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
+			// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
+			// once, and a being-built answer gives no parameter whose type could tell two keys apart.
+			let keyText: String = if beingBuilt, isTwin(kind) {
+				"\(read.channel.name) twin \(bound.label) being built"
+			} else if kind.isConstant {
+				text
+			} else {
+				// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
+				"\(read.channel.name) \(declarationForms)\(inReadForm ? " in the form read" : "")"
+			}
+			return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property, inReadForm: inReadForm), declaration: Int32(node))
+		}
+		// Rule A's second stage: `nil` passes through an optional wrapper parameter as well as through the declared form's,
+		// so where no answer in the declared form reaches a read and a wrapper of its value does, `nil` keys with the
+		// wrapper (the lazy one where both kinds reach), and its call shares that wrapper's function. What reaches a read is
+		// folded over the reads it passes through to, beneath the call: down from every binding, then up the edges that
+		// bind nothing for it, to a fixed point over cycles. Bits: 1 the declared form, 2 a lazy wrapper, 4 a Sendable lazy
+		// wrapper, 8 `nil`.
+		let isOptionalRead = readTable.map { $0.channel == .optional || $0.channel == .optionalValue }
+		// Each node's optional reads from above get a slot; `slotByRank` holds a node's slots by the rank of each of its
+		// reads from above, -1 for a read of another channel.
+		var rankOffsets = [Int32](repeating: 0, count: graph.nodes.count + 1)
+		var slotByRank = [Int32]()
+		var slotCount: Int32 = 0
+		for node in graph.nodes.indices {
+			reads.rows.forEachColumn(inRow: node) { read, _ in
+				if isOptionalRead[Int(read)] {
+					slotByRank.append(slotCount)
+					slotCount += 1
+				} else {
+					slotByRank.append(-1)
+				}
+			}
+			rankOffsets[node + 1] = Int32(slotByRank.count)
+		}
+		let rootSlotCount = slotByRank[0..<Int(rankOffsets[1])].count { $0 >= 0 }
+		/// The slot of `read` among `node`'s optional reads from above, nil where it reads no such read.
+		func optionalSlot(of read: Int32, in node: Int) -> Int? {
+			guard isOptionalRead[Int(read)], let rank = reads.rows.rank(of: read, inRow: node) else { return nil }
+			return Int(slotByRank[Int(rankOffsets[node]) + rank])
+		}
+		var reaching = [UInt8](repeating: 0, count: Int(slotCount))
+		// What each edge's optional reads are bound to, by slot of the target, and the caller's slot each passes through.
+		var edgeClasses = [(target: Int, slot: Int, bound: UInt8, passedFrom: Int?)]()
+		var edgeIndex = 0
+		for node in graph.nodes.indices {
+			for target in graph.edges(from: node) {
+				let edge = edgeIndex
+				edgeIndex += 1
+				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
+					guard isOptionalRead[Int(read)], let slot = optionalSlot(of: read, in: Int(target)) else { return }
+					if let bound = binding(at: edge, of: read) {
+						let answer = Int(bound.answer)
+						let bit: UInt8 = if isBeingBuilt[answer], isTwin(kinds[answer]) {
+							8
+						} else if isInReadForm[answer] {
+							1
+						} else {
+							switch kinds[answer] {
+							case .lazilyInstantiated:
+								2
+							case .sendableLazilyInstantiated:
+								4
+							case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator:
+								1
+							}
+						}
+						edgeClasses.append((Int(target), slot, bit, nil))
+					} else if let callerSlot = optionalSlot(of: read, in: node) {
+						edgeClasses.append((Int(target), slot, 0, callerSlot))
+					} else {
+						edgeClasses.append((Int(target), slot, 8, nil))
+					}
+				}
+			}
+		}
+		// The root's slots come first, and nothing answers the root's own reads.
+		for root in 0..<rootSlotCount {
+			reaching[root] = 8
+		}
+		var changed = true
+		while changed {
+			changed = false
+			for edge in edgeClasses {
+				let joined = reaching[edge.slot] | edge.bound | (edge.passedFrom.map { reaching[$0] } ?? 0)
+				if joined != reaching[edge.slot] {
+					reaching[edge.slot] = joined
+					changed = true
+				}
+			}
+		}
+		var beneath = reaching
+		changed = true
+		while changed {
+			changed = false
+			for edge in edgeClasses.reversed() {
+				guard let callerSlot = edge.passedFrom else { continue }
+				let joined = beneath[callerSlot] | beneath[edge.slot]
+				if joined != beneath[callerSlot] {
+					beneath[callerSlot] = joined
+					changed = true
+				}
+			}
+		}
+		/// The key `nil` takes at a call of `target` for `read`.
+		func nilKey(of read: Int32, at target: Int32) -> Int32 {
+			guard let slot = optionalSlot(of: read, in: Int(target)) else { return optionalParameterKey }
+			let classes = beneath[slot]
+			return if classes & 1 != 0 || classes & 6 == 0 {
+				optionalParameterKey
+			} else if classes & 2 != 0 {
+				optionalLazilyInstantiatedParameterKey
+			} else {
+				optionalSendableLazilyInstantiatedParameterKey
+			}
+		}
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
 			rootAnswer: { _ in nil },
-			binding: { edge, readID in
-				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
-				let read = readTable[Int(readID)]
-				let node = Int(sourceByEdge[edge])
-				let child = graph.nodes[Int(edgeTargets[edge])]
-				// A child answers its own label's read as the declaration being built, by the property it is built as; any
-				// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
-				// call does not answer it.
-				// Every binding, and every child's property, is a declaration of its node's scope, which the lookup finds by its
-				// spelling.
-				let bound: Property?
-				let beingBuilt: Bool
-				if let property = child.property, labels.existingID(of: property.label) == read.label {
-					bound = property
-					beingBuilt = true
-				} else {
-					let start = Int(bindingOffsets[node])
-					bound = bindings[start..<start + Int(bindingsBefore[edge])].last { $0.label == read.label }.map { properties.values[Int($0.property)] }
-					beingBuilt = false
-				}
-				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else { return nil }
-				let kind = declaration.property.propertyType
-				let declarationForms = declaration.forms
-				let text = "\(read.channel.name) \(declarationForms)\(beingBuilt ? " being built" : "")"
-				// Rule 3, case 2: a value, `LazilyInstantiated` or `SendableLazilyInstantiated` being built is one cycle
-				// identity whichever twin the path entered, which 2.4.0 builds in one function and passes no parameter. The
-				// key names the label alone, not the type and label a cycle identity names elsewhere: a node declares a label
-				// once, and a being-built answer gives no parameter whose type could tell two keys apart.
-				let keyText: String = if beingBuilt, isTwin(kind) {
-					"\(read.channel.name) twin \(bound.label) being built"
-				} else if kind.isConstant {
-					text
-				} else {
-					// Rule 2: a wrapper still being built is passed and made again at the call, so it keys as the wrapper.
-					"\(read.channel.name) \(declarationForms)"
-				}
-				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
-			},
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
-			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
-			family: { _, family in family },
-			key: { readID, answer in
+			binding: { edge, readID in binding(at: edge, of: readID) },
+			family: family,
+			key: { readID, answer, target in
 				switch readTable[Int(readID)].channel {
 				case .optional, .optionalValue:
 					// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
 					// twin the path entered, and wherever else the label is bound (rule 3, case 2).
-					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])) {
+					// An answer already in the form every receive of the label declares passes through the one optional
+					// parameter `nil` passes through: only a wrapper answering a read of its value keys apart. The form is the
+					// read's, never a place's, so which places a type has, and their order, decide nothing.
+					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])),
+					   !isInReadForm[Int(answer)]
+					{
 						optionalParameterKey(of: kinds[Int(answer)])
-					} else {
+					} else if answer >= 0, isInReadForm[Int(answer)] {
 						optionalParameterKey(of: nil)
+					} else {
+						nilKey(of: readID, at: target)
 					}
-				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+				case .alias:
+					// An alias's text follows only the form of the declaration it is bound to: the value itself, or a lazy
+					// wrapper's instance.
+					answer < 0 ? answer : optionalParameterKey(of: kinds[Int(answer)])
+				case .value, .madeAgain, .mock, .carrier, .fill, .family, .override:
 					answer < 0 ? answer : keys[Int(answer)]
 				}
 			},
+			madeAgain: madeAgain.map { madeAgain in
+				(madeAgain.edges, { node, readID in madeAgainAnswer(at: node, for: readTable[Int(readID)]) })
+			},
 		)
-		return (variants, isBeingBuilt, texts, keys, answerProperties)
+		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
@@ -942,6 +1446,8 @@ struct TypeFactsGraph: Sendable {
 
 	/// Whether the world is a mock root's.
 	let forMockGeneration: Bool
+	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
+	let holesArePlaces: Bool
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove
@@ -974,6 +1480,9 @@ struct TypeFactsGraph: Sendable {
 	let typesDeclaredEscaping: BitRows
 	/// Whether each node's subtree holds a hole: column 0.
 	let holesBeneath: BitRows
+	/// In a seam's own tree, whether a hole is beneath each node along every edge, fills included: column 0. Empty in any
+	/// other world.
+	let casesBeneath: BitRows
 	/// Every node's parents, each node's in a run starting at its offset; the last offset is the count.
 	let parentOffsets: [Int32]
 	let parents: [TypeFactsParent]
@@ -986,12 +1495,18 @@ struct TypeFactsGraph: Sendable {
 	/// Every call's passed-up holes, each node's in a run starting at its offset; the last offset is the count.
 	let passUpOffsets: [Int32]
 	let passUps: [TypeFactsPassUp]
+	/// The memos the fills take of labels some route hands them a memo of (`TypeFactsFill.handedMemoStart`), each fill's
+	/// run by label.
+	let fillHandedMemos: [TypeFactsHandedMemo]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
 	let readTable: [Read]
 	/// Each label ID's text, which only text reads.
 	let labelTexts: [String]
+	/// The keys of the calls' fills and dispatchers (`ScopeGenerator.fillKey(of:)`, `ScopeGenerator.FillDispatcher.key(of:returnsBuilderStruct:)`),
+	/// by their IDs, which only text reads.
+	let fillKeyTexts: [String]
 	/// Each property ID's property, which only text and a spelling lookup read.
 	let propertyTable: [Property]
 	/// Each type ID's type, which only text and a spelling lookup read.
@@ -1000,6 +1515,33 @@ struct TypeFactsGraph: Sendable {
 	let moduleNames: [String]
 	/// Each declaration location ID's location.
 	let declarationLocations: [Dependency.DeclarationLocation]
+
+	/// The facts producers still owe each node's answers (`TypeFactsOwedFacts`), found once for the whole world.
+	let owedFactsByNode: [TypeFactsOwedFacts]
+
+	/// The facts producers still owe each node's answers, in one walk down from the fills: a node is beneath a fill where
+	/// a fill reaches it. Each node and each node a walk from a fill reaches counts as one visit of `findingOwedFacts`;
+	/// asked of each declaration with a walk up its parents, a chain of n declarations walked n² parents.
+	private static func owedFacts(of graph: OrderedGraph<TypeFactsDeclaration>, forMockGeneration: Bool) -> [TypeFactsOwedFacts] {
+		let everyNode: TypeFactsOwedFacts = forMockGeneration ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		var owed = [TypeFactsOwedFacts](repeating: everyNode, count: graph.nodes.count)
+		var visits = graph.nodes.count
+		// A declaration is beneath a fill where any of its routes enters one: a walk down from every fill.
+		var pending = [Int]()
+		for index in graph.nodes.indices where graph.nodes[index].key.isFill {
+			owed[index].insert(.fillBeingBuilt)
+			pending.append(index)
+		}
+		while let current = pending.popLast() {
+			visits += 1
+			for target in graph.edges(from: current) where !owed[Int(target)].contains(.fillBeingBuilt) {
+				owed[Int(target)].insert(.fillBeingBuilt)
+				pending.append(Int(target))
+			}
+		}
+		GenerationWork.record(visits, by: .findingOwedFacts)
+		return owed
+	}
 
 	/// The facts of the node's edges, parallel to `graph.edges(from:)`.
 	func edgeFacts(from index: Int) -> ArraySlice<TypeFactsEdge> {
@@ -1069,9 +1611,10 @@ struct TypeFactsGraph: Sendable {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
 		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
-		count += 9 * fills.count + 2 * fillPathEntries.count + fillSitePathLabels.count + propertyFacts.columnElementCount + readTable.count
+		count += 14 * fills.count + 2 * fillPathEntries.count + fillSitePathLabels.count + 3 * fillHandedMemos.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
+		count += madeAgain?.columnElementCount ?? 0
 		return count
 	}
 
@@ -1090,6 +1633,9 @@ struct TypeFactsGraph: Sendable {
 			}
 			for target in graph.edges(from: index) {
 				line.append(" -> \(target)")
+			}
+			for target in madeAgain?.targets(of: index) ?? [] {
+				line.append(" again -> \(target)")
 			}
 			lines.append(line)
 		}
@@ -1325,6 +1871,115 @@ struct TypeFactsGraph: Sendable {
 		return dominators
 	}
 
+	/// The family a call builds its callee in, given the function its edge `opens` and its caller's family: a body inside a
+	/// `@Sendable` function is in the `@Sendable` family, and so is every body beneath it.
+	/// The family a call at an edge builds its callee in, given the caller's: its own family in a mock, and in a seam's
+	/// tree where a hole is beneath the callee along every edge, fills included (`casesBeneath`); the root's `.plain`
+	/// everywhere else.
+	static func familyOfCall(
+		forMockGeneration: Bool,
+		holesArePlaces: Bool,
+		casesBeneath: BitRows,
+		edgeTargets: [Int32],
+		edgeOpens: [TypeFactsFunctionOpened],
+	) -> (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily {
+		if forMockGeneration {
+			{ edge, callerFamily in familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) }
+		} else if holesArePlaces {
+			{ edge, callerFamily in casesBeneath.contains(0, inRow: Int(edgeTargets[edge])) ? familyOfCall(opening: edgeOpens[edge], callerFamily: callerFamily) : .plain }
+		} else {
+			{ _, callerFamily in callerFamily }
+		}
+	}
+
+	/// Per variant, whether a call builds its body inside a `@Sendable` function: the mark a body shared by calls inside
+	/// and outside one carries, folded over every call into it, so that its function is `@Sendable` once any call needs
+	/// it. A call opens such a function by `familyOfCall(opening:callerFamily:)`'s rule, and a call from a marked body
+	/// hands the mark on. Where a world keys a body by family (a mock's, and a seam's that holds a hole), the mark is its
+	/// family, except in a group below; elsewhere it is the one fact that tells a body's places inside and outside the
+	/// function apart.
+	///
+	/// `oneFunctionGroups` are the variants one function serves: a body and its twins of one key, the `Sendable`
+	/// wrapper's and the constant's (the lead's ruling for one `@Sendable` function), which share the mark, of any
+	/// family.
+	///
+	/// A member a loop makes again (`TypeFactsVariants.madeAgainCallees(of:)`) needs no fold of its own: its call names the
+	/// variant its maker's parent calls at an edge (oracle B, check 32), which that edge marks wherever the maker is marked,
+	/// since a loop's members are all plain or all `Sendable` (a mixed loop is rejected), and a twin group's `Sendable`
+	/// twin requires its type to be `Sendable`, which a plain loop member, holding a plain builder, is not. Check 34 holds
+	/// every made-again call to it.
+	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]]) -> [Bool] {
+		var marks = [Bool](repeating: false, count: variants.count)
+		var groupOfVariant = [Int](repeating: -1, count: variants.count)
+		for (group, members) in oneFunctionGroups.enumerated() {
+			for member in members {
+				groupOfVariant[member] = group
+			}
+		}
+		// Each variant is visited once in order and again only when a call newly marks it: a call that closes a cycle
+		// reaches a variant made before its caller.
+		var worklist = Array((0..<variants.count).reversed())
+		while let variant = worklist.popLast() {
+			if marks[variant], groupOfVariant[variant] >= 0 {
+				for member in oneFunctionGroups[groupOfVariant[variant]] where !marks[member] {
+					marks[member] = true
+					worklist.append(member)
+				}
+			}
+			let callerFamily: VariantFamily = marks[variant] ? .sendable : .plain
+			let edgeOffset = graph.edgeOffset(of: Int(variants.node(of: variant)))
+			for (edgeIndex, callee) in variants.callees(of: variant).enumerated() where !marks[Int(callee)] && familyOfCall(opening: edgeOpens[edgeOffset + edgeIndex], callerFamily: callerFamily) == .sendable {
+				marks[Int(callee)] = true
+				worklist.append(Int(callee))
+			}
+		}
+		return marks
+	}
+
+	/// The variants of twin declarations, one cycle identity's, that read the same values from above and share a key,
+	/// each group of two or more in variant order, where a twin of the identity is on a cycle, as one that closes it on
+	/// the other is: one function serves each group, in a mock's world as in production's (mocks behave like
+	/// production), so the group ignores family. Twins of an identity no cycle runs through are siblings built apart, a
+	/// function each.
+	static func twinGroups(of variants: TypeFactsVariants, cycleIDs: [CycleID], twins: [Int32], isOnCycle: (Int) -> Bool, readColumn: [Int32], readOffsets: [Int32]) -> [[Int]] {
+		var identitiesOnCycles = Set<CycleID>()
+		for (node, identity) in cycleIDs.enumerated() where twins[node] >= 0 && isOnCycle(node) {
+			identitiesOnCycles.insert(identity)
+		}
+		var groupByBody = [TwinBody: Int]()
+		var groups = [[Int]]()
+		for variant in 0..<variants.count where identitiesOnCycles.contains(cycleIDs[Int(variants.node(of: variant))]) {
+			let node = Int(variants.node(of: variant))
+			let body = TwinBody(identity: cycleIDs[node], reads: Array(readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])]), keys: Array(variants.keys(of: variant)))
+			if let group = groupByBody[body] {
+				groups[group].append(variant)
+			} else {
+				groupByBody[body] = groups.count
+				groups.append([variant])
+			}
+		}
+		return groups.filter { $0.count > 1 }
+	}
+
+	/// A body twin declarations share: their cycle identity, the values they read from above, and the variant's key.
+	/// A key is positional over its node's reads, so two twins' keys mean the same only over the same reads. Twins of
+	/// one identity whose reads differ may be a shape SafeDI cannot build; the reads keep such twins apart rather than
+	/// let equal positions merge bodies that differ.
+	private struct TwinBody: Hashable {
+		let identity: CycleID
+		let reads: [Int32]
+		let keys: [Int32]
+	}
+
+	static func familyOfCall(opening opens: TypeFactsFunctionOpened, callerFamily: VariantFamily) -> VariantFamily {
+		switch opens {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			.sendable
+		case .none, .instantiatorBuilder:
+			callerFamily
+		}
+	}
+
 	private static func opens(_ node: TypeFactsDeclaration) -> TypeFactsFunctionOpened {
 		guard node.key.leaf == .none, let property = node.property else { return .none }
 		switch property.propertyType {
@@ -1415,9 +2070,28 @@ struct TypeFactsGraph: Sendable {
 	/// the type instantiates or forwards a property of that label, which the alias then renames; and, for a call that passes
 	/// fills, each label the fills' trees receive, whose declaration the call hands them. A leaf reads nothing of its own:
 	/// its scope's own dependencies read for it.
-	private static func ownReads(of node: TypeFactsDeclaration, forMockGeneration: Bool, labels: inout TypeFactsInterner<String>) -> [Read] {
+	private static func ownReads(of node: TypeFactsDeclaration, forMockGeneration: Bool, labels: inout TypeFactsInterner<String>, formsReadOnlyIfAvailable: inout [OnlyIfAvailableForm]) -> [Read] {
 		var reads = [Read]()
-		guard node.key.leaf == .none else { return reads }
+		switch node.key.leaf {
+		case .none:
+			break
+		case .alias:
+			// An alias is bound to the nearest declaration of its fulfilling label, whose form decides its text (`x` or
+			// `x.instance`), so it reads that label: a required alias on the alias channel, keyed by the answer's form; one
+			// only if available as a receive of it does, keyed by rule 1.
+			if let fulfillingProperty = node.aliasFulfillingProperty {
+				let label = labels.id(of: fulfillingProperty.label)
+				if node.isOnlyIfAvailableAlias {
+					appendReceiveReads(of: label, onlyIfAvailable: true, forMockGeneration: forMockGeneration, to: &reads)
+					formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: fulfillingProperty.asUnwrappedProperty.propertyType))
+				} else {
+					reads.append(Read(.alias, label: label))
+				}
+			}
+			return reads
+		case .hole:
+			return reads
+		}
 		let record = node.scope
 		if let property = node.property {
 			reads.append(Read(.value, label: labels.id(of: property.label)))
@@ -1437,10 +2111,18 @@ struct TypeFactsGraph: Sendable {
 			case .instantiated, .forwarded:
 				break
 			case let .received(onlyIfAvailable):
-				appendReceiveReads(of: labels.id(of: dependency.property.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+				let label = labels.id(of: dependency.property.label)
+				appendReceiveReads(of: label, onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+				if onlyIfAvailable {
+					formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: dependency.property.asUnwrappedProperty.propertyType))
+				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				if !createdLabels.contains(fulfillingProperty.label) {
-					appendReceiveReads(of: labels.id(of: fulfillingProperty.label), onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+					let label = labels.id(of: fulfillingProperty.label)
+					appendReceiveReads(of: label, onlyIfAvailable: onlyIfAvailable, forMockGeneration: forMockGeneration, to: &reads)
+					if onlyIfAvailable {
+						formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: fulfillingProperty.asUnwrappedProperty.propertyType))
+					}
 				}
 			}
 		}
@@ -1451,6 +2133,7 @@ struct TypeFactsGraph: Sendable {
 				let label = labels.id(of: property.label)
 				reads.append(Read(.optionalValue, label: label))
 				reads.append(Read(.optional, label: label))
+				formsReadOnlyIfAvailable.append(OnlyIfAvailableForm(label: label, kind: property.asUnwrappedProperty.propertyType))
 			}
 		}
 		return reads
@@ -1469,4 +2152,109 @@ struct TypeFactsGraph: Sendable {
 			reads.append(Read(.mock, label: label))
 		}
 	}
+}
+
+/// A seam call or a call of another module's public mock that passes fills, as the graph's build reads it to find what
+/// each fill binds from its site's scope struct (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:handedMemoByLabel:)`).
+/// Held only while the graph is built.
+struct FillsOfCall {
+	init(scope: ConstructionScope, fillEdges: [(edge: Int32, hole: SeamSignature.Hole)]) {
+		self.fillEdges = fillEdges
+		isPublicMockCall = scope.publicMockCall != nil
+		calledBuilders = scope.calledBuilders
+	}
+
+	/// What each fill edge's fill binds from its site's scope struct, and the memo it takes of each label some route hands
+	/// it one of, by the edge's position: `receivedByFillTarget` gives what the subtree of an edge's target reads from above
+	/// it, along the edges that are no fills.
+	///
+	/// Where some route hands a fill a memo, the fill binds the memo's forms of its label in place of the place's field
+	/// (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`,
+	/// the tree's own rule, over the call's dispatchers, which the tree's rule declares from the call's builders and
+	/// filled places; only their names, which no memo reads, come from an allocator of their own). The tree finds two
+	/// inputs of that rule on the pass before, and here the fill's target's reads answer each, the rule run again with what
+	/// they find: the labels a fill's tree reads only as the place's field, of which it hands no memo
+	/// (`ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`), and then the
+	/// `SendableLazilyInstantiated` its tree reads beside a label it is handed a memo of, which decides only that memo's
+	/// deferral (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
+	/// so it hides nothing but tells which wrapper's memo the fill takes. Three inputs of the tree's are not a record's,
+	/// and stay at what they are for a call outside a fill in a tree that is no seam's: the dispatchers enclosing calls
+	/// declare (none), the scope values a seam's tree hands its fills (`SeamHoles.innerScope(at:innerKey:)`, none), and the
+	/// fields the sites inside a fill carry (none). Each rule runs over the call's dispatchers at most three times, and each
+	/// fill edge's received row is read once.
+	func structBindings(receivedByFillTarget: (_ edge: Int32) -> Set<Property>) -> (bindingsByEdge: [Int32: ScopeGenerator.FillStructBindings], handedMemoByLabelByEdge: [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]) {
+		let innerScopeReaders = calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+		var handedMemosByKey = [String: ScopeGenerator.FillDispatcher.HandedMemos]()
+		var emittedFills = [(fill: ScopeGenerator.FillDispatcher.EmittedFill, edge: Int32, placeFields: [SeamSignature.Hole.Field])]()
+		// A public mock's caller hands values.
+		if let calledBuilders, !isPublicMockCall {
+			// Every place of a case nested by type is filled by one fill, the first place's, which takes every field any
+			// place of the case carries (`ScopeGenerator.caseFields(of:)`).
+			var placesByCaseKey = [String: [SeamSignature.Hole]]()
+			for (_, hole) in fillEdges where hole.enumPlace != nil {
+				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
+			}
+			var emittedCaseKeys = Set<String>()
+			for (edge, hole) in fillEdges {
+				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+				guard hole.enumPlace == nil || emittedCaseKeys.insert(caseKey).inserted else { continue }
+				let places = placesByCaseKey[caseKey] ?? [hole]
+				let fields = hole.enumPlace == nil ? hole.fields : ScopeGenerator.caseFields(of: places).fields
+				emittedFills.append((ScopeGenerator.FillDispatcher.EmittedFill(key: ScopeGenerator.fillKey(of: hole), hole: hole, fields: fields), edge, places.flatMap(\.fields)))
+			}
+			var names = GeneratedNameAllocator(reserving: [])
+			let dispatchers = ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Set(fillEdges.map(\.hole.site)),
+				enclosingDispatchers: [:],
+				fillNames: [:],
+				names: &names,
+			)
+			func memosHanded(leavingOut labelsReadOnlyAsPlaceField: [String: Set<String>], readingSendableWrapper: [String: [String: Property]]) -> [String: ScopeGenerator.FillDispatcher.HandedMemos] {
+				ScopeGenerator.FillDispatcher.memosHanded(toFills: emittedFills.map(\.fill), ofPublicMockCall: isPublicMockCall, labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField, readingSendableWrapper: readingSendableWrapper, among: dispatchers)
+			}
+			handedMemosByKey = memosHanded(leavingOut: [:], readingSendableWrapper: [:])
+			// What each fill's target reads from above, found once for a fill some route hands a memo.
+			var receivedByEdge = [Int32: Set<Property>]()
+			var labelsReadOnlyAsPlaceField = [String: Set<String>]()
+			for (fill, edge, placeFields) in emittedFills {
+				guard let memoByLabel = handedMemosByKey[fill.key]?.memoByLabel, !memoByLabel.isEmpty else { continue }
+				let received = receivedByFillTarget(edge)
+				receivedByEdge[edge] = received
+				for field in fill.fields {
+					guard let memo = memoByLabel[field.property.label],
+					      ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(field.handedAsMemo(memo), placeFields: placeFields, reads: { ScopeGenerator.reads($0, among: received) }, carriedBySites: [])
+					else { continue }
+					labelsReadOnlyAsPlaceField[fill.key, default: []].insert(field.property.label)
+				}
+			}
+			if !labelsReadOnlyAsPlaceField.isEmpty {
+				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField, readingSendableWrapper: [:])
+			}
+			var readingSendableWrapper = [String: [String: Property]]()
+			for (fill, edge, _) in emittedFills {
+				guard let memoByLabel = handedMemosByKey[fill.key]?.memoByLabel, !memoByLabel.isEmpty, let received = receivedByEdge[edge] else { continue }
+				let instancePropertyByLabel = ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo: Set(memoByLabel.keys), labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField[fill.key] ?? [], among: received)
+				if !instancePropertyByLabel.isEmpty {
+					readingSendableWrapper[fill.key] = instancePropertyByLabel
+				}
+			}
+			if !readingSendableWrapper.isEmpty {
+				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField, readingSendableWrapper: readingSendableWrapper)
+			}
+		}
+		var memoByLabelByEdge = [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
+		for (fill, edge, _) in emittedFills {
+			memoByLabelByEdge[edge] = handedMemosByKey[fill.key]?.memoByLabel
+		}
+		var bindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
+		for (edge, hole) in fillEdges {
+			bindingsByEdge[edge] = ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: isPublicMockCall, innerScopeReaders: innerScopeReaders, handedMemoByLabel: memoByLabelByEdge[edge] ?? [:])
+		}
+		return (bindingsByEdge, memoByLabelByEdge)
+	}
+
+	private let fillEdges: [(edge: Int32, hole: SeamSignature.Hole)]
+	private let isPublicMockCall: Bool
+	private let calledBuilders: CalledBuilders?
 }

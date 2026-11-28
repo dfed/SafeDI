@@ -55,14 +55,12 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
 		]
-		try await expectGeneratedTree(of: fixture, root: "App", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "App", equals: { _ in """
 		extension App {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            #sourceLocation(file: "\(fixtures["Screen.swift"])", line: 10)
-		            let currentSession: Session = session
-		            #sourceLocation()
+		            let currentSession: Session = session // Declared as Screen.currentSession
 		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(session: session, currentSession: currentSession, stepBuilder: stepBuilder)
 		        }
@@ -351,7 +349,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			]),
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
 		]
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let session = Session()
@@ -361,12 +359,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_t0Builder() -> T0 {
 		            let stepSession = Session()
-		            #sourceLocation(file: "\(fixtures["T0.swift"])", line: 11)
-		            let session: Session = stepSession
-		            #sourceLocation()
-		            #sourceLocation(file: "\(fixtures["T0.swift"])", line: 12)
-		            let optionalSession: Session = stepSession
-		            #sourceLocation()
+		            let session: Session = stepSession // Declared as T0.session
+		            let optionalSession: Session = stepSession // Declared as T0.optionalSession
 		            let t3Builder = Instantiator<T3> {
 		                __safeDI_t3Builder(session: session, optionalSession: optionalSession)
 		            }
@@ -416,14 +410,12 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "Logger", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let t3Builder: Instantiator<T3>?"]),
 		]
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_t3Builder(session: Session?, logger: Logger?) -> T3 {
-		            #sourceLocation(file: "\(fixtures["T3.swift"])", line: 12)
-		            let aliasedSession: Session? = session
-		            #sourceLocation()
+		            let aliasedSession: Session? = session // Declared as T3.aliasedSession
 		            func __safeDI_t0Builder() -> T0 {
 		                let session = Session()
 		                let t3Builder = Instantiator<T3> {
@@ -449,7 +441,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(session: session, logger: logger, t3Builder: t3Builder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -494,9 +486,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    ) -> Root {
 		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 		        func __safeDI_t3Builder(session: Session?, logger: Logger?) -> T3 {
-		            #sourceLocation(file: "\(fixtures["T3.swift"])", line: 12)
-		            let aliasedSession: Session? = session
-		            #sourceLocation()
+		            let aliasedSession: Session? = session // Declared as T3.aliasedSession
 		            func __safeDI_t0Builder() -> T0 {
 		                let session = if let safeDIBuilder = safeDIOverrides.t3Builder.t0Builder.session { safeDIBuilder() } else { Session() }
 		                let t3Builder = Instantiator<T3> {
@@ -1881,7 +1871,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// The instance of `Root`'s `renamed` does not keep an alias of `renamed` from being created, as a declaration whose label
 		// hides the wrapper it is read from, so `Mid` creates its alias, though `Root` passes the function `renamed.instance`.
 		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: LazilyInstantiated<X>"])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
@@ -1891,9 +1881,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1908,7 +1896,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -1952,9 +1940,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -1993,7 +1979,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// one, bound from `Mid`'s `x`, which is built first and passed `nil` for the alias it waits on. `Mid` and the `A` built
 		// again are handed `Mid`'s alias.
 		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: X"])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
@@ -2003,9 +1989,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -2017,7 +2001,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2058,9 +2042,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -2101,22 +2083,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			rootDeclares: ["@Instantiated let x0: X", #"@Received(fulfilledByDependencyNamed: "x0", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#],
 			aReceives: "@Received let renamed: X?",
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let x0 = X(renamed: nil)
-		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
-		        let renamed: X? = x0
-		        #sourceLocation()
+		        let renamed: X? = x0 // Declared as Root.renamed
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -2128,7 +2106,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(x0: x0, renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2166,15 +2144,11 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let x0 = if let safeDIBuilder = safeDIOverrides.x0 { safeDIBuilder(nil) } else { X(renamed: nil) }
-		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
-		        let renamed: X? = x0
-		        #sourceLocation()
+		        let renamed: X? = x0 // Declared as Root.renamed
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -2215,7 +2189,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			midDeclaresBesideAlias: ["@Instantiated let y: Y"],
 			otherTypes: [seamFixtureType(named: "Y", isFinalClass: true, declarations: [siblingRequiresAlias ? "@Received let renamed: X?" : "@Received(onlyIfAvailable: true) let renamed: X?"])],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
@@ -2224,9 +2198,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let y = Y(renamed: renamed)
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
@@ -2239,7 +2211,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2277,9 +2249,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                let y = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.y { safeDIBuilder(renamed) } else { Y(renamed: renamed) }
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
@@ -2320,7 +2290,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			labelType: "Instantiator<X>",
 			midFulfillingDeclaration: "@Instantiated let xBuilder: Instantiator<X>",
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: Instantiator<X>?) -> A {
@@ -2330,9 +2300,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                    return X(renamed: renamed)
 		                }
 		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: Instantiator<X>? = xBuilder
-		                #sourceLocation()
+		                let renamed: Instantiator<X>? = xBuilder // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -2347,7 +2315,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2389,9 +2357,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.xBuilder { safeDIBuilder(renamed) } else { X(renamed: renamed) }
 		                }
 		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: Instantiator<X>? = xBuilder
-		                #sourceLocation()
+		                let renamed: Instantiator<X>? = xBuilder // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -2432,7 +2398,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			labelType: "any XProtocol",
 			midFulfillingDeclaration: #"@Instantiated(fulfilledByType: "X") let x: any XProtocol"#,
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
@@ -2441,9 +2407,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x: any XProtocol = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: (any XProtocol)? = x
-		            #sourceLocation()
+		            let renamed: (any XProtocol)? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -2455,7 +2419,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2493,9 +2457,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x: any XProtocol = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: (any XProtocol)? = x
-		                #sourceLocation()
+		                let renamed: (any XProtocol)? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -2575,7 +2537,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			]),
 			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
 		]
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
@@ -2590,9 +2552,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(renamed: renamed)
 		            }
@@ -2607,7 +2567,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2646,9 +2606,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            func __safeDI_bBuilder(renamed: X?) -> B {
 		                func __safeDI_midBuilder() -> Mid {
 		                    let x = if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                    let renamed: X? = x
-		                    #sourceLocation()
+		                    let renamed: X? = x // Declared as Mid.renamed
 		                    let bBuilder = Instantiator<B> {
 		                        __safeDI_bBuilder(renamed: renamed)
 		                    }
@@ -2707,7 +2665,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 				#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
 			]),
 		]
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
@@ -2720,16 +2678,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x: X = __safeDI_renamed()
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            return Mid(x: x, renamed: renamed)
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        self.init(renamed: renamed)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -2770,9 +2726,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(nil, aBuilder) } else { X(renamed: nil, aBuilder: aBuilder) }
 		                    }
 		                    let x: X = __safeDI_x()
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
-		                    let renamed: X? = x
-		                    #sourceLocation()
+		                    let renamed: X? = x // Declared as Mid.renamed
 		                    return Mid(x: x, renamed: renamed)
 		                }
 		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
@@ -3440,7 +3394,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
 			],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
@@ -3467,9 +3421,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_cBuilder() -> C {
 		            let source: X = __safeDI_renamed()
-		            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
-		            let renamed: X? = source
-		            #sourceLocation()
+		            let renamed: X? = source // Declared as C.renamed
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(renamed: renamed)
 		            }
@@ -3481,7 +3433,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3529,9 +3481,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.safeDIBuilder { safeDIBuilder(nil, bBuilder) } else { X(renamed: nil, bBuilder: bBuilder) }
 		                            }
 		                            let source: X = __safeDI_source()
-		                            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
-		                            let renamed: X? = source
-		                            #sourceLocation()
+		                            let renamed: X? = source // Declared as C.renamed
 		                            let bBuilder = Instantiator<B> {
 		                                __safeDI_bBuilder(renamed: renamed)
 		                            }
@@ -3588,13 +3538,11 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		// `X` receives `renamed` through an `onlyIfAvailable` alias, `previous`, whose fulfilling property `renamed: X` is still
 		// being built around `X`, in every form the parameter provides: `X` is passed `nil`, as before.
 		let fixture = Self.typeBuiltAsParameterLabelFixture(xDeclares: [#"@Received(fulfilledByDependencyNamed: "renamed", ofType: X.self, onlyIfAvailable: true) let previous: X?"#])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
-		            #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
-		            let previous: X? = nil
-		            #sourceLocation()
+		            let previous: X? = nil // Declared as X.previous
 		            return X(previous: previous)
 		        }
 		        let renamed: X = __safeDI_renamed()
@@ -3615,7 +3563,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3653,18 +3601,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_renamed() -> X {
-		            #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
-		            let previous: X? = nil
-		            #sourceLocation()
+		            let previous: X? = nil // Declared as X.previous
 		            return if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(previous) } else { X(previous: previous) }
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_renamed() -> X {
-		                    #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
-		                    let previous: X? = nil
-		                    #sourceLocation()
+		                    let previous: X? = nil // Declared as X.previous
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(previous) } else { X(previous: previous) }
 		                }
 		                let renamed: X = __safeDI_renamed()
@@ -3717,7 +3661,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 				seamFixtureType(named: "Leaf2", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
 			],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
@@ -3737,9 +3681,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            return X(leaf: leaf)
 		        }
 		        func __safeDI_leaf() -> Leaf {
-		            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		            let renamed: X? = nil
-		            #sourceLocation()
+		            let renamed: X? = nil // Declared as Leaf.renamed
 		            let leaf2 = Leaf2(renamed: renamed)
 		            return Leaf(renamed: renamed, leaf2: leaf2)
 		        }
@@ -3748,9 +3690,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            return X(leaf: leaf)
 		        }
 		        func __safeDI_leaf_(source: X) -> Leaf {
-		            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		            let renamed: X? = source
-		            #sourceLocation()
+		            let renamed: X? = source // Declared as Leaf.renamed
 		            let leaf2 = Leaf2(renamed: renamed)
 		            return Leaf(renamed: renamed, leaf2: leaf2)
 		        }
@@ -3760,7 +3700,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3799,9 +3739,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_source() -> X {
 		                    func __safeDI_leaf() -> Leaf {
-		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		                        let renamed: X? = nil
-		                        #sourceLocation()
+		                        let renamed: X? = nil // Declared as Leaf.renamed
 		                        let leaf2 = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.leaf.leaf2 { safeDIBuilder(renamed) } else { Leaf2(renamed: renamed) }
 		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.source.leaf.safeDIBuilder { safeDIBuilder(renamed, leaf2) } else { Leaf(renamed: renamed, leaf2: leaf2) }
 		                    }
@@ -3811,9 +3749,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                let source: X = __safeDI_source()
 		                func __safeDI_renamed() -> X {
 		                    func __safeDI_leaf() -> Leaf {
-		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		                        let renamed: X? = source
-		                        #sourceLocation()
+		                        let renamed: X? = source // Declared as Leaf.renamed
 		                        let leaf2 = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.leaf2 { safeDIBuilder(renamed) } else { Leaf2(renamed: renamed) }
 		                        return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed.leaf.safeDIBuilder { safeDIBuilder(renamed, leaf2) } else { Leaf(renamed: renamed, leaf2: leaf2) }
 		                    }
@@ -3868,7 +3804,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			],
 			otherTypes: [seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let renamed: X"])],
 		)
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
@@ -3878,9 +3814,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		            let inner: Inner = __safeDI_inner()
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
@@ -3897,7 +3831,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -3938,9 +3872,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		                func __safeDI_inner() -> Inner {
 		                    let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.inner.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.inner.safeDIBuilder { safeDIBuilder(renamed) } else { Inner(renamed: renamed) }
@@ -4011,7 +3943,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 				"@Instantiated let aBuilder: Instantiator<A>",
 			]),
 		]
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
@@ -4027,9 +3959,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let source: X = __safeDI_renamed()
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: X? = source
-		            #sourceLocation()
+		            let renamed: X? = source // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -4039,7 +3969,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(renamed: renamed)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -4081,9 +4011,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		                        return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(aBuilder) } else { X(aBuilder: aBuilder) }
 		                    }
 		                    let source: X = __safeDI_source()
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                    let renamed: X? = source
-		                    #sourceLocation()
+		                    let renamed: X? = source // Declared as Mid.renamed
 		                    let aBuilder = Instantiator<A> {
 		                        __safeDI_aBuilder(renamed: renamed)
 		                    }
@@ -4127,13 +4055,11 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			"@Instantiated let other: X",
 			#"@Received(fulfilledByDependencyNamed: "other", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
 		])
-		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { _ in """
 		extension Root {
 		    public convenience init() {
 		        let other = X(renamed: nil)
-		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
-		        let renamed: X? = other
-		        #sourceLocation()
+		        let renamed: X? = other // Declared as Root.renamed
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
@@ -4151,7 +4077,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        self.init(other: other, renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
-		""" }, mock: { fixtures in """
+		""" }, mock: { _ in """
 		#if DEBUG
 		extension Root {
 		    /// Overrides for the mock dependency tree.
@@ -4189,9 +4115,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(nil) } else { X(renamed: nil) }
-		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
-		        let renamed: X? = other
-		        #sourceLocation()
+		        let renamed: X? = other // Declared as Root.renamed
 		        func __safeDI_aBuilder(renamed: X?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let renamed = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
@@ -4852,6 +4776,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableLabelErrorAlone_whenScopeClosingCycleDeclaresLabelAfterItsBuilder() async {
+		// As the test below, but `S` declares `x` after the builder that closes the cycle. No parameter carries `x`, so
+		// today's tree builds `aBuilder` first, while a call place, which receives what `A`'s tree receives, would wait
+		// for `x`: the comparison of the two orders skips a tree that is rejected (seam corpus seeds 480 and 505).
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["B.swift"]):7:5: error: @Received property `x: X` is received in chain: A -> B. A dependency cycle builds `A` again beneath `S`, which declares `x: LazilyInstantiated<X>` with the same label, and SafeDI hands each `A` one value of `x`. `A` and the types it builds receive `x` as `x: LazilyInstantiated<X>?` and `x: X`, which one value cannot carry together. Receive `x: LazilyInstantiated<X>?` and `x: X` under different labels to fix.
+			\(fixtures["S.swift"]):9:5: note: `x: LazilyInstantiated<X>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: false, scopeClosingCycleDeclaresLabelLast: true), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsUnpassableLabelError_whenTreeBuiltAgainRequiresInstanceBesideOptionalWrapperOnlyIfAvailable() async {
 		// `B` requires `x: X` and `C` receives `x: LazilyInstantiated<X>?` only if available. `Root` and `S` each declare
 		// `x: LazilyInstantiated<X>`, which provides both, but a parameter `x: X` cannot carry the wrapper `C` would get.
@@ -4932,14 +4872,16 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// `Root`, which instantiates `x: LazilyInstantiated<X>` and `aBuilder`, and generates a mock when
 	/// `rootGeneratesMock`; `A` builds `B`, which requires `x: X`, `C`, which receives `x: LazilyInstantiated<X>?` only if
 	/// available, and `sBuilder`; `S` instantiates `x: LazilyInstantiated<X>` and closes the cycle on `A`.
-	private static func requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: Bool) -> [String] {
+	private static func requiredInstanceBesideOptionalWrapperFixture(rootGeneratesMock: Bool, scopeClosingCycleDeclaresLabelLast: Bool = false) -> [String] {
 		[
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"])
 				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: rootGeneratesMock ? "@Instantiable(isRoot: true, generateMock: true)" : "@Instantiable(isRoot: true)"),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let sBuilder: Instantiator<S>"]),
 			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let x: X"]),
 			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: LazilyInstantiated<X>?"]),
-			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "S", isFinalClass: true, declarations: scopeClosingCycleDeclaresLabelLast
+				? ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let x: LazilyInstantiated<X>"]
+				: ["@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
 		]
 	}
@@ -5364,7 +5306,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	}
 
 	/// The tree SafeDI generates for `Root` of `aliasOfParameterLabelFixture` with the label spelled as `spelling` spells it.
-	private static func expectedSpelledAliasOfParameterLabelTree(spelling: LabelSpelling, fixtures: FixturePaths) -> String {
+	private static func expectedSpelledAliasOfParameterLabelTree(spelling: LabelSpelling, fixtures _: FixturePaths) -> String {
 		let type = spelling.labelType
 		// `x` is annotated with its declared type where that is not the type built.
 		let xAnnotation = type == spelling.constructedType ? "" : ": \(type)"
@@ -5377,9 +5319,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        func __safeDI_midBuilder() -> Mid {
 		            let x\(xAnnotation) = \(spelling.constructedType)(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: \(type)? = x
-		            #sourceLocation()
+		            let renamed: \(type)? = x // Declared as Mid.renamed
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: renamed)
 		            }
@@ -5395,7 +5335,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	}
 
 	/// The mock SafeDI generates for `Root` of `aliasOfParameterLabelFixture` with the label spelled as `spelling` spells it.
-	private static func expectedSpelledAliasOfParameterLabelMock(spelling: LabelSpelling, fixtures: FixturePaths) -> String {
+	private static func expectedSpelledAliasOfParameterLabelMock(spelling: LabelSpelling, fixtures _: FixturePaths) -> String {
 		let type = spelling.labelType
 		// `x` is annotated with its declared type where that is not the type built.
 		let xAnnotation = type == spelling.constructedType ? "" : ": \(type)"
@@ -5437,9 +5377,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(renamed: \(type)?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		                let x\(xAnnotation) = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { \(spelling.constructedType)(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: \(type)? = x
-		                #sourceLocation()
+		                let renamed: \(type)? = x // Declared as Mid.renamed
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(renamed: renamed)
 		                }
@@ -5459,7 +5397,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	}
 
 	/// The tree SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared.
-	private static func expectedAliasOfParameterLabelTree(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
+	private static func expectedAliasOfParameterLabelTree(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures _: FixturePaths) -> String {
 		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let aBuiltWith = { (argument: String) in
 			wrapper.isErased ? "AnyA(__safeDI_aBuilder(renamed: \(argument)))" : "__safeDI_aBuilder(renamed: \(argument))"
@@ -5498,9 +5436,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        \(sendable)func __safeDI_midBuilder() -> Mid {
 		            let x = X(renamed: nil)
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		            let renamed: X? = x
-		            #sourceLocation()
+		            let renamed: X? = x // Declared as Mid.renamed
 		\(midConstruction)
 		        let aBuilder = \(wrapper.generatedType) {
 		            \(aBuiltWith("nil"))
@@ -5513,7 +5449,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	/// The mock SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared. `Root` binds
 	/// `renamed` to an override, which `A`'s builder function is passed where it is declared.
-	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
+	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures _: FixturePaths) -> String {
 		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let override = { (path: String) in mockOverride(path, wrapper: wrapper) }
 		let midConstruction = switch aliasPosition {
@@ -5575,9 +5511,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		\(wrapper.isSendable ? "        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder\n" : "")        \(sendable)func __safeDI_aBuilder(renamed: X?) -> \(wrapper.isErased ? "AnyA" : "A") {
 		            \(sendable)func __safeDI_midBuilder() -> Mid {
 		                let x = if let safeDIBuilder = \(override("midBuilder.x")) { safeDIBuilder(nil) } else { X(renamed: nil) }
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
+		                let renamed: X? = x // Declared as Mid.renamed
 		\(midConstruction)
 		            }
 		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)

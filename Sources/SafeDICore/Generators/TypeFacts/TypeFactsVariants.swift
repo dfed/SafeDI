@@ -71,6 +71,10 @@ struct VariantBinding: Equatable, Sendable {
 /// above, in read order: what its callers' answers share, never one caller's answer), and for each of its node's edges in order the variant it calls and the run of
 /// sources of what that call hands. A variant's ID is its position, in the order the worklist first makes it, so it
 /// orders deterministically with no sort. It holds those columns for as long as its owner keeps it.
+///
+/// In a world with loops of builders, each variant's made-again calls follow its edges' calls (`madeAgainCalls(of:)`):
+/// a call of each member its node's body makes again at its top, handed the caller's answers at that top, which are the
+/// caller's own but for the labels it rebinds, projected onto the member's reads as an edge's call projects them.
 struct TypeFactsVariants: Sendable {
 	/// The bucket of a variant's key: its node, family and keys hashed.
 	static func hash(_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int {
@@ -92,17 +96,21 @@ struct TypeFactsVariants: Sendable {
 	///     node whatever encloses them (production: `@Sendable` is a mark folded over call edges)
 	///     returns the caller's, so the root's `.plain` reaches every node; only seam contracts and mocks whose parameter
 	///     types differ by family key on it.
-	///   - key: The value of an answer to a read that a variant is told apart by. The two parameter rules live here: a
-	///     difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
+	///   - key: The value of an answer to a read that a variant is told apart by, at a call of `target` (the root's own
+	///     reads: 0). The two parameter rules live here: a difference a parameter can carry projects to one key. It is applied once, to an answer a call binds or to -1 for
 	///     none, never to a key a call passes through, so it need not be idempotent: a key collapsed at one call reaches
 	///     every callee below unchanged.
+	///   - madeAgain: The world's made-again calls, and what a node binds at its top for a read of a member it makes again
+	///     (an answer for each read of a label it rebinds, `nil` for the others, which pass through from the caller's own
+	///     answers); `nil` for a world with no loop of builders.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
 		rootAnswer: (_ read: Int32) -> VariantBinding?,
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
-		key: (_ read: Int32, _ answer: Int32) -> Int32,
+		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
+		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)? = nil,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
 		var columns = Columns()
@@ -130,11 +138,37 @@ struct TypeFactsVariants: Sendable {
 
 		reads.rows.forEachColumn(inRow: 0) { read, _ in
 			let answer = rootAnswer(read)
-			scratchKeys.append(key(read, answer?.answer ?? -1))
+			scratchKeys.append(key(read, answer?.answer ?? -1, 0))
 			columns.rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
 		}
 		_ = variant(of: 0, family: .plain)
 		var next = 0
+		/// Appends the call of `target` from `caller`, a variant of `node`, with the answers `binding` gives and the caller's
+		/// own passed through for the rest.
+		func appendCall(of target: Int32, from caller: Int, of node: Int, family calleeFamily: () -> VariantFamily, binding: (_ read: Int32) -> VariantBinding?) {
+			scratchKeys.removeAll(keepingCapacity: true)
+			scratchSources.removeAll(keepingCapacity: true)
+			reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
+				work += 1
+				if let bound = binding(read) {
+					scratchKeys.append(key(read, bound.answer, target))
+					scratchSources.append(.bound(bound.declaration, answer: bound.answer))
+				} else if let position = reads.rows.rank(of: read, inRow: node) {
+					// The caller's key, as it is: an answer its callers share, which is all a body shared by them can hand
+					// on. It is a key already, so `key` is never applied to it again.
+					scratchKeys.append(columns.key(ofVariant: caller, at: position))
+					scratchSources.append(.passedThrough(Int32(position)))
+				} else {
+					scratchKeys.append(key(read, -1, target))
+					scratchSources.append(.none)
+				}
+			}
+			columns.sourceOffsets.append(Int32(columns.sources.count))
+			columns.sources.append(contentsOf: scratchSources)
+			let callee = variant(of: target, family: calleeFamily())
+			columns.callees.append(callee)
+		}
+
 		while next < columns.nodes.count {
 			let caller = next
 			next += 1
@@ -143,27 +177,17 @@ struct TypeFactsVariants: Sendable {
 			columns.callOffsets.append(Int32(columns.callees.count))
 			for (edgeIndex, target) in graph.edges(from: node).enumerated() {
 				let edge = graph.edgeOffset(of: node) + edgeIndex
-				scratchKeys.removeAll(keepingCapacity: true)
-				scratchSources.removeAll(keepingCapacity: true)
-				reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
-					work += 1
-					if let bound = binding(edge, read) {
-						scratchKeys.append(key(read, bound.answer))
-						scratchSources.append(.bound(bound.declaration, answer: bound.answer))
-					} else if let position = reads.rows.rank(of: read, inRow: node) {
-						// The caller's key, as it is: an answer its callers share, which is all a body shared by them can
-						// hand on. It is a key already, so `key` is never applied to it again.
-						scratchKeys.append(columns.key(ofVariant: caller, at: position))
-						scratchSources.append(.passedThrough(Int32(position)))
-					} else {
-						scratchKeys.append(key(read, -1))
-						scratchSources.append(.none)
-					}
+				appendCall(of: target, from: caller, of: node, family: { family(edge, callerFamily) }, binding: { binding(edge, $0) })
+			}
+			if let madeAgain {
+				columns.madeAgainOffsets.append(Int32(columns.callees.count))
+				// A member made again is the parent's member, built in the family its parent's edge builds it in. The caller
+				// stands for the parent there: a caller in another family than the parent's is a `@Sendable` member, which
+				// rebinds only `@Sendable` members (a plain one is `nonSendableWrapperCaptures`' error), each of whose edges
+				// fixes its family whatever it is given.
+				for (target, parentEdge) in zip(madeAgain.edges.targets(of: node), madeAgain.edges.parentEdges(of: node)) {
+					appendCall(of: target, from: caller, of: node, family: { family(Int(parentEdge), callerFamily) }, binding: { madeAgain.binding(node, $0) })
 				}
-				columns.sourceOffsets.append(Int32(columns.sources.count))
-				columns.sources.append(contentsOf: scratchSources)
-				let callee = variant(of: target, family: family(edge, callerFamily))
-				columns.callees.append(callee)
 			}
 		}
 		columns.callOffsets.append(Int32(columns.callees.count))
@@ -199,11 +223,24 @@ struct TypeFactsVariants: Sendable {
 
 	/// The variant each of the variant's node's edges calls, in edge order.
 	func callees(of variant: Int) -> ArraySlice<Int32> {
-		columns.callees[Int(columns.callOffsets[variant])..<Int(columns.callOffsets[variant + 1])]
+		columns.callees[Int(columns.callOffsets[variant])..<madeAgainCallOffset(of: variant)]
+	}
+
+	/// The variant each member the variant's node makes again calls, in the order its body rebinds them
+	/// (`MadeAgainEdges.targets(of:)`): empty in a world with no loop of builders.
+	func madeAgainCallees(of variant: Int) -> ArraySlice<Int32> {
+		columns.callees[madeAgainCallOffset(of: variant)..<Int(columns.callOffsets[variant + 1])]
+	}
+
+	/// The position of the variant's first made-again call among every variant's calls, after its edges' calls: a made-again
+	/// call's position, for `sources(ofCall:)`, is this plus its index.
+	func madeAgainCallOffset(of variant: Int) -> Int {
+		columns.madeAgainOffsets.isEmpty ? Int(columns.callOffsets[variant + 1]) : Int(columns.madeAgainOffsets[variant])
 	}
 
 	/// Where each answer a call hands its callee comes from, in the callee's read order: `call` is the call's position
-	/// among every variant's calls, `callOffset(of:)` plus the edge's index.
+	/// among every variant's calls, `callOffset(of:)` plus the edge's index, or `madeAgainCallOffset(of:)` plus the made-again
+	/// call's.
 	func sources(ofCall call: Int) -> ArraySlice<AnswerSource> {
 		columns.sources[Int(columns.sourceOffsets[call])..<Int(columns.sourceOffsets[call + 1])]
 	}
@@ -228,7 +265,7 @@ struct TypeFactsVariants: Sendable {
 
 	/// The 32-bit elements the variants hold, for a test to count per variant and per call.
 	var columnElementCount: Int {
-		columns.nodes.count * 2 + columns.keys.count + columns.keyOffsets.count + columns.callees.count + columns.callOffsets.count + columns.sources.count * 3 + columns.sourceOffsets.count
+		columns.nodes.count * 2 + columns.keys.count + columns.keyOffsets.count + columns.callees.count + columns.callOffsets.count + columns.madeAgainOffsets.count + columns.sources.count * 3 + columns.sourceOffsets.count
 	}
 
 	private struct Columns {
@@ -237,6 +274,9 @@ struct TypeFactsVariants: Sendable {
 		var keyOffsets: [Int32] = [0]
 		var keys = [Int32]()
 		var callOffsets = [Int32]()
+		/// Per variant, where its made-again calls begin among `callees`, after its edges' calls; empty in a world with no
+		/// loop of builders.
+		var madeAgainOffsets = [Int32]()
 		var callees = [Int32]()
 		var sourceOffsets = [Int32]()
 		var sources = [AnswerSource]()

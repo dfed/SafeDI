@@ -133,7 +133,7 @@ extension SeamPlacesDrafts {
 		// signature time, and its places in the tree, spelled apart since they name cases.
 		func projected(_ declaration: SeamSignature.Places.Declaration, placesInTree: [String]) -> String {
 			let field = declaration.field
-			let location = field.declarationLocation.map { "\($0.order) \($0.placement)" } ?? "none"
+			let location = Dependency.DeclarationLocation.reportSpelling(of: field.declarationLocation)
 			let buildable = declaration.buildability.map { ($0.labelsHeldAboveSeam + ["in tree:"] + placesInTree).joined(separator: " ") } ?? "none"
 			let rows = [
 				"\(field.property.label): \(field.property.typeDescription.asSource) declared by \(field.declaringType.asSource) at \(location)\(field.isReceivedOnlyIfAvailable ? " only if available" : "")",
@@ -233,5 +233,13 @@ extension SeamPlacesDrafts {
 		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters", "report: declaration fields: \(comparedFieldCount) compared, \(fieldDifferences.count) differences", "report: stored declaration rows: \(rowCounts.map { "\($0.0) \($0.1)" }.joined(separator: ", "))"] + fieldDifferences.sorted()
 			+ fromFacts.subtracting(fromStored).sorted().map { "declarations: only from facts: \($0)" }
 			+ fromStored.subtracting(fromFacts).sorted().map { "declarations: only stored: \($0)" }
+	}
+}
+
+extension Dependency.DeclarationLocation {
+	/// How a places-draft report spells `location`: its rank and its line and column, or `none`.
+	static func reportSpelling(of location: Dependency.DeclarationLocation?) -> String {
+		guard let location else { return "none" }
+		return "\(location.order) \(location.position.map { "\($0.line):\($0.column)" } ?? "unplaced")"
 	}
 }

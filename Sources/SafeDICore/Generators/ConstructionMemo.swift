@@ -430,7 +430,7 @@ struct ConstructionContext {
 		case let .nearestDeclaration(label):
 			let (declaration, depth) = nearestDeclarations.resolving(label)
 			return (.nearestDeclaration(declaration), depth)
-		case let .binding(property):
+		case let .binding(property), let .cycleArgumentBinding(property):
 			let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 			return (.binding(binding), depth)
 		case let .declarationClosedOn(property, concreteType):
@@ -454,6 +454,10 @@ struct ConstructionLog {
 		case nearestDeclaration(String)
 		/// The binding a receive of a property only if available reads (`NearestDeclarations.resolvingBinding(of:)`).
 		case binding(Property)
+		/// The binding a scope passes a parameter of the builder function a lazy cycle closes on that nothing requires,
+		/// read as `binding` is and answered alike. It is a read of its own because it asks for what a cycle passes: the
+		/// function's body may read none of it, where a declaration of the label inside the function hides the parameter.
+		case cycleArgumentBinding(Property)
 		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
 		case declarationClosedOn(PropertyID, TypeID)
 		/// The parameters of the builder function built for a declaration that a lazy cycle closes on, if any.
@@ -465,7 +469,7 @@ struct ConstructionLog {
 		/// Whether this read asks what a cycle closes on or passes: what most places of one key differ in.
 		var isCycleRead: Bool {
 			switch self {
-			case .nearestDeclaration, .binding, .passesNil:
+			case .nearestDeclaration, .binding, .cycleArgumentBinding, .passesNil:
 				false
 			case .declarationClosedOn, .cycleParameterContext:
 				true
@@ -624,6 +628,24 @@ struct ConstructionLog {
 			body(recorded.read.read, recorded.answer, recorded.read.depth)
 			return true
 		}
+	}
+
+	/// The labels of the reads of this log that are no cycle reads: what a place's subtree asked of the declarations above
+	/// it (`PlaceReadsObservation`).
+	var labelsOfReadsOfDeclarations: Set<String> {
+		var labels = Set<String>()
+		_ = forEachRead(where: { _ in true }) { recorded in
+			switch recorded.read.read {
+			case let .nearestDeclaration(label):
+				labels.insert(label)
+			case let .binding(property), let .passesNil(property, _, _):
+				labels.insert(property.label)
+			case .declarationClosedOn, .cycleParameterContext, .cycleArgumentBinding:
+				break
+			}
+			return true
+		}
+		return labels
 	}
 
 	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read
@@ -884,7 +906,7 @@ public enum ConstructionMemoOracle {
 	/// its code: one with the construction memo, shared across the trees created with one memo, and one without it. The
 	/// two must hold the same data on every path. The build without the memo walks every place, which `typeFacts` holds
 	/// beside the tree's graph of per-type facts, for the test to compare.
-	@TaskLocal public static var observer: (@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable, _ typeFacts: TypeFactsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ treeBuiltWithMemo: any Sendable, _ treeBuiltWithoutMemo: any Sendable, _ typeFacts: TypeFactsReport) -> Void>?
 
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.
@@ -892,12 +914,12 @@ public enum ConstructionMemoOracle {
 
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
 	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
-	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
+	@TaskLocal public static var keyedPlaceObserver: TaskLocalFunction<@Sendable (_ concreteType: String) -> Void>?
 
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` reuses from a construction memo within a
 	/// pass, and whether the pass is a tree's first, when set: by the tests, never by the tool. The oracle's own builds are
 	/// not reported.
-	@TaskLocal public static var reusedPlaceObserver: (@Sendable (_ concreteType: String, _ isFirstPass: Bool) -> Void)?
+	@TaskLocal public static var reusedPlaceObserver: TaskLocalFunction<@Sendable (_ concreteType: String, _ isFirstPass: Bool) -> Void>?
 }
 
 /// What a place's log keeps of the reads its subtree made: the elements each place adds to what the logs and the memo
@@ -906,7 +928,7 @@ public enum ConstructionMemoOracle {
 /// grow with the places. Handed to `observer`, which the tests set, never the tool.
 public enum ConstructionLogStorage {
 	/// Called with the elements each place's kept log adds, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (Int) -> Void>?
 
 	/// Hands `observer`, when set, the elements a place's kept log adds.
 	static func record(_ elementCount: Int) {

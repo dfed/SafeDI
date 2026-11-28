@@ -78,7 +78,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		for seed in UInt64(0)..<8 {
 			let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
 			let scheduled = try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: seed, offersLaterPlacesCandidates: seed.isMultiple(of: 2))) { [fixture] in
-				try await ConstructionSharingSchedule.$observer.withValue({ continuation.yield($0) }) {
+				try await ConstructionSharingSchedule.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 				}
 			}
@@ -311,7 +311,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		// `Core`'s seam `Feature` takes a builder of `any Service`, which `App`'s `DefaultService` fills. `App`'s root builds
 		// `DefaultService` itself too, so the tree builds it at two places: once beneath `Root`, once as `Feature`'s fill.
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) {
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					ModuleFixture(
@@ -371,9 +371,10 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 				}))
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			// Today's tree's look-ups: a plan's bodies share a memo of their own.
+			_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(.max) { try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
-			}
+			} }
 			continuation.finish()
 			var candidatesAsked = [Int]()
 			for await work in stream where work.step == .askingMemoCandidates {
@@ -384,6 +385,52 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		}
 		#expect(mostCandidatesAsked == [1, 1])
 		#expect(lookupCounts == [128, 224])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reusesTreeOutsideCycleInEveryBodyAfterTheFirst_whenParentsBuildTypeOnCycleUnderLabelsOfTheirOwn() async throws {
+		// Each parent builds `A`, which opens itself, under a label of its own, so the root's plan builds a body of `A` for
+		// each label. The tree of `T0` beneath `A` is built in the first body and reused in each other, through one memo for
+		// the root's bodies: built once per body, it cost the number of labels times the tree (160 labels of a tree of 1,500
+		// types took 30 seconds and 1.4 GB, against 1.2 seconds and 94 MB with the memo shared).
+		var reusedTreeCounts = [Int]()
+		var treeBuildCounts = [Int]()
+		for parentCount in [2, 4] {
+			var fixture = [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: (0..<parentCount).map { "@Instantiated let c\($0): C\($0)" }),
+				seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let t0: T0", "@Instantiated let aBuilder: Instantiator<A>"]),
+			]
+			for parent in 0..<parentCount {
+				fixture.append(seamFixtureType(named: "C\(parent)", isFinalClass: true, declarations: ["@Instantiated let a\(parent): A"]))
+			}
+			for type in 0..<7 {
+				fixture.append(seamFixtureType(named: "T\(type)", isFinalClass: true, declarations: [2 * type + 1, 2 * type + 2].filter { $0 < 7 }.map { "@Instantiated let t\($0): T\($0)" }))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: (type: String, isReuse: Bool).self)
+			_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue(TaskLocalFunction { concreteType, _ in continuation.yield((concreteType, true)) }) {
+				try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield(($0, false)) }) { [fixture] in
+					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+				}
+			}
+			continuation.finish()
+			var reusedTrees = 0
+			var treeBuilds = 0
+			for await (type, isReuse) in stream {
+				if isReuse, type == "T0" {
+					reusedTrees += 1
+				} else if !isReuse, type == "T6" {
+					treeBuilds += 1
+				}
+			}
+			reusedTreeCounts.append(reusedTrees)
+			treeBuildCounts.append(treeBuilds)
+		}
+		// The tests' comparison builds today's tree beside the plan, which reuses `T0` as often again: half of each count.
+		// With a memo per body the plan reuses nothing, and the counts are [2, 4].
+		#expect(reusedTreeCounts == [4, 8])
+		// The deepest type of the tree is keyed once by today's tree and once by the plan, however many labels build `A`.
+		#expect(treeBuildCounts == [2, 2])
 	}
 
 	@Test
@@ -408,7 +455,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 				)))
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 			}
 			continuation.finish()
@@ -436,7 +483,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func typesKeyedInMemo(of fixture: [String], moduleMembershipArguments: [String] = []) async throws -> Set<String> {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, moduleMembershipArguments: moduleMembershipArguments)
 		}
 		continuation.finish()
@@ -452,9 +499,10 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func keyedPlaceCountsInMemo(of fixture: [String]) async throws -> [String: Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		// Today's tree's places: a plan's bodies share a memo of their own.
+		_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(.max) { try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		} }
 		continuation.finish()
 		var keyedPlaceCounts = [String: Int]()
 		for await keyedType in stream {

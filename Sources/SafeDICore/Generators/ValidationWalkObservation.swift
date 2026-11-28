@@ -34,7 +34,7 @@ public enum ValidationWalkObservation: Sendable {
 	case keyedSubtree
 
 	/// Called with what the walk did, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (ValidationWalkObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (ValidationWalkObservation) -> Void>?
 
 	/// Whether the walk skips a subtree whose walk along an equal context completed and found nothing. `false` only where a
 	/// test, or the graph fuzzer's oracle, compares what the walk reports with and without the skip.
@@ -48,7 +48,7 @@ public enum ValidationWalkObservation: Sendable {
 	/// and what the walk of every route then found (`DependencyTreeGenerator.FulfillmentFold`). Setting it makes the walk
 	/// run where the fold found no route that may fail, so a test holds the fold to its one-way error on every graph it
 	/// generates; the tool never sets it.
-	@TaskLocal public static var foldComparison: (@Sendable (FulfillmentFoldComparison) -> Void)?
+	@TaskLocal public static var foldComparison: TaskLocalFunction<@Sendable (FulfillmentFoldComparison) -> Void>?
 }
 
 /// What the fold over the facts of each type answered for the trees of one validation, beside what the walk of their

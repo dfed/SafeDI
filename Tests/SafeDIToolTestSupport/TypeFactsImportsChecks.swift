@@ -30,9 +30,9 @@ import Testing
 enum TypeFactsImportsChecks {
 	/// Runs `operation` while comparing the imports of every root it plans, handing each comparison to
 	/// `enclosingObserver` too, and records an issue for each root whose two sets differ.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (TypeFactsImportsComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (TypeFactsImportsComparison) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: TypeFactsImportsComparison.self)
-		let result = try await TypeFactsImportsObservation.$comparesWalk.withValue({ comparison in
+		let result = try await TypeFactsImportsObservation.$comparesWalk.withValue(TaskLocalFunction { comparison in
 			continuation.yield(comparison)
 			enclosingObserver?(comparison)
 		}) {

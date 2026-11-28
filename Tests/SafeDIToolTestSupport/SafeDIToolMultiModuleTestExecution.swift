@@ -165,11 +165,9 @@ enum MultiModuleIntegration: CaseIterable {
 	/// omitting that flag and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
 	/// Bazel names both outputs after the rule label and Tuist writes `SafeDIGenerated.swift`, and its CSV names
 	/// each file by the absolute, unresolved path the harness created it under, where Bazel's entries are
-	/// execroot-relative and Tuist's `$SRCROOT`-relative: that changes only the text of `#sourceLocation`
-	/// directives, of diagnostics and of the paths the `.safedi` stores, never the tree or mock code. In
-	/// combined mode `generate()` normalizes no path and `run()` respells paths only when printing, so a
-	/// diagnostic cites the CSV's path and an alias's declaration is referenced by a `#sourceLocation`
-	/// directive naming it.
+	/// execroot-relative and Tuist's `$SRCROOT`-relative: that changes only the text of diagnostics and of the
+	/// paths the `.safedi` stores, never the tree or mock code. In combined mode `generate()` normalizes no path
+	/// and `run()` respells paths only when printing, so a diagnostic cites the CSV's path.
 	case moduleInfo
 	/// The SwiftPM plugin's invocations (`SafeDIGenerateDependencyTree.swift`): `scan` while planning the build
 	/// and, only when the manifest plans an output, `generate` with that manifest, as the plugin adds a build
@@ -181,8 +179,7 @@ enum MultiModuleIntegration: CaseIterable {
 	/// (the fixture's package name, which stands in for SwiftPM's package identity), its files spelled as the CSV
 	/// spells them, and the modules it depends on directly. The build system
 	/// spells a file to the compiler as the reported package directory joined with the CSV's relative path
-	/// (`FixturePaths.compilerPath(of:)`): an alias's declaration is referenced by a `#sourceLocation` directive
-	/// naming that spelling, a found additional file outside the package is listed by its normalized path, and a
+	/// (`FixturePaths.compilerPath(of:)`): a found additional file outside the package is listed by its normalized path, and a
 	/// diagnostic `generate()` throws cites the path the file was parsed under, the compiler's spelling
 	/// normalized (`NormalizedFilePath`), which `run()` respells as the build system's before printing it.
 	case swiftPackagePlugin
@@ -408,10 +405,6 @@ func executeSafeDIToolMultiModuleTest(
 	}
 	let writtenModulesByName = Dictionary(uniqueKeysWithValues: writtenModules.map { ($0.fixture.name, $0) })
 
-	// Under Bazel's flow each module also runs over module info files that store their positions in files of their own
-	// (`--module-info-positions-in-own-file`), which must generate, warn and fail exactly as the run over whole files does.
-	// A test that hands a module another run's file, or rewrites a written file, has no split twin.
-	let splitsPositions = integration == .moduleInfo && moduleInfoOverrides.isEmpty && !discardsStoredSeamSignatures
 	var outputs = [String: ModuleTestOutput]()
 	// What `modulesBeneath` gave for each module it was asked about, which a record's inputs hold.
 	var modulesBeneathByModuleName = [String: [String]]()
@@ -615,9 +608,32 @@ func executeSafeDIToolMultiModuleTest(
 													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 													// (`TypeFactsReceivedValueSuppliesChecks`).
 													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-															try await tool.generate()
+														try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+															try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+																try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+																	try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																		try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																			try await MockVariantBodyChecks.comparing {
+																				try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																					try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																						try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																							try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																								// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+																								try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+																									// Every call of a plan the per-type facts key must take the body, and its function the parameter order, the plan’s own rules give (`PlanFactsKeyChecks`).
+																									try await PlanFactsKeyChecks.comparing(handingOn: PlanFactsKeyObservation.observer) {
+																										try await tool.generate()
+																									}
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
 														}
 													}
 												}
@@ -634,9 +650,6 @@ func executeSafeDIToolMultiModuleTest(
 				if !discardsStoredSeamSignatures {
 					try await expectErrorMatchesRunComputingEverySeamSignature(error, arguments: generateArguments, sourceLocation: sourceLocation)
 				}
-				if splitsPositions {
-					try await SplitPositionsRun.expectMatches(.failure(error), arguments: generateArguments, moduleName: moduleName, fixtureRoot: fixtureRoot, sourceLocation: sourceLocation)
-				}
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
 				throw SafeDIToolMultiModuleTestError(
@@ -652,16 +665,6 @@ func executeSafeDIToolMultiModuleTest(
 		if let generateOutput {
 			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
 			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
-		}
-		if splitsPositions, let generateArguments, let generateOutput {
-			// The same run over module info files that store their positions apart must generate and warn alike.
-			try await SplitPositionsRun.expectMatches(
-				.success((warnings: generateOutput.warnings, generatedFiles: generatedSwiftFiles(in: outputDirectory))),
-				arguments: generateArguments,
-				moduleName: moduleName,
-				fixtureRoot: fixtureRoot,
-				sourceLocation: sourceLocation,
-			)
 		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let writtenFile = moduleInfoFile {
@@ -892,74 +895,4 @@ private func expectErrorMatchesRunComputingEverySeamSignature(_ error: any Error
 		computingError = error
 	}
 	#expect(computingError.map { "\($0)" } == "\(error)", "a run reading stored seam signatures reports what a run computing them reports", sourceLocation: sourceLocation)
-}
-
-/// The run of a module over module info files that store their positions apart, beside the run over whole files.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-enum SplitPositionsRun {
-	/// The directory the split runs write their module info and positions files to, beside the whole files' `ModuleInfo`.
-	static func moduleInfoDirectory(under fixtureRoot: URL) -> URL {
-		fixtureRoot.appendingPathComponent("ModuleInfoSplit")
-	}
-
-	/// Runs `generate` with `arguments` respelled to read and write the split module info files, writing its code to a
-	/// directory of its own, and expects it to warn and generate as `wholeRun` did, or to throw its description.
-	static func expectMatches(
-		_ wholeRun: Result<(warnings: [SourceDiagnostic], generatedFiles: [String: String]), any Error>,
-		arguments: [String],
-		moduleName: String,
-		fixtureRoot: URL,
-		sourceLocation: SourceLocation,
-	) async throws {
-		let wholeModuleInfoDirectory = fixtureRoot.appendingPathComponent("ModuleInfo").path
-		let splitModuleInfoDirectory = moduleInfoDirectory(under: fixtureRoot)
-		let wholeOutputDirectory = fixtureRoot.appendingPathComponent("Output").appendingPathComponent(moduleName).path
-		let splitOutputDirectory = fixtureRoot.appendingPathComponent("OutputSplit").appendingPathComponent(moduleName)
-		try FileManager.default.createDirectory(at: splitModuleInfoDirectory, withIntermediateDirectories: true)
-		try FileManager.default.createDirectory(at: splitOutputDirectory, withIntermediateDirectories: true)
-		func respelled(_ argument: String) -> String {
-			argument
-				.replacingOccurrences(of: wholeModuleInfoDirectory + "/", with: splitModuleInfoDirectory.path + "/")
-				.replacingOccurrences(of: wholeOutputDirectory + "/", with: splitOutputDirectory.path + "/")
-		}
-		var splitArguments = [String]()
-		for (index, argument) in arguments.enumerated() {
-			let isListOfModuleInfoFiles = index > 0 && ["--dependent-module-info-file-path", "--transitive-module-info-file-path"].contains(arguments[index - 1])
-			if isListOfModuleInfoFiles {
-				try respelled(String(contentsOfFile: argument, encoding: .utf8)).write(toFile: respelled(argument), atomically: true, encoding: .utf8)
-			}
-			splitArguments.append(respelled(argument))
-		}
-		if splitArguments.contains("--module-info-output") {
-			splitArguments.append("--module-info-positions-in-own-file")
-		}
-		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
-		// step of one run. But the tool drafts a seam's place graph, stores it and reads a stored one only while the levels
-		// are observed (`SeamPlaceLevels.observer`), as every whole run here is: the run is handed an observer of its own
-		// that keeps nothing, so both runs read their files' graphs and differ in where the positions are stored alone,
-		// and the whole run's observer sees no place twice.
-		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
-			await SeamPlaceLevels.$observer.withValue({ _ in }) {
-				do {
-					return try await .success(Generate.parse(splitArguments).generate())
-				} catch {
-					return .failure(error)
-				}
-			}
-		}.value
-		switch (wholeRun, splitRun) {
-		case let (.success(whole), .success(split)):
-			#expect(split.warnings.map(\.formatted) == whole.warnings.map(\.formatted), "Module \(moduleName) warns otherwise over module info files that store their positions apart.", sourceLocation: sourceLocation)
-			let splitFiles = try generatedSwiftFiles(in: splitOutputDirectory)
-			#expect(splitFiles == whole.generatedFiles, "Module \(moduleName) generates other code over module info files that store their positions apart.", sourceLocation: sourceLocation)
-		case let (.failure(whole), .failure(split)):
-			// An error that names a module info file names the split one where the whole run names its own.
-			let splitDescription = "\(split)".replacingOccurrences(of: splitModuleInfoDirectory.path + "/", with: wholeModuleInfoDirectory + "/")
-			#expect(splitDescription == "\(whole)", "Module \(moduleName) fails otherwise over module info files that store their positions apart.", sourceLocation: sourceLocation)
-		case let (.success, .failure(split)):
-			Issue.record("Module \(moduleName) fails over module info files that store their positions apart: \(split)", sourceLocation: sourceLocation)
-		case let (.failure(whole), .success):
-			Issue.record("Module \(moduleName) succeeds over module info files that store their positions apart, where it fails over whole files: \(whole)", sourceLocation: sourceLocation)
-		}
-	}
 }

@@ -325,8 +325,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 /// integrations place differently when a module has `#if` content, are kept as a unit of their own; the fuzzer emits
 /// no `#if`, so none appear.
 struct GraphFuzzerGeneratedModule: Equatable, Sendable {
-	/// The generated extensions' code by unit name, each with every path under the fixture root reduced to
-	/// `<fixture-directory>/…`, so that both integrations' `#sourceLocation` directives read the same.
+	/// The generated extensions' code by unit name.
 	var units: [String: String]
 	/// The `import` lines of each generated file's header, sorted and unique, by file name: the plugin's files each
 	/// carry their own header, and the module-info integration's one combined file carries one.
@@ -448,6 +447,10 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 
 	/// The modules' verdicts, in dependency order. A module after one the integration rejected has none.
 	let verdicts: [ModuleVerdict]
+	/// Each module's `.safedi` as `GraphFuzzerLineShift.moduleInfoText(_:)` reads it, by module name: under the
+	/// module-info integration, every module it wrote one for, a module before a rejection included; none under the
+	/// plugin's, which writes none.
+	var moduleInfoTexts: [String: String] = [:]
 
 	/// Whether the integration generated every module.
 	var isAccepted: Bool {
@@ -600,6 +603,9 @@ struct GraphFuzzerMultiModuleRuns: Sendable {
 	let renaming: GraphFuzzerRenaming?
 	let moduleInfoOutcome: GraphFuzzerMultiModuleOutcome
 	let pluginOutcome: GraphFuzzerMultiModuleOutcome
+	/// The module-info integration's outcome for the graph with every line of every file shifted
+	/// (`GraphFuzzerLineShift.shifted(_:)`), when it was run.
+	var lineShiftedModuleInfoOutcome: GraphFuzzerMultiModuleOutcome?
 
 	/// Whether the module-info integration, which runs `generate` for every module, generated every module.
 	var isAccepted: Bool {
@@ -620,6 +626,19 @@ struct GraphFuzzerMultiModuleRuns: Sendable {
 			details: "\(summary)\nModules:\n\(partition.description)\nUnder .moduleInfo:\n\(moduleInfoOutcome.description)\nUnder .swiftPackagePlugin:\n\(pluginOutcome.description)",
 		)
 	}
+
+	/// The failure of a graph whose run of the module-info integration with every line shifted differs from its run as
+	/// drawn beyond the diagnostics' positions (`GraphFuzzerLineShift.difference(between:and:)`), or `nil`.
+	var lineShiftFailure: GraphFuzzerFailure? {
+		guard let lineShiftedModuleInfoOutcome,
+		      let difference = GraphFuzzerLineShift.difference(between: moduleInfoOutcome, and: lineShiftedModuleInfoOutcome)
+		else { return nil }
+		return GraphFuzzerFailure(
+			seed: seed,
+			kind: .lineShiftChangesOutput,
+			details: "Split into modules, with every declaration moved down and to the right, the graph changes \(difference).\nModules:\n\(partition.description)\nAs drawn:\n\(moduleInfoOutcome.description)\nShifted:\n\(lineShiftedModuleInfoOutcome.description)",
+		)
+	}
 }
 
 /// Runs a graph, split by its partition, through both multi-module integrations.
@@ -632,18 +651,25 @@ enum GraphFuzzerMultiModuleProperty {
 		// The plugin's `scan` plans a dependency-tree file for every root in its CSV, which lists the files of the
 		// modules the module depends on, and `generate` writes the file of a root another module declares without
 		// code, as the module-info integration writes no file for it: the outcomes are compared as written.
-		return try await GraphFuzzerMultiModuleRuns(
+		var runs = try await GraphFuzzerMultiModuleRuns(
 			seed: fixture.seed,
 			partition: partition,
 			renaming: renaming,
 			moduleInfoOutcome: outcome(of: modules, integration: .moduleInfo, seed: fixture.seed),
 			pluginOutcome: outcome(of: modules, integration: .swiftPackagePlugin, seed: fixture.seed),
 		)
+		// The graph as generated is run once more with every line shifted, which must change nothing but the diagnostics'
+		// positions (`lineShiftFailure`): the module-info integration writes the `.safedi` files a build's other modules read.
+		if renaming == nil {
+			let shiftedModules = modules.map { $0.withEachFile(transformedBy: GraphFuzzerLineShift.shifted(_:)) }
+			runs.lineShiftedModuleInfoOutcome = try await outcome(of: shiftedModules, integration: .moduleInfo, seed: fixture.seed)
+		}
+		return runs
 	}
 
 	/// `text` with each path under a fixture root – a directory named by a UUID under the tests' temporary directory,
 	/// however that directory is spelled: through `/private` or not – reduced to `<fixture-directory>/…`, so the
-	/// paths both integrations cite in `#sourceLocation` directives and in diagnostics read the same. The harness
+	/// paths both integrations cite in diagnostics read the same. The harness
 	/// spells the root two ways, as `TestTemporaryDirectory.root` spells it and resolved with `realpath(3)`,
 	/// and both end in the UUID component, so one expression covers both without threading the root, which the
 	/// harness's error does not carry, through to here; everything after the root is kept.
@@ -694,13 +720,13 @@ enum GraphFuzzerMultiModuleProperty {
 			}
 			var generatedModule = GraphFuzzerGeneratedModule(units: [:], importsByFileName: [:], warnings: moduleOutput.warnings.map { reducingFixtureRootPaths(in: "\($0)") })
 			for fileName in moduleOutput.generatedFiles.keys.sorted() {
-				GraphFuzzerGeneratedModule.parsingGeneratedFile(reducingFixtureRootPaths(in: moduleOutput.generatedFiles[fileName, default: ""]), named: fileName, into: &generatedModule)
+				GraphFuzzerGeneratedModule.parsingGeneratedFile(moduleOutput.generatedFiles[fileName, default: ""], named: fileName, into: &generatedModule)
 			}
 			verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .accepted(generatedModule)))
 		}
 		if let rejection {
 			verdicts.append(rejection)
 		}
-		return GraphFuzzerMultiModuleOutcome(verdicts: verdicts)
+		return GraphFuzzerMultiModuleOutcome(verdicts: verdicts, moduleInfoTexts: GraphFuzzerLineShift.moduleInfoTexts(of: outputsByModuleName))
 	}
 }

@@ -62,6 +62,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isUnavailableDependency: Bool = false,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
+		callPlaceRequiredAliasFulfillingProperties: Set<Property> = [],
 		seamRoot: SeamRoot? = nil,
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		holeCallArguments: [HoleCallArgument] = [],
@@ -297,7 +298,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
 			cycleParameters: isPropertyCycle ? cycleParameters : [],
-			seamCallRequiredThroughAliasProperties: seamCall?.requiredThroughAliasProperties ?? [],
+			// A call place of the per-type plan requires what the tree it stands for requires, as a seam's call does.
+			seamCallRequiredThroughAliasProperties: (seamCall?.requiredThroughAliasProperties ?? []).union(callPlaceRequiredAliasFulfillingProperties),
 		)
 		requiredOnlyIfAvailableAliasProperties = aliasRequirements.requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = aliasRequirements.requiredAliasFulfillingProperties
@@ -435,7 +437,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillParametersByKey[key] = child.fillParameterFields
 				for (label, argument) in child.fillCallerReads.argumentByLabel {
 					guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
-					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument)]) { form, _ in form }
+					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument.spelled)]) { form, _ in form }
 				}
 			}
 			if case let .fill(_, functionName) = child.scopeData {
@@ -502,6 +504,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamCall: SeamCall?,
 		children: [ScopeGenerator],
 	) -> Set<TypeDescription> {
+		var typesDeclaredEscaping = typesDeclaredEscaping(ownedBy: instantiable, publicMockCall: publicMockCall, seamCall: seamCall)
+		for child in children where !child.typesDeclaredEscaping.isEmpty {
+			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
+		}
+		return typesDeclaredEscaping
+	}
+
+	/// The names a scope of `instantiable` declares `@escaping` itself, without its children's: those its initializers'
+	/// parameters declare so, those its aliases name in place of one, and those of the seam or public mock it calls. A call
+	/// place of the per-type plan declares the union of these over every scope its tree reaches (`CallPlaceShadow`).
+	nonisolated static func typesDeclaredEscaping(
+		ownedBy instantiable: Instantiable,
+		publicMockCall: PublicMockCall?,
+		seamCall: SeamCall?,
+	) -> Set<TypeDescription> {
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
 		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
@@ -518,9 +535,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
-		for child in children where !child.typesDeclaredEscaping.isEmpty {
-			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
-		}
 		return typesDeclaredEscaping
 	}
 
@@ -778,11 +792,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillLabelsReadOnlyAsPlaceField = previousPassFillLabelsReadOnlyAsPlaceField
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
-			for field in fill.fillFields where fill.fillLabelsHandedAsMemo.contains(field.property.label) && !built.reads(field.property) && !built.fieldsCarriedBySites.contains(field.property) {
-				let placeField = fill.fillCaseHoles.lazy.flatMap(\.fields).first { $0.property.label == field.property.label }
-				if let placeField, built.reads(placeField.property) {
-					fillLabelsReadOnlyAsPlaceField[key, default: []].insert(field.property.label)
-				}
+			let placeFields = fill.fillCaseHoles.flatMap(\.fields)
+			for field in fill.fillFields where fill.fillLabelsHandedAsMemo.contains(field.property.label) && FillDispatcher.readsOnlyAsPlaceField(field, placeFields: placeFields, reads: built.reads, carriedBySites: built.fieldsCarriedBySites) {
+				fillLabelsReadOnlyAsPlaceField[key, default: []].insert(field.property.label)
 			}
 		}
 		if fillLabelsReadOnlyAsPlaceField != previousPassFillLabelsReadOnlyAsPlaceField {
@@ -797,11 +809,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
-			var instancePropertyByLabel = [String: Property]()
-			let labelsReadOnlyAsPlaceField = fillLabelsReadOnlyAsPlaceField[key] ?? []
-			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
-				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
-			}
+			let instancePropertyByLabel = FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo: fill.fillLabelsHandedAsMemo, labelsReadOnlyAsPlaceField: fillLabelsReadOnlyAsPlaceField[key] ?? [], among: built.receivedProperties)
 			if !instancePropertyByLabel.isEmpty {
 				fillSendableWrapperReads[key] = instancePropertyByLabel
 			}
@@ -1259,7 +1267,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailable: Bool,
 		fulfillingBindingIsOptional: Bool,
 		fulfillingExpression: String? = nil,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 	) {
 		self.fulfillingExpression = fulfillingExpression
 		seamAndFillFieldsStorage = nil
@@ -1744,12 +1752,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter the fill takes for each such label.
 		var parameterByLabel = [String: SeamSignature.Hole.Field]()
 		/// What the root dispatcher passes the parameter of each such label, where the caller does not build it later.
-		var argumentByLabel = [String: String]()
+		var argumentByLabel = [String: ArgumentSource]()
 		/// What the root dispatcher hands of each label the fill takes as a `SendableLazilyInstantiated` memo some route hands
 		/// it (`Scope.Fill.labelsHandedAsMemo`), by the memo the fill takes (`SeamSignature.Hole.Field.memoProperty`): the
 		/// caller's declaration of that wrapper, or one made of the caller's value, so the fill's tree reads the caller's own
 		/// wrapper where it reads the wrapper, as inline.
-		var memoArgumentByMemo = [Property: String]()
+		var memoArgumentByMemo = [Property: ArgumentSource]()
 		/// The scope value the inner seam handed the fill, which a place inside its tree, or a call there that passes one up,
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
@@ -1947,12 +1955,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The properties a fill of `hole` declares: the property of each field of the site's scope struct it binds – each
-	/// labeled in `boundLabels` – and, for a lazily instantiated field, the instance a receive reads by value.
-	static func fieldForms(of hole: SeamSignature.Hole, boundLabels: Set<String>) -> Set<Property> {
-		fieldForms(of: hole.fields, boundLabels: boundLabels)
-	}
-
 	/// The property a fill of `hole` builds, with its instance, where it is no instantiator: the type that owns the place
 	/// declares it, so a receive of it in the fill's tree is not received from the scopes enclosing the call. The fill's
 	/// tree finds it still being built and passes a receive only if available `nil`, as the same types built inline do,
@@ -1968,7 +1970,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return properties
 	}
 
-	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels` (see `fieldForms(of:boundLabels:)`).
+	/// What a fill of `hole` that a call passes binds from the site's scope struct, and of that what hides the fill's
+	/// reads from the caller's scope, as the walk of what the call receives reads it.
+	struct FillStructBindings: Sendable {
+		/// The forms of the fields the fill binds from the struct, and the property it builds.
+		let bound: Set<Property>
+		/// `bound` but for the fields of a label a level of an inner seam's enum holds on some route to the place and not
+		/// on another, which the fill reads of the caller's scope on that other route
+		/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`).
+		let hiddenFromCaller: Set<Property>
+	}
+
+	/// What a fill of `hole` binds from the site's scope struct (`FillStructBindings`). A public mock takes no deferred
+	/// parameter, so its fill binds every field. A seam's fill reads a field bound from a deferred parameter of the
+	/// caller's scope, but for a place a seam passes up from a seam it calls, whose deferred fields hold the memo of what
+	/// that call passed, which the fill binds from the struct (`fillUnderConstruction`). So does a fill some route hands
+	/// such a memo through the levels on a carried route, by each label of `handedMemoByLabel`
+	/// (`FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`):
+	/// its field is then that memo's, whose forms it binds in place of the place's field of the label, so a read of the
+	/// place's field that the memo does not provide is the caller's, as the tree's fill reads it.
+	static func structBindings(ofFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?, handedMemoByLabel: [String: FillDispatcher.HandedMemo] = [:]) -> FillStructBindings {
+		let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
+		let readsDeferredFieldsFromStruct = passedByPublicMockCall || hole.innerSeamType != nil
+		let fields = hole.fields.map { field in
+			handedMemoByLabel[field.property.label].map { field.handedAsMemo($0) } ?? field
+		}
+		let boundLabels = Set(fields.filter { readsDeferredFieldsFromStruct || !$0.isDeferredParameter || handedMemoByLabel[$0.property.label] != nil }.map(\.property.label))
+		let beingBuilt = propertiesBeingBuilt(byFillOf: hole)
+		return FillStructBindings(
+			bound: fieldForms(of: fields, boundLabels: boundLabels).union(beingBuilt),
+			hiddenFromCaller: fieldForms(of: fields, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(beingBuilt),
+		)
+	}
+
+	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels`: the property of each field of
+	/// the site's scope struct it binds and, for a lazily instantiated field, the instance a receive reads by value.
 	static func fieldForms(of fields: [SeamSignature.Hole.Field], boundLabels: Set<String>) -> Set<Property> {
 		var fieldForms = Set<Property>()
 		for field in fields where boundLabels.contains(field.property.label) {
@@ -1993,10 +2029,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil) {
+		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passedUpStruct: PassedUpStruct? = nil, builtCall: BuiltCall? = nil) {
 			self.label = label
 			self.value = value
 			self.passedUpStruct = passedUpStruct
+			self.builtCall = builtCall
 			self.enclosingFill = enclosingFill
 			self.isSendable = isSendable
 			self.builderStruct = builderStruct
@@ -2058,6 +2095,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let type: TypeDescription
 			let caseName: String
 			let member: PassedOnMember
+		}
+
+		/// Where a seam's call fills the builder's places and declares the dispatchers that fill them, the call of the root
+		/// level's dispatcher `value` writes; `nil` for every other argument, and for a call that re-enters an enclosing call's.
+		let builtCall: BuiltCall?
+
+		/// The call of the dispatcher of a builder's root level a seam's call passes the builder, handed the struct the case of
+		/// the caller's own enum for the call returns, for each struct of a level its fills take.
+		struct BuiltCall: Sendable {
+			let dispatcherKey: String
+			let dispatcherName: String
+			let carriedStructs: [CarriedStruct]
+
+			/// A struct the dispatcher is handed: under the label its fills take it by, of its type, bound as `name`.
+			struct CarriedStruct: Sendable {
+				let upName: String
+				let type: TypeDescription
+				let name: String
+			}
+
+			/// The call, as the argument's value.
+			var spelled: String {
+				"\(dispatcherName)(\(carriedStructs.map { "\($0.upName.spelledAsArgumentLabel): \($0.name)" }.joined(separator: ", ")))"
+			}
 		}
 	}
 
@@ -2407,6 +2468,75 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			return handedMemos
+		}
+
+		/// A fill of a seam call whose code is emitted, as `memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`
+		/// reads it: its key, the place it fills, and the fields it takes (`ScopeGenerator.caseFields(of:)` for a case nested
+		/// by type, else the place's own).
+		struct EmittedFill {
+			let key: String
+			let hole: SeamSignature.Hole
+			let fields: [SeamSignature.Hole.Field]
+		}
+
+		/// The memo each fill of `fills` takes of each label some route of `dispatchers` hands it as a memo
+		/// (`memosHanded(toFillOf:labels:readingSendableWrapper:among:)`), by the fill's key: only of a seam's call whose
+		/// dispatchers hold a level on a carried route that carries a deferred parameter's field, a field of the fill's that
+		/// is not a deferred parameter's itself, its case's payload does not carry, and its tree does not read only as the
+		/// place's own field (`labelsReadOnlyAsPlaceField`, which the pass before finds: `readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`).
+		/// A public mock's caller hands values. Empty for nearly every call.
+		///
+		/// One rule for the tree, which builds each fill with the memos it takes (`Scope`), and for the per-type facts, which
+		/// hide along a fill edge what the fill binds (`TypeFactsGraph`). Which labels are handed and in which form reads the
+		/// dispatchers' keys and cases alone, never their names. `readingSendableWrapper` decides only a memo's deferral, never
+		/// which labels are handed nor the memo's property.
+		static func memosHanded(
+			toFills fills: [EmittedFill],
+			ofPublicMockCall isPublicMockCall: Bool,
+			labelsReadOnlyAsPlaceField: [String: Set<String>],
+			readingSendableWrapper: [String: [String: Property]],
+			among dispatchers: [FillDispatcher],
+		) -> [String: HandedMemos] {
+			guard !isPublicMockCall, dispatchers.contains(where: { dispatcher in
+				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
+			}) else { return [:] }
+			var handedMemosByKey = [String: HandedMemos]()
+			for fill in fills {
+				let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
+				let readOnlyAsPlaceField = labelsReadOnlyAsPlaceField[fill.key] ?? []
+				handedMemosByKey[fill.key] = memosHanded(
+					toFillOf: fill.key,
+					labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) && !readOnlyAsPlaceField.contains($0.property.label) }.map(\.property.label)),
+					readingSendableWrapper: readingSendableWrapper[fill.key] ?? [:],
+					among: dispatchers,
+				)
+			}
+			return handedMemosByKey
+		}
+
+		/// The `SendableLazilyInstantiated` a fill's tree, which receives `receivedProperties`, reads of each label among
+		/// `labelsHandedAsMemo` (the labels some route hands it a memo of) but those it reads only as the place's own field
+		/// (`labelsReadOnlyAsPlaceField`), by that wrapper's instance property: the `readingSendableWrapper` of
+		/// `memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`. The optional
+		/// wrapper only if available is left out (`ScopeGenerator.fillSendableWrapperReads` says why); of two wrappers of one
+		/// label, the one that sorts first. One rule for the tree, which finds these reads on the pass before, and the
+		/// per-type facts, which find them in the fill target's received fold.
+		static func sendableWrapperReads(ofLabelsHandedAsMemo labelsHandedAsMemo: Set<String>, labelsReadOnlyAsPlaceField: Set<String>, among receivedProperties: Set<Property>) -> [String: Property] {
+			var instancePropertyByLabel = [String: Property]()
+			for property in receivedProperties.sorted() where labelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
+			}
+			return instancePropertyByLabel
+		}
+
+		/// Whether a fill that takes `field`, a memo some route hands it, reads its label only as the place's own field of it,
+		/// the wrapper a type further out declares: its tree, which reads what `reads` says, reads neither the memo's value
+		/// nor its memo, no site inside it carries the field (`carriedBySites`), and it reads the field of the label the
+		/// first of `placeFields` that has one is. Such a fill takes that field on the next pass
+		/// (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`). One rule for the tree and the per-type facts.
+		static func readsOnlyAsPlaceField(_ field: SeamSignature.Hole.Field, placeFields: [SeamSignature.Hole.Field], reads: (Property) -> Bool, carriedBySites: Set<Property>) -> Bool {
+			guard !reads(field.property), !carriedBySites.contains(field.property), let placeField = placeFields.first(where: { $0.property.label == field.property.label }) else { return false }
+			return reads(placeField.property)
 		}
 
 		/// What identifies a dispatcher among the fills and dispatchers enclosing a call.
@@ -2818,292 +2948,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return dispatchers
 		}
 
-		/// The body of a fill generated in the one case of a dispatcher that calls it, in place of a function of its own
-		/// (see `ScopeGenerator.inlinableFillKeys`): what the case binds, and the fill's body, indented for the case.
-		struct InlinedFill {
-			/// Whether the case carries a payload struct, which the fill is handed as its scope.
-			let carriesPayload: Bool
-			/// Whether the body reads the scope; a case that binds a value it never reads draws a warning.
-			let readsScope: Bool
-			/// The name the fill's function gives the value an instantiator forwards, or `nil` for a place that forwards none.
-			let forwardedValueName: String?
-			/// Whether the body reads the forwarded value: a fill never reads a forwarded `Void`.
-			let readsForwardedValue: Bool
-			let body: [String]
-		}
-
-		/// The function of the dispatcher's level, indented by `indent`, `@Sendable` as `isSendable` says, which returns the
-		/// level's builder struct (`structDeclaration`), and whether it hands a target a declaration of the code around the
-		/// call. A case whose fill is in `inlinedFills`, by key, holds the fill's body. The root dispatcher, which takes no
-		/// parameter, hands the caller's declaration of each value a target reads that no case carries, and any dispatcher
-		/// hands a memo the caller binds (`callerMemoArgumentByMemo`). Which values no case carries is decided only where the
-		/// struct is written, by the case's payload, the carried levels, the labels a reentering call hides and the deferred
-		/// fields a case hands on, so the walk that writes it records them. A function that hands none is written as it would
-		/// be without the caller's declarations.
-		/// - Parameter parametersByKey: What each dispatcher of the call takes beside its enum
-		///   (`dispatcherParameters(of:fillReads:)`), and each fill nested by type beside its case's payload, by key.
-		func declarationAndCaptures(
-			isSendable: Bool,
-			indent: String,
-			inlinedFills: [String: InlinedFill],
-			parametersByKey: [String: [SeamSignature.Hole.Field]],
-			callerArgumentByParameter: [Property: String],
-			callerMemoArgumentByMemo: [Property: String],
-			typesDeclaredEscaping: Set<TypeDescription>,
-			fillsTakingPayloadFields: Set<String>,
-			labelsHiddenByReenteringCalls: Set<String>,
-		) -> (text: String, handsCallerDeclarations: Bool) {
-			var handsCallerDeclarations = false
-			let parameters = parametersByKey[key] ?? []
-			let parameterNames = Self.parameterNames(of: parameters)
-			// What this function hands on of a value no case carries to a target that takes it as `parameter`: its own parameter
-			// of that form (`parameter(handing:among:)`), or, for the root dispatcher, which takes none, the caller's declaration
-			// in the form that target takes (`ScopeGenerator.FillCallerReads`), whatever form another target of the call takes it
-			// in.
-			func ownValue(for parameter: SeamSignature.Hole.Field) -> String {
-				guard !takesValuesOfOuterTypes else { return parameterNames[parameter.property] ?? parameter.property.label }
-				handsCallerDeclarations = true
-				return callerArgumentByParameter[parameter.property] ?? parameter.property.label
-			}
-			func callerMemoArgument(for parameter: SeamSignature.Hole.Field) -> String? {
-				let memoArgument = callerMemoArgumentByMemo[parameter.memoProperty]
-				if memoArgument != nil {
-					handsCallerDeclarations = true
-				}
-				return memoArgument
-			}
-			// The names this function binds, apart from the names of what it takes and passes on.
-			let labels = Set(parameterNames.values).union(cases.flatMap { dispatcherCase in
-				dispatcherCase.target.map { Self.parameterNames(of: parametersByKey[$0.key] ?? []).values.map(\.self) } ?? []
-			})
-			func name(_ base: String) -> String {
-				var name = base
-				while labels.contains(name) {
-					name += "_"
-				}
-				return name
-			}
-			let text = structDeclaration(
-				isSendable: isSendable,
-				indent: indent,
-				inlinedFills: inlinedFills,
-				fillsTakingPayloadFields: fillsTakingPayloadFields,
-				parameters: parameters,
-				parametersByKey: parametersByKey,
-				ownValue: ownValue(for:),
-				callerMemoArgument: callerMemoArgument(for:),
-				valuesName: name("values"),
-				scopeName: name("scope"),
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
-			)
-			return (text, handsCallerDeclarations)
-		}
-
-		/// The function of one level of a seam's tree that returns its enum's builder struct (`returnsBuilderStruct`): it takes
-		/// the values the members' targets read that the cases do not carry, as the enum's dispatcher takes them, and returns a
-		/// struct whose member for each case calls the function of the next level, handing it what it reads of the values the
-		/// member is handed, or holds the fill of the case's place, which reads them. No member's closure captures the values
-		/// it is handed: it reads what it needs out of them. A seam's caller fills every place of an enum, so every case has a
-		/// target, and no place forwards a value.
-		private func structDeclaration(
-			isSendable: Bool,
-			indent: String,
-			inlinedFills: [String: InlinedFill],
-			fillsTakingPayloadFields: Set<String>,
-			parameters: [SeamSignature.Hole.Field],
-			parametersByKey: [String: [SeamSignature.Hole.Field]],
-			ownValue: (SeamSignature.Hole.Field) -> String,
-			callerMemoArgument: (SeamSignature.Hole.Field) -> String?,
-			valuesName: String,
-			scopeName: String,
-			typesDeclaredEscaping: Set<TypeDescription>,
-			labelsHiddenByReenteringCalls: Set<String>,
-		) -> String {
-			let memberIndent = indent + ScopeGenerator.standardIndent
-			/// The names a carrier's member takes `dispatcherCase`'s values under, given the payload's name: the struct of the run
-			/// they end, then each value after it (`SeamCarrierValues.Use`), or every value, each under the payload's name joined
-			/// with its label.
-			func carrierParameterNames(of dispatcherCase: Case, payloadName: String) -> [String] {
-				let values = dispatcherCase.values ?? []
-				return dispatcherCase.carrierUse?.parameterNames(of: values, inPayloadNamed: payloadName) ?? values.map { SeamHoles.argumentName(of: $0, inPayloadNamed: payloadName) }
-			}
-			/// What reads `field` of `dispatcherCase`'s values from the names `carrierParameterNames` gives them.
-			func carrierRead(of field: SeamSignature.Hole.Field, in dispatcherCase: Case, payloadName: String, bindingMemo: Bool) -> String {
-				let values = dispatcherCase.values ?? []
-				guard let use = dispatcherCase.carrierUse, let index = values.firstIndex(where: { $0.property == field.property }) else { return SeamHoles.argumentRead(of: field, inPayloadNamed: payloadName, bindingMemo: bindingMemo) }
-				return use.read(ofFieldAt: index, of: values, inPayloadNamed: payloadName, bindingMemo: bindingMemo)
-			}
-			/// The argument `target`, the target of `dispatcherCase`, takes for `parameter`, reading the case's payload bound as
-			/// `payloadName`, and whether it reads the payload: the struct the caller's member of this level returns for the case,
-			/// for the struct of a level on a carried route; else the case's payload's field, or this function's own value.
-			func argument(_ parameter: SeamSignature.Hole.Field, named argumentLabel: String, of target: Case.Target, for dispatcherCase: Case, payloadName: String, readsOwnPayload: Bool) -> (text: String, readsPayload: Bool) {
-				let label = parameter.property.label
-				if let carriedInnerScope = carriedInnerScopes.first(where: { $0.name == label }) {
-					// A level function an enclosing call declares takes the struct under its own name for it.
-					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
-					// A carrier's member takes the case's values as arguments, which the closure binds under the payload's name.
-					let memberArguments = takesValuesAsArguments ? carrierParameterNames(of: dispatcherCase, payloadName: payloadName).joined(separator: ", ") : payloadName
-					let member = "\(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)"
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(dispatcherCase.isLetChild ? member : "\(member)(\(memberArguments))")", true)
-				} else if readsOwnPayload, (dispatcherCase.carriedLabels.contains(label) && dispatcherCase.handsOn(parameter)) || (parameter.bindsMemo && labelsHiddenByReenteringCalls.contains(label) && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
-					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
-					// value: also a deferred field `carriedLabels` leaves out where a call inside a fill passes a fill of this call on
-					// beneath another declaration of the label (`fillDeferredLabelsHiddenByReenteringCalls`), which builds the seam
-					// again (`Scope.fillUnderConstruction`): the target binds the memo of the seam whose struct it is handed, where the
-					// enclosing value is another declaration's. Elsewhere the caller's declaration is the one inline reads, which the
-					// branches below hand. The payload is read before the member returns, so no memo made of it captures the payload.
-					let source = HandedSource(field, readsMemo: parameter.bindsMemo, expression: takesValuesAsArguments ? carrierRead(of: field, in: dispatcherCase, payloadName: payloadName, bindingMemo: parameter.bindsMemo) : "\(payloadName).\(field.memberName(bindingMemo: parameter.bindsMemo))")
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: true))", true)
-				} else if let ownParameter = Self.parameter(handing: parameter, among: parameters) {
-					// This function's own parameter of the target's form: a target of another form is handed its own.
-					let source = HandedSource(ownParameter, readsMemo: ownParameter.bindsMemo, expression: ownValue(ownParameter))
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
-				} else if parameter.bindsMemo, parameter.deferral == .deferred(isSendable: true), let memoArgument = callerMemoArgument(parameter) {
-					// The root dispatcher hands a target that takes a `SendableLazilyInstantiated` the caller's declaration of it, or
-					// one made of the caller's value (`ScopeGenerator.FillCallerReads.memoArgumentByMemo`).
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(memoArgument)", false)
-				} else {
-					// The root dispatcher hands the caller's declaration, in the form a target that takes the value takes it
-					// (`ScopeGenerator.FillCallerReads`).
-					let source = HandedSource(expression: ownValue(parameter), type: parameter.property.typeDescription, isMemo: false)
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
-				}
-			}
-			/// The parameters of `target`, in the order it declares them: a fill's in their own order; a level function's with
-			/// the structs of carried levels first, in the order this function takes them, and the rest in their order; a level
-			/// function an enclosing call declares takes only structs, in its own order.
-			func orderedCarriedFirst(_ parameters: [SeamSignature.Hole.Field], of target: Case.Target) -> [SeamSignature.Hole.Field] {
-				guard !Self.isFill(target), target.reusedCarriedInnerScopes.isEmpty else { return parameters }
-				let carriedNames = carriedInnerScopes.map(\.name)
-				let carried = carriedNames.compactMap { name in parameters.first { $0.property.label == name } }
-				return carried + parameters.filter { !carriedNames.contains($0.property.label) }
-			}
-			// A seam's carrier hands each member the case's values as arguments, not as a payload struct; the member's closure
-			// takes each under the payload's name joined with its label.
-			let takesValuesAsArguments = ReservedName.seamCarrier(ofEnum: enumType) != nil
-			func closureHead(of dispatcherCase: Case, payloadName: String, readsPayload: Bool) -> String {
-				guard takesValuesAsArguments else { return "{ \(readsPayload ? payloadName : "_") in" }
-				let names = carrierParameterNames(of: dispatcherCase, payloadName: payloadName)
-				return names.isEmpty ? "{" : "{ \(names.joined(separator: ", ")) in"
-			}
-			var members = [(name: String, lines: [String])]()
-			for (dispatcherCase, target) in cases.compactMap({ dispatcherCase in dispatcherCase.target.map { (dispatcherCase, $0) } }) {
-				let targetParameters = parametersByKey[target.key] ?? []
-				let targetParameterNames = Self.parameterNames(of: targetParameters)
-				if let inlinedFill = inlinedFills[target.key] {
-					// The fill's body, which declares no function: a fill that does is called by name, so no function is declared
-					// inside the closure the struct stores (`ScopeGenerator.declaresFunction(inFillBody:)`).
-					let head = closureHead(of: dispatcherCase, payloadName: "scope", readsPayload: inlinedFill.carriesPayload && inlinedFill.readsScope)
-					members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(head)"] + inlinedFill.body.map { String($0.dropFirst(memberIndent.count)) } + ["}"]))
-				} else if fillsTakingPayloadFields.contains(target.key) || !Self.isFill(target) {
-					// A fill that returns a wrapper's builder takes each field of the payload it reads, from the payload, and each
-					// value it reads that the payload does not carry, under its label: the builder it returns captures no payload.
-					// The next level's function likewise takes what it reads from this case's payload where it carries one.
-					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, named: targetParameterNames[$0.property] ?? $0.property.label, of: target, for: dispatcherCase, payloadName: valuesName, readsOwnPayload: true) }
-					let readsValues = arguments.contains(where: \.readsPayload)
-					var call = "\(target.name)(\(arguments.map(\.text).joined(separator: ", ")))"
-					if dispatcherCase.returnsWrapperBuilder, !Self.isFill(target) {
-						// The member of an instantiator's place on a carried route returns the builder the wrapper keeps, which ignores the
-						// forwarded value: the fill's level reads it from its own payload. A level that reads the payload is called before
-						// the builder is returned, so the builder captures the level's struct, never the payload.
-						call = readsValues ? "{ [level = \(call)] _ in level }" : "{ _ in \(call) }"
-					}
-					if dispatcherCase.isLetChild, !Self.isFill(target) {
-						// A carrier's `let` child is formed with its parent, by the next level's function.
-						members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(call)"]))
-					} else {
-						members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(closureHead(of: dispatcherCase, payloadName: valuesName, readsPayload: readsValues)) \(call) }"]))
-					}
-				} else {
-					// A fill nested by type takes the case's payload, and each value it reads that the payload does not carry, under
-					// its label: this function's own, or the caller's.
-					let bound = if !dispatcherCase.carriesPayload {
-						[String]()
-					} else if takesValuesAsArguments {
-						carrierParameterNames(of: dispatcherCase, payloadName: scopeName)
-					} else {
-						[scopeName]
-					}
-					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, named: targetParameterNames[$0.property] ?? $0.property.label, of: target, for: dispatcherCase, payloadName: scopeName, readsOwnPayload: false) }
-					let readsPayload = !bound.isEmpty || arguments.contains(where: \.readsPayload)
-					members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(closureHead(of: dispatcherCase, payloadName: scopeName, readsPayload: readsPayload)) \(target.name)(\((bound + arguments.map(\.text)).joined(separator: ", "))) }"]))
-				}
-			}
-			// The struct of this level the caller's member returns, on a carried route, before the values the members' targets
-			// read.
-			var valueParameterList = [String]()
-			for carriedInnerScope in carriedInnerScopes where parameters.contains(where: { $0.property.label == carriedInnerScope.name }) || (innerScopeName != nil && cases.contains { dispatcherCase in
-				dispatcherCase.target.map { (parametersByKey[$0.key] ?? []).contains { $0.property.label == carriedInnerScope.name } } ?? false
-			}) {
-				valueParameterList.append("\(carriedInnerScope.upName.spelledAsArgumentLabel): \(ReservedName.levelType(ofEnum: enumType, built: Self.carried(carriedInnerScope.type, through: returnType)).asSource)")
-			}
-			let carriedNames = Set(carriedInnerScopes.map(\.name))
-			let parameterNames = Self.parameterNames(of: parameters)
-			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\((parameterNames[$0.property] ?? $0.property.label).spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-			let valueParameters = valueParameterList.joined(separator: ", ")
-			let builderType = ReservedName.levelType(ofEnum: enumType, built: returnType)
-			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(valueParameters)) -> \(builderType.asSource) {"]
-			if members.allSatisfy({ $0.lines.count == 1 }) {
-				lines.append("\(memberIndent).init(\(members.map { $0.lines[0] }.joined(separator: ", ")))")
-			} else if members.count == 1 {
-				// One member over several lines opens on the initializer's line and closes the call on its last.
-				let memberLines = members[0].lines
-				lines.append("\(memberIndent).init(\(memberLines[0])")
-				lines += memberLines.dropFirst().dropLast().map { "\(memberIndent)\($0)" }
-				lines.append("\(memberIndent)\(memberLines[memberLines.count - 1]))")
-			} else {
-				// Several members, one of them over several lines: one member per line, each indented once more.
-				lines.append("\(memberIndent).init(")
-				for (index, member) in members.enumerated() {
-					let separator = index == members.count - 1 ? "" : ","
-					let memberLines = member.lines
-					lines += memberLines.dropLast().map { "\(memberIndent)\(ScopeGenerator.standardIndent)\($0)" }
-					lines.append("\(memberIndent)\(ScopeGenerator.standardIndent)\(memberLines[memberLines.count - 1])\(separator)")
-				}
-				lines.append("\(memberIndent))")
-			}
-			lines.append("\(indent)}")
-			return lines.joined(separator: "\n")
-		}
-
-		/// What a level function hands a target of one label: `expression`, of `type`, a deferred parameter's memo where
-		/// `isMemo`, else the value, which can be a `LazilyInstantiated` or its `Sendable` twin a type declares.
-		struct HandedSource {
-			let expression: String
-			let type: TypeDescription?
-			let isMemo: Bool
-
-			init(expression: String, type: TypeDescription?, isMemo: Bool) {
-				self.expression = expression
-				self.type = type
-				self.isMemo = isMemo
-			}
-
-			/// `field` read as `expression`: its memo where `readsMemo` and it is a deferred parameter's, else its value.
-			init(_ field: SeamSignature.Hole.Field, readsMemo: Bool, expression: String) {
-				let isMemo = readsMemo && field.isDeferredParameter
-				self.init(expression: expression, type: isMemo ? field.memoType : field.property.typeDescription, isMemo: isMemo)
-			}
-
-			/// The expression `parameter` is handed: the memo's instance where it takes the value, the memo where it takes a memo
-			/// of the same type, and else a `LazilyInstantiated` of the parameter's memo type made of what is handed, which reads
-			/// the instance of a memo or of a type's `LazilyInstantiated` when its own instance is read, so the value is created
-			/// where the target's tree reads it. Where `capturingExpression`, the expression reads the payload, which the closure
-			/// of a memo made of it reads first, so it captures no payload.
-			func handed(to parameter: SeamSignature.Hole.Field, capturingExpression: Bool) -> String {
-				guard parameter.bindsMemo, let memoType = parameter.memoType else {
-					return isMemo ? "\(expression).\(Dependency.lazilyInstantiatedInstancePropertyName)" : expression
-				}
-				guard type != memoType else { return expression }
-				let readsInstance = isMemo || type.map { $0.propertyType.isLazilyInstantiated && !$0.isOptional } == true
-				let read = readsInstance ? ".\(Dependency.lazilyInstantiatedInstancePropertyName)" : ""
-				return capturingExpression
-					? "\(memoType.asSource)({ [handed = \(expression)] in handed\(read) })"
-					: "\(memoType.asSource)({ \(expression)\(read) })"
-			}
-		}
-
 		/// The type a level's struct is generic over on a carried route, given `returnType`, what the level's function returns
 		/// its struct over: `carriedType`, the caller's struct of the fill's own level, in place of the built type, inside the
 		/// structs of the fills' levels a deeper seam's level returns its struct over.
@@ -3116,11 +2960,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .void, .simple, .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
 				carriedType
 			}
-		}
-
-		/// Whether `target` is a fill rather than a dispatcher.
-		private static func isFill(_ target: Case.Target) -> Bool {
-			!target.key.hasPrefix("dispatcher ")
 		}
 	}
 
@@ -3225,6 +3064,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this generator's tree reads `field`, a field of a scope struct, as its fill binds it: it receives the
 	/// field, its optional form, or its instance.
 	nonisolated func reads(_ field: Property) -> Bool {
+		Self.reads(field, among: receivedProperties)
+	}
+
+	/// Whether a tree that receives `receivedProperties` reads `field` as a fill binds it (see `reads(_:)`).
+	nonisolated static func reads(_ field: Property, among receivedProperties: Set<Property>) -> Bool {
 		receivedProperties.contains(field)
 			|| receivedProperties.contains(field.asOptionalProperty)
 			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { receivedProperties.contains($0) || receivedProperties.contains($0.asOptionalProperty) } == true
@@ -3345,6 +3189,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// The receives a type's own `dependencies` make from above its builder function, in declaration order, each with the
+	/// dependency that makes it: a received property, and the property an alias binds against where the type does not
+	/// declare it. An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
+	/// calls the type's builder function, which binds its own: it receives nothing.
+	nonisolated static func receivesFromAbove(ofOwnDependencies dependencies: [Dependency]) -> [(property: Property, dependency: Dependency)] {
+		var receives = [(property: Property, dependency: Dependency)]()
+		// Read only for a type with an alias, which few are.
+		var ownDeclaredProperties: Set<Property>?
+		for dependency in dependencies {
+			switch dependency.source {
+			case .received:
+				receives.append((dependency.property, dependency))
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
+				ownDeclaredProperties = declaredProperties
+				guard !declaresFulfillingProperty(
+					of: fulfillingProperty,
+					onlyIfAvailable: onlyIfAvailable,
+					declaredProperties: declaredProperties,
+					forwardedProperties: [],
+				) else { continue }
+				receives.append((fulfillingProperty, dependency))
+			case .instantiated, .forwarded:
+				continue
+			}
+		}
+		return receives
+	}
+
 	/// The properties `dependencies`, a type's own, declare for the scopes the type builds: those it instantiates and
 	/// those it forwards, each lazily instantiated one followed by the property that receives its instance by value. An
 	/// alias of one of them is bound inside the type's builder function, and receives nothing from above it.
@@ -3375,6 +3248,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
 		)
+	}
+
+	/// The places of this scope's body, its children's code in the order it builds them, as a root's body holds them: what
+	/// the type key lays out of a body of the per-type plan (`TypeKeyBody.statements(ofPlan:)`).
+	func generateChildPlans() async throws -> [GeneratedCode] {
+		try await generateProperties(
+			propertiesGeneratedLater: [],
+			enclosingFunctionNames: BuilderFunctionNames().enclosingFunctionNames,
+			leadingMemberWhitespace: "        ",
+			fillPlaceBindings: .none,
+		)
+	}
+
+	/// The extension a root of the dependency tree declares around `statements`, the body the type key laid out; nothing
+	/// for a root without dependencies.
+	static func rootCode(of instantiable: Instantiable, writing statements: [GeneratedCode]) throws -> GeneratedCode {
+		try rootInitializer(of: instantiable)?.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim))) ?? .empty
 	}
 
 	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
@@ -3745,6 +3635,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingSendableBuilders: [],
 			chain: [],
 		)
+	}
+
+	/// Whether a `@Sendable` builder function in this body of a root's per-type plan may capture an `Instantiator`,
+	/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside it: the walk of
+	/// `nonSendableWrapperCaptures(ofTreeRootedAt:)` over the body's tree, each label the body reads from above declared,
+	/// outside every `@Sendable` function of the body, as each of `answers` binds it. It may find a capture the plan's
+	/// code does not make, where a `@Sendable` function reads a parameter of its own: the root then keeps its tree per
+	/// path, whose walk judges it.
+	///
+	/// - Parameters:
+	///   - instantiable: The type the body builds.
+	///   - answers: The declarations that answer the labels the body reads from above.
+	func mayCaptureNonSendableWrapper(asBodyOf instantiable: Instantiable, answeredBy answers: [NearestDeclaration]) async -> Bool {
+		var declarationsByLabel = [String: [VisibleDeclaration]]()
+		for answer in answers {
+			for (form, declaredProperty) in answer.bindings.sorted(by: { $0.key < $1.key }) {
+				declarationsByLabel[form.label, default: []].append(VisibleDeclaration(
+					property: declaredProperty,
+					instanceProperty: form == declaredProperty ? nil : form,
+					declaringType: nil,
+					declarationLocation: nil,
+					sendableBuilderDepth: 0,
+				))
+			}
+		}
+		return await !nonSendableWrapperCaptures(
+			of: instantiable,
+			unavailableProperties: unavailableProperties(
+				isGeneratedBefore: { _ in false },
+				propertiesGeneratedLater: [],
+			),
+			propertiesGeneratedLater: [],
+			declarationsByLabel: declarationsByLabel,
+			enclosingSendableBuilders: [],
+			chain: [],
+		).isEmpty
 	}
 
 	/// A value the tree holds for a parameter of a seam's generated initializer that the tier it calls omits, which
@@ -5198,7 +5124,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fulfillingProperty: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 		)
 		/// A site in a seam's tree of a property the builder the seam's generated initializer takes builds. `site` is
 		/// `nil` in a tree built only to compute the seam's signature.
@@ -5482,6 +5408,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Those of `cycleParameters` that are unavailable where this scope passes them, given what the scopes enclosing it
 	/// create, before any sibling's ordering is known (see `unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`).
 	private let cycleParameterUnavailableProperties: Set<Property>
+	/// The labels of those of `cycleParameters` this scope passes `nil`, before any sibling's ordering is known.
+	nonisolated var labelsOfCycleParametersPassedNil: Set<String> {
+		Set(cycleParameters.lazy.filter { self.cycleParameterUnavailableProperties.contains($0.property) }.map(\.property.label))
+	}
+
 	/// The received properties in scope only as the instance of a `LazilyInstantiated` property where this scope passes
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
@@ -7255,27 +7186,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		/// Meets the receives among `dependencies`, those of the type at `index` in `visitedTypes`.
 		func meet(_ dependencies: [Dependency], ofTypeAt index: Int) {
-			// Read only for a type with an alias, which few are.
-			var ownDeclaredProperties: Set<Property>?
-			for dependency in dependencies {
-				switch dependency.source {
-				case .received:
-					meet(dependency.property.label, receiver: .init(property: dependency.property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					// An alias of a property its own type declares reads that declaration, also where a cycle-closing scope
-					// calls the type's builder function, which binds its own: it receives nothing.
-					let declaredProperties = ownDeclaredProperties ?? propertiesDeclared(byOwnDependencies: dependencies)
-					ownDeclaredProperties = declaredProperties
-					guard !declaresFulfillingProperty(
-						of: fulfillingProperty,
-						onlyIfAvailable: onlyIfAvailable,
-						declaredProperties: declaredProperties,
-						forwardedProperties: [],
-					) else { continue }
-					meet(fulfillingProperty.label, receiver: .init(property: fulfillingProperty, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
-				case .instantiated, .forwarded:
-					continue
-				}
+			for (property, dependency) in receivesFromAbove(ofOwnDependencies: dependencies) {
+				meet(property.label, receiver: .init(property: property, declarationLocation: dependency.declarationLocation, chain: chain(endingAt: index)))
 			}
 		}
 		meet(ownDependencies, ofTypeAt: 0)
@@ -7351,7 +7263,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `bodyChildren(propertiesGeneratedLater:enclosingFunctionNames:)` declares them: a member that takes such parameters
 	/// is a loop's non-alias child with cycle parameters, and the members are the loop's non-alias children and the renames
 	/// the body declares of them. Empty for nearly every body.
-	nonisolated private func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild]) -> [Int: Set<Property>] {
+	///
+	/// - Parameter includingChildrenWithoutCycleParameters: Whether to give the members of every non-alias child on a loop, also one whose
+	///   function takes no such parameter: a call place of a plan by declaration (`VariantAnswers`) stands for a function
+	///   that takes them, and has none of its own.
+	nonisolated func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild], includingChildrenWithoutCycleParameters: Bool = false) -> [Int: Set<Property>] {
 		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
 		guard !loopByChildIndex.isEmpty else { return [:] }
 		var membersByLoop = [Int: Set<Property>]()
@@ -7368,7 +7284,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		var membersByChildIndex = [Int: Set<Property>]()
-		for child in orderedChildren where !child.generator.isAlias && !child.generator.cycleParameters.isEmpty {
+		for child in orderedChildren where !child.generator.isAlias && (includingChildrenWithoutCycleParameters || !child.generator.cycleParameters.isEmpty) {
 			guard let loop = loopByChildIndex[child.index] else { continue }
 			membersByChildIndex[child.index] = membersByLoop[loop, default: []]
 		}
@@ -7541,14 +7457,96 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Where a test observes seam calls (`SeamCallRecordObservation`) and this scope's call of another module's seam fills
+	/// a builder, the call's record as the engine is to spell it, handed to the test beside its text: a built place whose
+	/// call fields pass each builder up or build it (`BuiltClosure`). A call that re-enters an enclosing call's dispatcher, a
+	/// call of a public mock, a member of a loop of builders and a member of a cycle are not observed yet.
+	nonisolated private func observeFilledCall(
+		of property: Property,
+		instantiable: Instantiable,
+		seamCall: SeamCall,
+		erasedToConcreteExistential: Bool,
+		code: GeneratedCode,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
+	) throws(Initializer.GenerationError) {
+		guard let observer = SeamCallRecordObservation.observer,
+		      publicMockCall == nil,
+		      reboundProperties.isEmpty,
+		      cycleParameters.isEmpty,
+		      inlinePlaceBuilder == nil,
+		      builderCallArguments.contains(where: { $0.builtCall != nil }),
+		      builderCallArguments.allSatisfy({ $0.builtCall != nil || $0.passedUpStruct != nil }),
+		      let argumentReads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
+		else { return }
+		var closureArguments = [ClosureArgumentEntry]()
+		var builtClosures = [BuiltClosure]()
+		var spelledArguments = [String]()
+		for (builder, builderCallArgument) in zip(seamCall.calledBuilders.builders, builderCallArguments) {
+			if let passedUpStruct = builderCallArgument.passedUpStruct {
+				let read = PassedOnRead(calledType: instantiable.concreteInstantiable, builderLabel: builder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member)
+				closureArguments.append(ClosureArgumentEntry(label: builderCallArgument.label, value: .passedOn(read)))
+				spelledArguments.append("\(builderCallArgument.label): \(read.member.spelled(on: passedUpStruct.name, caseName: read.caseName))")
+			} else if let builtCall = builderCallArgument.builtCall {
+				let builtClosure = BuiltClosure(
+					rootDispatcherKey: builtCall.dispatcherKey,
+					dispatchers: [],
+					fillChildIndices: [],
+					carriedStructs: builtCall.carriedStructs.map { BuiltClosure.CarriedStructRead(upName: $0.upName, structType: $0.type) },
+				)
+				closureArguments.append(ClosureArgumentEntry(label: builderCallArgument.label, value: .built(BuiltClosureID(builtClosures.count))))
+				builtClosures.append(builtClosure)
+				spelledArguments.append("\(builderCallArgument.label): \(builtClosure.spelled(dispatcherName: builtCall.dispatcherName, structNames: builtCall.carriedStructs.map(\.name)))")
+			}
+		}
+		// Observing a call counts none of the generator's work (`GenerationWork`): a test that counts it, such as
+		// `SafeDIToolSeamRootFunctionWorkTests`' walks for root functions, sees what generating the call does.
+		let (text, _) = GenerationWork.$observer.withValue(nil) { code.spelledWithoutRootFunctions() }
+		var record = BuiltPlaceRecord(
+			property: property,
+			isErased: erasedToConcreteExistential,
+			concreteType: instantiable.concreteInstantiable,
+			isExtension: false,
+			target: .initializer(instantiable.concreteInstantiable),
+			arguments: argumentReads,
+			forwardedProperties: [],
+			cycleParameters: [],
+			callCycleArguments: [],
+			functionName: builderFunctionNames.functionName ?? Self.functionName(toBuild: property),
+			isSendable: buildsInSendableFunction,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			lineEnd: "",
+			hasFunction: true,
+			children: [],
+			node: PlanNode(),
+		)
+		record.callFields = CallFields(
+			leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+			closureArguments: closureArguments,
+			builtClosures: builtClosures,
+		)
+		observer(SeamCallRecordObservation(
+			text: text,
+			// The text declares the call's dispatchers and fills, whose names and reads the record does not hold yet.
+			readNames: nil,
+			boundNames: nil,
+			spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + spelledArguments,
+			written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + builderCallArguments.map { "\($0.label): \($0.value)" },
+		))
+	}
+
 	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
 	/// of the call's arguments, or `nil` where the type key does not plan it. Where a test observes it
 	/// (`SeamCallRecordObservation`), the place's record as the engine is to spell it is handed to the test beside its text.
+	/// A builder's forwarded values are bound inside its text, so a read of one of `forwardedProperties`' labels is no read
+	/// outside it; only a call that forwards nothing is observed or spelled by the engine in place.
 	nonisolated private func seamCallRecord(
 		of property: Property,
 		instantiable: Instantiable,
 		seamCall: SeamCall,
 		erasedToConcreteExistential: Bool,
+		forwardedProperties: [Property] = [],
 		code: GeneratedCode,
 		declaredFunctionName: String?,
 		unavailableProperties: Set<Property>,
@@ -7556,13 +7554,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillPlaceBindings: FillPlaceBindings,
 		inlinePlaceBuilder: FillPlaceBindings.HoleBuilder?,
 		separatesValuesBindings: Bool,
+		inPlaceStatements: (before: [GeneratedCode], after: [GeneratedCode])?,
+		lineEnd: String,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
+		if SeamCallRecordObservation.observer != nil, forwardedProperties.isEmpty {
+			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
+		}
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
 		      inlinePlaceBuilder == nil,
 		      cycleParameters.isEmpty,
 		      let argumentReads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
 		var reads = argumentReads
+		let forwardedLabels = Set(forwardedProperties.map(\.label))
+		reads.removeAll { forwardedLabels.contains($0.label) }
 		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
 		// of that struct, typed as the caller's tree binds it. A call that fills a place declares its fills and dispatchers
 		// inside its builder function, or at the root where they capture nothing (`RootFunctionHoisting`), and they read of the
@@ -7591,9 +7596,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
-		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records.
-		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty {
-			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
+		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records. A call
+		// that fills a place is observed apart (`observeFilledCall`).
+		if let observer = SeamCallRecordObservation.observer, !fillsAPlace, reboundProperties.isEmpty, forwardedProperties.isEmpty {
+			// Every builder argument passes a struct up (the guard above and `fillsAPlace`), in the order the seam's builders
+			// are taken.
 			let passedOn = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
 				builderCallArgument.passedUpStruct.map { passedUpStruct in
 					(
@@ -7638,6 +7645,64 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
+		// A call that passes every place up and reaches no root function, outside a loop of builders, is spelled by the
+		// engine from its record where its text is written: the guard line, and a construction that hands each builder the
+		// member of the struct it passes up. A call that fills a place keeps its text, whose dispatchers the record does not
+		// hold.
+		if let inPlaceStatements, !fillsAPlace, rootFunctionNames.isEmpty, reboundProperties.isEmpty, forwardedProperties.isEmpty, let declaredFunctionName {
+			var arguments = argumentReads
+			var argumentValues = [Int: ValuePath]()
+			var closureArguments = [ClosureArgumentEntry]()
+			// Every builder argument passes a struct up (the guard above and `fillsAPlace`), in the order the seam's builders
+			// are taken.
+			let passedUpStructs = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
+				builderCallArgument.passedUpStruct.map { (builder: builder, label: builderCallArgument.label, passedUpStruct: $0) }
+			}
+			for (builder, label, passedUpStruct) in passedUpStructs {
+				let structRead = PlaceRead(
+					argumentLabel: label,
+					label: passedUpStruct.name,
+					property: Property(label: passedUpStruct.name, typeDescription: passedUpStruct.type),
+					source: .binding(label: passedUpStruct.name),
+					// SafeDI cannot tell the struct is `Sendable`, as for a hole site's read of it.
+					staysOutsideSendableFunctions: true,
+				)
+				let passedOnRead = PassedOnRead(calledType: instantiable.concreteInstantiable, builderLabel: builder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member)
+				argumentValues[arguments.count] = passedOnRead.member.value(reading: structRead, caseName: passedOnRead.caseName)
+				arguments.append(structRead)
+				closureArguments.append(ClosureArgumentEntry(label: label, value: .passedOn(passedOnRead)))
+			}
+			var callRecord = BuiltPlaceRecord(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				concreteType: instantiable.concreteInstantiable,
+				isExtension: instantiable.declarationType.isExtension,
+				target: .initializer(instantiable.concreteInstantiable),
+				arguments: arguments,
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: declaredFunctionName,
+				isSendable: buildsInSendableFunction,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lineEnd: lineEnd,
+				hasFunction: true,
+				children: [],
+				node: PlanNode(),
+			)
+			if !argumentValues.isEmpty {
+				callRecord.argumentValues = argumentValues
+			}
+			callRecord.callFields = CallFields(
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+				closureArguments: closureArguments,
+			)
+			record.call = InPlaceCall(
+				record: callRecord,
+				statementsBeforeLeadingStatement: inPlaceStatements.before,
+				statementsAfterLeadingStatement: inPlaceStatements.after,
+			)
+		}
 		return .alias(record)
 	}
 
@@ -7903,8 +7968,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let parametersByKey: [String: [SeamSignature.Hole.Field]]
 		/// What the root dispatcher passes of each value it reads from this scope, by the parameter a target takes for it,
 		/// and of each memo.
-		let callerArgumentByParameter: [Property: String]
-		let callerMemoArgumentByMemo: [Property: String]
+		let callerArgumentByParameter: [Property: ArgumentSource]
+		let callerMemoArgumentByMemo: [Property: ArgumentSource]
 		/// The dispatchers of a seam's caller; empty for a public mock's caller, which declares level functions instead.
 		let callDispatchers: [FillDispatcher]
 		/// Which fills a dispatcher may hold in its case.
@@ -8032,8 +8097,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The caller's declaration in one form is the same for every fill of the call, which reads the one scope enclosing it
 		// (`Scope.Fill.callerNearestDeclarations`), so nothing is chosen among spellings: a form is passed as the declaration
 		// where any fill that takes it finds it available, and as `nil` where none does.
-		var callerArgumentByParameter = [Property: String]()
-		var callerMemoArgumentByMemo = [Property: String]()
+		var callerArgumentByParameter = [Property: ArgumentSource]()
+		var callerMemoArgumentByMemo = [Property: ArgumentSource]()
 		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
 		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
 		// calls with the caller's values.
@@ -8059,7 +8124,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						if !forms.allSatisfy(child.unavailableProperties.contains) {
 							callerArgumentByParameter[parameter] = argument
 						} else if callerArgumentByParameter[parameter] == nil {
-							callerArgumentByParameter[parameter] = "nil"
+							callerArgumentByParameter[parameter] = .nil
 						}
 					}
 					callerMemoArgumentByMemo.merge(callerReads.memoArgumentByMemo) { argument, _ in argument }
@@ -8262,6 +8327,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call's dispatchers follow its fills, each a function that returns its level's struct. One that captures nothing
 		// of the call is a root function, which the root may declare once for every call (`RootFunctionHoisting`).
 		let labelsHiddenByReenteringCalls = Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined())
+		let callerArgumentByParameter = body.callerArgumentByParameter.mapValues(\.spelled)
+		let callerMemoArgumentByMemo = body.callerMemoArgumentByMemo.mapValues(\.spelled)
 		// A dispatcher captures the caller's declarations where it hands a target one (the root dispatcher, which takes no
 		// parameter, or one that hands a memo the caller binds). Every other dispatcher of the call takes what its targets
 		// read as parameters, so the root may still declare it once. Each is written once, with the caller's declarations,
@@ -8275,8 +8342,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: leadingMemberWhitespace,
 				inlinedFills: body.inlinedFills,
 				parametersByKey: body.parametersByKey,
-				callerArgumentByParameter: body.callerArgumentByParameter,
-				callerMemoArgumentByMemo: body.callerMemoArgumentByMemo,
+				callerArgumentByParameter: callerArgumentByParameter,
+				callerMemoArgumentByMemo: callerMemoArgumentByMemo,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
@@ -8287,12 +8354,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, rootFunctionFillKeys: body.rootFunctionFillKeys, ownFillKeys: Set(body.orderedChildren.compactMap(\.generator.fillKey)), capturingCallerDeclarations: capturingKeys)
-		for (dispatcher, textWithoutAttributes) in zip(body.callDispatchers, textsWithoutAttributes) {
+		// Where a test observes them, each dispatcher's declaration is spelled again from the call's records alone, beside
+		// the text written here.
+		let dispatcherObserver = DispatcherRecordObservation.observer
+		let filledCallFields = FilledCallFields(callerArguments: body.callerArgumentByParameter, callerMemoArguments: body.callerMemoArgumentByMemo, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls)
+		let dispatcherRecords = dispatcherObserver == nil ? [] : body.callDispatchers.map { dispatcher in
+			DispatcherRecord(dispatcher: dispatcher, parameters: body.parametersByKey[dispatcher.key, default: []], isSendable: sendableFillKeys.contains(dispatcher.key))
+		}
+		func observe(_ text: String, ofDispatcherAt index: Int, asRootFunction: Bool) {
+			guard let dispatcherObserver else { return }
+			dispatcherObserver(DispatcherRecordObservation(
+				text: text,
+				spelledFromRecord: filledCallFields.declaration(
+					of: dispatcherRecords[index],
+					among: dispatcherRecords,
+					asRootFunction: asRootFunction,
+					indent: leadingMemberWhitespace,
+					inlinedFills: body.inlinedFills,
+					fillParametersByKey: body.fillParametersByKey,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+				),
+			))
+		}
+		for (index, (dispatcher, textWithoutAttributes)) in zip(body.callDispatchers, textsWithoutAttributes).enumerated() {
 			let isSendable = sendableFillKeys.contains(dispatcher.key)
 			guard rootFunctionKeys.contains(dispatcher.key) else {
-				generatedProperties.append(.text(leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes))
+				let text = leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes
+				observe(text, ofDispatcherAt: index, asRootFunction: false)
+				generatedProperties.append(.text(text))
 				continue
 			}
+			let rootFunctionText = leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: false) + textWithoutAttributes
+			observe(rootFunctionText, ofDispatcherAt: index, asRootFunction: true)
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
 			let inlinedFillKeys = Set(targetKeys.filter { body.inlinedFills[$0] != nil })
 			let calledFunctionNames = dispatcher.cases.compactMap { dispatcherCase in
@@ -8949,33 +9043,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .hole(property, _, site):
-			// A tree built only to compute the seam's signature has no site, and generates nothing. Nor has a root's tree,
-			// where only a property instantiated only if available is a hole, since validation reports any other: no builder
-			// reaches a root, so the property is `nil` there, as in a module that generates no seam.
-			guard let site else {
-				guard property.typeDescription.isOptional else { return .empty }
-				return .place(PlacePlan(code: .text("let \(property.asSource) = nil"), record: .alias(Self.recordOfPropertyBoundToNil(property))))
-			}
 			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
-			// stays until fills are planned.
-			// The payloads bound at the site's path are places of their own, as a scope's are (`valuesBindingPlaces`), so the
-			// site's place binds only its property and the function it declares; where a loop's box holds them, the site's
-			// text holds them too.
-			let valuesBindingPlaces = valuesBindingPlaces(builderFunctionNames: builderFunctionNames)
-			let sitePlace = Self.holeSitePlace(
-				text: (valuesBindingPlaces == nil ? valuesBindingLines : "") + Self.buildSiteCode(of: property, at: site, routeMembers: siteRouteMembers, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse),
+			// stays until fills are planned. Node records write a hole's place with the same function
+			// (`NodeRecords.holePlace(of:in:seamHoles:)`).
+			return HoleSitePlaces.place(
 				of: property,
 				at: site,
 				routeMembers: siteRouteMembers,
 				functionName: builderFunctionNames.functionName,
 				valuesBindings: valuesBindings,
-				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
 				carrierUse: siteCarrierUse,
+				readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties,
+				loopBindsPayloads: builderFunctionNames.loopValuesBindingLines != nil,
 			)
-			guard let valuesBindingPlaces else { return sitePlace }
-			return .sequence(valuesBindingPlaces + [sitePlace])
 		case let .fill(hole, functionName):
 			let fillCode = try await generateFillCode(
 				of: hole,
@@ -9008,10 +9090,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The record of the place of `property`, instantiated only if available, where nothing fulfills it. Its `nil` reads
 	/// nothing, which the record lists, so the type key lays it out as written, as it does an alias bound to `nil`: a place
 	/// that records nothing would keep the bodies of the root's tree one per path.
-	private static func recordOfPropertyBoundToNil(_ property: Property) -> AliasPlaceRecord {
-		AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.asSource) = nil", reads: [])
-	}
-
 	/// A place that records nothing, written as `text`.
 	@inline(never)
 	private static func textPlace(_ text: String) -> GeneratedCode {
@@ -9081,17 +9159,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// reads, so the type key lays them out as the scope's parent's statements; `nil` where there are none, or where a
 	/// loop's box holds them.
 	nonisolated private func valuesBindingPlaces(builderFunctionNames: BuilderFunctionNames) -> [GeneratedCode]? {
-		guard !valuesBindings.isEmpty, builderFunctionNames.loopValuesBindingLines == nil else { return nil }
-		return valuesBindings.map { binding in
-			let line = binding.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties)
-			let record = AliasPlaceRecord(
-				property: Property(label: binding.bindingName, typeDescription: binding.boundType),
-				fulfillingProperty: nil,
-				text: line,
-				reads: binding.reads(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties),
-			)
-			return .place(PlacePlan(code: .text("\(line)\n"), record: .alias(record)))
-		}
+		guard builderFunctionNames.loopValuesBindingLines == nil else { return nil }
+		return HoleSitePlaces.valuesBindingPlaces(of: valuesBindings, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties)
 	}
 
 	/// The place of an alias's declaration.
@@ -9101,7 +9170,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfilledBy fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 		unavailableProperties: Set<Property>,
 	) -> GeneratedCode {
 		let aliasCode = aliasCode(
@@ -9117,7 +9186,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
 				.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: aliasCode, reads: []))
 			} else {
-				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode))
+				.alias(AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: aliasCode, readsOnlyIfAvailable: fulfillingBindingIsOptional))
 			}
 		} else {
 			nil
@@ -9151,7 +9220,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfilledBy fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 		unavailableProperties: Set<Property>,
 	) -> String {
 		if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
@@ -9578,7 +9647,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				) : nil
 			} else if let seamCall {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
-				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, forwardedProperties: forwardedProperties, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
@@ -9611,7 +9680,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			let code = function.spelled(after: valuesBindingLines, followedBy: lastLine)
 			let record: PlaceRecord? = if let seamCall {
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: nil, lineEnd: constructionLineEnd)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true)
 			}
@@ -9665,9 +9734,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A call of another module's seam is written as its text, which the type key lays out with the reads it lists: its
 			// builder function holds the guard line, which the type key's constructions do not write.
 			let record: PlaceRecord? = if let seamCall {
-				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings, inPlaceStatements: valuesBindingLines.isEmpty && hasGeneratedContent ? (before: memberCallCode, after: fillPlaceBindingLines + childCode) : nil, lineEnd: constructionLineEnd)
 			} else if isUnavailableDependency {
-				.alias(Self.recordOfPropertyBoundToNil(property))
+				.alias(HoleSitePlaces.recordOfPropertyBoundToNil(property))
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent)
 			}
@@ -9729,10 +9798,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		unreadTypeComment: UnreadTypeComment?,
 		namesForwardedTypes: Bool,
+		declaresLevelsWithoutScope: Bool,
 	) -> [String] {
 		guard let ownType = builders.first?.enumKey.seamType else { return [] }
 		let holesBySite = Dictionary(holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
-		let calledRootsTakingValue = calledRootsTakingValue(amongEnumsOf: scopeEnums, filledBy: scopeEnums.filter { $0.key.seamType == ownType })
+		let calledRootsTakingValue = declaresLevelsWithoutScope ? LevelsWithoutScope.calledRootsTakingValue(amongEnumsOf: scopeEnums, filledBy: scopeEnums.filter { $0.key.seamType == ownType }) : []
 		// Each level's form is computed once per hole type: the builder structs ask for the form of a level once for every case
 		// that holds it.
 		var levelFormsByHoleType = [SeamSignature.HoleType: LevelBuilderForms]()
@@ -9756,37 +9826,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					break
 				}
 			}
-			var levelForms = levelFormsByHoleType[key.holeType] ?? LevelBuilderForms(enumsOfHoleType: scopeEnums.filter { $0.key.holeType == key.holeType }, holesBySite: holesBySite)
-			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, carrierValues: carrierValues)
+			var levelForms = levelFormsByHoleType[key.holeType] ?? LevelBuilderForms(enumsOfHoleType: scopeEnums.filter { $0.key.holeType == key.holeType })
+			let declaration = scopeEnumDeclaration(of: scopeEnum, nestedEnums: nestedEnums, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, declaresLevelsWithoutScope: declaresLevelsWithoutScope, calledRootsTakingValue: calledRootsTakingValue, carrierValues: carrierValues)
 			levelFormsByHoleType[key.holeType] = levelForms
 			guard let marker = unreadTypeComment?.markerLine(namedBy: namedTypes, indent: standardIndent) else { return declaration }
 			return "\(marker)\n\(declaration)"
 		}
-	}
-
-	/// The called seams' root enums, among `reachedEnums`, whose builder struct takes a builder that takes a value from its
-	/// no-scope initializer, of those a case of `fillingEnums` for a builder the seam fills holds: every place such a root
-	/// reaches is held in an instantiator that forwards a value (`DependencyTreeGenerator.builderForm(ofPlaces:)`), whose
-	/// property ends the place's site path. Found once for the seam, never once for each case.
-	private static func calledRootsTakingValue(amongEnumsOf reachedEnums: [SeamSignature.ScopeEnum], filledBy fillingEnums: [SeamSignature.ScopeEnum]) -> Set<SeamSignature.ScopeEnum.Key> {
-		var innerKeys = Set<SeamSignature.ScopeEnum.Key>()
-		for enumCase in fillingEnums.flatMap(\.cases) {
-			if case let .fill(innerKey, _?, _, _, _) = enumCase.kind {
-				innerKeys.insert(innerKey)
-			}
-		}
-		var calledRootsTakingValue = Set<SeamSignature.ScopeEnum.Key>()
-		var calledEnumsByHoleType = [SeamSignature.HoleType: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]]()
-		for innerKey in innerKeys {
-			if calledEnumsByHoleType[innerKey.holeType] == nil {
-				calledEnumsByHoleType[innerKey.holeType] = Dictionary(reachedEnums.filter { $0.key.holeType == innerKey.holeType }.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-			}
-			let places = SeamSignature.ScopeEnum.sitesReached(from: innerKey, in: calledEnumsByHoleType[innerKey.holeType] ?? [:]).compactMap(\.path.last)
-			if DependencyTreeGenerator.builderForm(ofPlaceProperties: places).forwardedValue != nil {
-				calledRootsTakingValue.insert(innerKey)
-			}
-		}
-		return calledRootsTakingValue
 	}
 
 	/// The declaration of `scopeEnum`, nested in the seam or the public mock, a namespace no generated code builds or switches
@@ -9795,15 +9840,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameters:
 	///   - levelForms: The forms of the levels of every enum of the hole type of `scopeEnum`, both families', which decide
 	///     the type each level's builder struct takes from the builder a person writes.
-	///   - calledRootsTakingValue: The called seams' root enums whose struct takes a builder that takes a value from its
-	///     no-scope initializer, which decide what the struct of such a root that a case for a builder the seam fills returns
-	///     takes from its builder (`calledRootsTakingValue(amongEnumsOf:filledBy:)`).
-	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], carrierValues: SeamCarrierValues = SeamCarrierValues(), indent: String = standardIndent) -> String {
+	///   - declaresLevelsWithoutScope: Whether each builder struct declares `init(__safeDI_noScope:)`, as a public mock's do:
+	///     a seam's levels declare none, and the code that needs a seam's level built from one builder builds it with
+	///     functions of its own (`LevelsWithoutScope`).
+	///   - calledRootsTakingValue: The called mocks' root enums whose struct takes a builder that takes a value from its
+	///     no-scope initializer (`LevelsWithoutScope.calledRootsTakingValue(amongEnumsOf:filledBy:)`).
+	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, declaresLevelsWithoutScope: Bool, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], carrierValues: SeamCarrierValues = SeamCarrierValues(), indent: String = standardIndent) -> String {
 		if ReservedName.seamCarrier(ofEnum: scopeEnum.type) != nil {
 			// A seam's levels are carriers, declared side by side in the seam's extension: no namespace and no payload struct.
 			var carriers = [String]()
 			for level in [scopeEnum] + (scopeEnum.rootTypeName == nil ? nestedEnums : []) where !level.cases.isEmpty {
-				carriers.append(builderStructDeclaration(of: level, holesBySite: holesBySite, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, typesDeclaredEscaping: typesDeclaredEscaping, carrierValues: carrierValues, indent: indent))
+				carriers.append(builderStructDeclaration(of: level, levelForms: &levelForms, declaresLevelsWithoutScope: declaresLevelsWithoutScope, calledRootsTakingValue: calledRootsTakingValue, typesDeclaredEscaping: typesDeclaredEscaping, carrierValues: carrierValues, indent: indent))
 			}
 			return carriers.joined(separator: "\n\n")
 		}
@@ -9822,13 +9869,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only the root declares the enums nested in it; a nested enum's cases spell them from the root.
 		if scopeEnum.rootTypeName == nil {
 			for nestedEnum in nestedEnums {
-				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, holesBySite: holesBySite, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
+				body += (body.isEmpty ? "" : "\n\n") + scopeEnumDeclaration(of: nestedEnum, typesDeclaredEscaping: typesDeclaredEscaping, levelForms: &levelForms, declaresLevelsWithoutScope: declaresLevelsWithoutScope, calledRootsTakingValue: calledRootsTakingValue, indent: caseIndent)
 			}
 		}
 		// A root of the plain family with no case of its own, a namespace for the enums its `@Sendable` root's cases hold,
 		// declares no struct: no builder is handed one.
 		if !scopeEnum.cases.isEmpty {
-			body += (body.isEmpty ? "" : "\n\n") + builderStructDeclaration(of: scopeEnum, holesBySite: holesBySite, levelForms: &levelForms, calledRootsTakingValue: calledRootsTakingValue, typesDeclaredEscaping: typesDeclaredEscaping, carrierValues: carrierValues, indent: caseIndent)
+			body += (body.isEmpty ? "" : "\n\n") + builderStructDeclaration(of: scopeEnum, levelForms: &levelForms, declaresLevelsWithoutScope: declaresLevelsWithoutScope, calledRootsTakingValue: calledRootsTakingValue, typesDeclaredEscaping: typesDeclaredEscaping, carrierValues: carrierValues, indent: caseIndent)
 		}
 		return """
 		\(indent)nonisolated public enum \(scopeEnum.typeName) {
@@ -9844,9 +9891,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// places have: reading every place of every level beneath, sorted, made the cost of a seam's enums grow with the
 	/// square of its places.
 	struct LevelBuilderForms {
-		init(enumsOfHoleType: [SeamSignature.ScopeEnum], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) {
+		init(enumsOfHoleType: [SeamSignature.ScopeEnum]) {
 			enumsByKey = Dictionary(enumsOfHoleType.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-			self.holesBySite = holesBySite
 		}
 
 		/// The form of the builder a person writes for the places at and beneath the level of `key`, in that level's family.
@@ -9854,7 +9900,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let form = formByKey[key] {
 				return form
 			} else {
-				var placeBySpelling = [PlaceSpelling: SeamSignature.Hole]()
+				var placeBySpelling = [PlaceSpelling: Property]()
 				var visitedKeys = Set<SeamSignature.ScopeEnum.Key>()
 				var keysToVisit = [key]
 				while let visitedKey = keysToVisit.popLast() {
@@ -9871,7 +9917,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 					}
 				}
-				let form = DependencyTreeGenerator.builderForm(ofPlaces: placeBySpelling.sorted { $0.key < $1.key }.map(\.value))
+				let form = DependencyTreeGenerator.builderForm(ofPlaceProperties: placeBySpelling.sorted { $0.key < $1.key }.map(\.value))
 				formByKey[key] = form
 				return form
 			}
@@ -9928,11 +9974,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// What `DependencyTreeGenerator.builderForm(ofPlaces:)` reads of a place: whether it is held in an instantiator, and
 		/// then the wrapper's spelling and that of the value it forwards.
 		private struct PlaceSpelling: Hashable, Comparable {
-			init(of place: SeamSignature.Hole) {
-				let isAnyInstantiator = place.property.propertyType.isAnyInstantiator
+			init(of place: Property) {
+				let isAnyInstantiator = place.propertyType.isAnyInstantiator
 				self.isAnyInstantiator = isAnyInstantiator
-				wrapper = isAnyInstantiator ? place.property.typeDescription.unwrapped.strippingEscaping.asSource : ""
-				forwarded = isAnyInstantiator ? place.forwardedType?.strippingEscaping.asSource : nil
+				wrapper = isAnyInstantiator ? place.typeDescription.unwrapped.strippingEscaping.asSource : ""
+				forwarded = isAnyInstantiator ? place.typeDescription.forwardedTypeOfWrapper?.strippingEscaping.asSource : nil
 			}
 
 			let isAnyInstantiator: Bool
@@ -9944,18 +9990,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// One place of each spelling among the places of `scopeEnum`'s own cases.
-		private mutating func ownPlaces(of scopeEnum: SeamSignature.ScopeEnum) -> [PlaceSpelling: SeamSignature.Hole] {
+		/// One place of each spelling among the places of `scopeEnum`'s own cases, each the property its site's path ends
+		/// with, which a caller reads of another module's seam as that seam's module does.
+		private mutating func ownPlaces(of scopeEnum: SeamSignature.ScopeEnum) -> [PlaceSpelling: Property] {
 			if let places = ownPlacesByKey[scopeEnum.key] {
 				return places
 			} else {
-				var places = [PlaceSpelling: SeamSignature.Hole]()
+				var places = [PlaceSpelling: Property]()
 				for enumCase in scopeEnum.cases {
 					switch enumCase.kind {
 					case let .place(sites):
 						// Every place of a case spells alike: its spelling is its property's, which one owner level fixes for every
 						// place of a case of the place graph, and one case of the enum for every site it lists.
-						if let place = sites.first.flatMap({ holesBySite[$0] }) {
+						if let place = sites.first?.path.last {
 							let spelling = PlaceSpelling(of: place)
 							places[spelling] = places[spelling] ?? place
 						}
@@ -9969,28 +10016,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		private let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
-		private let holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 		private var formByKey = [SeamSignature.ScopeEnum.Key: DependencyTreeGenerator.BuilderForm]()
-		private var ownPlacesByKey = [SeamSignature.ScopeEnum.Key: [PlaceSpelling: SeamSignature.Hole]]()
+		private var ownPlacesByKey = [SeamSignature.ScopeEnum.Key: [PlaceSpelling: Property]]()
 		private var levelsTakingSendableBuilder: Set<SeamSignature.ScopeEnum.Key>?
 	}
 
-	/// The builder struct of `scopeEnum`, `__safeDI_Builder<Built>`, indented by `indent`: one stored function per case, its
-	/// member, named as the case, which takes the struct the case's member takes (`ScopeEnum.Case.memberValuesTypeName`) and
-	/// returns what the place builds – for a place held in an instantiator, the erased wrapper's `Builder` over what the place
-	/// forwards, `()` for nothing, since the constrained wrappers cannot be spelled over `Built` – or the builder struct of
-	/// the enum the case holds; the memberwise initializer; and `init(__safeDI_noScope:)`, which makes every member call one
-	/// builder, as a seam's readable initializer passes it the builder a person wrote. That builder's type is the one a
-	/// person writes for the places at and beneath the level, in the level's own family
-	/// (`DependencyTreeGenerator.builderForm(ofPlaces:)`), over `Built`, or in the `@Sendable` family where the level hands
-	/// it to a struct that takes a `@Sendable` one (`LevelBuilderForms.takesSendableBuilder(atLevel:)`). A member whose own
-	/// type takes a value where the level's builder takes nothing – `()`, or `T.ForwardedProperties`, which is `Void` beside
-	/// a place that forwards nothing – is handed the builder adapted to it. A `@Sendable` enum's struct is `Sendable`, with
-	/// `@Sendable` members.
+	/// The builder struct of `scopeEnum`, `__safeDI_Builder<Built>`, or a seam's carrier, indented by `indent`: one stored
+	/// function per case, its member, named as the case, which takes the struct the case's member takes
+	/// (`ScopeEnum.Case.memberValuesTypeName`) and returns what the place builds – for a place held in an instantiator, the
+	/// erased wrapper's `Builder` over what the place forwards, `()` for nothing, since the constrained wrappers cannot be
+	/// spelled over `Built` – or the builder struct of the enum the case holds; and the memberwise initializer. A public
+	/// mock's struct also declares `init(__safeDI_noScope:)` (`declaresLevelsWithoutScope`), which makes every member call one
+	/// builder (`LevelsWithoutScope`). A `@Sendable` enum's struct is `Sendable`, with `@Sendable` members.
 	private static func builderStructDeclaration(
 		of scopeEnum: SeamSignature.ScopeEnum,
-		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		levelForms: inout LevelBuilderForms,
+		declaresLevelsWithoutScope: Bool,
 		calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key>,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		carrierValues: SeamCarrierValues,
@@ -10003,50 +10044,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendableAttribute = isSendable ? "@Sendable " : ""
 		let builtTypeName = ReservedName.builderStructGenericParameterName
 		let builtType = TypeDescription.simple(name: builtTypeName, generics: [])
-		let builderParameter = ReservedName.noScopeParameterName
-		let levelForm = levelForms.form(ofLevel: scopeEnum.key)
-		let takesSendableBuilder = levelForms.takesSendableBuilder(atLevel: scopeEnum.key)
-		let noScopeType: TypeDescription = if let forwarded = levelForm.forwardedValue {
-			DependencyTreeGenerator.erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: takesSendableBuilder)
-		} else if takesSendableBuilder {
-			TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType).asSendableFunction
-		} else {
-			TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)
-		}
-		/// The builder, adapted to a member or a level beneath that takes `forwarded` where this level's takes nothing.
-		func builder(adaptedTo forwarded: TypeDescription?) -> String {
-			if levelForm.forwardedValue == nil, forwarded != nil {
-				"{ _ in \(builderParameter)() }"
-			} else {
-				builderParameter
-			}
-		}
-		var members = [(name: String, type: String, noScopeValue: String, isLetChild: Bool)]()
-		var ignoredArguments = [String: String]()
+		var members = [(name: String, type: String, isLetChild: Bool)]()
 		for enumCase in scopeEnum.cases {
-			let returnType: String
-			let noScopeValue: String
-			switch enumCase.kind {
-			case let .place(sites):
-				if let place = sites.first.flatMap({ holesBySite[$0] }), place.property.propertyType.isAnyInstantiator {
-					let forwarded = place.forwardedType?.strippingEscaping ?? .void(.tuple)
-					returnType = DependencyTreeGenerator.erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: isSendable).asSource
-					noScopeValue = builder(adaptedTo: forwarded)
-				} else {
-					returnType = builtTypeName
-					noScopeValue = "\(builderParameter)()"
-				}
-			case let .fill(innerKey, innerEnumType?, enumKey, enumType, _):
-				// A call's case for a builder it fills returns the called seam's struct over the struct of the fill's own level:
-				// its places, wherever on the called seam's levels, build the level of what the fill builds.
-				returnType = ReservedName.levelType(ofEnum: innerEnumType, built: ReservedName.levelType(ofEnum: enumType, built: builtType)).asSource
-				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): { \(calledRootsTakingValue.contains(innerKey) ? "_ in " : "").init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: levelForms.form(ofLevel: enumKey).forwardedValue))) })"
-			case let .nested(enumKey, enumType, _),
-			     let .inner(enumKey, enumType, _),
-			     let .fill(_, _, enumKey, enumType, _):
-				returnType = ReservedName.levelType(ofEnum: enumType, built: builtType).asSource
-				noScopeValue = ".init(\(ReservedName.noScopeArgumentLabel): \(builder(adaptedTo: levelForms.form(ofLevel: enumKey).forwardedValue)))"
-			}
+			let returnType = LevelsWithoutScope.memberReturnType(of: enumCase, inSendableEnum: isSendable, built: builtType).asSource
 			if carrierName != nil {
 				// A carrier's member takes the values its level binds before the case's property, in field order: a deferred
 				// parameter's as its memo, which a fill reads the instance of where its tree reads the value.
@@ -10059,13 +10059,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if enumCase.isLetChildOfCarrier(inSendableEnum: isSendable) {
 					// A level the member hands no value, outside every loop of levels: the carrier holds the child carrier itself,
 					// formed where this carrier is formed.
-					members.append((enumCase.name, returnType, noScopeValue, true))
+					members.append((enumCase.name, returnType, true))
 				} else {
-					members.append((enumCase.name, "\(sendableAttribute)(\(parameters.joined(separator: ", "))) -> \(returnType)", noScopeValue, false))
+					members.append((enumCase.name, "\(sendableAttribute)(\(parameters.joined(separator: ", "))) -> \(returnType)", false))
 				}
-				ignoredArguments[enumCase.name] = parameters.isEmpty ? "" : "\(Array(repeating: "_", count: parameters.count).joined(separator: ", ")) in "
 			} else {
-				members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", noScopeValue, false))
+				members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", false))
 			}
 		}
 		var lines = [
@@ -10086,76 +10085,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("\(bodyIndent)self.\(member.name) = \(member.name)")
 		}
 		lines.append("\(memberIndent)}")
-		lines.append("")
-		// Only a seam's readable initializer and a call of a public mock call this initializer, in this module or in one that
-		// calls the seam, which this module cannot see. Every module that declares it compiles it once: emitted into its callers
-		// (`@_alwaysEmitIntoClient`), each module above would read and check its body and, through the carriers it calls, the
-		// bodies of every seam module beneath, which made sixteen modules of seams in a chain compile 14% slower in debug and 27%
-		// slower in release.
-		lines.append("\(memberIndent)public \(carrierName == nil ? "" : "convenience ")init(\(ReservedName.noScopeArgumentLabel) \(builderParameter): @escaping \(noScopeType.asSource)) {")
-		lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): \($0.isLetChild ? $0.noScopeValue : "{ \(ignoredArguments[$0.name] ?? "_ in ")\($0.noScopeValue) }")" }.joined(separator: ", ")))")
-		lines.append("\(memberIndent)}")
+		if declaresLevelsWithoutScope {
+			// Only a call of a public mock calls this initializer, in this module or in one that calls the mock, which this
+			// module cannot see.
+			let builderParameter = ReservedName.noScopeParameterName
+			let arguments = LevelsWithoutScope.memberArgumentsWithoutScope(
+				of: scopeEnum,
+				levelForms: &levelForms,
+				calledRootsTakingValue: calledRootsTakingValue,
+				carrierValues: carrierValues,
+				builder: builderParameter,
+				building: { _, builder in ".init(\(ReservedName.noScopeArgumentLabel): \(builder))" },
+				buildingCalledRoot: { _, takesValue, fillLevel in ".init(\(ReservedName.noScopeArgumentLabel): { \(takesValue ? "_ in " : "")\(fillLevel) })" },
+			)
+			lines.append("")
+			lines.append("\(memberIndent)public \(carrierName == nil ? "" : "convenience ")init(\(ReservedName.noScopeArgumentLabel) \(builderParameter): @escaping \(LevelsWithoutScope.builderType(ofLevel: scopeEnum.key, levelForms: &levelForms).asSource)) {")
+			lines.append("\(bodyIndent)self.init(\(arguments.joined(separator: ", ")))")
+			lines.append("\(memberIndent)}")
+		}
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
-	}
-
-	/// The code a seam's tree generates at a site of `property`, a hole: the member of its case called on the builder struct
-	/// in scope there, handed the values in scope there. A constant is bound with its declared type, as inline binds an
-	/// existential. An instantiator is built around what its member returns, the builder the wrapper keeps, with no function
-	/// of the seam's own. Any other wrapper is built around a function that makes the call, as inline builds a wrapper around
-	/// its builder function, which is `@Sendable` for a `Sendable` wrapper.
-	/// - Parameters:
-	///   - functionName: The name of that function where it differs from `functionName(toBuild:)`.
-	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
-	///     `LazilyInstantiated` property, whose instance the payload reads, as the owner's receivers do
-	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:)`).
-	///   - lazilyInstantiatedBindingNames: In a public mock, the names the wrappers it binds apart from their instances' labels
-	///     have where the site is built, which the payload reads a field of such a wrapper by
-	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
-	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
-	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, routeMembers: [SeamSignature.Hole.RouteStep.Member?], functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
-		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
-		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
-		// wrapper carries nothing.
-		let fields = site.enumPlace?.values ?? site.fields
-		let arguments = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
-		// The expression that builds the value: the place's member, called on the struct the last case on its route returned,
-		// or on the builder itself. An instantiator's member returns the builder its wrapper keeps. Every place of a seam's or
-		// a public mock's tree has its enum's case, whose member takes a struct (`SeamBuilderFamilies`). The `""` is never
-		// returned: a hole is built before its place's case is known, so `enumPlace` is optional, and it is assigned to every
-		// place before any code is generated; no type holds that order. 2.3.1's emitter rewrite replaces this code and drops
-		// the fallback.
-		guard let enumPlace = site.enumPlace, let memberValuesTypeName = enumPlace.memberValuesTypeName else { return "" }
-		let valuesType = TypeDescription.nested(name: memberValuesTypeName, parentType: enumPlace.enumType(qualifiedBy: nil), generics: [])
-		// Inside a fill whose call's case leads on, the fill is handed the struct of its own level.
-		let lastStep = enumPlace.route.last
-		let lastMember = routeMembers.last ?? nil
-		let parentName = (lastMember == nil ? nil : lastStep?.innerScope?.name) ?? lastMember?.bindingName ?? site.internalName
-		let buildExpression = if ReservedName.seamCarrier(ofEnum: enumPlace.enumType(qualifiedBy: nil)) != nil {
-			// A seam's carrier takes the place's values as its member's arguments.
-			"\(parentName).\(enumPlace.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
-		} else {
-			"\(parentName).\(enumPlace.caseName)(\(valuesType.asSource)(\(arguments)))"
-		}
-		let propertyType = property.propertyType
-		guard !propertyType.isConstant else {
-			return "let \(property.asSource) = \(buildExpression)"
-		}
-		let unwrappedType = property.typeDescription.unwrapped
-		// A type constructed by annotation spells its generic arguments only in the declaration's annotation.
-		let declaration = property.typeDescription.asSource == unwrappedType.spelledForConstruction ? "let \(property.label)" : "let \(property.asSource)"
-		guard !propertyType.isAnyInstantiator else {
-			// An instantiator's member returns the builder the wrapper keeps, which takes the forwarded value itself.
-			return "\(declaration) = \(unwrappedType.spelledForConstruction)(\(buildExpression))"
-		}
-		let functionName = functionName ?? site.wrapperFunctionName ?? Self.functionName(toBuild: property)
-		return """
-		\(localFunctionPrefix(isSendable: propertyType.isSendable))func \(functionName)() -> \(site.builtType.asSource) {
-		\(standardIndent)\(buildExpression)
-		}
-		\(declaration) = \(unwrappedType.spelledForConstruction)(\(functionName))
-		"""
 	}
 
 	/// The name of the parameter that holds the value an instantiator forwards, in a fill of a hole's `property`: named
@@ -10198,6 +10147,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeParameterName += "_"
 		}
 		let indent = Self.standardIndent
+		// Where a test observes fills, the function's lines up to its tree are spelled again from the fill's record alone. A
+		// deliberate gap: a fill that calls a shared body is not observed, since its record (`FillSignature`) does not hold
+		// the shared form's arguments in place of the binding lines.
+		func observe(_ written: [String], form: FillSignature.Form, bound: [FillSignature.BoundValue] = [], parameters: [SeamSignature.Hole.Field] = []) {
+			guard let observer = FillSignatureObservation.observer else { return }
+			let record = FillSignature(
+				hole: hole,
+				functionNameStem: Self.fillFunctionName(of: hole),
+				isSendable: isSendable,
+				form: form,
+				bound: bound,
+				parameters: parameters,
+				labelsReadOrDeclared: labelsReadInFill,
+				returnsBoundValue: property.propertyType.isConstant,
+			)
+			observer(FillSignatureObservation(written: written, spelledFromRecord: record.spelledSignature(functionName: functionName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)))
+		}
 		let childCode = try await generateProperties(
 			codeGeneration: codeGeneration,
 			propertiesGeneratedLater: fillBodyPropertiesGeneratedLater(propertiesGeneratedLater),
@@ -10243,6 +10209,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard !sharesBody else {
 				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: fillMemberParameterFields.map(\.property.label), returnType: builderType.asSource, body: sharedBody(outerDeclarations: fillMemberParameterFields.map(\.property), trailing: []), isSendable: isSendable)
 			}
+			observe(["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {"], form: .wrapperBuilder(parameters: fillMemberParameterFields, innerScopeLabels: innerScopeLabels))
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {", body: body, isSendable: isSendable)
 		}
 		// A wrapper's scope returns what its builder function builds, and a constant's has bound it.
@@ -10256,6 +10223,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard !sharesBody else {
 				return sharedFillBodyFunction(named: functionName, parameters: parameters, bodyParameters: parameters, arguments: payloadFields.map(\.property.label), returnType: hole.builtType.asSource, body: sharedBody(outerDeclarations: payloadFields.map(\.property), trailing: returnStatement), isSendable: isSendable)
 			}
+			observe(["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"], form: .payloadFields(parameters: payloadFields))
 			return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {", body: body, isSendable: isSendable)
 		}
 		// A fill of a place nested by type binds what its case's payload holds, and takes what a type further out binds.
@@ -10270,6 +10238,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			false
 		}
 		let caseValues = nestedByTypeValues ?? hole.fields
+		let boundValues: [FillSignature.BoundValue] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field in
+			FillSignature.BoundValue(index: index, field: field, bindsMemo: memoBoundLabels.contains(field.property.label))
+		}
 		// Each field the fill binds, with what reads it from what the fill is handed.
 		let boundFields: [(field: SeamSignature.Hole.Field, read: String)] = valuesType == nil ? [] : caseValues.enumerated().filter { isRead($0.element) }.map { index, field in
 			let bindsMemo = memoBoundLabels.contains(field.property.label)
@@ -10313,6 +10284,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 		}
 		let bindings = boundFields.map { GeneratedCode.text("\(indent)let \($0.field.property.label) = \($0.read)") }
+		let form: FillSignature.Form = if let fillCarrierUse, takesValuesAsArguments {
+			.carrierUse(fillCarrierUse)
+		} else if takesValuesAsArguments {
+			.caseArguments
+		} else {
+			.caseValues(valuesType: valuesType)
+		}
+		observe(["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"] + boundFields.map { "\(indent)let \($0.field.property.label) = \($0.read)" }, form: form, bound: boundValues, parameters: fillParameterFields)
 		return Self.fillFunction(declaredBy: "\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {", body: bindings + body, isSendable: isSendable)
 	}
 
@@ -10594,18 +10573,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if seamRoot.generatesPlainInitializers, !takesNoArgument {
 				// The plain initializer forwards its values, so the closures the other one holds capture its own parameters
 				// and never what its caller wrote.
-				// A builder that takes nothing is handed to the generated-only initializer as a builder struct every member of which
-				// calls it.
+				// A builder that takes nothing is handed to the generated-only initializer as the levels of its builder, every member
+				// of which calls it, built by functions the initializer declares (`LevelsWithoutScope`).
+				var levelsWithoutScope = LevelsWithoutScope(scopeEnums: signature.scopeEnums)
+				var bodyLines = levelsWithoutScope.functionDeclarations(reachedFrom: signature.builders.map(\.enumKey), indent: bodyIndent)
 				let forwardedArguments = parameters.map { "\($0.generatedOnlyArgumentLabel): \($0.property.label)" }
 					+ signature.builders.map { builder in
-						let label = builder.label(inTierAt: tier)
-						let argument = ".init(\(ReservedName.noScopeArgumentLabel): \(label))"
-						return "\(builder.generatedOnlyArgumentLabel(inTierAt: tier)): \(argument)"
+						"\(builder.generatedOnlyArgumentLabel(inTierAt: tier)): \(levelsWithoutScope.call(ofLevel: builder.enumKey, handing: builder.label(inTierAt: tier)))"
 					}
+				bodyLines.append("\(bodyIndent)self.init(\(forwardedArguments.joined(separator: ", ")))")
 				initializers.append("""
 				\(marker ?? "")\(plainDocumentation)
 				\(declarationPrefix)(\(plainParameterList(of: parameters, inTierAt: tier))) {
-				\(bodyIndent)self.init(\(forwardedArguments.joined(separator: ", ")))
+				\(bodyLines.joined(separator: "\n"))
 				\(Self.standardIndent)}
 				""")
 				initializers.append(generatedOnlyInitializer)
@@ -10622,6 +10602,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			unreadTypeComment: seamRoot.unreadTypeComment,
 			namesForwardedTypes: signature.tiers.first == .public,
+			declaresLevelsWithoutScope: false,
 		)
 		// The class each of the tree's boxes is, after the initializers, in the order of their names (`boxedLoops`).
 		var members = scopeTypes + initializers
@@ -10684,29 +10665,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// Points `code`, an alias's assignment, at its `@Received` declaration as `declarationReference` says:
-	/// wrapped in `#sourceLocation` directives so that compiler diagnostics for it are reported at the
-	/// declaration, or followed by a comment naming the declaration, which the compiler shows in the excerpt
-	/// of a diagnostic it reports in the generated file. The trailing bare `#sourceLocation()` restores
-	/// reporting against the generated file for the lines that follow.
+	/// Follows `code`, an alias's assignment, with a comment naming its `@Received` declaration, `declarationReference`
+	/// (`Type.label`, `DependencyTreeGenerator.aliasedDependency(_:fulfilledBy:erasedToConcreteExistential:onlyIfAvailable:declaredBy:)`), which the compiler shows in the
+	/// excerpt of a diagnostic it reports at the assignment. The comment names no file or line, so the generated code
+	/// is the same whichever integration generates it and wherever the declaration sits in its file.
 	///
 	/// SafeDI does not validate that an aliased dependency’s declared type can be fulfilled by
 	/// the fulfilling dependency’s type; the Swift compiler checks the generated assignment.
 	static func referencingDeclaration(
 		of code: String,
-		by declarationReference: AliasDeclarationReferences.Reference?,
+		by declarationReference: String?,
 	) -> String {
 		guard let declarationReference else { return code }
-		return switch declarationReference {
-		case let .sourceLocationDirective(filePath, line):
-			"""
-			#sourceLocation(file: \(StringLiteralExprSyntax(content: filePath).description), line: \(line))
-			\(code)
-			#sourceLocation()
-			"""
-		case let .comment(filePath, line):
-			"\(code) // Declared at \(filePath):\(line)"
-		}
+		return "\(code) // Declared as \(declarationReference)"
 	}
 
 	// MARK: Mock Root Parameters
@@ -12483,8 +12454,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What the module that declares a public mock built inline sees, resolved once per module and only for a module whose
-	/// public mock a tree builds inline (`SeamResolution.ForeignPublicMock.visibleDeclarations`).
-	private struct DeclaringModulesSight {
+	/// public mock a tree builds inline (`SeamResolution.ForeignPublicMock.visibleDeclarations`), which the walks of the
+	/// places built inline inside and outside fills both read.
+	struct DeclaringModulesSight {
 		/// Whether the module that declares `publicMock` sees an instantiable of `type`: a type it sees is not a hole of it.
 		mutating func sees(_ type: TypeDescription, declaredBesides publicMock: SeamResolution.ForeignPublicMock) throws -> Bool {
 			if let instantiables = instantiablesByModule[publicMock.declaringModule] {

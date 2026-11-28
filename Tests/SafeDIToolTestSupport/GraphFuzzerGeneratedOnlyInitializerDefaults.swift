@@ -22,7 +22,7 @@ import SwiftParser
 import SwiftSyntax
 
 /// The initializers only generated code calls: each tier of a seam declares one, every parameter and builder of which
-/// is labeled `__safeDI_<label>`, and each builder struct of a seam's scope enum declares
+/// is labeled `__safeDI_<label>`, and each builder struct of a public mock's scope enum declares
 /// `init(__safeDI_noScope __safeDI_builder:)`. No parameter of one has a default (`seam-access-proof.md`): every call
 /// is generated and writes every argument, so a default would only let a call SafeDI generated against an older
 /// signature compile while it passes nothing for a parameter the tree now reads.

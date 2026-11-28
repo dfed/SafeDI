@@ -46,14 +46,14 @@ public enum NodeRecordsObservation {
 	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, ConstructionScope) -> Void>?
 
 	/// Handed each root's report, where set. Only a test sets it.
-	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 
 	/// Handed the body of the root a tree's places build, beside the node records made for the same root, where a root's
 	/// plan is observed: set by the generator around one root's plan.
-	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
+	@TaskLocal static var rootBodyObserver: TaskLocalFunction<@Sendable (_ rootBody: [GeneratedCode]) -> Void>?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
@@ -62,7 +62,11 @@ public enum NodeRecordsObservation {
 		var differences = [String]()
 		var treePlaceCount = 0
 		var pending = [(tree: treeBody, nodeRecords: nodeRecordsBody, path: "root")]
-		while let (tree, nodeRecords, path) = pending.popLast() {
+		while let (treeCodes, nodeRecordsCodes, path) = pending.popLast() {
+			// A hole's place, and a place on the route to one, is a sequence of places: the payloads bound before it, each
+			// a place written as text, then the place itself. Each is compared as a statement of its own.
+			let tree = treeCodes.flatMap(statements(of:))
+			let nodeRecords = nodeRecordsCodes.flatMap(statements(of:))
 			guard tree.count == nodeRecords.count else {
 				differences.append("\(path): the tree builds \(tree.count) statements, node records \(nodeRecords.count)")
 				continue
@@ -76,7 +80,7 @@ public enum NodeRecordsObservation {
 				}
 				let label = switch nodeRecordsRecord {
 				case let .built(record): record.property.label
-				case let .closer(record): record.property.label
+				case let .closer(record): "\(record.property.label) made again"
 				case let .alias(record): record.property.label
 				}
 				let placePath = "\(path).\(label)"
@@ -94,8 +98,8 @@ public enum NodeRecordsObservation {
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
 					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
-				// A closer is compared by no arm yet: node records make none, since they refuse every world with a cycle
-				// (`cycle`), so a tree's closer meets another kind of record here. The kind that makes closers adds its arm.
+				case let (.closer(treeCloser), .closer(nodeRecordsCloser)):
+					differences += fieldDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
 					differences.append("\(placePath): the tree writes another kind of place than node records")
 				}
@@ -114,7 +118,32 @@ public enum NodeRecordsObservation {
 		return (indentation, inner)
 	}
 
-	/// The fields of `nodeRecords`, a rename, that differ from `tree`'s.
+	/// The fields of `nodeRecords`, a closing place, that differ from `tree`'s: every field the engine reads of a closer.
+	private static func fieldDifferences(between tree: ClosingPlaceRecord, and nodeRecords: ClosingPlaceRecord) -> [String] {
+		var differences = [String]()
+		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
+			guard treeValue != nodeRecordsValue else { return }
+			differences.append("\(name) is \(treeValue) in the tree, \(nodeRecordsValue) by node records")
+		}
+		compare("property", tree.property, nodeRecords.property)
+		compare("isErased", tree.isErased, nodeRecords.isErased)
+		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
+		compare("closedOnFunctionName", tree.closedOnFunctionName, nodeRecords.closedOnFunctionName)
+		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
+		compare("cycleArguments", tree.cycleArguments, nodeRecords.cycleArguments)
+		compare("passedArguments", tree.passedArguments, nodeRecords.passedArguments)
+		compare("rebindsLoopMember", tree.rebindsLoopMember, nodeRecords.rebindsLoopMember)
+		return differences
+	}
+
+	/// `code`'s statements: each piece of a sequence, indented as the sequence is, or `code` where it is no sequence.
+	private static func statements(of code: GeneratedCode) -> [GeneratedCode] {
+		let (indentation, inner) = unindented(code)
+		guard case let .sequence(pieces) = inner.node else { return [code] }
+		return pieces.flatMap { statements(of: .indented($0, by: indentation)) }
+	}
+
+	/// The fields of `nodeRecords`, a rename or a hole's place, that differ from `tree`'s.
 	private static func fieldDifferences(between tree: AliasPlaceRecord, and nodeRecords: AliasPlaceRecord) -> [String] {
 		var differences = [String]()
 		func compare<Value: Equatable>(_ name: String, _ treeValue: Value, _ nodeRecordsValue: Value) {
@@ -123,11 +152,42 @@ public enum NodeRecordsObservation {
 		}
 		compare("property", tree.property, nodeRecords.property)
 		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
-		compare("text", tree.text, nodeRecords.text)
+		// Node records leave a call's text to the engine, which spells it from the call (`InPlaceCall`).
+		if nodeRecords.call == nil {
+			compare("text", tree.text, nodeRecords.text)
+		}
 		compare("reads", tree.reads, nodeRecords.reads)
 		compare("otherBindings", tree.otherBindings, nodeRecords.otherBindings)
 		compare("calledFunctionNames", tree.calledFunctionNames, nodeRecords.calledFunctionNames)
+		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
+		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
+		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
+		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
+			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
+			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
+			compare("call: statements before the leading statement", treeCall.statementsBeforeLeadingStatement.count, nodeRecordsCall.statementsBeforeLeadingStatement.count)
+			compare("call: statements after the leading statement", treeCall.statementsAfterLeadingStatement.count, nodeRecordsCall.statementsAfterLeadingStatement.count)
+		}
 		return differences
+	}
+
+	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the optional parameter of one function that serves a
+	/// call that answers a read only if available and a call that does not: the nearest declaration of its label where
+	/// `tree`'s, the same argument otherwise, reads `nil`, by value or, where the declaration is a lazily instantiated
+	/// wrapper, as its instance (a wrapper still being built where `tree` reads `nil`, which the facts key as the wrapper);
+	/// or, where the parameter is a lazily instantiated wrapper some call passes `nil` (rule 3), the wrapper's instance
+	/// through the optional where `tree`'s reads `nil` or the instance.
+	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
+		guard tree.count == nodeRecords.count else { return false }
+		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
+			let readsValue = treeRead.source == .nil
+				&& (nodeRecordsRead.source == .binding(label: treeRead.label) || nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+			let readsWrappersInstance = (treeRead.source == .nil || treeRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+				&& nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: true)
+			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: nodeRecordsRead.source, staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			guard readsValue || readsWrappersInstance, treeReadWithRecordsSource == nodeRecordsRead else { return false }
+		}
+		return true
 	}
 
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
@@ -142,7 +202,11 @@ public enum NodeRecordsObservation {
 		compare("concreteType", tree.concreteType, nodeRecords.concreteType)
 		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
 		compare("target", tree.target, nodeRecords.target)
-		compare("arguments", tree.arguments, nodeRecords.arguments)
+		// Where one function serves a call that answers a read only if available and a call that does not, its record
+		// reads the declaration at each argument the tree's place at the second call reads `nil` at, and the two write the
+		// same code, the call passing `nil`: such a difference has a name of its own, which a test may approve where the
+		// two texts are equal. Any other difference of the arguments keeps the plain name.
+		compare(differOnlyWhereTreeReadsNilOfLabel(tree.arguments, nodeRecords.arguments) ? NodeRecordsReport.argumentsOfOptionalParameterDifferenceName : "arguments", tree.arguments, nodeRecords.arguments)
 		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
 		compare("cycleParameters", tree.cycleParameters, nodeRecords.cycleParameters)
 		compare("callCycleArguments", tree.callCycleArguments, nodeRecords.callCycleArguments)
@@ -160,6 +224,11 @@ public enum NodeRecordsObservation {
 
 /// One production root's node records, beside its tree's places (`NodeRecordsObservation`).
 public struct NodeRecordsReport: Sendable {
+	/// The name, in a line of `differences`, of a place's arguments where they differ only as one function with an
+	/// optional parameter makes them differ: the tree's place reads `nil` where the records read the nearest declaration
+	/// of the argument's label.
+	public static let argumentsOfOptionalParameterDifferenceName = "arguments of an optional parameter"
+
 	/// The root's concrete type.
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
@@ -185,4 +254,18 @@ public struct NodeRecordsReport: Sendable {
 	/// off its facts world alone (`SeamPlacesDrafting`), differ from its stored places, a line opening `report:` a count
 	/// and every other a difference. The other fields are empty there.
 	public var placesDraftDifferences: [String]?
+	/// The root's code as its tree spells it and as it is laid out from node records, where both were laid out: what a
+	/// test rewrites by the approved differences before it reports the root as differing.
+	public var comparedTexts: NodeRecordsComparedTexts?
+	/// The differences among `differences` that no text shows, a capture or a label only the tree's checks see: no
+	/// approved difference of the texts accounts for one.
+	public var differencesNoTextShows = [String]()
+}
+
+/// One root's code, spelled from its tree and laid out from its node records (`NodeRecordsReport.comparedTexts`).
+public struct NodeRecordsComparedTexts: Sendable {
+	/// The code the tree's places spell.
+	public let tree: String
+	/// The code laid out from node records.
+	public let nodeRecords: String
 }

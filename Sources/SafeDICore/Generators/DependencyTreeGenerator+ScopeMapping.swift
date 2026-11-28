@@ -156,6 +156,26 @@ extension DependencyTreeGenerator {
 		)
 	}
 
+	/// The alias of `dependency`, an aliased dependency `instantiable` declares, as a scope of `instantiable` generates it,
+	/// in every scope map.
+	static func aliasedDependency(
+		_ dependency: Dependency,
+		fulfilledBy fulfillingProperty: Property,
+		erasedToConcreteExistential: Bool,
+		onlyIfAvailable: Bool,
+		declaredBy instantiable: Instantiable,
+	) -> Scope.PropertyToGenerate {
+		.aliased(
+			dependency.property,
+			fulfilledBy: fulfillingProperty,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			onlyIfAvailable: onlyIfAvailable,
+			// The assignment names its declaration by the declaring type, spelled as generated code spells it, and the
+			// alias’s label: no file or line, which would differ between integrations and move with every edit above it.
+			declarationReference: "\(instantiable.concreteInstantiable.asSource).\(dependency.property.label)",
+		)
+	}
+
 	func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
 		// Create the mapping.
 		let typeDescriptionToScopeMap: [TypeDescription: Scope] = reachableTypeDescriptions
@@ -198,12 +218,12 @@ extension DependencyTreeGenerator {
 						scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					scope.propertiesToGenerate.append(.aliased(
-						dependency.property,
+					scope.propertiesToGenerate.append(Self.aliasedDependency(
+						dependency,
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
+						declaredBy: scope.instantiable,
 					))
 				case .forwarded, .received:
 					continue

@@ -36,7 +36,7 @@ extension SeamSignature.Places {
 	/// stack allows a recursive walk to go (`cycle-generation.md`, "Walks"). A lazy cycle can build one level variant again
 	/// beneath itself, so the graph can hold a cycle: a walk that meets a level it is still walking takes nothing from it at
 	/// first, and then computes the levels of that cycle again until none of their answers grows, which is the union over
-	/// every route, however often it goes around (`cycleRevisits` counts the meetings).
+	/// every route, however often it goes around.
 	///
 	/// It holds its memos for as long as its owner keeps it: one computation of a seam's holes, or one caller's reads of a
 	/// signature.
@@ -91,10 +91,6 @@ extension SeamSignature.Places {
 		}
 
 		public let places: SeamSignature.Places
-		/// How often a walk met a level it was still walking: a cycle in the graph.
-		public var cycleRevisits: Int {
-			answerFold.revisits + hiddenFold.revisits + nearestFold.revisits + reentryFold.revisits + variantFold.revisits
-		}
 
 		// MARK: Answers
 
@@ -111,25 +107,6 @@ extension SeamSignature.Places {
 			)
 			guard crossedAtSite else { return answers }
 			return answers.map { $0.crossingFunction(at: SeamSignature.Places.Answer.siteFunction) }
-		}
-
-		/// The fields the places of the case at `caseIndex` carry, the first per label in label order (`labels(reaching:)`),
-		/// as the scope struct of the case's first place declares them.
-		public func fields(of caseIndex: Int) -> [SeamSignature.Hole.Field] {
-			labels(reaching: caseIndex).compactMap { label in
-				answers(ofLabel: label, at: caseIndex).lazy.compactMap { answer -> SeamSignature.Hole.Field? in
-					guard case let .field(level, declaration) = answer else { return nil }
-					return self.places.declaration(level: level, declaration: declaration).field
-				}.first
-			}
-		}
-
-		/// The declarations the places of the case at `caseIndex` carry no field of, every distinct one per label, in label
-		/// order.
-		public func uncarriedDeclarations(of caseIndex: Int) -> [SeamSignature.Hole.UncarriedDeclaration] {
-			labels(reaching: caseIndex).flatMap { label in
-				answers(ofLabel: label, at: caseIndex).compactMap { uncarriedDeclaration(of: $0, at: caseIndex) }
-			}
 		}
 
 		/// The uncarried declaration `answer` is for a place of the case at `caseIndex`, or `nil` for a field or the caller's own.
@@ -324,11 +301,6 @@ extension SeamSignature.Places {
 			)
 		}
 
-		/// The declarations hidden by fields of the case at `caseIndex`, in the order of its fields' labels.
-		public func declarationsHiddenByFields(of caseIndex: Int) -> [SeamSignature.Hole.DeclarationHiddenByField] {
-			fields(of: caseIndex).flatMap { declarationsHiddenByFields(ofLabel: $0.property.label, at: caseIndex) }
-		}
-
 		/// The nearest declaration of the label of the declaration at `index` of `level` before it, on the routes from
 		/// `level` in `state`: an earlier declaration of the label at the level, or the nearest one above.
 		private func reached(before index: Int, at level: Int, state: RouteState) -> [SeamSignature.Places.Reached] {
@@ -430,45 +402,6 @@ extension SeamSignature.Places {
 			}
 			entries.append(SeamSignature.Places.StackEntry(property: property, concreteType: concreteType))
 			return entries
-		}
-
-		/// The route a diagnostic about `answer`, the answer the places of the case at `caseIndex` read of `label`, names its
-		/// place by: of the routes of the case's family on which the places read that answer, the least by the source
-		/// locations of the properties the code declares along it, root first (a route whose locations are a prefix of
-		/// another's first, a location-less declaration after every located one), so neither a name nor the order in which
-		/// the places were reached decides it. Found from the roots down, one location at a time, over the levels that lead to
-		/// the answer, so no route is listed; a level a route has already passed is not entered again. `nil` when no route
-		/// reads `answer`.
-		public func representativeRoute(of caseIndex: Int, ofLabel label: String, answer: SeamSignature.Places.Answer) -> Route? {
-			let placeCase = places.cases[caseIndex]
-			guard let start = startState(of: placeCase) else { return nil }
-			// A step of a walk up from the owner: before the nearest declaration of the label, with the innermost function
-			// crossed so far, or past it, where only the family matters.
-			struct Node: Hashable {
-				let level: Int
-				let state: RouteState
-				let isPastDeclaration: Bool
-				let function: Int?
-			}
-			let startNode = Node(level: placeCase.ownerLevel, state: start, isPastDeclaration: false, function: placeCase.siteOpensSendableFunction ? SeamSignature.Places.Answer.siteFunction : nil)
-			return leastRoute(
-				from: startNode,
-				level: \.level,
-				next: { [unowned self] node in
-					// A node that decides the answer leads to the same level past the declaration, when the answer is `answer`.
-					if !node.isPastDeclaration, let decided = decidedAnswer(at: node.level, label: label, state: node.state, function: node.function) {
-						return decided == answer ? [(Node(level: node.level, state: node.state, isPastDeclaration: true, function: nil), false)] : []
-					}
-					let opens = places.levels[node.level].opensSendableFunction.isPresent
-					return transitions(from: node.level, state: node.state).map { parent, state in
-						let function = node.isPastDeclaration ? nil : node.function ?? (opens ? node.level : nil)
-						return (Node(level: parent, state: state, isPastDeclaration: node.isPastDeclaration, function: function), true)
-					}
-				},
-				isEnd: { [unowned self] node in
-					node.isPastDeclaration && places.levels[node.level].parents.isEmpty && isValid(node.level, node.state)
-				},
-			)
 		}
 
 		/// One joint value the places of a case read of a label over some of its routes: the answer, the scope a cycle
@@ -1835,8 +1768,6 @@ extension Optional {
 /// route, as a value computed from a finite graph of routes must be. It holds its memo as long as its owner does.
 private struct Fold<Key: Hashable, Element: Hashable> {
 	private var memo = [Key: [Element]]()
-	/// How often a walk met a key it was still walking. Each fold counts its own, since one fold's walk can ask another.
-	private(set) var revisits = 0
 
 	mutating func value(
 		of start: Key,
@@ -1857,7 +1788,6 @@ private struct Fold<Key: Hashable, Element: Hashable> {
 				var isPartial = false
 				memo[key] = Self.union(of: keyChildren, in: memo) { child in
 					if onStack.contains(child) {
-						revisits += 1
 						isPartial = true
 					} else if provisionalSet.contains(child) {
 						isPartial = true

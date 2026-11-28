@@ -529,7 +529,26 @@ extension DependencyTreeGenerator {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
+		// The labels the facts of the mock root's world find no one parameter can pass, beside those its tree reports,
+		// where a test compares the two (`UnpassableCycleLabelObservation.factsObserver`).
+		if let observer = UnpassableCycleLabelObservation.factsObserver {
+			TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true)
+				.compareCycleFunctionParameters(of: "mock of \(instantiable.concreteInstantiable.asSource)", with: generator, observer: observer.function)
+		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		// Each place of the tree against the body the plan of a tree by declaration builds for it, built only where a test
+		// compares the two.
+		try Self.compareMockBodies(
+			ofMockOf: instantiable,
+			mockRootScope: mockRootScope,
+			todaysTree: generator,
+			boundProperties: allReceived,
+			receivesPassedNil: receivesPassedNil,
+			lazilyInstantiatedInstanceProperties: instancesReadThroughWrapperParameters,
+			frozenScopeMap: frozenScopeMap,
+			declaredTypeNames: declaredTypeNames,
+			cache: &cache,
+		)
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must
 		// forward one value, as that initializer's places must.
@@ -1192,11 +1211,12 @@ extension DependencyTreeGenerator {
 		return receivesPassedNil
 	}
 
-	/// The properties each required receive of the type of `scope` reads from above it, by label, as
+	/// The properties each required receive of `instantiable`, built as `publicMockCall` where it is one, reads from above
+	/// it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: ConstructionScope) -> [(label: String, propertiesRead: Set<Property>)] {
-		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
+	static func propertiesReadByRequiredReceivesFromAbove(of instantiable: Instantiable, publicMockCall: PublicMockCall?) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: instantiable, publicMockCall: publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
 	}

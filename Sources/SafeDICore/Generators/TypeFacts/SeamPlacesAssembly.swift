@@ -516,7 +516,7 @@ extension SeamPlacesLevelAssembly {
 					pathTypes: level.pathTypes,
 					closesOn: level.closesOn,
 					parents: zip(level.parents, level.declaredSegmentByParent).map { parent, segment in
-						"\(spelledKey(levels[parent].key)) declaring \(segment.map { "\($0.property.label) by \($0.declaringType?.asSource ?? "none") at \($0.declarationLocation.map { "\($0.order) \($0.placement)" } ?? "none")" }.joined(separator: ", "))"
+						"\(spelledKey(levels[parent].key)) declaring \(segment.map { "\($0.property.label) by \($0.declaringType?.asSource ?? "none") at \(Dependency.DeclarationLocation.reportSpelling(of: $0.declarationLocation))" }.joined(separator: ", "))"
 					}.sorted(),
 				)
 			}
