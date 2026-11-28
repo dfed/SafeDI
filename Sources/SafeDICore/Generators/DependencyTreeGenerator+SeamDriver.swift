@@ -302,16 +302,6 @@ extension DependencyTreeGenerator {
 				let ownSignature = ownSeamRoot?.signature
 				let callersFailed = callersComputation.failedSeams.contains(seamType)
 				let callersSignature: SeamSignature? = callersFailed ? nil : (callersComputation.seamRoots[seamType] ?? nil)?.signature
-				// Test only, deleted before merge: the tests check that comparing the call shapes with a hole per case finds what
-				// comparing them with a hole per site does.
-				if let observer = SeamPlaceLevels.observer {
-					var comparison = SeamPlaceLevels(seamType: seamType, places: [])
-					comparison.callShapeComparison = .init(
-						differsPerSite: callersFailed || ownSignature?.callShapeHeldPerSite != callersSignature?.callShapeHeldPerSite,
-						differsPerCase: callersFailed || ownSignature?.callShape != callersSignature?.callShape,
-					)
-					observer(comparison)
-				}
 				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { continue }
 				let labelsCallersFailedOn = callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil
 				if let declaration = Self.unseenDeclarationToName(

@@ -21,7 +21,7 @@
 import SafeDICore
 
 extension SeamPlaceLevels {
-	/// Test only, deleted before merge: each route a seam's enums nested by type computed whose steps differ from its
+	/// Deleted when places come from facts: each route a seam's enums nested by type computed whose steps differ from its
 	/// edges' steps (`SeamRouteStepObservation`), each bound at the step's own path length. Holds while the seam's tree reads a
 	/// route per place, and lets that tree read the steps by edge instead.
 	var routeStepMismatches: [String] {

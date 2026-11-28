@@ -21,7 +21,7 @@
 import SafeDICore
 
 extension SeamPlaceLevels {
-	/// Test only, deleted before merge: where the place graph's joint label variants (`Places.Query.labelVariants`) and a
+	/// Deleted when places come from facts: where the place graph's joint label variants (`Places.Query.labelVariants`) and a
 	/// stacked declaration's depths below a case's owner (`Places.Query.depthsBelowOwner`) differ from what each place's own
 	/// route reads, evaluated route by route. The routes are the per-site walk's, one per place; a seam with more places
 	/// than `SeamPlaceVariantChecks.siteLimit` is left to the other checks, since this one evaluates every label on every

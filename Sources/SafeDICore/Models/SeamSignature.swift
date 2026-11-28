@@ -1487,7 +1487,6 @@ public struct SeamSignature: Sendable {
 		self.typesDeclaredEscaping = typesDeclaredEscaping
 		callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 		guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
-		observeCallShapeFold()
 	}
 
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
@@ -1596,7 +1595,6 @@ public struct SeamSignature: Sendable {
 		didSet {
 			callShape = Self.callShape(parameters: parameters, holes: holes, builders: builders, scopeEnums: scopeEnums, tiers: tiers, places: places, caseIndexByHole: caseIndexByHole)
 			guardTypeName = Self.guardTypeName(of: seamType, callShape: callShape)
-			observeCallShapeFold()
 		}
 	}
 
@@ -2064,33 +2062,6 @@ public struct SeamSignature: Sendable {
 			}
 			return fieldsOfLabel
 		}
-	}
-
-	/// Test only, deleted before merge: hands the tests this signature's call shape holes beside its holes per site
-	/// (`SeamPlaceLevels.CallShapeFold`), so they check that a hole per case keeps what the holes per site of its case hold.
-	private func observeCallShapeFold() {
-		if let observer = SeamPlaceLevels.observer {
-			var observation = SeamPlaceLevels(seamType: seamType, places: [])
-			observation.callShapeFold = .init(
-				caseHoles: callShape.holes,
-				siteHoles: holes.map(CallShape.Hole.init),
-				caseIndexBySite: caseIndexByHole,
-				caseHasAccess: places.cases.map { $0.narrowestAccess != nil },
-			)
-			observer(observation)
-		}
-	}
-
-	/// Test only, deleted before merge: the call shape with a hole per site, as it was before holes were compared per case,
-	/// which the tests compare the per-case comparison with (`SeamPlaceLevels.CallShapeComparison`).
-	public var callShapeHeldPerSite: CallShape {
-		CallShape(
-			parameters: parameters.map(CallShape.Parameter.init),
-			holes: holes.map(CallShape.Hole.init),
-			builders: builders.map(CallShape.Builder.init),
-			scopeEnums: Self.scopeEnumShapes(of: scopeEnums, holes: holes),
-			tiers: tiers,
-		)
 	}
 
 	/// What a call depends on of `scopeEnums`, whose own cases build `holes`: each enum by its key's spelling, in that

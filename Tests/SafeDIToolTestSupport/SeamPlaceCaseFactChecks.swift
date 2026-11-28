@@ -21,7 +21,7 @@
 import SafeDICore
 
 extension SeamPlaceLevels {
-	/// Test only, deleted before merge: each place whose own facts differ from what its case answers for every place of the
+	/// Deleted when places come from facts: each place whose own facts differ from what its case answers for every place of the
 	/// case, where a reader takes the case's answer instead of each place's (`SeamPlaceCaseFactChecks`).
 	var placeCaseFactMismatches: [String] {
 		placesObservation.map(SeamPlaceCaseFactChecks.mismatches(of:)) ?? []

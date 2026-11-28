@@ -497,8 +497,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		}
 		continuation.finish()
 		var placeLevels = [SeamPlaceLevels]()
-		// A judgement of fills rides on the same observer with no places (test only, deleted before merge).
-		for await computedPlaceLevels in stream where !computedPlaceLevels.carriesComparisonOnly && !placeLevels.contains(computedPlaceLevels) {
+		for await computedPlaceLevels in stream where !placeLevels.contains(computedPlaceLevels) {
 			placeLevels.append(computedPlaceLevels)
 		}
 		return (placeLevels, output)

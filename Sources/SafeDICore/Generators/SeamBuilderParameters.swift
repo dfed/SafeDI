@@ -2572,31 +2572,18 @@ extension DependencyTreeGenerator {
 		callerModule: ModuleIdentity,
 		compilesGeneratedMocks: Bool = true,
 	) throws {
-		// EXPERIMENT: the graph judge reports.
-		let findings = fillFindings(inTreesRootedAt: generators, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, byCase: true)
-		// Test only, deleted before merge: the same findings judged once per case and answer, for the tests' oracle, which
-		// rides on the levels' observer (`FillCaseJudgementComparison`).
-		if let observer = SeamPlaceLevels.observer {
-			let byCase = fillFindings(inTreesRootedAt: generators, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, byCase: true)
-			var observation = SeamPlaceLevels(seamType: .simple(name: "", generics: []), places: [])
-			// In the order the error prints them (`DependencyTreeGeneratorError.fillFindings`), which no judge's order decides.
-			func printed(_ findings: [DependencyTreeGeneratorError.FillFinding]) -> [String] {
-				findings.sorted { $0.precedesInSourceOrder($1) }.flatMap(\.sourceDiagnostics).map(\.formatted)
-			}
-			observation.fillJudgement = .init(perPlace: printed(findings), byCase: printed(byCase))
-			observer(observation)
-		}
+		let findings = fillFindings(inTreesRootedAt: generators, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks)
 		if !findings.isEmpty {
 			throw DependencyTreeGeneratorError.fillFindings(findings)
 		}
 	}
 
-	/// EXPERIMENT (F2 step 2): `byCase` judges one representative place per case and per distinct answer.
+	/// The findings of the fills in the trees rooted at `generators`, each call's judged one representative place per case
+	/// and per distinct answer (`caseJudgement(of:call:callerModule:compilesGeneratedMocks:seamTreeReceives:)`).
 	static func fillFindings(
 		inTreesRootedAt generators: [ScopeGenerator],
 		callerModule: ModuleIdentity,
 		compilesGeneratedMocks: Bool,
-		byCase: Bool,
 	) -> [DependencyTreeGeneratorError.FillFinding] {
 		// The findings of each key, in the order the keys are first met, those that differ only in the places they name merged.
 		var keys = [String]()
@@ -2637,12 +2624,9 @@ extension DependencyTreeGenerator {
 			// children of its parent, which are the fills of that call, and what the calls inside the fills of public mock calls
 			// enclosing it hide from the fills of public mock calls nested in those fills (`inheritedCalledCopyDeclarations`).
 			// A fill that stands for another place's (`ScopeGenerator.FillStoodFor`) is visited once more for that place, with
-			// the place's own hole and what the calls hide from its own key, where the place's own fill would be.
-			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, call: ScopeGenerator?.none, isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]](), placeStoodFor: SeamSignature.Hole?.none)]
-			while let (generator, hidden, call, isFillOfPublicMockCall, inheritedCalledCopyDeclarations, placeStoodFor) = generatorsToVisit.popLast() {
-				if !byCase, let hole = placeStoodFor ?? generator.fillHole, let child = generator.children.first, let call {
-					findingsOfFill(of: hole, fill: generator, reads: FillTreeReads(walking: child), call: call, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
-				}
+			// what the calls hide from the place's own key, where the place's own fill would be.
+			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]]())]
+			while let (generator, hidden, isFillOfPublicMockCall, inheritedCalledCopyDeclarations) = generatorsToVisit.popLast() {
 				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
 				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
 				// own scope (`PublicMockLevelFunctions.Reentry`), the nearest declaration inline reads, so the declarations on the path
@@ -2656,7 +2640,7 @@ extension DependencyTreeGenerator {
 					[:]
 				}
 				if generator.seamCall != nil {
-					findingsOfCasesNestedByType(filledBy: generator.children, standingFor: generator.fillsStoodFor, calledBuilders: byCase ? generator.calledBuilders : nil, callerModule: callerModule).forEach(record)
+					findingsOfCasesNestedByType(filledBy: generator.children, standingFor: generator.fillsStoodFor, calledBuilders: generator.calledBuilders, callerModule: callerModule).forEach(record)
 				}
 				// A public mock call nested in a fill of an enclosing public mock call hands its own fills what they read of the
 				// caller's scope from that enclosing fill's, which the calls inside the enclosing call's fills that re-enter it hand
@@ -2718,14 +2702,12 @@ extension DependencyTreeGenerator {
 					}
 					return childHidden
 				}
-				if byCase {
-					caseJudgement(of: childrenToVisit.filter(\.child.treeHoldsCallOrFill).compactMap { child, stoodFor in
-						guard let hole = stoodFor?.hole ?? child.fillHole, child.children.first != nil else { return nil }
-						return CaseJudgementEntry(hole: hole, fill: child, hidden: hiddenOf(child, stoodFor) ?? FillReentryHidings())
-					}, call: generator, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
-				}
+				caseJudgement(of: childrenToVisit.filter(\.child.treeHoldsCallOrFill).compactMap { child, stoodFor in
+					guard let hole = stoodFor?.hole ?? child.fillHole, child.children.first != nil else { return nil }
+					return CaseJudgementEntry(hole: hole, fill: child, hidden: hiddenOf(child, stoodFor) ?? FillReentryHidings())
+				}, call: generator, callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives).forEach(record)
 				generatorsToVisit.append(contentsOf: childrenToVisit.reversed().filter(\.child.treeHoldsCallOrFill).map { child, stoodFor in
-					(child, hiddenOf(child, stoodFor), generator, generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations, stoodFor?.hole)
+					(child, hiddenOf(child, stoodFor), generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations)
 				})
 			}
 		}

@@ -258,10 +258,7 @@ func collectingPlaceFacts<Result>(during operation: () async throws -> Result) a
 	let (stream, continuation) = AsyncStream.makeStream(of: SeamPlaceLevels.self)
 	let enclosingObserver = SeamPlaceLevels.observer
 	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
-		// Test only, deleted before merge: a fill judgement's, a case's fields' and the call shapes' comparisons ride on a value with no places.
-		if !placeLevels.carriesComparisonOnly {
-			continuation.yield(placeLevels)
-		}
+		continuation.yield(placeLevels)
 		enclosingObserver?(placeLevels)
 	}) {
 		try await operation()
