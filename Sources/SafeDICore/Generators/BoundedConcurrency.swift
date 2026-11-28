@@ -196,7 +196,7 @@ enum BoundedConcurrency {
 /// `observer`, which the tests set, never the tool.
 public enum BoundedTaskStart {
 	/// Called each time a job starts, with the jobs then running, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (_ jobsRunning: Int) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ jobsRunning: Int) -> Void>?
 
 	/// Tells `observer`, when set, that a job started with `jobsRunning` running.
 	static func record(jobsRunning: Int) {

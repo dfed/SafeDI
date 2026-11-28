@@ -65,7 +65,7 @@ public enum ConstructionInternerOrder: Equatable, Sendable {
 
 	/// The value of `body`, run with what `generate` interns ordered so; a freeze order a test already set is kept.
 	public func applying<Value>(_ body: () async throws -> Value) async rethrows -> Value {
-		let order: @Sendable (Int) -> [Int] = { count in positions(count: count) }
+		let order = TaskLocalFunction<@Sendable (Int) -> [Int]> { count in positions(count: count) }
 		return try await ConstructionInternerObservation.$declarationOrder.withValue(order) {
 			try await ScopeTableObservation.$entryOrder.withValue(ScopeTableObservation.entryOrder ?? order) {
 				try await body()
@@ -88,9 +88,9 @@ public enum ConstructionInternerOrder: Equatable, Sendable {
 public enum ConstructionInternerClosure {
 	/// An observer that records an issue for each miss that is `notExcluded`, and hands each miss to `enclosingObserver`.
 	public static func recordingMissesNotExcluded(
-		handingOn enclosingObserver: (@Sendable (ConstructionInternerMiss, String) -> Void)?,
-	) -> @Sendable (ConstructionInternerMiss, String) -> Void {
-		{ bucket, value in
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (ConstructionInternerMiss, String) -> Void>?,
+	) -> TaskLocalFunction<@Sendable (ConstructionInternerMiss, String) -> Void> {
+		TaskLocalFunction { bucket, value in
 			switch bucket {
 			case .notExcluded:
 				Issue.record("A freeze interned `\(value)`, which the generator’s declarations did not give its interner, for a place a memo entry can key: a construction site the interner does not cover.")

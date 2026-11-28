@@ -42,14 +42,14 @@ public enum NodeRecordsObservation {
 	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, ConstructionScope) -> Void>?
 
 	/// Handed each root's report, where set. Only a test sets it.
-	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 
 	/// Handed the body of the root a tree's places build, beside the node records made for the same root, where a root's
 	/// plan is observed: set by the generator around one root's plan.
-	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
+	@TaskLocal static var rootBodyObserver: TaskLocalFunction<@Sendable (_ rootBody: [GeneratedCode]) -> Void>?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
