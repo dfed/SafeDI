@@ -637,6 +637,8 @@ struct NodeRecords: Sendable {
 		mockLoopSendableStructDeclarations = mockLoopLevels.sendableStructByLevel.sorted(by: { $0.key < $1.key }).flatMap(\.value.declaration)
 		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
 		mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in: world, slots: $0) }
+		self.kinds = kinds
+		bodyEntries = world.isMockWorld ? entries : []
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -669,10 +671,17 @@ struct NodeRecords: Sendable {
 	}
 
 	/// Each variant's declaration.
-	private let declarationByVariant: [DeclarationID]
+	let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [PlaceRecord?]
+	let records: [PlaceRecord?]
+
+	/// Each declaration's kind.
+	let kinds: [NodeRecordKind]
+
+	/// What each variant's body holds, in the order it builds it, by variant, in a mock root's world; empty in a production
+	/// root's.
+	let bodyEntries: [[BodyEntry]]
 
 	/// A place `init(world:seamTree:seamHoles:declaredTypeNames:)`'s walk is making: its variant, its node's edges in build
 	/// order and the next to walk, what its body holds so far, and what the places walked beneath it hand it.

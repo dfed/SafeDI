@@ -220,6 +220,40 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenConfiguredTypeIsBuiltBeneathItsTypeBuiltAgain() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.alphaAgainFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.alphaAgainFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		// The `Gamma` and `Delta` each `Alpha` built again builds are beneath a repeated ancestor, so they record no
+		// configuration of their own: every lap reads the root's `alpha.gamma` configuration, as the walk's does.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(alpha: .init(gamma: .init(delta: .init({ marked(Delta(epsilon: $0), "delta") })))))
+		"""
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.alphaAgainFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.alphaAgainFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [".alpha", ".alpha.alphaBuilder.instantiate()", ".alpha.alphaBuilder.instantiate().alphaBuilder.instantiate()"].enumerated().flatMap { lap, path in
+				[
+					DifferentialValueProbe(name: "lap \(lap)", expression: "Root.mock()\(path).gamma.delta"),
+					DifferentialValueProbe(name: "overridden lap \(lap)", expression: "\(overridden)\(path).gamma.delta"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// The override was read: it marks the value its closure built.
+		#expect(comparison.featureDescription.contains("\"delta\""), "No value is marked delta:\n\(comparison.featureDescription)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenBuilderOffTheCycleBuildsTypeTheCycleBuildsAgain() async throws {
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.homeFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -1514,6 +1548,103 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 		    @Instantiated let otherHomeBuilder: Instantiator<Home>
 		    public var marker = ""
+		}
+		""",
+	]
+
+	/// A root's `Alpha` builds `Alpha` again, beneath which each `Alpha` builds a `Gamma` that builds a `Delta`, which builds
+	/// an `Epsilon`, and a `SettingsFlow` whose `LoggedInFlow`’s settings build a `SettingsFlow` again. `Aardvark` builds
+	/// the `LoggedInFlow` first in name order, so the cycle edge configurations leave out is not the one that closes it here.
+	private static let alphaAgainFixture: [String: String] = [
+		"Marked.swift": markedFile,
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(alpha: Alpha) {
+		        self.alpha = alpha
+		    }
+
+		    @Instantiated let alpha: Alpha
+		}
+		""",
+		"Alpha.swift": """
+		@Instantiable
+		public final class Alpha: Instantiable {
+		    public init(alphaBuilder: Instantiator<Alpha>, gamma: Gamma) {
+		        self.alphaBuilder = alphaBuilder
+		        self.gamma = gamma
+		    }
+
+		    @Instantiated let alphaBuilder: Instantiator<Alpha>
+		    @Instantiated let gamma: Gamma
+		}
+		""",
+		"Gamma.swift": """
+		@Instantiable
+		public final class Gamma: Instantiable {
+		    public init(delta: Delta, flow: Flow) {
+		        self.delta = delta
+		        self.flow = flow
+		    }
+
+		    @Instantiated let delta: Delta
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
+		}
+		""",
+		"Delta.swift": """
+		@Instantiable
+		public final class Delta: Instantiable, Marked {
+		    public init(epsilon: Epsilon) {
+		        self.epsilon = epsilon
+		    }
+
+		    @Instantiated let epsilon: Epsilon
+		    public var marker = ""
+		}
+		""",
+		"Epsilon.swift": """
+		@Instantiable
+		public final class Epsilon: Instantiable {
+		    public init() {}
+		}
+		""",
+		"Flow.swift": """
+		public protocol Flow: AnyObject {}
+
+		@Instantiable
+		public final class Aardvark: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
+		}
+
+		@Instantiable
+		public final class LoggedInFlow: Instantiable, Flow {
+		    public init(settingsBuilder: Instantiator<Settings>) {
+		        self.settingsBuilder = settingsBuilder
+		    }
+
+		    @Instantiated let settingsBuilder: Instantiator<Settings>
+		}
+
+		@Instantiable
+		public final class Settings: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
+		}
+
+		@Instantiable
+		public final class SettingsFlow: Instantiable, Flow {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
 		}
 		""",
 	]

@@ -375,7 +375,7 @@ extension NodeRecords {
 
 	/// The type of the overrides the function of `member`, a member of a loop of builders in a mock root's world, takes:
 	/// its configuration, or its override closure where it reads no configuration, `@Sendable` for a `@Sendable` member, as
-	/// the local its level reads it into is typed (`mockOverrideType(of:usesHandWrittenMock:isConfigured:instantiable:)`).
+	/// the local its level reads it into is typed (`mockOverrideType(of:usesHandWrittenMock:isConfigured:isSendable:instantiable:)`).
 	/// `nil` where its function is handed nothing (`mockLoopMemberTakesNothing(_:in:)`).
 	private static func mockLoopOverridesType(of member: DeclarationID, in world: some NodeRecordSources) -> TypeDescription? {
 		guard !mockLoopMemberTakesNothing(member, in: world), let property = world.property(of: member) else { return nil }
