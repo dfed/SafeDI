@@ -259,7 +259,6 @@ struct NodeRecords: Sendable {
 		kinds.reserveCapacity(declarationCount)
 		for declaration in 0..<Int32(declarationCount) {
 			try kinds.append(Self.kind(of: declaration, in: world))
-			try Self.checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
 			try Self.checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
 			try Self.checkForwardsBuiltTypesProperties(declaration, in: world, declaredTypeNames: declaredTypeNames)
 		}
@@ -782,11 +781,6 @@ struct NodeRecords: Sendable {
 				refusals.insert(.readAnsweredTwoWays)
 			}
 			do {
-				try checkReadsNoSeamRootValue(of: seamTree, declaration, in: world)
-			} catch {
-				refusals.insert(error)
-			}
-			do {
 				try checkMakesNoLoopMemberAgain(inSeamTree: seamTree, declaration, in: world)
 			} catch {
 				refusals.insert(error)
@@ -831,26 +825,6 @@ struct NodeRecords: Sendable {
 	private static func owesFacts(_ declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> Bool {
 		let owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootRecord, .mockRootBinding] : []
 		return !world.owedFacts(of: declaration).subtracting(owedOnlyOutsideTests).isEmpty
-	}
-
-	/// Refuses `declaration`'s world as `lazy` where its type reads what a seam's root is handed in a way node records do
-	/// not write: a receive or a rename of one of the instances of `LazilyInstantiated` properties the root is handed,
-	/// which its tree reads through the wrapper and the records would read as a binding of the label, since a seam's
-	/// root's keys are not yet seeded from its parameters. The seam's own rename that keeps a deferred parameter's label
-	/// is bound from the parameter's autoclosure (`autoclosureCallByLabel`).
-	private static func checkReadsNoSeamRootValue(of seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree?, _ declaration: DeclarationID, in world: some NodeRecordVariantFacts) throws(NodeRecordRefusal) {
-		guard let seamTree else { return }
-		let readsAnInstance = world.scope(of: declaration).instantiable.dependencies.contains { dependency in
-			switch dependency.source {
-			case .received:
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
-			case let .aliased(fulfillingProperty, _, _):
-				seamTree.rootLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty)
-			case .instantiated, .forwarded:
-				false
-			}
-		}
-		guard !readsAnInstance else { throw .lazy }
 	}
 
 	/// Refuses `declaration`'s world as `builderLoopBoxed` where it is a seam's own and `declaration` makes a member of a
