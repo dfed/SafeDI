@@ -83,7 +83,7 @@ extension SeamPlacesDrafts {
 		}
 
 		struct ListKey: Hashable {
-			let builtType: TypeDescription
+			let builtType: TypeDescription?
 			let declarations: [SeamSignature.Places.Declaration]
 			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
 			let pathSegment: [Property]
@@ -100,11 +100,13 @@ extension SeamPlacesDrafts {
 			let key: SeamSignature.Places.LevelKey
 			let declarationList: Int
 			let opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
+			var fillBaseStack = [SeamSignature.Places.StackEntry]()
+			var fillOwnerType: TypeDescription?
 			let pathSegment: [Property]
 			let pathTypes: [SeamSignature.Hole.PathType]
 			let closesOn: SeamSignature.Places.StackEntry?
-			/// Whether the level is a passing-up call's, which `draft` encloses: it has no next property.
-			var isPassingUpCall = false
+			/// Whether the level builds no child next: a passing-up call's, which `draft` encloses, and a fill's entry level.
+			var hasNoNextPosition = false
 			var parents = [Int]()
 			var declaredSegmentByParent = [[SeamSignature.Hole.DeclaredProperty]]()
 		}
@@ -115,12 +117,140 @@ extension SeamPlacesDrafts {
 		// The level each drafted level is built in line as, which its children's levels are enclosed by.
 		var inLineLevelByDraft = [SeamPlacesLevelID: Int]()
 		var levelsByDraft = [SeamPlacesLevelID: [Int]]()
-		for draft in levels + closingLevels where draft.fill == nil && !node(of: draft.id.variant).key.isFill {
+		// Whether each variant is built in a fill's tree: a fill, or a scope a variant in a fill's tree builds in line. The
+		// drafts list a level after the levels that build it in line, but for those a cycle closes on.
+		var isInFill = Set<VariantID>()
+		var isInFillChanged = true
+		while isInFillChanged {
+			isInFillChanged = false
+			for draft in levels + closingLevels where !isInFill.contains(draft.id.variant) && (node(of: draft.id.variant).key.isFill || draft.parents.contains { buildsInLine($0) && isInFill.contains($0.variant) }) {
+				isInFill.insert(draft.id.variant)
+				isInFillChanged = true
+			}
+		}
+		// The holes each fill variant fills, each with the level of the call whose edge passes it, in draft order: one fill
+		// can fill several holes of one call, a seam's own and one it passes up.
+		struct FillEntry {
+			let call: SeamPlacesLevelID
+			let fill: SeamPlacesFillDraft
+			let hole: SeamSignature.Hole
+			let calledCase: SeamSignature.Places.CalledCase?
+		}
+		var fillEntriesByVariant = [VariantID: [FillEntry]]()
+		for draft in levels + closingLevels {
+			guard let fill = draft.fill, let calledBuilders = node(of: draft.id.variant).scope.calledBuilders, Int(fill.holeIndex) < calledBuilders.holes.count else { continue }
+			let calls = world.calls(of: draft.id.variant)
+			let callee = calls[calls.startIndex + Int(draft.id.edge)]
+			guard !(fillEntriesByVariant[callee] ?? []).contains(where: { $0.fill.holeIndex == fill.holeIndex && $0.fill.calledType == fill.calledType }) else { continue }
+			let hole = calledBuilders.holes[Int(fill.holeIndex)]
+			let calledType = world.typeTable[Int(fill.calledType)]
+			fillEntriesByVariant[callee, default: []].append(FillEntry(
+				call: draft.id,
+				fill: fill,
+				hole: hole,
+				calledCase: calledBuilders.caseIndexBySite[hole.site].map { SeamSignature.Places.CalledCase(seamType: calledType, isPublicMock: fill.isPublicMock, caseIndex: $0) },
+			))
+		}
+		// A fill's entry level, beneath the call level whose edge passes it: the declarations on the paths of the places it
+		// stands for that their structs do not carry, each label once, then the fields it binds from the struct, which are
+		// those no such declaration's label hides, and of a deferred parameter only where the place is passed up.
+		func entryDeclarations(of entry: FillEntry) -> [SeamSignature.Places.Declaration] {
+			let hole = entry.hole
+			let calledType = world.typeTable[Int(entry.fill.calledType)]
+			var declarations = [SeamSignature.Places.Declaration]()
+			var labels = Set<String>()
+			for uncarried in hole.uncarriedDeclarations where labels.insert(uncarried.property.label).inserted {
+				declarations.append(SeamSignature.Places.Declaration(
+					field: SeamSignature.Hole.Field(property: uncarried.property, access: .internal, declaringType: uncarried.declaringType, declarationLocation: uncarried.declarationLocation, parameterTakingType: uncarried.parameterTakingType),
+					isBoundBeforeNextProperty: false,
+					builtAfter: uncarried.builtAfter,
+					reason: uncarried.reason,
+					isForwarded: false,
+					cycleParameterOrigin: nil,
+					alias: nil,
+					isBoundFromCallersArgument: false,
+					isCycleParameter: false,
+					isReboundByBuilderFunction: false,
+					isFieldOfSeamParameter: false,
+					fillFieldHiding: nil,
+					buildability: nil,
+				))
+			}
+			let fieldLabels = Set(hole.fields.map(\.property.label))
+			let uncarriedOnSomeRoute = Set(hole.uncarriedDeclarations.map(\.property.label).filter { !fieldLabels.contains($0) })
+			let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && world.constructions[Int(world.declaration(of: entry.call.variant))] != .publicMockCall
+			for field in hole.fields where (!field.isDeferredParameter || readsDeferredFieldsFromStruct) && !uncarriedOnSomeRoute.contains(field.property.label) {
+				declarations.append(SeamSignature.Places.Declaration(
+					field: SeamSignature.Hole.Field(
+						property: field.property,
+						access: .internal,
+						declaringType: field.declaringType,
+						declarationLocation: field.declarationLocation,
+						isReceivedOnlyIfAvailable: field.isReceivedOnlyIfAvailable,
+						parameterTakingType: field.parameterTakingType,
+						seamParameterOrigin: field.isBoundByPublicMockRoot ? nil : field.seamParameterOrigin,
+					),
+					isBoundBeforeNextProperty: true,
+					builtAfter: nil,
+					reason: .other,
+					isForwarded: false,
+					cycleParameterOrigin: nil,
+					alias: nil,
+					isBoundFromCallersArgument: false,
+					isCycleParameter: false,
+					isReboundByBuilderFunction: false,
+					isFieldOfSeamParameter: field.isSeamParameter,
+					fillFieldHiding: field.isSeamParameter ? .init(calledSeam: calledType, receivingSeam: hole.scopeSeamType) : nil,
+					buildability: nil,
+				))
+			}
+			return declarations
+		}
+		func indexOfList(_ declarations: [SeamSignature.Places.Declaration], builtType: TypeDescription?, opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?, pathSegment: [Property]) -> Int {
+			let listKey = ListKey(builtType: builtType, declarations: declarations, opensSendableFunction: opensSendableFunction, pathSegment: pathSegment)
+			if let known = listIndexByKey[listKey] {
+				return known
+			}
+			listIndexByKey[listKey] = lists.count
+			lists.append(declarations)
+			return lists.count - 1
+		}
+		// Each fill's entry level: no type of its own, its next property the hole's, built beneath the filled seam's path.
+		var entryLevelsByFillVariant = [VariantID: [Int]]()
+		for (variant, entry) in fillEntriesByVariant.sorted(by: { $0.key < $1.key }).flatMap({ variant, entries in entries.map { (variant, $0) } }) {
+			guard let callDraft = draftByLevel[entry.call] else { continue }
+			let hole = entry.hole
+			let opened: SeamSignature.Places.SendableFunctionOpened? = hole.isSendable ? .init(property: hole.property, function: .other) : nil
+			let pathSegment = hole.pathBeforePropertyInItsFill
+			let list = indexOfList(entryDeclarations(of: entry), builtType: nil, opensSendableFunction: opened, pathSegment: pathSegment)
+			let key = SeamSignature.Places.LevelKey(builtType: nil, nextProperty: hole.property, isSeamRoot: false, isInFill: true, filledType: world.typeTable[Int(entry.fill.calledType)], filledCase: entry.calledCase)
+			let levelKey = LevelKey(declarationList: list, key: key, nextPosition: -1, nextLoop: -1, closesOn: nil)
+			if let known = levelIndexByKey[levelKey] {
+				entryLevelsByFillVariant[variant, default: []].append(known)
+				continue
+			}
+			levelIndexByKey[levelKey] = assembled.count
+			entryLevelsByFillVariant[variant, default: []].append(assembled.count)
+			assembled.append(AssembledLevel(
+				draft: callDraft,
+				key: key,
+				declarationList: list,
+				opensSendableFunction: opened,
+				fillBaseStack: zip(hole.fillPropertyStack, hole.fillConcreteTypeStack).map { SeamSignature.Places.StackEntry(property: $0, concreteType: $1) },
+				fillOwnerType: hole.ownerType,
+				pathSegment: pathSegment,
+				pathTypes: hole.typesToOwner,
+				closesOn: nil,
+				hasNoNextPosition: true,
+			))
+		}
+		for draft in levels + closingLevels {
 			let variantNode = node(of: draft.id.variant)
 			let instantiable = variantNode.scope.instantiable
 			let builtType = instantiable.concreteInstantiable
-			let opened = opensSendableFunction(into: draft)
-			let pathSegment = draft.id.variant == rootVariant ? [] : variantNode.property.map { [$0] } ?? []
+			let fillEntry = fillEntriesByVariant[draft.id.variant]?.first
+			let opened = fillEntry == nil ? opensSendableFunction(into: draft) : nil
+			let pathSegment = draft.id.variant == rootVariant ? [] : fillEntry.map { [$0.hole.property] } ?? variantNode.property.map { [$0] } ?? []
 			let listDeclarations = declarations(of: draft.id.variant)
 			let listKey = ListKey(builtType: builtType, declarations: listDeclarations, opensSendableFunction: opened, pathSegment: pathSegment)
 			let listIndex: Int
@@ -132,7 +262,7 @@ extension SeamPlacesDrafts {
 				lists.append(listDeclarations)
 			}
 			let next = world.graph.nodes[Int(target(of: draft.id))]
-			let key = SeamSignature.Places.LevelKey(builtType: builtType, nextProperty: next.key.isFill ? nil : next.property, isSeamRoot: draft.id.variant == rootVariant, isInFill: false, filledType: nil)
+			let key = SeamSignature.Places.LevelKey(builtType: builtType, nextProperty: next.key.isFill ? nil : next.property, isSeamRoot: draft.id.variant == rootVariant, isInFill: isInFill.contains(draft.id.variant), filledType: nil)
 			var entries = [SeamSignature.Places.StackEntry?]()
 			if buildsInLine(draft.id) || !closesCycle(draft.id) {
 				entries.append(nil)
@@ -167,7 +297,7 @@ extension SeamPlacesDrafts {
 		// A call that passes up places of the seam it calls owns their cases at a level of the called seam with no next
 		// property and no declarations, enclosed by the level whose next edge is the call.
 		var passingUpLevelByCall = [SeamPlacesLevelID: Int]()
-		for draft in levels where draft.fill == nil && !node(of: draft.id.variant).key.isFill && buildsInLine(draft.id) && !world.passUps(of: Int(target(of: draft.id))).isEmpty {
+		for draft in levels where !node(of: draft.id.variant).key.isFill && buildsInLine(draft.id) && !world.passUps(of: Int(target(of: draft.id))).isEmpty {
 			let call = world.graph.nodes[Int(target(of: draft.id))]
 			let calledType = world.typeTable[Int(world.builtTypes[Int(target(of: draft.id))])]
 			let opened: SeamSignature.Places.SendableFunctionOpened? = switch draft.opens {
@@ -190,7 +320,7 @@ extension SeamPlacesDrafts {
 				listIndexByKey[listKey] = listIndex
 				lists.append([])
 			}
-			let key = SeamSignature.Places.LevelKey(builtType: calledType, nextProperty: nil, isSeamRoot: false, isInFill: false, filledType: nil)
+			let key = SeamSignature.Places.LevelKey(builtType: calledType, nextProperty: nil, isSeamRoot: false, isInFill: isInFill.contains(draft.id.variant), filledType: nil)
 			let levelKey = LevelKey(declarationList: listIndex, key: key, nextPosition: -1, nextLoop: -1, closesOn: nil)
 			let index: Int
 			if let known = levelIndexByKey[levelKey] {
@@ -206,18 +336,36 @@ extension SeamPlacesDrafts {
 					pathSegment: pathSegment,
 					pathTypes: [SeamSignature.Hole.PathType(type: calledType, moduleName: call.scope.instantiable.moduleName)],
 					closesOn: nil,
-					isPassingUpCall: true,
+					hasNoNextPosition: true,
 				))
 			}
 			passingUpLevelByCall[draft.id] = index
 		}
+		// A fill's entry level is enclosed by its call's level, and declares on the way what the filled seam's path does; the
+		// fulfiller's levels are enclosed by the entry level, which declares the hole's property on the way.
+		for (variant, entries) in fillEntriesByVariant.sorted(by: { $0.key < $1.key }) {
+			for (entry, entryLevel) in zip(entries, entryLevelsByFillVariant[variant] ?? []) {
+				guard let callLevel = inLineLevelByDraft[entry.call], !assembled[entryLevel].parents.contains(callLevel) else { continue }
+				assembled[entryLevel].parents.append(callLevel)
+				assembled[entryLevel].declaredSegmentByParent.append(entry.hole.declaredPathBeforePropertyInItsFill)
+			}
+		}
 		// Each level's parents, in the order the drafts reach them, once each.
 		for draft in levels + closingLevels {
-			for index in levelsByDraft[draft.id] ?? [] {
-				for parent in draft.parents where buildsInLine(parent) {
-					guard let parentIndex = inLineLevelByDraft[parent], !assembled[index].parents.contains(parentIndex) else { continue }
-					assembled[index].parents.append(parentIndex)
-					assembled[index].declaredSegmentByParent.append(declaredSegment(of: draft, from: parent))
+			if let entries = fillEntriesByVariant[draft.id.variant], let entryLevels = entryLevelsByFillVariant[draft.id.variant] {
+				for index in levelsByDraft[draft.id] ?? [] {
+					for (entry, entryLevel) in zip(entries, entryLevels) where !assembled[index].parents.contains(entryLevel) {
+						assembled[index].parents.append(entryLevel)
+						assembled[index].declaredSegmentByParent.append([SeamSignature.Hole.DeclaredProperty(property: entry.hole.property, declaringType: entry.hole.ownerType, declarationLocation: entry.hole.declarationLocation)])
+					}
+				}
+			} else {
+				for index in levelsByDraft[draft.id] ?? [] {
+					for parent in draft.parents where buildsInLine(parent) {
+						guard let parentIndex = inLineLevelByDraft[parent], !assembled[index].parents.contains(parentIndex) else { continue }
+						assembled[index].parents.append(parentIndex)
+						assembled[index].declaredSegmentByParent.append(declaredSegment(of: draft, from: parent))
+					}
 				}
 			}
 		}
@@ -235,11 +383,11 @@ extension SeamPlacesDrafts {
 				SeamSignature.Places.Level(
 					key: level.key,
 					declarationList: level.declarationList,
-					nextPosition: level.isPassingUpCall || level.draft.nextPosition < 0 ? nil : Int(level.draft.nextPosition),
-					nextLoop: level.isPassingUpCall || level.draft.nextLoop < 0 ? nil : Int(level.draft.nextLoop),
+					nextPosition: level.hasNoNextPosition || level.draft.nextPosition < 0 ? nil : Int(level.draft.nextPosition),
+					nextLoop: level.hasNoNextPosition || level.draft.nextLoop < 0 ? nil : Int(level.draft.nextLoop),
 					opensSendableFunction: level.opensSendableFunction,
-					fillBaseStack: [],
-					fillOwnerType: nil,
+					fillBaseStack: level.fillBaseStack,
+					fillOwnerType: level.fillOwnerType,
 					pathSegment: level.pathSegment,
 					pathTypes: level.pathTypes,
 					parents: level.parents,
@@ -254,7 +402,7 @@ extension SeamPlacesDrafts {
 }
 
 extension SeamPlacesLevelAssembly {
-	/// How the assembled levels differ from the levels outside fills of `places`, a seam's stored graph: each level whole,
+	/// How the assembled levels differ from the levels of `places`, a seam's stored graph: each level whole,
 	/// its declarations, its parents' keys and what each parent declares on the way included, but its declarations' field
 	/// access and places in their trees, which the assembly does not give yet. The first line is a count report. Test only.
 	func differences(from places: SeamSignature.Places) -> [String] {
@@ -294,6 +442,9 @@ extension SeamPlacesLevelAssembly {
 		}
 		struct Spelling: Hashable {
 			let key: String
+			let fullKey: SeamSignature.Places.LevelKey
+			let fillBaseStack: [SeamSignature.Places.StackEntry]
+			let fillOwnerType: TypeDescription?
 			let declarations: [SeamSignature.Places.Declaration]
 			let nextPosition: Int?
 			let nextLoop: Int?
@@ -307,6 +458,9 @@ extension SeamPlacesLevelAssembly {
 			levels.map { level in
 				Spelling(
 					key: spelledKey(level.key),
+					fullKey: level.key,
+					fillBaseStack: level.fillBaseStack,
+					fillOwnerType: level.fillOwnerType,
 					declarations: lists[level.declarationList].map(normalized),
 					nextPosition: level.nextPosition,
 					nextLoop: level.nextLoop,
@@ -320,8 +474,7 @@ extension SeamPlacesLevelAssembly {
 				)
 			}
 		}
-		let storedLevels = places.levels.filter { !$0.key.isInFill }
-		let stored = spellings(of: places.levels, lists: places.declarationLists).enumerated().filter { !places.levels[$0.offset].key.isInFill }.map(\.element)
+		let stored = spellings(of: places.levels, lists: places.declarationLists)
 		let assembled = spellings(of: levels, lists: declarationLists)
 		let assembledSet = Set(assembled)
 		var assembledByKey = [String: [Spelling]]()
@@ -330,17 +483,24 @@ extension SeamPlacesLevelAssembly {
 		}
 		var differences = Set<String>()
 		var alike = 0
-		for spelling in stored {
+		var alikeInFills = 0
+		for (spelling, level) in zip(stored, places.levels) {
 			guard !assembledSet.contains(spelling) else {
-				alike += 1
+				if level.key.isInFill {
+					alikeInFills += 1
+				} else {
+					alike += 1
+				}
 				continue
 			}
 			guard let candidates = assembledByKey[spelling.key] else {
-				differences.insert("assembled levels: \(spelling.key): stored, none assembled")
+				differences.insert("assembled levels: \(spelling.key): stored, none assembled: \(spelling.declarations.count) declarations, position \(spelling.nextPosition.map(String.init) ?? "none"), segment \(spelling.pathSegment.map(\.label).joined(separator: ".")), types \(spelling.pathTypes.map(\.type.asSource).joined(separator: ".")), parents \(spelling.parents.joined(separator: "; "))")
 				continue
 			}
 			// Name the parts no assembled level of the key shares.
 			let parts: [(String, (Spelling) -> String)] = [
+				("key", { "in fill \($0.fullKey.isInFill) filled \($0.fullKey.filledType?.asSource ?? "none") case \($0.fullKey.filledCase.map { "\($0.caseIndex)" } ?? "none")" }),
+				("fill stack", { "\($0.fillBaseStack.map { "\($0.property.label): \($0.concreteType.asSource)" }) owner \($0.fillOwnerType?.asSource ?? "none")" }),
 				("declarations", { "\($0.declarations)" }),
 				("position", { "\($0.nextPosition.map(String.init) ?? "none")" }),
 				("loop", { "\($0.nextLoop.map(String.init) ?? "none")" }),
@@ -354,6 +514,7 @@ extension SeamPlacesLevelAssembly {
 				differences.insert("assembled levels: \(spelling.key): \(name): stored \(part(spelling)), assembled \(Set(candidates.map(part)).sorted().joined(separator: " | "))")
 			}
 		}
-		return ["report: assembled levels: \(storedLevels.count) stored outside fills, \(levels.count) assembled, \(alike) alike"] + differences.sorted()
+		let inFillCount = places.levels.count(where: \.key.isInFill)
+		return ["report: assembled levels: \(places.levels.count - inFillCount) stored outside fills, \(levels.count) assembled, \(alike) alike, \(inFillCount) stored in fills, \(alikeInFills) alike"] + differences.sorted()
 	}
 }
