@@ -126,7 +126,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 		// nearest declaration of its label.
 		var rootContext = [String: [Binding]]()
 		for parameter in rootParameters where labels.contains(parameter.label) {
-			rootContext[parameter.label] = [Binding(property: parameter, state: .available)]
+			rootContext[parameter.label, default: []].append(Binding(property: parameter, state: .available))
 		}
 		contextByVariant[0] = rootContext
 		var variantsToVisit: [VariantID] = [0]
