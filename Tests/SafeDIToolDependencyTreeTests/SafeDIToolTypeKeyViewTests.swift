@@ -134,6 +134,20 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_asksWhetherEachReadPassesNilAConstantNumberOfTimes_whenTheBodyOfReadsGrows() async throws {
+		// A root declaring a token and then readers that each receive it only if available, at two sizes: whether a read
+		// is passed `nil` takes two binary searches of the positions of its label, whatever the size of its body, asked
+		// where the path key reads it, where its class's read is checked and where it is spelled, so the work grows with the
+		// readers (six each), not with the square of the body.
+		var totals = [Int]()
+		for readerCount in [8, 16] {
+			try await totals.append(workCounts(of: Self.readersOfAToken(readerCount: readerCount), by: .askingWhetherReadsPassNil).reduce(0, +))
+		}
+		#expect(totals == [48, 96])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutOneViewPerScreen_whenEachScreenReceivesTheRouterItsParentDeclares() async throws {
 		// Layers of three screens, each declaring a router of its own, receiving its parent's and opening the three screens of
 		// the next layer through an `Instantiator`. A screen's places read their parent's router, a statement of another place
@@ -645,6 +659,14 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 			}
 		}
 		return files
+	}
+
+	/// A root that declares a token and then `readerCount` readers, each receiving the token only if available.
+	private static func readersOfAToken(readerCount: Int) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let token: Token"] + (0..<readerCount).map { "@Instantiated let reader\($0): Reader\($0)" }),
+			seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+		] + (0..<readerCount).map { seamFixtureType(named: "Reader\($0)", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]) }
 	}
 
 	/// Layers of three screens beneath a root that opens the first layer's, each screen opening the three screens of the next
