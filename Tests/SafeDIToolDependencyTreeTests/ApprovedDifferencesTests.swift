@@ -145,12 +145,35 @@ struct ApprovedDifferencesTests: ~Copyable {
 		#expect(ApprovedDifferences.normalized(nodeRecordsText: texts.nodeRecords, treeText: treeText) == nil)
 	}
 
+	@Test(arguments: [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesSendableFunction_whenASendableBuilderAndABuilderOfOneTypeShareIt(sendableBuilderIsDeclaredFirst: Bool) async throws {
+		let fixtureFiles = ["Fixture.swift": Self.sendableAndPlainBuilderFixture(sendableBuilderIsDeclaredFirst: sendableBuilderIsDeclaredFirst)]
+		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries } == [[28]])
+		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		// The one function the two builders share is `@Sendable`, as the `SendableInstantiator` needs, and the
+		// `Instantiator`, which needs less, calls it too: the compile of the laid-out code checks both.
+		#expect(rootFile.components(separatedBy: "func __safeDI_").count - 1 == 1)
+		#expect(rootFile.contains("@Sendable nonisolated func __safeDI_"))
+		try await expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
+			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: treeOutput.generatedFiles ?? [:]),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Tests – entry 29, a function named apart from another body's
 
-	@Test
+	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_laysOutRootWhoseFunctionIsNamedApart_whenAnotherBodyNestsAFunctionOfItsName() async throws {
-		let fixtureFiles = ["Fixture.swift": Self.nameKeptApartFixture]
+	mutating func generate_laysOutRootWhoseFunctionIsNamedApart_whenAnotherBodyNestsAFunctionOfItsName(nestingBodyIsDeclaredFirst: Bool) async throws {
+		let fixtureFiles = ["Fixture.swift": Self.nameKeptApartFixture(nestingBodyIsDeclaredFirst: nestingBodyIsDeclaredFirst)]
 		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -158,7 +181,7 @@ struct ApprovedDifferencesTests: ~Copyable {
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries } == [[29]])
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
-		#expect(rootFile.contains("func __safeDI_t2Builder_() -> T0 {"))
+		#expect(rootFile.contains("func __safeDI_t2Builder_("))
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: treeOutput.generatedFiles ?? [:]),
@@ -190,17 +213,52 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
+	/// `Root` builds `Shared` through a `SendableInstantiator` and through an `Instantiator`, in either order.
+	private static func sendableAndPlainBuilderFixture(sendableBuilderIsDeclaredFirst: Bool) -> String {
+		let sendableBuilder = "    @Instantiated let strictBuilder: SendableInstantiator<Shared>\n"
+		let plainBuilder = "    @Instantiated let looseBuilder: Instantiator<Shared>\n"
+		var fixture = """
+		import SafeDI
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    public init(strictBuilder: SendableInstantiator<Shared>, looseBuilder: Instantiator<Shared>) {}
+
+		"""
+		fixture += sendableBuilderIsDeclaredFirst ? sendableBuilder : plainBuilder
+		fixture += sendableBuilderIsDeclaredFirst ? plainBuilder : sendableBuilder
+		fixture += """
+		}
+		@Instantiable public final class Shared: Instantiable, Sendable {
+		    public init(leaf: Leaf) { self.leaf = leaf }
+		    @Instantiated let leaf: Leaf
+		}
+		@Instantiable public final class Leaf: Instantiable, Sendable {
+		    public init() {}
+		}
+		"""
+		return fixture
+	}
+
 	/// `Root` builds `t2Builder` of `T0`, and `T1`, which `t1Builder` builds, a `t2Builder` of `T2`: two properties of one
 	/// label and two types, whose functions the tree names alike in two bodies.
-	private static let nameKeptApartFixture = """
-	import SafeDI
-	@Instantiable(isRoot: true) public final class Root: Instantiable {
-	    public init(t1Builder: Instantiator<T1>, anyT0Builder: ErasedInstantiator<(), AnyT0>, t2Builder: Instantiator<T0>, service: Service) {}
-	    @Instantiated let t1Builder: Instantiator<T1>
-	    @Instantiated(fulfilledByType: "T0", erasedToConcreteExistential: true) let anyT0Builder: ErasedInstantiator<(), AnyT0>
-	    @Instantiated let t2Builder: Instantiator<T0>
-	    @Instantiated let service: Service
+	/// `nestingBodyIsDeclaredFirst` declares `t1Builder`, whose body nests the other function, before `t2Builder`.
+	private static func nameKeptApartFixture(nestingBodyIsDeclaredFirst: Bool) -> String {
+		let t1Builder = "    @Instantiated let t1Builder: Instantiator<T1>\n"
+		let t2Builder = "    @Instantiated let t2Builder: Instantiator<T0>\n"
+		var fixture = """
+		import SafeDI
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    public init(t1Builder: Instantiator<T1>, anyT0Builder: ErasedInstantiator<(), AnyT0>, t2Builder: Instantiator<T0>, service: Service) {}
+
+		"""
+		fixture += nestingBodyIsDeclaredFirst ? t1Builder : t2Builder
+		fixture += "    @Instantiated(fulfilledByType: \"T0\", erasedToConcreteExistential: true) let anyT0Builder: ErasedInstantiator<(), AnyT0>\n"
+		fixture += nestingBodyIsDeclaredFirst ? t2Builder : t1Builder
+		fixture += "    @Instantiated let service: Service\n}\n"
+		fixture += nameKeptApartTypes
+		return fixture
 	}
+
+	private static let nameKeptApartTypes = """
 	@Instantiable public final class T1: Instantiable {
 	    public init(t2Builder: Instantiator<T2>, anyT0Builder: ErasedInstantiator<(), AnyT0>, service: Service) {}
 	    @Instantiated let t2Builder: Instantiator<T2>
