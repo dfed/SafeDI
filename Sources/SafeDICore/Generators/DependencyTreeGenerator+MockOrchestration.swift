@@ -288,7 +288,10 @@ extension DependencyTreeGenerator {
 				recordedWorldRoots[mockRoot.instantiable.concreteInstantiable].map { (mockedType: mockRoot.instantiable.concreteInstantiable, root: $0.scope) }
 			}
 			let table = MockWorldsTable(worlds: worlds)
-			observer(table.report(shared: MockWorldsSharedGraph(table: table), differences: []))
+			let shared = MockWorldsSharedGraph(table: table)
+			// The oracle: each world's facts taken from the shared graph against the world built whole.
+			let worldsBuiltWhole = worlds.map { TypeFactsGraph(root: $0.root, forMockGeneration: true) }
+			observer(table.report(shared: shared, differences: shared.differences(fromWorldsBuiltWhole: worldsBuiltWhole)))
 		}
 		// The lowering lays a mock out from node records only where a test observes them.
 		let worldRoots = NodeRecordsObservation.observer == nil ? [:] : recordedWorldRoots

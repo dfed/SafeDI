@@ -42,8 +42,9 @@ struct TypeFactsOutcomes: Sendable {
 		let callees = input.callees
 
 		// Which variants’ bodies are the root’s: the root’s, and the body of a variant every call of which builds it in the
-		// body of a caller whose body is the root’s.
-		var bodyIsRoot = [Bool](repeating: true, count: variantCount)
+		// body of a caller whose body is the root’s. A graph with no root, the mock worlds’ shared graph, has none: its
+		// bodies are called from outside it.
+		var bodyIsRoot = [Bool](repeating: input.hasRoot, count: variantCount)
 		var outsideRoot = [Int32]()
 		for call in callees.indices where !input.buildsInCallersBody[call] && callees[call] != 0 && bodyIsRoot[Int(callees[call])] {
 			bodyIsRoot[Int(callees[call])] = false
@@ -62,7 +63,9 @@ struct TypeFactsOutcomes: Sendable {
 		/// world’s sources, which are never still being built, at no edge.
 		let rootSourcesAreBeingBuilt = [Bool](repeating: false, count: input.rootSources.count)
 		func forEachCall(_ body: (_ caller: Int, _ callee: Int, _ edge: Int32, _ sources: ArraySlice<AnswerSource>, _ isBeingBuilt: ArraySlice<Bool>) -> Void) {
-			body(0, 0, -1, input.rootSources[...], rootSourcesAreBeingBuilt[...])
+			if input.hasRoot {
+				body(0, 0, -1, input.rootSources[...], rootSourcesAreBeingBuilt[...])
+			}
 			for caller in 0..<variantCount {
 				for call in Int(callOffsets[caller])..<Int(callOffsets[caller + 1]) {
 					let run = Int(sourceOffsets[call])..<Int(sourceOffsets[call + 1])
@@ -103,6 +106,16 @@ struct TypeFactsOutcomes: Sendable {
 			}
 		}
 
+		// A call from outside the graph offers each read of the variant it reaches the outcome its caller's graph found.
+		// Two worlds' statements of their own root bodies are two statements here, so a shared variant the worlds call
+		// with each its own takes a parameter where each world built whole captures its statement: whether that join is
+		// the shared variant's outcome is a ruling the records track waits on (`MockWorldsSharedGraph.differences`).
+		for (variant, offered) in input.seedOutcomes {
+			for (read, outcome) in offered.enumerated() {
+				cells.join(outcome, into: Int(readOffsets[Int(variant)]) + read, through: -1)
+			}
+		}
+
 		while let cell = cells.nextChanged() {
 			let outcome = cells.outcomes[cell]
 			for index in Int(dependentOffsets[cell])..<Int(dependentOffsets[cell + 1]) {
@@ -131,7 +144,11 @@ struct TypeFactsOutcomes: Sendable {
 			isBeingBuilt: (_ answer: Int32) -> Bool,
 			buildsInCallersBody: (_ variant: Int, _ edgeIndex: Int) -> Bool,
 			edgeOffset: (_ declaration: Int) -> Int,
+			hasRoot: Bool = true,
+			seedOutcomes: [(variant: Int32, outcomes: [Outcome])] = [],
 		) {
+			self.hasRoot = hasRoot
+			self.seedOutcomes = seedOutcomes
 			readOffsets = [0]
 			cellRules = []
 			families = []
@@ -177,6 +194,8 @@ struct TypeFactsOutcomes: Sendable {
 			sourceIsBeingBuilt: [Bool],
 			rootSources: [AnswerSource],
 		) {
+			hasRoot = true
+			seedOutcomes = []
 			self.readOffsets = readOffsets
 			self.cellRules = cellRules
 			self.families = families
@@ -236,6 +255,11 @@ struct TypeFactsOutcomes: Sendable {
 		var sourceIsBeingBuilt: [Bool]
 		/// Per read of the root, what the world binds for it: a seam root’s parameter, or none.
 		var rootSources: [AnswerSource]
+		/// Whether variant 0 is the root's: false for the mock worlds' shared graph, whose variants start from seeds.
+		var hasRoot: Bool
+		/// Per variant a call from outside the graph reaches, the outcome the call offers each of its reads, in its read
+		/// order: what the caller's own graph found for the variant it calls there.
+		var seedOutcomes: [(variant: Int32, outcomes: [Outcome])]
 	}
 
 	/// What a variant’s body uses for the value of one read: its form, the statement of the root’s body it reads where it

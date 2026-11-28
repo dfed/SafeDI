@@ -408,6 +408,44 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsSharedDeclarationsAndVariantsOnceHoweverManyWorldsCallThem_whenMockRootsShareSubtree(rootCount: Int) async throws {
+		var declarations = (0..<rootCount).map { index in
+			Self.type("Screen\(index)", mocked: true, instantiating: [("page", "Page")])
+		}
+		declarations.append(Self.type("Page", instantiating: [("shared", "Shared")]))
+		declarations.append(Self.type("Shared", instantiating: [("first", "First")]))
+		declarations.append(Self.type("First", instantiating: [("second", "Second")]))
+		declarations.append(Self.type("Second", instantiating: [("third", "Third")]))
+		declarations.append(Self.type("Third"))
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Each world builds its root and `page`, and calls the shared `shared` from `page`. The shared graph holds `shared`,
+		// `first`, `second` and `third` once, a variant each, whatever the number of worlds, and each world's facts of them
+		// equal its own built whole. The first world meets the subtree, every later one only its root.
+		let worlds = (0..<rootCount).map { index in
+			MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: index == 0 ? 0 : 5 + index, declarationCount: 6, shareableDeclarationCount: 5, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0", "2 ← shared 1", "3 ← shared 2"])
+		}
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 5 + rootCount,
+				sharedDeclarationCount: 4,
+				sharedVariantCount: 4,
+				shareableDeclarations: ["1: page: Page", "2: shared: Shared", "3: first: First", "4: second: Second", "5: third: Third"],
+				differences: [],
+				worlds: worlds,
+			),
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsRootsChildInTopGraph_whenWorldFirstReachesItBeneathAnotherChild() async throws {

@@ -925,6 +925,8 @@ struct TypeFactsGraph: Sendable {
 			// layout gives the callee none: false costs only a parameter, where true could capture a function's local.
 			buildsInCallersBody: { _, _ in false },
 			edgeOffset: { graph.edgeOffset(of: $0) },
+			hasRoot: seeds == nil,
+			seedOutcomes: Self.seedOutcomes(of: seeds ?? [], variants: answers.variants, readTable: readInterner.values, labels: labels.values, readColumn: readColumn, readOffsets: readOffsets),
 		))
 		self.cycleIDs = cycleIDs
 	}
