@@ -133,10 +133,6 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		        public init(api: @escaping (Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _, _, _, _, _, _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -283,10 +279,6 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		        public init(api: @escaping (__safeDI_Values9) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -403,10 +395,6 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 		        public init(api: @escaping (Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8) -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _, _, _, _, _, _, _ in __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -489,10 +477,6 @@ struct SafeDIToolSeamCarrierTransportTests: ~Copyable {
 
 		        public init(api: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() })
 		        }
 		    }
 

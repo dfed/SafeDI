@@ -27,7 +27,7 @@ import SafeDICore
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct Query: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
-		abstract: "Answer a question about the `@Instantiable` types in a set of modules (beta).",
+		abstract: "Answer a question about the `@Instantiable` types in a set of modules (`needs` in beta, `graph` in alpha).",
 		subcommands: [QueryNeeds.self, QueryGraph.self],
 	)
 }

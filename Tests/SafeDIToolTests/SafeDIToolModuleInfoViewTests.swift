@@ -196,14 +196,16 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: [false, true])
+	@Test(arguments: [false, true], [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_readsOneModuleInfoListedUnderTwoPaths_onlyWhenBothHoldTheSameBytes(filesDiffer: Bool) async throws {
-		// Cell 2c: a stale `Core.safedi` beside the current `Core_safedi.safedi`, both recording `Core`.
+	mutating func generate_readsOneModuleInfoListedUnderTwoPaths_onlyWhenBothHoldTheSameBytes(filesDiffer: Bool, viewsReferToModules: Bool) async throws {
+		// Cell 2c: a stale `Core.safedi` beside the current `Core_safedi.safedi`, both recording `Core`. Written as the Bazel
+		// rule writes them, each file stores its own entry’s checksum, which the reading run compares in place of the entries.
+		let viewArguments = viewsReferToModules ? ["--module-info-views-refer-to-modules"] : []
 		let core = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.clock],
 			filesToDelete: &filesToDelete,
-			moduleMembershipArguments: ["--module-name", "Core"],
+			moduleMembershipArguments: ["--module-name", "Core"] + viewArguments,
 		)
 		let corePath = try core.writtenModuleInfoOutputPath
 		let secondPath: String
@@ -211,7 +213,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			let otherCore = try await executeSafeDIToolTest(
 				swiftFileContent: [Self.clock],
 				filesToDelete: &filesToDelete,
-				moduleMembershipArguments: ["--module-name", "Core"],
+				moduleMembershipArguments: ["--module-name", "Core"] + viewArguments,
 			)
 			secondPath = try otherCore.writtenModuleInfoOutputPath
 		} else {

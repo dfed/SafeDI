@@ -53,10 +53,10 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		var projectionsBySeed = [UInt64: [String]]()
 		for seed in UInt64(1)...20 {
 			let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-			try await ScopeTableObservation.$entryOrder.withValue({ entryCount in
+			try await ScopeTableObservation.$entryOrder.withValue(TaskLocalFunction { entryCount in
 				Self.shuffledPositions(count: entryCount, seed: seed)
 			}) {
-				try await ScopeTableObservation.$observer.withValue({ projection in
+				try await ScopeTableObservation.$observer.withValue(TaskLocalFunction { projection in
 					continuation.yield(projection)
 				}) {
 					_ = try await executeSafeDIToolTest(
@@ -97,7 +97,7 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		// scopes of every seam after it, which the first seam's tree does not reach: only its own call of the second seam is
 		// recorded again from the pass.
 		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
-		try await ScopeTableObservation.$overlaidCallRecords.withValue({ calledTypes in
+		try await ScopeTableObservation.$overlaidCallRecords.withValue(TaskLocalFunction { calledTypes in
 			continuation.yield(calledTypes)
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -127,10 +127,10 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		var projectionsBySeed = [UInt64: [String]]()
 		for seed in UInt64(1)...20 {
 			let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-			try await ScopeTableObservation.$entryOrder.withValue({ entryCount in
+			try await ScopeTableObservation.$entryOrder.withValue(TaskLocalFunction { entryCount in
 				Self.shuffledPositions(count: entryCount, seed: seed)
 			}) {
-				try await ScopeTableObservation.$observer.withValue({ projection in
+				try await ScopeTableObservation.$observer.withValue(TaskLocalFunction { projection in
 					continuation.yield(projection)
 				}) {
 					_ = try await executeSafeDIToolTest(
@@ -165,7 +165,7 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		// hole there. `App`'s `Root` builds `Hub`, whose call fills the hole with `LiveApi`, and renames `hub`. Each table
 		// spells every kind of property a record holds, and the fill of a call.
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		try await ScopeTableObservation.$observer.withValue({ projection in
+		try await ScopeTableObservation.$observer.withValue(TaskLocalFunction { projection in
 			continuation.yield(projection)
 		}) {
 			_ = try await executeSafeDIToolMultiModuleTest(

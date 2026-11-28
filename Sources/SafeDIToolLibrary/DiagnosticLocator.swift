@@ -263,5 +263,5 @@ struct LocatedDiagnosticsError: SourceLocatedError {
 public enum DiagnosticLocatorObservation {
 	/// Called with the path a `.safedi` file records of each file the locator reads again, when set: by the tests, never
 	/// by the tool.
-	@TaskLocal public static var fileReadObserver: (@Sendable (String) -> Void)?
+	@TaskLocal public static var fileReadObserver: TaskLocalFunction<@Sendable (String) -> Void>?
 }

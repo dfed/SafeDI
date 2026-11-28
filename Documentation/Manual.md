@@ -899,10 +899,6 @@ extension Service {
         public init(profile: @escaping (Analytics) -> __safeDI_UserServiceCarrier_Profile<__safeDI_Built>) {
             self.profile = profile
         }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(profile: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-        }
     }
 
     /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -911,10 +907,6 @@ extension Service {
 
         public init(userService: @escaping () -> __safeDI_Built) {
             self.userService = userService
-        }
-
-        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-            self.init(userService: { __safeDI_builder() })
         }
     }
 
@@ -1560,7 +1552,7 @@ See [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
 An error SafeDI reports at another module’s declaration prints that declaration’s line, column and fix-it when the action can read the module’s file, at the path the module’s `.safedi` records or, for a relative path, under the directory the action’s own input files resolve under through symbolic links; otherwise it prints the file and message alone. A warning about another module’s declaration always prints the file and message alone, since Bazel prints a cached action’s warnings again after that file may have changed.
 
-A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and `SafeDITool query needs` cannot read the module.
+A module that no SafeDI module depends on, such as your app, sets `is_depended_upon = False` on its `safedi_swift_library` or `safedi_compile`. SafeDI then writes no `.safedi` for it, which saves the time the top module of a deep graph spends writing a copy of what its dependencies’ files carry. A module that lists it in `safedi_deps` fails analysis with an error that names the attribute, and neither `SafeDITool query needs` nor `query graph` can read the module.
 
 For [Stardoc](https://github.com/bazelbuild/stardoc) and other `bzl_library` tooling, a `bzl_library` of your own that loads `safedi.bzl` can list `@safedi//bazel:safedi` in its `deps`.
 

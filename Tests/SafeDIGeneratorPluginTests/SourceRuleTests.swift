@@ -200,6 +200,47 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func sourcesAndToolTestSupport_holdNoFunctionInATaskLocal() throws {
+		#expect(try findings(of: [.taskLocalFunction]) == [])
+	}
+
+	@Test(arguments: [
+		"@TaskLocal static var observer: (@Sendable (Int) -> Void)?",
+		"@TaskLocal static var observer: @Sendable (Int) -> Void = { _ in }",
+		"@TaskLocal static var observer: Optional<@Sendable (Int, String) -> Void>",
+		"@TaskLocal static var observer: ((Int) -> Bool)!",
+		"@TaskLocal\nstatic var observer: (((Int) -> Void))?",
+		"@TaskLocal static var observer = { @Sendable (value: Int) in }",
+	])
+	func sourceRuleCheck_findsTaskLocalFunction_whenTaskLocalHoldsFunction(declaration: String) {
+		let line = declaration.hasPrefix("@TaskLocal\n") ? 2 : 1
+		// The implicitly unwrapped declaration is a `forceUnwrap` finding too, which this test is not about.
+		#expect(findings(in: declaration).filter { $0.contains(": taskLocalFunction: ") } == [
+			"Sources/SafeDICore/Models/Fixture.swift:\(line): taskLocalFunction: a task-local function crashes Swift 6.3’s release builds in `swift_task_localValuePush` when `withValue` binds it: hold it in a `TaskLocalFunction`",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsTaskLocalFunction_whenToolTestSupportTaskLocalHoldsFunction() {
+		#expect(findings(in: "@TaskLocal static var observer: (@Sendable (Int) -> Void)?", at: "Tests/SafeDIToolTestSupport/Checks.swift") == [
+			"Tests/SafeDIToolTestSupport/Checks.swift:1: taskLocalFunction: a task-local function crashes Swift 6.3’s release builds in `swift_task_localValuePush` when `withValue` binds it: hold it in a `TaskLocalFunction`",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoTaskLocalFunction_whenTaskLocalHoldsStructOrNoTaskLocalHoldsFunction() {
+		#expect(findings(in: """
+		@TaskLocal static var observer: TaskLocalFunction<@Sendable (Int) -> Void>?
+		@TaskLocal static var limit: Int?
+		@TaskLocal static var names: [String] = []
+		@TaskLocal static var order = TaskLocalFunction<@Sendable (Int) -> [Int]> { [$0] }
+		static var handler: (@Sendable (Int) -> Void)?
+		@MainActor static var action: () -> Void = {}
+		""") == [])
+		#expect(findings(in: "@TaskLocal static var observer: (@Sendable (Int) -> Void)?", at: "Tests/SafeDIToolTests/Fixture.swift") == [])
+	}
+
+	@Test
 	func toolTestSupport_importsNoModuleTestably() throws {
 		let checkedFiles = try Self.checkedFiles.get()
 		#expect(Set(checkedFiles.map(\.file.path)).isSuperset(of: [
@@ -781,7 +822,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `engineFeatureName`, `typeFactsFoldModelName`, `stringScan`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`, `taskGroupTupleElement`, `taskLocalFunction`, `engineFeatureName`, `typeFactsFoldModelName`, `stringScan`",
 		])
 	}
 

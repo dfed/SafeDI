@@ -2221,7 +2221,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			implementationIsVisible: false,
 			expectedPassUpLabels: ["gadgetBuilder"],
 			expectedTwinInitializerLabels: nil,
-			valueProbes: [DifferentialValueProbe(name: "Feature", expression: "Mid.Feature.mock(gadgetBuilder: { Mid.StubGadget() })", knownRightExpression: "Mid.Feature(__safeDI_gadgetBuilder: .init(__safeDI_noScope: { Mid.StubGadget() }))")],
+			valueProbes: [DifferentialValueProbe(name: "Feature", expression: "Mid.Feature.mock(gadgetBuilder: { Mid.StubGadget() })", knownRightExpression: "Mid.Feature(gadgetBuilder: { Mid.StubGadget() })")],
 		), seed: 0)
 
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
@@ -2693,7 +2693,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			valueProbes: [DifferentialValueProbe(
 				name: "Screen and the number of gizmoBuilder calls",
 				expression: "{ () -> (App.Screen, Int) in var count = 0; let screen = App.Screen.mock(gizmoBuilder: { count += 1; return App.StubGizmo() }); return (screen, count) }()",
-				knownRightExpression: "{ () -> (App.Screen, Int) in var count = 0; let screen = App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { count += 1; return App.StubGizmo() })); return (screen, count) }()",
+				knownRightExpression: "{ () -> (App.Screen, Int) in var count = 0; let screen = App.Screen(gizmoBuilder: { count += 1; return App.StubGizmo() }); return (screen, count) }()",
 			)],
 		), seed: 0)
 
@@ -2716,7 +2716,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			valueProbes: [DifferentialValueProbe(
 				name: "Screen",
 				expression: "App.Screen.mock(gizmoSendableBuilder: { App.StubGizmo() })",
-				knownRightExpression: "App.Screen(__safeDI_gizmoSendableBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))",
+				knownRightExpression: "App.Screen(gizmoSendableBuilder: { App.StubGizmo() })",
 			)],
 		), seed: 0)
 
@@ -2741,7 +2741,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			valueProbes: [DifferentialValueProbe(
 				name: "Screen",
 				expression: "App.Screen.mock(defaultGizmo_GizmoBuilder: { App.DefaultGizmo(id: $0) })",
-				knownRightExpression: "App.Screen(__safeDI_defaultGizmo_GizmoBuilder: .init(__safeDI_noScope: { App.DefaultGizmo(id: $0) }))",
+				knownRightExpression: "App.Screen(defaultGizmo_GizmoBuilder: { App.DefaultGizmo(id: $0) })",
 			)],
 		), seed: 0)
 
@@ -2761,7 +2761,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			implementationIsVisible: false,
 			expectedPassUpLabels: ["gizmoBuilder"],
 			expectedTwinInitializerLabels: nil,
-			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(gizmoBuilder: { App.StubGizmo() })")],
 		), seed: 0)
 
 		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
@@ -2779,7 +2779,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			implementationIsVisible: false,
 			expectedPassUpLabels: ["gizmoBuilder"],
 			expectedTwinInitializerLabels: nil,
-			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(gizmoBuilder: { App.StubGizmo() })")],
 		), seed: 0)
 
 		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
@@ -2800,7 +2800,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			valueProbes: [DifferentialValueProbe(
 				name: "Screen",
 				expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() }, widgetBuilder: { App.StubWidget() })",
-				knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }), __safeDI_widgetBuilder: .init(__safeDI_noScope: { App.StubWidget() }))",
+				knownRightExpression: "App.Screen(gizmoBuilder: { App.StubGizmo() }, widgetBuilder: { App.StubWidget() })",
 			)],
 		), seed: 0)
 
@@ -2820,7 +2820,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			implementationIsVisible: false,
 			expectedPassUpLabels: ["gizmoBuilder"],
 			expectedTwinInitializerLabels: nil,
-			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() })", knownRightExpression: "App.Screen(gizmoBuilder: { App.StubGizmo() })")],
 		), seed: 0)
 
 		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])
@@ -2841,7 +2841,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			implementationIsVisible: false,
 			expectedPassUpLabels: ["gizmoBuilder"],
 			expectedTwinInitializerLabels: nil,
-			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() }, gizmo: App.StubGizmo())", knownRightExpression: "App.Screen(__safeDI_gizmoBuilder: .init(__safeDI_noScope: { App.StubGizmo() }))")],
+			valueProbes: [DifferentialValueProbe(name: "Screen", expression: "App.Screen.mock(gizmoBuilder: { App.StubGizmo() }, gizmo: App.StubGizmo())", knownRightExpression: "App.Screen(gizmoBuilder: { App.StubGizmo() })")],
 		), seed: 0)
 
 		Self.expectTakesTwinsBuilders(result, labels: ["gizmoBuilder"])

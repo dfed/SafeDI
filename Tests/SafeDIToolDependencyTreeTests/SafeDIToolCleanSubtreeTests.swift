@@ -1079,7 +1079,7 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 	private static func observingValidationWalk(skippingCleanSubtrees: Bool, _ generate: () async throws -> Outcome) async throws -> Run {
 		let (stream, continuation) = AsyncStream.makeStream(of: ValidationWalkObservation.self)
 		let outcome = try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(skippingCleanSubtrees) {
-			try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await generate()
 			}
 		}

@@ -15431,10 +15431,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -15563,10 +15559,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
@@ -15711,10 +15703,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 				            self.service = service
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -15843,10 +15831,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 				            self.service = service
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 

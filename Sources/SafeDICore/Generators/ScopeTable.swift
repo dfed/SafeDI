@@ -568,17 +568,17 @@ public enum ScopeTableObservation {
 	/// When set, each freeze takes its map's entries, and each signature pass's overlay its pass map's, in the order this
 	/// returns, a permutation of the positions of as many entries as it is passed, so that a test can show a table does not
 	/// depend on the order entries arrive in.
-	@TaskLocal public static var entryOrder: (@Sendable (_ entryCount: Int) -> [Int])?
+	@TaskLocal public static var entryOrder: TaskLocalFunction<@Sendable (_ entryCount: Int) -> [Int]>?
 	/// Called with each table a map freezes, and each table a signature pass assembles (`FrozenScopeMap.overlaying`), as text
 	/// (`ScopeTable.projection`).
-	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ projection: String) -> Void>?
 	/// When set, called once per seam signature pass with each key whose record in the pass's table, assembled from the base
 	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and
 	/// each key outside the pass's map that names a record: the overlay oracle. Empty when the two agree.
-	@TaskLocal public static var overlayOracle: (@Sendable (_ mismatches: [String]) -> Void)?
+	@TaskLocal public static var overlayOracle: TaskLocalFunction<@Sendable (_ mismatches: [String]) -> Void>?
 	/// Called once per seam signature pass with the types, by `asSource` in sorted order, of the seam calls whose records
 	/// the pass's table takes from the pass's map rather than the base's (`FrozenScopeMap.overlaying`).
-	@TaskLocal public static var overlaidCallRecords: (@Sendable (_ calledTypes: [String]) -> Void)?
+	@TaskLocal public static var overlaidCallRecords: TaskLocalFunction<@Sendable (_ calledTypes: [String]) -> Void>?
 }
 
 extension TypeDescription {

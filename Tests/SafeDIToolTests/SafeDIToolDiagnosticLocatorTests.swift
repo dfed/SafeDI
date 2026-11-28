@@ -152,7 +152,7 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 		#expect(!FileManager.default.fileExists(atPath: project.featurePath("Store.swift")))
 		let (filesRead, filesReadContinuation) = AsyncStream<String>.makeStream()
 
-		let description = try await DiagnosticLocatorObservation.$fileReadObserver.withValue({ filesReadContinuation.yield($0) }) {
+		let description = try await DiagnosticLocatorObservation.$fileReadObserver.withValue(TaskLocalFunction { filesReadContinuation.yield($0) }) {
 			try await project.appErrorDescription()
 		}
 		filesReadContinuation.finish()
@@ -246,7 +246,7 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 		try await project.runFeature()
 		let (filesRead, filesReadContinuation) = AsyncStream<String>.makeStream()
 
-		let description = try await DiagnosticLocatorObservation.$fileReadObserver.withValue({ filesReadContinuation.yield($0) }) {
+		let description = try await DiagnosticLocatorObservation.$fileReadObserver.withValue(TaskLocalFunction { filesReadContinuation.yield($0) }) {
 			try await project.appErrorDescription()
 		}
 		filesReadContinuation.finish()
@@ -276,7 +276,7 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 		try await project.runFeature()
 		let (filesRead, filesReadContinuation) = AsyncStream<String>.makeStream()
 
-		let output = try await DiagnosticLocatorObservation.$fileReadObserver.withValue({ filesReadContinuation.yield($0) }) {
+		let output = try await DiagnosticLocatorObservation.$fileReadObserver.withValue(TaskLocalFunction { filesReadContinuation.yield($0) }) {
 			try await project.runApp()
 		}
 		filesReadContinuation.finish()

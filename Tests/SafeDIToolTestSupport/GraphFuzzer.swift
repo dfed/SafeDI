@@ -17468,12 +17468,12 @@ enum GraphFuzzerOracle {
 		let (((firstRun, placeLevelDisagreements), placeFacts), rootFunctionKeyDisagreements) = try await collectingRootFunctionKeyDisagreements(during: {
 			try await collectingPlaceFacts(during: {
 				try await collectingPlaceLevelDisagreements(during: {
-					try await ValidationWalkObservation.$observer.withValue({ observation in
+					try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { observation in
 						if case .skippedCleanSubtree = observation {
 							skippedSubtreesContinuation.yield()
 						}
 					}) {
-						try await SeamFillSharing.$observer.withValue({ fillsOfCallsContinuation.yield($0) }) {
+						try await SeamFillSharing.$observer.withValue(TaskLocalFunction { fillsOfCallsContinuation.yield($0) }) {
 							try await toolRun(of: fixture)
 						}
 					}

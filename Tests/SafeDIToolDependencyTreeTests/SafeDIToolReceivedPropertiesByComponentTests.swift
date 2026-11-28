@@ -339,7 +339,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let outcome: Outcome
 		do {
 			let output = try await ValidationWalkObservation.$completesReceivedPropertiesByComponent.withValue(completingByComponent) {
-				try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 				}
 			}
@@ -487,7 +487,7 @@ struct SafeDIToolReceivedPropertiesByComponentTests: ~Copyable {
 		let outcome: Outcome
 		do {
 			let output = try await ValidationWalkObservation.$completesReceivedPropertiesByComponent.withValue(completingByComponent) {
-				try await ValidationWalkObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await ValidationWalkObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 				}
 			}

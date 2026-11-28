@@ -448,10 +448,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        public init(owner: @escaping (@escaping OnTap, LazilyInstantiated<Config>) -> __safeDI_ServiceCarrier_ServiceOwner<__safeDI_Built>) {
 		            self.owner = owner
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(owner: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -460,10 +456,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 
 		        public init(service: @escaping () -> __safeDI_Built) {
 		            self.service = service
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(service: { __safeDI_builder() })
 		        }
 		    }
 
