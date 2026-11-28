@@ -568,7 +568,7 @@ struct NodeRecords: Sendable {
 			guard !isLoopMember, !closesFromLoopMember else {
 				throw NodeRecordRefusal.builderLoopTakesCycleParameters
 			}
-			guard !([variant] + variantsBetween[Int(variant)]).contains(where: { !world.madeAgain(from: world.declaration(of: $0)).isEmpty }) else {
+			guard !([variant] + variantsBetween[Int(variant)]).contains(where: { !world.madeAgain(of: $0).isEmpty }) else {
 				throw NodeRecordRefusal.cycleHoldsLoopRebinding
 			}
 		}
