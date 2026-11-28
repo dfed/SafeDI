@@ -42,7 +42,7 @@ extension TypeKeyLayout {
 		let families = bodies.map(\.isInSendableFamily)
 		var structuralKeys = [[Int]: Int]()
 		var classes = [Int](repeating: 0, count: count)
-		var parts = StructuralKeyParts()
+		var parts = StructuralKeyParts(frozen: nodeFacts.keyParts)
 		for body in bodies.indices.dropFirst() {
 			let key = structuralKey(of: body, isInSendableFamily: families[body], parts: &parts)
 			classes[body] = structuralKeys[key] ?? {
@@ -99,30 +99,18 @@ extension TypeKeyLayout {
 
 	func structuralKey(of body: Int, isInSendableFamily: Bool, parts: inout StructuralKeyParts) -> [Int] {
 		guard let record = bodies[body].record else { return [] }
+		// What a node's record alone decides of its key, the snapshot holds for a node several roots share.
+		let recordFacts = nodeFacts.keyFactsByNode[record.node] ?? Self.keyFacts(of: record, parts: &parts)
 		var key = [parts.id(of: .header(
-			concreteType: record.concreteType.asSource,
+			concreteType: recordFacts.concreteType,
 			callee: record.target.callee,
 			isExtension: record.isExtension,
 			lineEnd: record.lineEnd,
 			isInSendableFamily: isInSendableFamily,
-			forwardedProperties: record.forwardedProperties.map(\.asSource),
+			forwardedProperties: recordFacts.forwardedProperties,
 			reads: reads[body],
 		))]
-		// A function that begins with a statement of its kind's writes other text than one that does not.
-		if let leadingStatement = record.leadingStatement {
-			key.append(parts.id(of: .leadingStatement(leadingStatement)))
-		}
-		for argument in record.arguments {
-			key.append(parts.id(of: .argument(argumentLabel: argument.argumentLabel, label: argument.label, property: argument.property.asSource)))
-		}
-		for shape in record.constructionShape(shapes: &parts) {
-			key.append(parts.id(of: .text(shape)))
-		}
-		// A place's own passed arguments are its function's parameters: only their names and types tell places apart, since
-		// each call hands its own values, which the caller's key holds.
-		for argument in record.passedArguments {
-			key.append(parts.id(of: .parameter(name: argument.parameterName, type: argument.type.asSource)))
-		}
+		key += recordFacts.recordPartIDs
 		// A variant of the per-type plan takes a parameter per label its body's answers declare (`CycleVariantRecord.parameters`):
 		// two variants of one declaration answered apart take other parameters, so they are no class of one, whose outcomes
 		// one member decides (`computeOutcomes`).
@@ -132,7 +120,8 @@ extension TypeKeyLayout {
 			}
 		}
 		for (index, statement) in bodies[body].statements.enumerated() {
-			key.append(parts.id(of: statementPart(statement, parts: &parts)))
+			let sharedPartID = recordFacts.statementPartIDs.flatMap { index < $0.count ? $0[index] : nil }
+			key.append(sharedPartID ?? parts.id(of: statementPart(statement, parts: &parts)))
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
 			key.append(parts.id(of: .passedArgumentCount(passedArguments.count)))
 			if case .closer = statement {
@@ -152,23 +141,61 @@ extension TypeKeyLayout {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return .text("") }
-			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
+			return Self.statementPart(of: .built(record), parts: &parts)
 		case let .closer(record, _):
-			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
+			return Self.statementPart(of: .closer(record), parts: &parts)
 		case let .inline(record):
+			return Self.statementPart(of: .built(record), parts: &parts)
+		case let .alias(record):
+			return Self.statementPart(of: .alias(record), parts: &parts)
+		}
+	}
+
+	/// The part of a body's key for a statement recorded as `record`: a call of a place's function where the place declares
+	/// one, and otherwise everything the statement is spelled from.
+	static func statementPart(of record: PlaceRecord, parts: inout StructuralKeyParts) -> StructuralKeyParts.Part {
+		switch record {
+		case let .built(record) where record.hasFunction:
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
+		case let .built(record):
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			return .text("inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape(shapes: &parts).joined(separator: ";"))")
+		case let .closer(record):
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
 		case let .alias(record):
 			let reads = record.listedReads.map { "\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			// Two renames of one text read their value apart where one reads it only if available: the type they read
 			// differs, so the places are no class of one.
 			guard let call = record.call else { return .text("alias|\(record.text)|\(reads)|\(record.readsOnlyIfAvailable)") }
-			return .text("alias|\(inPlaceCallShape(call))|\(reads)|\(record.readsOnlyIfAvailable)")
+			return .text("alias|\(Self.inPlaceCallShape(call))|\(reads)|\(record.readsOnlyIfAvailable)")
 		}
 	}
 
+	/// What a body's key holds of its place's record alone (`NodeKeyFacts`), interned in `parts`, its statements' parts left
+	/// to the body, whose statements are read once.
+	static func keyFacts(of record: BuiltPlaceRecord, parts: inout StructuralKeyParts) -> NodeKeyFacts {
+		GenerationWork.record(1, by: .spellingStructuralKeyFacts)
+		var recordPartIDs = [Int]()
+		// A function that begins with a statement of its kind's writes other text than one that does not.
+		if let leadingStatement = record.leadingStatement {
+			recordPartIDs.append(parts.id(of: .leadingStatement(leadingStatement)))
+		}
+		for argument in record.arguments {
+			recordPartIDs.append(parts.id(of: .argument(argumentLabel: argument.argumentLabel, label: argument.label, property: argument.property.asSource)))
+		}
+		for shape in record.constructionShape(shapes: &parts) {
+			recordPartIDs.append(parts.id(of: .text(shape)))
+		}
+		// A place's own passed arguments are its function's parameters: only their names and types tell places apart, since
+		// each call hands its own values, which the caller's key holds.
+		for argument in record.passedArguments {
+			recordPartIDs.append(parts.id(of: .parameter(name: argument.parameterName, type: argument.type.asSource)))
+		}
+		return NodeKeyFacts(concreteType: record.concreteType.asSource, forwardedProperties: record.forwardedProperties.map(\.asSource), recordPartIDs: recordPartIDs, statementPartIDs: nil)
+	}
+
 	/// What tells two calls written where their places are apart: everything the engine spells them from, never their text.
-	func inPlaceCallShape(_ call: InPlaceCall) -> String {
+	static func inPlaceCallShape(_ call: InPlaceCall) -> String {
 		let record = call.record
 		var shape = [
 			record.property.asSource,

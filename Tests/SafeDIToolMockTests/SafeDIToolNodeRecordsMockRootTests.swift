@@ -135,7 +135,7 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_worksOutEachSharedNodesDomainOnce_whenThreeMockRootsShareSubtree() async throws {
+	mutating func mock_worksOutEachSharedNodesLayoutFactsOnce_whenThreeMockRootsShareSubtree() async throws {
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -191,13 +191,13 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 			}
 		}
 		continuation.finish()
-		var domainCount = 0
-		for await work in stream where work.step == .computingPlanNodeDomains {
-			domainCount += work.elementCount
+		var countsByStep = [GenerationWork.Step: Int]()
+		for await work in stream where [.computingPlanNodeDomains, .spellingStructuralKeyFacts].contains(work.step) {
+			countsByStep[work.step, default: 0] += work.elementCount
 		}
-		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains are worked out once for the
-		// three roots, where each root's layout worked out both.
-		#expect(domainCount == 2)
+		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains and the parts of their keys
+		// are worked out once for the three roots, where each root's layout worked out both.
+		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true, true])
 	}
 

@@ -401,7 +401,7 @@ extension TypeKeyLayout {
 /// equality, never for order. It holds one entry per distinct part and path met, and dies with `computeClasses`.
 struct StructuralKeyParts {
 	/// A part of a structural key. Each case is a kind of string the key held, so no two kinds of part are alike.
-	enum Part: Hashable {
+	enum Part: Hashable, Sendable {
 		/// What the place builds and how, as `structuralKey(of:isInSendableFamily:parts:)` lists it.
 		case header(
 			concreteType: String,
@@ -429,8 +429,11 @@ struct StructuralKeyParts {
 
 	/// The id of `part`.
 	mutating func id(of part: Part) -> Int {
+		if let id = frozen?.idsByPart[part] {
+			return id
+		}
 		guard let id = idsByPart[part] else {
-			let id = idsByPart.count
+			let id = (frozen?.idsByPart.count ?? 0) + idsByPart.count
 			idsByPart[part] = id
 			return id
 		}
@@ -444,7 +447,7 @@ struct StructuralKeyParts {
 
 	// MARK: Private
 
-	private enum Node: Hashable {
+	fileprivate enum Node: Hashable, Sendable {
 		case rootDeclaration(String)
 		case read(String)
 		case passedArgument(String)
@@ -456,14 +459,26 @@ struct StructuralKeyParts {
 
 	/// A segment of a spliced path: its text, its value's id, or the function's name, each a case of its own so no two
 	/// kinds of segment are alike.
-	private enum Segment: Hashable {
+	fileprivate enum Segment: Hashable, Sendable {
 		case text(String)
 		case value(Int)
 		case declaredFunction(String)
 	}
 
+	/// The ids a snapshot of shared plan nodes gave its parts (`NodeLayoutFacts`), which every id of this value reads first,
+	/// so a part the snapshot holds has the snapshot's id, and every other part an id after all of the snapshot's.
+	private let frozen: FrozenStructuralKeyParts?
 	private var idsByPart = [Part: Int]()
 	private var idsByNode = [Node: Int]()
+
+	init(frozen: FrozenStructuralKeyParts? = nil) {
+		self.frozen = frozen
+	}
+
+	/// These ids, which no value adds to again.
+	var frozenIDs: FrozenStructuralKeyParts {
+		FrozenStructuralKeyParts(idsByPart: idsByPart, idsByNode: idsByNode)
+	}
 
 	/// The id of `value`, reached through its member reads without recursing, since a chain of them can be as deep as the
 	/// configurations it reads through.
@@ -528,11 +543,26 @@ struct StructuralKeyParts {
 	}
 
 	private mutating func id(of node: Node) -> Int {
+		if let id = frozen?.idsByNode[node] {
+			return id
+		}
 		guard let id = idsByNode[node] else {
-			let id = idsByNode.count
+			let id = (frozen?.idsByNode.count ?? 0) + idsByNode.count
 			idsByNode[node] = id
 			return id
 		}
 		return id
+	}
+}
+
+/// The ids of the parts a snapshot of shared plan nodes interned (`NodeLayoutFacts`), read by every root's layout. It holds
+/// them for as long as the snapshot holds it.
+final class FrozenStructuralKeyParts: Sendable {
+	fileprivate let idsByPart: [StructuralKeyParts.Part: Int]
+	fileprivate let idsByNode: [StructuralKeyParts.Node: Int]
+
+	fileprivate init(idsByPart: [StructuralKeyParts.Part: Int], idsByNode: [StructuralKeyParts.Node: Int]) {
+		self.idsByPart = idsByPart
+		self.idsByNode = idsByNode
 	}
 }

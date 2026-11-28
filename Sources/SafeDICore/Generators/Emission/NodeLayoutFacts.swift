@@ -28,22 +28,52 @@ final class NodeLayoutFacts: Sendable {
 	/// The domain of each plan node of the shared records and the nodes beneath them, where every place beneath records
 	/// what it builds.
 	let domainsByNode: [PlanNode: TypeKeyLayout.Domain]
+	/// What a body's structural key holds of each shared node's record alone, its statements' parts included, as ids of
+	/// `keyParts` (`TypeKeyLayout.structuralKey(of:isInSendableFamily:parts:)`).
+	let keyFactsByNode: [PlanNode: NodeKeyFacts]
+	/// The ids of the parts `keyFactsByNode` holds, which every root's key reads first.
+	let keyParts: FrozenStructuralKeyParts?
 
 	/// The facts of `records`' nodes, each computed once.
 	init(records: some Sequence<BuiltPlaceRecord>) {
 		var layout = TypeKeyLayout()
-		// The type key works out the domain of a place that declares a function alone, and a shared record's children are
-		// shared records too.
+		var parts = StructuralKeyParts()
+		var keyFactsByNode = [PlanNode: NodeKeyFacts]()
+		// The type key lays out a body for a place that declares a function alone, and a shared record's children are shared
+		// records too.
 		for record in records where record.hasFunction {
 			_ = layout.domain(of: record)
+			var facts = TypeKeyLayout.keyFacts(of: record, parts: &parts)
+			// A body's statements are its children's places, one each (`TypeKeyLayout.read(_:)`), and a body with a child that
+			// records nothing is never laid out.
+			let statementPartIDs = TypeKeyLayout.statementCodes(of: record.children).compactMap(TypeKeyLayout.record(of:)).map { childRecord in
+				parts.id(of: TypeKeyLayout.statementPart(of: childRecord, parts: &parts))
+			}
+			facts.statementPartIDs = statementPartIDs
+			keyFactsByNode[record.node] = facts
 		}
 		domainsByNode = layout.domainsByNode
+		self.keyFactsByNode = keyFactsByNode
+		keyParts = parts.frozenIDs
 	}
 
 	/// The facts of no node, for a layout that shares none. Made without a layout, whose own facts default to these.
-	static let none = NodeLayoutFacts(domainsByNode: [:])
+	static let none = NodeLayoutFacts()
 
-	private init(domainsByNode: [PlanNode: TypeKeyLayout.Domain]) {
-		self.domainsByNode = domainsByNode
+	private init() {
+		domainsByNode = [:]
+		keyFactsByNode = [:]
+		keyParts = nil
 	}
+}
+
+/// What a body's structural key holds of its place's record alone (`TypeKeyLayout.structuralKey(of:isInSendableFamily:parts:)`):
+/// the spellings its header reads, and the ids of the parts after the header, in the key's order.
+struct NodeKeyFacts: Sendable {
+	let concreteType: String
+	let forwardedProperties: [String]
+	/// The ids of the leading statement's, the arguments', the construction's and the passed arguments' parts.
+	let recordPartIDs: [Int]
+	/// The id of each statement's part, in the body's order, where a snapshot holds them; `nil` where the body works them out.
+	var statementPartIDs: [Int]?
 }
