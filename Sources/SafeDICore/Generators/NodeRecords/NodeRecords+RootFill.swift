@@ -169,29 +169,27 @@ struct FillFacts: Sendable {
 			dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 		}
 		guard !handsMemo else { return .refused(.fillHandedMemo) }
-		// The fill nodes the call passes, one per fill argument, in the order of the call's fill arguments (`TypeFactsGraph`),
-		// by the key of the place each fills: a fill is matched to its node by its key, never by its position among the fills.
-		let fillNodes = world.edges(from: call).filter { world.construction(of: $0) == .fill }
-		let filledHoles = scope.holeArguments.compactMap { holeArgument -> SeamSignature.Hole? in
-			switch holeArgument {
-			case let .fill(hole, _, _):
-				hole
-			case .passUp:
-				nil
-			}
-		}
+		// The node of each fill the call passes, by the key of the place it fills: the hole argument the world records for
+		// each fill edge (`TypeFactsFill.holeIndex`), never a position among the fills. A key is a place's (its site path),
+		// so two fills of one key, or a fill with no node, is a world node records do not model, which keeps its tree.
+		let edges = world.edges(from: call)
 		var fillNodeByKey = [String: DeclarationID]()
-		for (hole, fillNode) in zip(filledHoles, fillNodes) {
-			fillNodeByKey[ScopeGenerator.fillKey(of: hole)] = fillNode
+		for index in world.fillIndices(ofEdgesIn: edges.indices) {
+			let worldFill = world.fill(index)
+			switch scope.holeArguments[Int(worldFill.holeIndex)] {
+			case let .fill(hole, _, _):
+				guard fillNodeByKey.updateValue(edges[Int(worldFill.edge)], forKey: ScopeGenerator.fillKey(of: hole)) == nil else { return .refused(.fill) }
+			case .passUp:
+				return .refused(.fill)
+			}
 		}
 		var allFacts = [FillFacts]()
 		for (fill, _, _) in callFills.fills where fill.emitsCode {
-			if let fillNode = fillNodeByKey[fill.key] {
-				// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
-				// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
-				let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
-				allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
-			}
+			guard let fillNode = fillNodeByKey[fill.key] else { return .refused(.fill) }
+			// A public mock's root binds a value again in the forms its tree reads, so a level can hold a label in a form the
+			// fill's tree does not read, which the fill then reads from the caller: the forms it reads decide what it binds.
+			let formsRead = scope.publicMockCall == nil ? nil : scope.fillReceivedProperties[fill.hole.site] ?? []
+			allFacts.append(facts(of: fill, node: fillNode, readingForms: formsRead, in: world, readsInnerScopes: levelsOfCallingTree != nil && readsInnerScopes(fillNode, in: world), log: &log))
 		}
 		return .facts(allFacts)
 	}
