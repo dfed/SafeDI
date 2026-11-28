@@ -548,6 +548,25 @@ struct NodeRecords: Sendable {
 				receivedFunctionNames[parent, default: [:]][declaration] = name
 			}
 		}
+		// Any other loop member a cycle closes on, or a function a loop's member closes a cycle on, reads nothing of the body
+		// around it but its loop's functions, and the type key engine lays its function out further out than the tree
+		// nests it: refused until the engine keeps the tree's nesting.
+		let receivedFunctionDeclarations = Set(receivedFunctionNames.values.flatMap(\.keys))
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty && !receivedFunctionDeclarations.contains(world.declaration(of: variant)) {
+			let declaration = world.declaration(of: variant)
+			let isLoopMember = world.parents(of: declaration).contains { parent in
+				world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
+			}
+			let closesFromLoopMember = variantsBetween[Int(variant)].contains { between in
+				entries[Int(between)].contains { entry in
+					guard case let .closer(closingOn: callee) = entry, callee == variant else { return false }
+					return world.edgeFacts(from: world.declaration(of: between)).contains { $0.child == declaration && $0.loop >= 0 }
+				}
+			}
+			guard !isLoopMember, !closesFromLoopMember else {
+				throw NodeRecordRefusal.builderLoopTakesCycleParameters
+			}
+		}
 		// What the body of `variant` reads as a wrapper's instance, where a call in it closes a cycle: its function's, but for
 		// the labels it declares itself, whose own declarations are nearer.
 		func instancePropertiesInBody(of variant: VariantID) -> Set<Property> {
