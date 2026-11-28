@@ -63,8 +63,9 @@ extension SeamPlacesLevelAssembly {
 	/// up, in the order of the calls. A passed-up case is owned by the level of the called seam its call encloses. Cases
 	/// that present the same places, those whose references lead to one own case of one seam (`origin(of:through:)`),
 	/// name the first of them, and only that first one has a naming route: the least route to its owner. The cases whose
-	/// levels were not assembled are left out, and named in `unassembled`.
-	func cases(of drafts: SeamPlacesDrafts) -> SeamPlacesCaseAssembly {
+	/// levels were not assembled are left out, and named in `unassembled`. With `access`, each case holds the narrowest
+	/// access of its places' builders, with the cause of the first place in site order that has it.
+	func cases(of drafts: SeamPlacesDrafts, access: SeamPlacesFieldAccess? = nil) -> SeamPlacesCaseAssembly {
 		var cases = [SeamSignature.Places.Case]()
 		var unassembled = [String]()
 		var ownCaseByKey = [SeamPlacesCaseAssembly.OwnKey: Int]()
@@ -74,8 +75,18 @@ extension SeamPlacesLevelAssembly {
 				unassembled.append("own case of level \(draftCase.owner.variant).\(draftCase.owner.edge)")
 				continue
 			}
+			var narrowestAccess: SeamSignature.Places.Case.Access?
 			for site in draftCase.sites {
-				ownCaseByKey[SeamPlacesCaseAssembly.OwnKey(declaration: drafts.world.declaration(of: site.owner.variant), edge: site.owner.edge, isSendable: draftCase.isBuiltInSendableFunction)] = cases.count
+				let declaration = drafts.world.declaration(of: site.owner.variant)
+				ownCaseByKey[SeamPlacesCaseAssembly.OwnKey(declaration: declaration, edge: site.owner.edge, isSendable: draftCase.isBuiltInSendableFunction)] = cases.count
+				let targets = drafts.world.edges(from: declaration)
+				let ownerNode = drafts.world.graph.nodes[Int(declaration)]
+				if let access, let property = drafts.world.graph.nodes[Int(targets[targets.startIndex + Int(site.owner.edge)])].property {
+					let placeAccess = access.builderAccess(ofPlace: property, ownedBy: ownerNode.scope.instantiable.concreteInstantiable)
+					if narrowestAccess.map({ placeAccess.level < $0.level }) ?? true {
+						narrowestAccess = placeAccess
+					}
+				}
 			}
 			cases.append(SeamSignature.Places.Case(
 				ownerLevel: owner,
@@ -83,6 +94,7 @@ extension SeamPlacesLevelAssembly {
 				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
 				passedUp: nil,
 				namingRoute: namingRoute,
+				narrowestAccess: narrowestAccess,
 			))
 		}
 		let passedUp = drafts.passedUpCases()
@@ -105,12 +117,22 @@ extension SeamPlacesLevelAssembly {
 			}
 			calledBuildersByCase[cases.count] = calledBuilders
 			passedUpCaseByKey[SeamPlacesCaseAssembly.PassedUpKey(owner: draftCase.owner, isSendable: draftCase.isBuiltInSendableFunction, calledCase: calledCase)] = cases.count
+			var narrowestAccess: SeamSignature.Places.Case.Access?
+			if let access {
+				for (hole, caseIndex) in zip(calledBuilders.holes, calledBuilders.caseIndexByHole) where caseIndex == calledCase.caseIndex {
+					let placeAccess = access.builderAccess(passingUp: hole)
+					if narrowestAccess.map({ placeAccess.level < $0.level }) ?? true {
+						narrowestAccess = placeAccess
+					}
+				}
+			}
 			cases.append(SeamSignature.Places.Case(
 				ownerLevel: owner,
 				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
 				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
 				passedUp: calledCase,
 				namingRoute: callRoute + [owner],
+				narrowestAccess: narrowestAccess,
 			))
 		}
 		// The cases that present the same places name the first of them, and only that first one keeps its naming route:
@@ -151,14 +173,33 @@ extension SeamPlacesLevelAssembly {
 				parent[max(first, other)] = min(first, other)
 			}
 		}
-		for index in cases.indices where root(of: index) != index {
+		// A call takes the builder of the places it presents `@Sendable` where it is made inside a `@Sendable` function; a call
+		// that presents a place of this seam's own, which a ring of seams passes back, also where the called seam's place is
+		// taken `@Sendable`.
+		var isPassedOnSendable = cases.map { $0.passedUp != nil && $0.isBuiltInSendableFunction }
+		for index in cases.indices {
+			guard let calledCase = cases[index].passedUp, let calledBuilders = calledBuildersByCase[index] else { continue }
+			let passesOwnPlaceOnSendable = zip(calledBuilders.holes, calledBuilders.caseIndexByHole).contains { hole, caseIndex in
+				caseIndex == calledCase.caseIndex && hole.site.seamType == seamType && (cases[index].isBuiltInSendableFunction || hole.isSendable)
+			}
+			if passesOwnPlaceOnSendable {
+				let origin = Self.origin(ofCaseAt: index, in: cases, calledBuildersByCase: calledBuildersByCase, seamType: seamType)
+				if origin.seamType == seamType, cases.indices.contains(origin.caseIndex) {
+					isPassedOnSendable[origin.caseIndex] = true
+				}
+			}
+		}
+		for index in cases.indices where root(of: index) != index || isPassedOnSendable[index] {
 			let placeCase = cases[index]
 			cases[index] = SeamSignature.Places.Case(
 				ownerLevel: placeCase.ownerLevel,
 				isBuiltInSendableFunction: placeCase.isBuiltInSendableFunction,
 				siteOpensSendableFunction: placeCase.siteOpensSendableFunction,
 				passedUp: placeCase.passedUp,
-				firstCasePresentingSamePlaces: root(of: index),
+				firstCasePresentingSamePlaces: root(of: index) == index ? nil : root(of: index),
+				isPassedOnSendable: isPassedOnSendable[index],
+				namingRoute: root(of: index) == index ? placeCase.namingRoute : [],
+				narrowestAccess: placeCase.narrowestAccess,
 			)
 		}
 		return SeamPlacesCaseAssembly(cases: cases, unassembled: unassembled, ownCaseByKey: ownCaseByKey, passedUpCaseByKey: passedUpCaseByKey)

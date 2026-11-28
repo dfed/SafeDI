@@ -231,4 +231,22 @@ struct SeamPlacesFieldAccess {
 		let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName, declaringModuleName]))
 		return (min(access.level, seamTypeAccess), access.cause)
 	}
+
+	/// The access of the builder of a place of `property` that `ownerType` holds: its type's, as the field of a type its
+	/// owner's module declares, no wider than the seam's type.
+	func builderAccess(ofPlace property: Property, ownedBy ownerType: TypeDescription) -> SeamSignature.Places.Case.Access {
+		let access = access(of: property, declaredBy: ownerType)
+		return SeamSignature.Places.Case.Access(level: access.level, cause: access.cause)
+	}
+
+	/// The access of the builder this seam passes up for `hole`, a called seam's: a function from the called seam's scope
+	/// to the place's type, which the hole's owner's module declares, no wider than the seam's type.
+	func builderAccess(passingUp hole: SeamSignature.Hole) -> SeamSignature.Places.Case.Access {
+		let access = proof.access(
+			ofParameterTyped: .closure(arguments: [hole.scopeSeamType], isAsync: false, doesThrow: false, returnType: hole.property.typeDescription),
+			mentionedFrom: .declaration(seam),
+			admittedModules: Set([seam.moduleName, instantiables[hole.ownerType]?.moduleName]),
+		)
+		return SeamSignature.Places.Case.Access(level: min(access.level, seamTypeAccess), cause: access.cause)
+	}
 }

@@ -20,8 +20,8 @@
 
 // A seam's whole place graph assembled from its facts drafts, in place of the walk's, where a test turns the switch on
 // (`NodeRecordsObservation.assemblesPlacesFromFacts`): what the oracle runs the generator on. The per-case additions
-// the facts do not give yet (`isPassedOnSendable`, the called copies, the re-entering declarations, the narrowest access)
-// are carried over from the walk's case each assembled case matches.
+// the facts do not give yet (the called copies, the declarations replaced on paths to calls, the re-entering
+// declarations) are carried over from the walk's case each assembled case matches.
 
 extension SeamPlacesDrafts {
 	/// The graph assembled from the drafts, with each of `stored`'s cases' index in it: the assembled case of the same
@@ -29,7 +29,7 @@ extension SeamPlacesDrafts {
 	/// assembled case matched once; `nil` for a stored case none matches.
 	func assembledPlaces(parameters: [SeamSignature.Parameter], access: SeamPlacesFieldAccess, replacing stored: SeamSignature.Places) -> (places: SeamSignature.Places, assembledIndexOfStoredCase: [Int?]) {
 		let assembly = assembledLevels(parameters: parameters, access: access)
-		let caseAssembly = assembly.cases(of: self)
+		let caseAssembly = assembly.cases(of: self, access: access)
 		var fold = SeamPlacesCaseAssembly.PlacesInTreeFold(drafts: self, cases: caseAssembly)
 		// Each child's places in its tree, the union over the levels that share its list.
 		struct ListedDeclaration: Hashable {
@@ -88,13 +88,13 @@ extension SeamPlacesDrafts {
 				siteOpensSendableFunction: placeCase.siteOpensSendableFunction,
 				passedUp: placeCase.passedUp,
 				firstCasePresentingSamePlaces: placeCase.firstCasePresentingSamePlaces,
-				isPassedOnSendable: storedCase?.isPassedOnSendable ?? false,
+				isPassedOnSendable: placeCase.isPassedOnSendable,
 				calledCopyDeclarations: storedCase?.calledCopyDeclarations ?? [],
 				uncarriedReplacedOnPathsToCalls: storedCase?.uncarriedReplacedOnPathsToCalls ?? [],
 				reenteringCallDeclarations: storedCase?.reenteringCallDeclarations ?? [],
 				reenteringPlaceFields: storedCase?.reenteringPlaceFields ?? [],
 				namingRoute: placeCase.namingRoute,
-				narrowestAccess: storedCase?.narrowestAccess,
+				narrowestAccess: placeCase.narrowestAccess,
 			)
 		}
 		return (SeamSignature.Places(levels: assembly.levels, cases: cases, declarationLists: lists), assembledIndexOfStoredCase)
