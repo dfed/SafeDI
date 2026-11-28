@@ -71,9 +71,15 @@ extension TypeKeyLayout {
 			let allSites = members.flatMap { callSitesByClass[$0] }
 			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
 			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
-			// each level of nested local functions past about twenty.
+			// each level of nested local functions past about twenty. Under `declaresLoopMembersAsThePathKeyDoes` the nesting
+			// is the path key's own, which the tree writes too, so the type key adds no depth.
 			guard let firstSite = externalSites.first else { return false }
-			let owner = 0
+			// Where the path key writes each loop once, it declares each function in the body that calls it, a loop's
+			// functions in the body that builds the loop. A component the path key writes once per calling body, which the
+			// type key keys as one view, has no one body to be declared in, so the root keeps the path key's body.
+			let isNested = declaresLoopMembersAsThePathKeyDoes
+			guard !isNested || externalSites.allSatisfy({ $0.owner == firstSite.owner }) else { return false }
+			let owner = isNested ? firstSite.owner : 0
 			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
 			// The functions are declared before the first statement of the root's body that reaches them: one that calls a
 			// member, or one that reaches a function that calls one, which is placed already, since callers are placed first.
@@ -85,11 +91,22 @@ extension TypeKeyLayout {
 				placementIndex[member] = index
 				placementDepth[member] = placementDepth[owner] + 1
 			}
-			let site = CallSite(owner: owner, index: index)
-			if isAttached {
-				attachedFunction[site] = members[0]
+			// A loop of builders whose members the root's statements each build once, and nothing else reaches, declares each
+			// member's function right before the statement that builds it, as the path key does: a member's function may call
+			// a later one's, which `keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes()` checks once captures are known.
+			let sitesByMember = members.map { member in callSitesByClass[member].filter { !memberSet.contains($0.owner) } }
+			if isNested, members.count > 1, sitesByMember.allSatisfy({ $0.count == 1 && $0.first?.owner == owner }) {
+				for (member, sites) in zip(members, sitesByMember) {
+					for site in sites {
+						placementIndex[member] = site.index
+						attachedFunction[site] = member
+					}
+				}
+				loopMembersDeclaredAsThePathKeyDoes.append(contentsOf: members)
+			} else if isAttached {
+				attachedFunction[CallSite(owner: owner, index: index)] = members[0]
 			} else {
-				hoistedFunctions[site, default: []].append(contentsOf: members)
+				hoistedFunctions[CallSite(owner: owner, index: index), default: []].append(contentsOf: members)
 			}
 		}
 		// Functions declared before one statement are ordered by the first reach of their cycle, then by their own.
@@ -103,5 +120,33 @@ extension TypeKeyLayout {
 			}
 		}
 		return true
+	}
+}
+
+extension TypeKeyLayout {
+	/// Whether each loop member declared right before the statement that builds it (`declaresLoopMembersAsThePathKeyDoes`)
+	/// reaches, through every function it calls, only captures the body declaring it binds before that statement. Its statement uses
+	/// its function, and Swift rejects the use of a function before a value any function it calls captures ("closure
+	/// captures 'x' before it is declared"): a member declared before a later member's statement calls that member's
+	/// function, which captures what the root binds before its own statement. Read after `computeOutcomes()`, which
+	/// settles what each function captures from where `computePlacement()` declares it, so placement cannot check it.
+	func keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() -> Bool {
+		loopMembersDeclaredAsThePathKeyDoes.allSatisfy { member in
+			let declaringOwner = placementOwner[member]
+			let use = placementIndex[member]
+			var reached: Set = [member]
+			var pending = [member]
+			var capturesOnlyWhatIsBoundBefore = true
+			while capturesOnlyWhatIsBoundBefore, let owner = pending.popLast() {
+				capturesOnlyWhatIsBoundBefore = !outcomes[owner].values.contains { outcome in
+					guard case let .captured(.statement(capturedOwner, index)) = outcome else { return false }
+					return capturedOwner == declaringOwner && index >= use
+				}
+				for callee in calleesByClass[owner] where reached.insert(callee).inserted {
+					pending.append(callee)
+				}
+			}
+			return capturesOnlyWhatIsBoundBefore
+		}
 	}
 }

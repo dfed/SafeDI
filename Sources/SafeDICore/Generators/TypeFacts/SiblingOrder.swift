@@ -120,13 +120,19 @@ enum SiblingOrder {
 		var orderedIndices = [Int]()
 		/// For each child, the index of the first member of the loop of builders it is on, or -1.
 		var loopByChild = [Int]()
+		/// For each child on a loop, the indices of the members its tree receives inside the loop, itself among them where
+		/// its tree receives its own property, which its builder function rebinds (`ScopeGenerator`'s
+		/// `reboundPropertiesByChildIndex`); empty for every other child.
+		var reboundByChild = [[Int]]()
 	}
 
 	static func order(of children: [Child], receives: TypeFactsReceives, facts: TypeFactsPropertyFacts) -> Result {
 		var result = Result()
 		let graph = siblingGraph(of: children, receives: receives, facts: facts)
-		let loops = loops(of: children, graph: graph, facts: facts)
+		let found = loops(of: children, graph: graph, facts: facts)
+		let loops = found.loopByChild
 		result.loopByChild = loops
+		result.reboundByChild = found.reboundByChild
 		// One child, or none, has no sibling to order against, but can be a loop of its own.
 		guard children.count > 1 else {
 			result.orderedIndices = Array(children.indices)
@@ -270,9 +276,10 @@ enum SiblingOrder {
 	}
 
 	/// `ScopeGenerator.receivedBuilderLoops(of:requiredOnlyIfAvailableAliasProperties:)`: for each child, the first member
-	/// of its loop of builders, or -1.
-	static func loops(of children: [Child], graph: Graph, facts: TypeFactsPropertyFacts) -> [Int] {
+	/// of its loop of builders, or -1, and the members it rebinds.
+	static func loops(of children: [Child], graph: Graph, facts: TypeFactsPropertyFacts) -> (loopByChild: [Int], reboundByChild: [[Int]]) {
 		var loopByChild = [Int](repeating: -1, count: children.count)
+		var reboundByChild = [[Int]](repeating: [], count: children.count)
 		let isBuilder = children.map { child -> Bool in
 			guard child.property >= 0, facts.isBuilder[Int(child.property)] else { return false }
 			guard child.isAlias else { return true }
@@ -286,10 +293,10 @@ enum SiblingOrder {
 					&& facts.provides(sibling.property, aFormReadBy: fulfilling)
 			}
 		}
-		guard isBuilder.contains(true) else { return loopByChild }
+		guard isBuilder.contains(true) else { return (loopByChild, reboundByChild) }
 		let candidates = graph.receivesLeftNil.filter { isBuilder[$0.receiver] && isBuilder[$0.sibling] }
 		guard !candidates.isEmpty || !graph.childrenRequiringThemselves.isEmpty || graph.dependencies.indices.contains(where: { isBuilder[$0] && graph.dependencies[$0].contains { isBuilder[$0] } }) else {
-			return loopByChild
+			return (loopByChild, reboundByChild)
 		}
 		func components(of arrows: [Set<Int>]) -> (componentByIndex: [Int], holdsOnlyBuilders: (Int) -> Bool) {
 			let componentByIndex = ScopeGenerator.stronglyConnectedComponents(of: arrows)
@@ -331,8 +338,13 @@ enum SiblingOrder {
 			let firstMember = firstMemberByComponent[componentByIndex[index]] ?? index
 			firstMemberByComponent[componentByIndex[index]] = firstMember
 			loopByChild[index] = firstMember
+			var rebound = givenArrows[index].filter { componentByIndex[$0] == componentByIndex[index] && children[$0].property >= 0 }
+			if givenSelfArrows.contains(index), children[index].property >= 0 {
+				rebound.insert(index)
+			}
+			reboundByChild[index] = rebound.sorted()
 		}
-		return loopByChild
+		return (loopByChild, reboundByChild)
 	}
 
 	/// Whether `target` is reached from `start` over `arrows`.

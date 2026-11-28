@@ -1306,6 +1306,24 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenProductionBuildsTypeInPlainFunctionAndInSendableFunction() async throws {
+		// `leaf` is one node with two parents, one built in a plain `Instantiator`'s function and one in a
+		// `SendableInstantiator`'s `@Sendable` function: production's body is one, `@Sendable` a mark folded over its calls,
+		// so the family keys no production variant.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let plainBuilder: Instantiator<Plain>", "@Instantiated let sharedBuilder: SendableInstantiator<Shared>"]),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"], conformances: ", Sendable"),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "Leaf as leaf: Leaf" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 1, "\(report.world)")
+		#expect(Set(report.variantFamilies) == ["plain"], "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1327,7 +1345,13 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		// Where a root's cycles are planned per type, the tree is built in pieces, each observed as a world of its own: the
+		// last piece with the most places holds the functions a test reads.
+		var largest = try #require(reports.last)
+		for report in reports.reversed() where report.places.count > largest.places.count {
+			largest = report
+		}
+		return largest
 	}
 
 	/// `Leaf` receives `theme` only if available, as `leafTheme`, and builds itself again through `leafBuilder`, so 2.4.x
