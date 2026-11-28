@@ -148,6 +148,10 @@ public struct GenerationWork: Sendable {
 		/// declaration, each edge, and each declaration a walk down from the fills reaches, once per world. Asked of each
 		/// declaration with a walk up its parents, a chain of n declarations walked n² parents.
 		case findingOwedFacts
+		/// Finding the optional forms a tree reads where they are available (`ScopeGenerator.formsReadWhereAvailable`), once
+		/// for each generator, from its children's: each child, each form a child's set holds, and each child asked whether
+		/// it receives one of the generator's optional forms.
+		case readingFormsWhereAvailable
 	}
 
 	/// The step that did the work.

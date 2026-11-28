@@ -2454,7 +2454,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			guard reachesFilledSite else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
-					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
+					return .init(label: label, value: memberCall, passesPlacesUp: true, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
 					if enumKey.holeType.builtType.isOptional {
