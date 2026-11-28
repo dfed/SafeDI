@@ -3508,6 +3508,11 @@ struct SeamHoles: Sendable {
 		valuesBindingsByPath.isEmpty ? [] : valuesBindingsByPath[sitePath, default: []]
 	}
 
+	/// Whether any builder function of the seam's tree makes a member call at its top (`memberCallsInsideFunction(at:)`).
+	var makesMemberCallsInsideFunctions: Bool {
+		!memberCallsInsideFunctionByPath.isEmpty
+	}
+
 	/// The structs the member calls made at the top of the builder function of the property at the end of `sitePath` return.
 	func memberCallsInsideFunction(at sitePath: [Property]) -> [ValuesBinding] {
 		memberCallsInsideFunctionByPath.isEmpty ? [] : memberCallsInsideFunctionByPath[sitePath, default: []]

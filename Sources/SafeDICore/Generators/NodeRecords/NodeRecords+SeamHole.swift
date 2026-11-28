@@ -34,49 +34,23 @@ extension NodeRecords {
 		if besideACycle {
 			refusals.append(.cycle)
 		}
-		let route = routeFacts(of: declaration, in: world)
-		if !route.isOnePath {
+		if !reachesRootAlongOnePath(declaration, in: world) {
 			refusals.append(.holeOnSeveralPaths)
-		}
-		if route.passesAWrapper {
-			refusals.append(.holeInWrapper)
 		}
 		return NodeRecordClaim(kind: .seamHole, discharges: [.renameOrHole], refusals: refusals)
 	}
 
-	/// Whether every node from `declaration`, a hole, up to the world's root has one parent, and whether the hole is held
-	/// in, or that path passes, a wrapper but an `Instantiator`: an erased, lazy or `@Sendable` one, whose builder
-	/// function binds the route's payloads apart.
-	private static func routeFacts(of declaration: DeclarationID, in world: some NodeRecordSources) -> (isOnePath: Bool, passesAWrapper: Bool) {
-		var passesAWrapper = world.property(of: declaration).map { !isPlain($0.propertyType) } ?? false
+	/// Whether every node from `declaration`, a hole, up to the world's root has one parent. A hole held in, or reached
+	/// through, a lazy, erased or `@Sendable` wrapper is written as any other: its site's text declares the wrapper's
+	/// function (`HoleSitePlaces.buildSiteCode`), and the payloads its route binds are places of the nodes on the route.
+	private static func reachesRootAlongOnePath(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		var node = declaration
 		while node != 0 {
 			let parents = world.parents(of: node)
-			guard parents.count == 1, let parent = parents.first else { return (false, passesAWrapper) }
+			guard parents.count == 1, let parent = parents.first else { return false }
 			node = parent.parent
-			if node != 0, world.isErased(node) || !isPlain(world.kind(of: node)) {
-				passesAWrapper = true
-			}
 		}
-		return (true, passesAWrapper)
-	}
-
-	private static func isPlain(_ propertyType: Property.PropertyType) -> Bool {
-		switch propertyType {
-		case .constant, .instantiator:
-			true
-		case .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
-			false
-		}
-	}
-
-	private static func isPlain(_ kind: TypeFactsKind) -> Bool {
-		switch kind {
-		case .constant, .instantiator:
-			true
-		case .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy, .alias, .hole:
-			false
-		}
+		return true
 	}
 
 	/// The place of `declaration`, a hole: its site's code, as a seam's tree writes it (`HoleSitePlaces`), from the site and
@@ -91,18 +65,22 @@ extension NodeRecords {
 	) -> GeneratedCode {
 		let (sitePath, lazilyInstantiatedInstanceProperties) = pathFacts(of: declaration, in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
 		let carrierSite = seamHoles.carrierSite(at: sitePath)
-		// A hole is a leaf its scope declares, built as its property (`TypeFactsDeclaration.init(leafOf:...)`).
+		// A hole is a leaf its scope declares, built as its property (`TypeFactsDeclaration.init(leafOf:...)`). Only a seam's
+		// own tree holds one, whose local functions are `@inline(never)` (`LocalFunctionInlining`), as the function a wrapper
+		// that holds the hole is built around.
 		return world.property(of: declaration).map { property in
-			HoleSitePlaces.place(
-				of: property,
-				at: seamHoles.site(at: sitePath),
-				routeMembers: seamHoles.routeMembers(at: sitePath),
-				functionName: nil,
-				valuesBindings: carrierSite?.formations ?? [],
-				carrierUse: carrierSite?.use,
-				readingInstancesOf: lazilyInstantiatedInstanceProperties,
-				loopBindsPayloads: false,
-			)
+			LocalFunctionInlining.$isNeverInlined.withValue(true) {
+				HoleSitePlaces.place(
+					of: property,
+					at: seamHoles.site(at: sitePath),
+					routeMembers: seamHoles.routeMembers(at: sitePath),
+					functionName: nil,
+					valuesBindings: carrierSite?.formations ?? [],
+					carrierUse: carrierSite?.use,
+					readingInstancesOf: lazilyInstantiatedInstanceProperties,
+					loopBindsPayloads: false,
+				)
+			}
 		} ?? .empty
 	}
 
@@ -119,6 +97,30 @@ extension NodeRecords {
 		let (path, lazilyInstantiatedInstanceProperties) = pathFacts(of: declaration, in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
 		guard let bindingPlaces = HoleSitePlaces.valuesBindingPlaces(of: seamHoles.valuesBindings(at: path), readingInstancesOf: lazilyInstantiatedInstanceProperties) else { return builtPlace }
 		return .sequence(bindingPlaces + [builtPlace])
+	}
+
+	/// The member calls of builder structs the seam's tree makes at the top of `declaration`'s builder function, a
+	/// `@Sendable` one on a route to a hole's place (`SeamHoles.memberCallsInsideFunction(at:)`), each a place of its own,
+	/// the first statements of the function's body, as the tree writes them (`ScopeGenerator.memberCallPlaces`); empty off
+	/// every such route.
+	static func memberCallPlaces(
+		of declaration: DeclarationID,
+		in world: some NodeRecordSources,
+		seamHoles: SeamHoles,
+		rootLazilyInstantiatedInstanceProperties: Set<Property>,
+	) -> [GeneratedCode] {
+		guard seamHoles.makesMemberCallsInsideFunctions else { return [] }
+		let (path, lazilyInstantiatedInstanceProperties) = pathFacts(of: declaration, in: world, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties)
+		return seamHoles.memberCallsInsideFunction(at: path).map { binding in
+			let line = binding.line(readingInstancesOf: lazilyInstantiatedInstanceProperties)
+			let record = AliasPlaceRecord(
+				property: Property(label: binding.bindingName, typeDescription: binding.boundType),
+				fulfillingProperty: nil,
+				text: line,
+				reads: binding.reads(readingInstancesOf: lazilyInstantiatedInstanceProperties),
+			)
+			return .indented(.place(PlacePlan(code: .text("\(line)\n"), record: .alias(record))), by: ScopeGenerator.standardIndent)
+		}
 	}
 
 	/// The properties from the world's root to `declaration`'s, by each node's first parent, and what the scope that builds

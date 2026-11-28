@@ -77,9 +77,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// The node is a hole of a seam's tree, or on the route to one, that the tree reaches along more than one path: the names
 	/// a route binds follow its path, so one variant per node cannot hold the place.
 	case holeOnSeveralPaths
-	/// The node is a hole of a seam's tree held in, or reached through, a wrapper but an `Instantiator`: an erased, lazy or
-	/// `@Sendable` one, whose builder function binds what the hole's place reads apart, which hole records do not write yet.
-	case holeInWrapper
 	/// The node is on a cycle, and no kind that makes a node on a cycle claims it (`cycleClaim(of:in:)`), or the world's
 	/// edges close a cycle that `NodeBuildOrder` meets.
 	case cycle
@@ -334,8 +331,10 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
 			// (`NodeRecords+Loops.swift`).
-			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
-			let children = Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels) + children
+			// A place of a seam's own mock is bound from its builder before the node's children, which read it. A `@Sendable`
+			// builder function on a route to a hole's place first calls the members of the builder structs that lead on.
+			let memberCallPlaces = seamHoles.map { Self.memberCallPlaces(of: declaration, in: world, seamHoles: $0, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties) } ?? []
+			let children = memberCallPlaces + Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels) + children
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = Self.lazilyInstantiatedInstanceProperties(of: declaration, variant: variant, in: world)
 			// A wrapper `mock()` binds around a value it takes is passed to each receiver by a name apart from its label, which

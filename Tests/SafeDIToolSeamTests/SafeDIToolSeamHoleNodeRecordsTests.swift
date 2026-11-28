@@ -69,10 +69,55 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesSeamsWorld_whenItReachesAHoleThroughALazyWrapper() async throws {
-		// `panel`'s builder function binds what its hole's site reads apart.
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenAHoleIsReachedThroughALazyWrapper() async throws {
+		// `panel`'s builder function binds what its hole's site reads, the places of the route's nodes.
 		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: LazilyInstantiated<Panel>"])
-		#expect(reports.map(\.refusal) == ["holeInWrapper"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenAHoleIsReachedThroughASendableInstantiator() async throws {
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenAHoleIsReachedThroughASendableLazyWrapper() async throws {
+		// `panel`'s `@Sendable` builder function first calls the member of the builder struct that leads to `api`'s place.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: SendableLazilyInstantiated<Panel>"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenAHoleIsHeldInALazyWrapper() async throws {
+		// `LazyPanel` holds its hole as `LazilyInstantiated<any Api>`, whose function the hole's site declares.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let lazyPanel: LazyPanel"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenATypeReceivingOnlyIfAvailableDeclaresAHole() async throws {
+		// `Watcher` receives `panel` only if available, which `Office` instantiates before it, and declares the hole `api`.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: Panel", "@Instantiated let watcher: Watcher"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenATypeDeclaringARenameDeclaresAHole() async throws {
+		// `Renamer` receives `panel` as `renamedPanel`, and declares the hole `api`.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: Panel", "@Instantiated let renamer: Renamer"])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.differences) == [[]])
 	}
 
 	// MARK: Private
@@ -92,6 +137,9 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 				seamFixtureType(named: "Looping", declarations: ["@Instantiated let api: any Api", "@Instantiated let childBuilder: Instantiator<Child>"]),
 				seamFixtureType(named: "Child", declarations: ["@Instantiated let grandBuilder: Instantiator<Grand>"]),
 				seamFixtureType(named: "Grand", declarations: ["@Instantiated let childBuilder: Instantiator<Child>"]),
+				seamFixtureType(named: "LazyPanel", declarations: ["@Instantiated let api: LazilyInstantiated<any Api>"]),
+				seamFixtureType(named: "Watcher", declarations: ["@Received(onlyIfAvailable: true) let panel: Panel?", "@Instantiated let api: any Api"]),
+				seamFixtureType(named: "Renamer", declarations: ["@Received(fulfilledByDependencyNamed: \"panel\", ofType: Panel.self) let renamedPanel: Panel", "@Instantiated let api: any Api"]),
 				seamFixtureType(named: "Office", isSeam: true, declarations: officeDeclarations),
 			],
 			app: [

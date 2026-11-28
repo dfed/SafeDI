@@ -20,9 +20,9 @@
 
 extension NodeRecords {
 	/// The claim of `declaration` where it is a node whose type receives a property only if available or declares a rename:
-	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole`, which it still holds where its
-	/// scope declares a hole, and the refusal of the wrapper it is built in, which its record reads of the node
-	/// (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
+	/// of kind `receivesOnlyIfAvailable`, discharging `onlyIfAvailable` and `renameOrHole` (a hole its scope declares is a
+	/// node of its own, `seamHoleClaim(of:in:)`), and the refusal of the wrapper it is built in, which its record reads of
+	/// the node (`wrapperRefusalsDischarged(of:in:)`); `nil` for any other node.
 	static func receivesOnlyIfAvailableClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { return nil }
 		let scope = world.scope(of: declaration)
@@ -34,15 +34,7 @@ extension NodeRecords {
 			}
 		}
 		guard declaresRename || scope.instantiable.dependencies.contains(where: { $0.source == .received(onlyIfAvailable: true) }) else { return nil }
-		let declaresHole = scope.propertiesToGenerate.contains {
-			if case .hole = $0 {
-				true
-			} else {
-				false
-			}
-		}
-		let refusals: [NodeRecordRefusal] = declaresHole ? [.renameOrHole] : []
-		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: refusals)
+		return NodeRecordClaim(kind: .receivesOnlyIfAvailable, discharges: wrapperRefusalsDischarged(of: declaration, in: world).union([.onlyIfAvailable, .renameOrHole]), refusals: [])
 	}
 
 	/// The record of `declaration`'s place in `variant`, a node of kind `receivesOnlyIfAvailable`: a `builtByInitializer`
