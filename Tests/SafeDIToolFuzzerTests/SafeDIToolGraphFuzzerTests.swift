@@ -7178,9 +7178,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xD861BA1867DC3677
+	static let corpusFixtureHash: UInt64 = 0xCB8F6B707975A3AA
 
-	static let corpusPartitionHash: UInt64 = 0xF85634477216DBA6
+	static let corpusPartitionHash: UInt64 = 0x412BBB9D33C6D0DC
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
