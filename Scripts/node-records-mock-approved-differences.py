@@ -1065,10 +1065,9 @@ AWAITING_CELLS = {
         'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTwoBodiesNameOneVariantsFunctionApart',
         'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTheBodyThatNamesAVariantsFunctionApartIsReadBeforeTheOneThatKeepsItsName',
     ],
-    # two variants of one node: mock_buildsTheWalksValues_whenOneNodeIsBuiltBeneathItsLabelHeldLazilyAndByValue
-    # (same branch) compares the values, but nobody has checked that its fixture writes the two functions of one
-    # name the held pairs show, so the hold stays until that is confirmed
-    '21 two variants': [],
+    # two variants of one node; the test is on claude/mock-cycle-twin-parameters f4a868ce0, and the mock writer
+    # reports its recorded text holds both functions of one name and one return type (04:39Z)
+    '21 two variants': ['SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenOneNodeIsBuiltByBuildersBeneathItsLabelHeldLazilyAndByValue'],
 }
 IGNORE_HOLDS = False
 
