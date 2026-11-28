@@ -21,10 +21,10 @@
 extension NodeRecords {
 	/// Claims a node built as an `ErasedInstantiator`, or as a constant or an `Instantiator` erased to its property's type
 	/// (`erasedToConcreteExistential`). Its record is its type's initializer's
-	/// (`builtByInitializerRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:typesDeclaredEscaping:children:lineEnd:)`),
+	/// (`builtByInitializerRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:construction:typeFunctionReturns:typesDeclaredEscaping:children:lineEnd:)`),
 	/// marked erased where the node is, so that the engine wraps the built value in the property's type. An erased
 	/// `LazilyInstantiated` is `lazyClaim(of:in:)`'s, and an erased `Sendable` wrapper `sendableClaim(of:in:)`'s.
-	static func erasedClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func erasedClaim(of declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> NodeRecordClaim? {
 		switch world.kind(of: declaration) {
 		case .erasedInstantiator:
 			NodeRecordClaim(kind: .erased, discharges: [.erased])

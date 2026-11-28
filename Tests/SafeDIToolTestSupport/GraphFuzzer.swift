@@ -2970,10 +2970,15 @@ enum GraphFuzzerGenerator {
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
+			actorClassWrapperRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorClassWrapperRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
+			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
+			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
+			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
+			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3061,6 +3066,11 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
+			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingRenameFulfilledByValueAndWrapper(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingActorAndClassBuildingSameWrapper(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3544,9 +3554,13 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
 		/// that tree.
 		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
+		private var actorClassWrapperRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingDependencyInstantiatedOnlyIfAvailable`'s choices: whether a graph gains `IfAvailableRoot`'s
 		/// tree, and every shape of that tree.
 		private var instantiatedOnlyIfAvailableRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingDependencyInstantiatedOnlyIfAvailable`'s fulfilled token is erased, so that every other
+		/// choice of the draw is drawn as before.
+		private var instantiatedOnlyIfAvailableErasureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingOptionalPlaceShapes`' choices: whether a split graph gains `OptionalPlaceRoot`'s tree, and every
 		/// shape of that tree.
 		private var optionalPlaceRandom: GraphFuzzerRandomNumberGenerator
@@ -3556,6 +3570,14 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
+		/// shape of that tree.
+		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingScreensLaidOutFromPerTypePlan`'s tree gains `PlanJob`, and where.
+		private var perTypePlanJobRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingRenameFulfilledByValueAndWrapper`'s choices: whether a graph gains `RenameSplitRoot`'s tree, and
+		/// every shape of that tree.
+		private var renameSplitRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -8320,6 +8342,78 @@ enum GraphFuzzerGenerator {
 
 		private static let actorArgumentRandomSeedMask: UInt64 = 0x6163746F72417267
 
+		// MARK: An actor and a class building the same wrapper
+
+		/// The base corpus's draw, outside `Sendable` graphs, of an actor and a class that each build the same wrapper of one
+		/// leaf. `ActorClassHost`, whose mock is generated, instantiates `ActorClassStore`, an actor, and
+		/// `ActorClassShelf`, a class, in either order, and each instantiates `actorClassLeafBuilder`: an `Instantiator`, a
+		/// `LazilyInstantiated`, or an `ErasedInstantiator` that erases `ActorClassLeaf` to `AnyActorClassLeaf`, a struct the
+		/// leaf's file declares. The actor is sent the wrapper with its closure, so a mock whose closure reads a field of a
+		/// configuration that is not `Sendable` does not compile. Half the time the leaf takes a default-valued parameter,
+		/// so its configuration has a field; a quarter of the time it receives `actorClassToken`, a `Sendable` class the
+		/// host instantiates before both; three draws in ten also generate the actor's own mock. No root reaches the tree, so the
+		/// compile and the value oracle's mirror of the host judge it. `actorClassWrapperRandom` draws only for this pass,
+		/// after every other, and only in the base corpus.
+		private mutating func addingActorAndClassBuildingSameWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard !omitsDrawsOlderReleasesReject, features.isEmpty, actorClassWrapperRandom.percentChance(12), sendability != .sendable else { return declarations }
+			var declarations = declarations
+			let wrapperKind = actorClassWrapperRandom.integer(in: 0...2)
+			let storeComesFirst = actorClassWrapperRandom.percentChance(50)
+			let leafTakesDefault = actorClassWrapperRandom.percentChance(50)
+			let leafReceivesToken = actorClassWrapperRandom.percentChance(25)
+			let storeGeneratesMock = actorClassWrapperRandom.percentChance(30)
+			func declaration(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: [],
+				)
+			}
+			let tokenName = "\(prefix)ActorClassToken"
+			let leafName = "\(prefix)ActorClassLeaf"
+			let erasedLeafName = "\(prefix)AnyActorClassLeaf"
+			let storeName = "\(prefix)ActorClassStore"
+			let shelfName = "\(prefix)ActorClassShelf"
+			let leafBuilder = switch wrapperKind {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "Instantiator<\(leafName)>")
+			case 1:
+				PropertyDeclaration(attribute: "@Instantiated", label: "actorClassLeafBuilder", type: "LazilyInstantiated<\(leafName)>")
+			default:
+				PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(leafName)\", erasedToConcreteExistential: true)", label: "actorClassLeafBuilder", type: "ErasedInstantiator<(), \(erasedLeafName)>")
+			}
+			var leaf = declaration(leafName, leafReceivesToken ? [PropertyDeclaration(attribute: "@Received", label: "actorClassToken", type: tokenName)] : [])
+			if leafTakesDefault {
+				leaf.defaultValuedParameters = [ParameterDeclaration(name: "name", type: "String", defaultValue: "\"leaf\"")]
+			}
+			if wrapperKind == 2 {
+				leaf.additionalDeclarations.append("public struct \(erasedLeafName) {\n\tpublic init(_ value: \(leafName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(leafName)\n}")
+			}
+			declarations.append(leaf)
+			var hostProperties = [PropertyDeclaration]()
+			if leafReceivesToken {
+				// A token that is not `Sendable`, captured by the wrapper the actor is sent and held by the host too, is a
+				// data race production reports as a mock does ("sending … risks causing data races"), so it is `Sendable`.
+				var token = declaration(tokenName, [])
+				token.additionalConformances = ["Sendable"]
+				declarations.append(token)
+				hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "actorClassToken", type: tokenName))
+			}
+			var store = declaration(storeName, generatesMock: storeGeneratesMock, [leafBuilder])
+			store.isActor = true
+			declarations.append(store)
+			declarations.append(declaration(shelfName, [leafBuilder]))
+			let storeProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassStore", type: storeName)
+			let shelfProperty = PropertyDeclaration(attribute: "@Instantiated", label: "actorClassShelf", type: shelfName)
+			hostProperties.append(contentsOf: storeComesFirst ? [storeProperty, shelfProperty] : [shelfProperty, storeProperty])
+			declarations.append(declaration("\(prefix)ActorClassHost", generatesMock: true, hostProperties))
+			return declarations
+		}
+
+		private static let actorClassWrapperRandomSeedMask: UInt64 = 0x6163744373577270
+
 		// MARK: A dependency instantiated only if available
 
 		/// The base corpus's draw of `@Instantiated(onlyIfAvailable: true)`. `IfAvailableRoot`, a root, instantiates
@@ -8329,9 +8423,12 @@ enum GraphFuzzerGenerator {
 		/// declares, which no declaration fulfills, so production binds the property to `nil` and a mock binds it from an
 		/// override that defaults to `nil`, and takes no parameter, a root's included (`rootMockTakesParameter`). The leaf receives the label in its optional
 		/// form, required or only if available, and where it is only if available the root now and then builds a second
-		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. The
-		/// compile and the value oracles judge the tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after
-		/// every other, and only in the base corpus.
+		/// leaf itself, outside the screen's tree, which is passed `nil`. Now and then the screen's mock is generated. Half
+		/// the graphs whose token is fulfilled erase it, on a stream of their own (`instantiatedOnlyIfAvailableErasureRandom`):
+		/// the screen instantiates `ifAvailableToken: AnyIfAvailableToken?` with `fulfilledByType:` and
+		/// `erasedToConcreteExistential: true`, which the leaf receives, so a mock wraps the token in the erasing type without
+		/// its optionality, as production does (`AnyT?(…)` does not compile). The compile and the value oracles judge the
+		/// tree. `instantiatedOnlyIfAvailableRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingDependencyInstantiatedOnlyIfAvailable(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard !omitsDrawsOlderReleasesReject, features.isEmpty, instantiatedOnlyIfAvailableRandom.percentChance(16) else { return declarations }
 			var declarations = declarations
@@ -8342,6 +8439,7 @@ enum GraphFuzzerGenerator {
 			let screenGeneratesMock = instantiatedOnlyIfAvailableRandom.percentChance(40)
 			let tokenIsFulfilled = instantiatedOnlyIfAvailableRandom.percentChance(60)
 			let rootBuildsLeaf = rootMayBuildLeaf && !leafRequiresToken
+			let tokenIsErased = tokenIsFulfilled && instantiatedOnlyIfAvailableErasureRandom.percentChance(50)
 			func append(_ name: String, arguments: [String] = [], _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
@@ -8354,19 +8452,28 @@ enum GraphFuzzerGenerator {
 			let tokenName = "\(prefix)IfAvailableToken"
 			let leafName = "\(prefix)IfAvailableLeaf"
 			let screenName = "\(prefix)IfAvailableScreen"
+			let erasedTokenName = "\(prefix)AnyIfAvailableToken"
+			let receivedTokenType = tokenIsErased ? erasedTokenName : tokenName
 			if tokenIsFulfilled {
 				append(tokenName, [])
 			}
 			append(leafName, [leafRequiresToken
-					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(tokenName)?")
-					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")])
-			let token = PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
+					? PropertyDeclaration(attribute: "@Received", label: "ifAvailableToken", type: "\(receivedTokenType)?")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(receivedTokenType)?")])
+			let token = tokenIsErased
+				? PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(tokenName)\", erasedToConcreteExistential: true, onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(erasedTokenName)?")
+				: PropertyDeclaration(attribute: "@Instantiated(onlyIfAvailable: true)", label: "ifAvailableToken", type: "\(tokenName)?")
 			let leaf = leafIsBuiltByInstantiator
 				? PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeafBuilder", type: "\(sendability == .sendable ? "SendableInstantiator" : "Instantiator")<\(leafName)>")
 				: PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableLeaf", type: leafName)
 			append(screenName, arguments: screenGeneratesMock ? ["generateMock: true"] : [], tokenComesFirst ? [token, leaf] : [leaf, token])
 			if !tokenIsFulfilled {
 				declarations[declarations.count - 1].additionalDeclarations.append("public final class \(tokenName): Sendable {}")
+			}
+			if tokenIsErased {
+				declarations[declarations.count - 1].additionalDeclarations.append(
+					"public struct \(erasedTokenName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(tokenName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(tokenName)\n}",
+				)
 			}
 			var rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "ifAvailableScreen", type: screenName)]
 			if rootBuildsLeaf {
@@ -8377,6 +8484,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let instantiatedOnlyIfAvailableRandomSeedMask: UInt64 = 0x4966417661696C21
+		private static let instantiatedOnlyIfAvailableErasureRandomSeedMask: UInt64 = 0x4966417661696C45
 
 		// MARK: A type built again through a second lazy cycle
 
@@ -8483,6 +8591,206 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let renamedLazyReaderRandomSeedMask: UInt64 = 0x52656E4C617A79
+
+		// MARK: Screens laid out from the per-type plan
+
+		/// Adds, to one base corpus graph in twenty, `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
+		/// (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)` finds nothing in it), which the corpus's other
+		/// draws almost never are. `PlanRoot` instantiates one or two services by value and opens `PlanScreen0` through an
+		/// instantiator. Three to five screens open the next one around a ring through instantiators, and now and then
+		/// another screen too, so every screen is in one cycle. `PlanScreen0` instantiates one or two models, which the other
+		/// screens now and then receive, a value their own cycle declares again each time it builds `PlanScreen0`; a screen
+		/// now and then receives a service only the root declares, and forwards a value of its own (`planId<i>`), which its
+		/// opener's instantiator is called with. A screen now and then builds `PlanPane<i>` by value, which opens a screen
+		/// through an instantiator, a member of the cycle built by value; and one graph in three, one screen builds
+		/// `PlanDetail` by value, which builds `PlanPart`, a tree outside the cycle built once. Each type's properties are in
+		/// an order of their own, and the draw keeps at most `maximumScreenBuildersBeyondRing` builders beyond the ring's,
+		/// a screen's own or a pane's. In a graph of `Sendable` types the screens open one another through
+		/// `SendableInstantiator`s, the only instantiators such a type can store. In a graph whose wrappers may be
+		/// `Sendable`, six in ten of these graphs have one screen build `PlanJob` through a `SendableInstantiator`, whose
+		/// `@Sendable` builder function the plan's code declares: in a
+		/// graph of `Sendable` types `PlanJob` receives a service only the root declares, which that function captures, and
+		/// otherwise nothing, since no other type of the draw is `Sendable` there. The draw holds none of what keeps a root on
+		/// today's tree: no seam, rename, optional, value received only if available, received instantiator, lazy wrapper,
+		/// erasure, function type, label held in two forms, tree outside the cycles built twice, label a screen receives that
+		/// another type of the root's tree declares outside its cycle, or wrapper that is not `Sendable` a `@Sendable`
+		/// function could capture. `perTypePlanRandom` draws only for this pass, after every other, and only in the base
+		/// corpus, whose value oracle compares `PlanRoot()` with its mock; `perTypePlanJobRandom` draws only `PlanJob`, so
+		/// that the draw's other graphs are drawn as before.
+		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `PlanRoot`'s tree holds no wrapper that is not `Sendable` where a `@Sendable` function could capture it, whatever
+			// the graph's other types hold.
+			guard features.isEmpty,
+			      perTypePlanRandom.percentChance(5)
+			else { return declarations }
+			var declarations = declarations
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				// Each type's properties in an order of their own, so that no order the walk relies on is always drawn.
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, perTypePlanRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+				))
+			}
+			// A graph whose types all conform to `Sendable` stores only `Sendable` wrappers, so its screens open one another
+			// through `SendableInstantiator`s.
+			let screenInstantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func screenBuilder(_ screen: Int) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "planScreen\(screen)Builder", type: "\(screenInstantiator)<\(prefix)PlanScreen\(screen)>")
+			}
+			let screenCount = perTypePlanRandom.integer(in: 3...5)
+			let serviceCount = perTypePlanRandom.integer(in: 1...2)
+			let modelCount = perTypePlanRandom.integer(in: 1...2)
+			let services = (0..<serviceCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planService\($0)", type: "\(prefix)PlanService\($0)") }
+			let models = (0..<modelCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planModel\($0)", type: "\(prefix)PlanModel\($0)") }
+			for index in 0..<serviceCount {
+				append("PlanService\(index)", [])
+			}
+			for index in 0..<modelCount {
+				append("PlanModel\(index)", [])
+			}
+			let detailScreen = perTypePlanRandom.percentChance(33) ? perTypePlanRandom.integer(in: 0...(screenCount - 1)) : nil
+			// The builders beyond the ring's, a screen's own or a pane's, each drawn as before and kept only while fewer
+			// than `maximumScreenBuildersBeyondRing` are, so that the graphs within it draw as they did.
+			var screenBuildersBeyondRingCount = 0
+			for screen in 0..<screenCount {
+				var properties = [screenBuilder((screen + 1) % screenCount)]
+				for other in 0..<screenCount where other != screen && other != (screen + 1) % screenCount && perTypePlanRandom.percentChance(20) && screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+					screenBuildersBeyondRingCount += 1
+					properties.append(screenBuilder(other))
+				}
+				if screen == 0 {
+					properties += models
+				} else {
+					properties += models.filter { _ in perTypePlanRandom.percentChance(50) }.map {
+						PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+					}
+					if perTypePlanRandom.percentChance(30) {
+						properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "planId\(screen)", type: "Int"))
+					}
+				}
+				properties += services.filter { _ in perTypePlanRandom.percentChance(40) }.map {
+					PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+				}
+				if screen != 0, perTypePlanRandom.percentChance(30) {
+					let paneScreen = perTypePlanRandom.integer(in: 0...(screenCount - 1))
+					let paneReceivesModel = perTypePlanRandom.percentChance(50)
+					if screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+						screenBuildersBeyondRingCount += 1
+						properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planPane\(screen)", type: "\(prefix)PlanPane\(screen)"))
+						var paneProperties = [screenBuilder(paneScreen)]
+						if paneReceivesModel {
+							paneProperties.append(PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type))
+						}
+						append("PlanPane\(screen)", paneProperties)
+					}
+				}
+				if detailScreen == screen {
+					properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planDetail", type: "\(prefix)PlanDetail"))
+				}
+				append("PlanScreen\(screen)", properties)
+			}
+			if detailScreen != nil {
+				append("PlanDetail", [
+					PropertyDeclaration(attribute: "@Instantiated", label: "planPart", type: "\(prefix)PlanPart"),
+					PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type),
+				])
+				append("PlanPart", [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)])
+			}
+			append("PlanRoot", isRoot: true, services + [screenBuilder(0)])
+			// Drawn after every other choice, from a stream of its own and without the shuffle above, so that every graph
+			// without it is drawn as before.
+			if sendability != .nonSendable, perTypePlanJobRandom.percentChance(60) {
+				let jobScreen = perTypePlanJobRandom.integer(in: 0...(screenCount - 1))
+				if let index = declarations.firstIndex(where: { $0.name == "\(prefix)PlanScreen\(jobScreen)" }) {
+					let jobBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "planJobBuilder", type: "SendableInstantiator<\(prefix)PlanJob>")
+					declarations[index].properties.insert(jobBuilder, at: perTypePlanJobRandom.integer(in: 0...declarations[index].properties.count))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)PlanJob",
+					instantiableArguments: [],
+					// Only a graph of `Sendable` types declares a `Sendable` service the job's function can capture.
+					properties: sendability == .sendable ? [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)] : [],
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			return declarations
+		}
+
+		/// How many builders beyond the ring's `addingScreensLaidOutFromPerTypePlan` draws at most. The value comparator
+		/// calls each builder twice and follows one until it is twice on a path, so its traversals of the ring grow
+		/// exponentially with these builders: with two, a ring of five screens and `PlanJob` take at most 4,382 of a probe's
+		/// 10,000 (`DifferentialValueLimits.traversalsPerProbe`), and with three, without `PlanJob`, as many as 42,056.
+		private static let maximumScreenBuildersBeyondRing = 2
+
+		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
+		private static let perTypePlanJobRandomSeedMask: UInt64 = 0x506C616E4A6F62
+
+		// MARK: A rename fulfilled by a value and by a wrapper
+
+		/// The base corpus's draw, in one graph of sixteen, of one type whose rename is fulfilled by a label one parent
+		/// declares as a value and another as a lazily instantiated wrapper of it. `RenameSplitRoot`, a root, instantiates
+		/// `RenameSplitLazyParent` and `RenameSplitValueParent`, in either order. The lazy parent declares
+		/// `renameSplitValue` as a `LazilyInstantiated<RenameSplitValue>` (or its `Sendable` kind in a `Sendable` graph) and
+		/// builds `RenameSplitReader` through an `Instantiator`, directly, or beneath `RenameSplitHolder`; the value parent
+		/// declares the label as a `RenameSplitValue` and builds the reader directly or beneath the holder. The reader
+		/// renames the label, `@Received(fulfilledByDependencyNamed: "renameSplitValue", ofType: RenameSplitValue.self)`, so
+		/// beneath the lazy parent its rename reads the wrapper's instance and beneath the value parent the value itself.
+		/// The two paths can share the reader's node records, whose key does not tell the forms apart, so a layout that
+		/// judged only the first path met wrote the value's spelling beneath the wrapper too, which does not compile.
+		/// `renameSplitRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingRenameFulfilledByValueAndWrapper(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, renameSplitRandom.percentChance(6) else { return declarations }
+			var declarations = declarations
+			let lazyParentComesFirst = renameSplitRandom.percentChance(50)
+			// 0: through an `Instantiator`; 1: directly; 2: beneath the holder.
+			let lazyPath = renameSplitRandom.integer(in: 0...2)
+			let valuePathUsesHolder = renameSplitRandom.percentChance(50)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let valueName = "\(prefix)RenameSplitValue"
+			let readerName = "\(prefix)RenameSplitReader"
+			let holderName = "\(prefix)RenameSplitHolder"
+			let wrapped = "\(lazilyInstantiatedWrapper(isSendable: sendability == .sendable))<\(valueName)>"
+			let reader = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReader", type: readerName)
+			let holder = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitHolder", type: holderName)
+			append(valueName, [])
+			append(readerName, [PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"renameSplitValue\", ofType: \(valueName).self)", label: "renameSplitRenamed", type: valueName)])
+			if lazyPath == 2 || valuePathUsesHolder {
+				append(holderName, [reader])
+			}
+			let lazyParentReach = switch lazyPath {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitReaderBuilder", type: "\(instantiator)<\(readerName)>")
+			case 1:
+				reader
+			default:
+				holder
+			}
+			append("\(prefix)RenameSplitLazyParent", [lazyParentReach, PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: wrapped)])
+			append("\(prefix)RenameSplitValueParent", [PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValue", type: valueName), valuePathUsesHolder ? holder : reader])
+			let lazyParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitLazyParent", type: "\(prefix)RenameSplitLazyParent")
+			let valueParent = PropertyDeclaration(attribute: "@Instantiated", label: "renameSplitValueParent", type: "\(prefix)RenameSplitValueParent")
+			append("\(prefix)RenameSplitRoot", isRoot: true, lazyParentComesFirst ? [lazyParent, valueParent] : [valueParent, lazyParent])
+			return declarations
+		}
+
+		private static let renameSplitRandomSeedMask: UInt64 = 0x52656E53706C6974
 
 		// MARK: Cycle parameters
 
@@ -14059,7 +14367,7 @@ enum GraphFuzzerSourceLine: Equatable {
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), let keyword = ["final class ", "actor "].first(where: { declaration.hasPrefix($0) }) {
-				// Only `addingActorArgumentShapes` draws an actor, so reading one changes no other graph's files or model.
+				// Only `addingActorArgumentShapes` and `addingActorAndClassBuildingSameWrapper` draw an actor, so reading one changes no other graph's files or model.
 				let name = declaration.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
 			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {

@@ -41,8 +41,6 @@ extension DependencyTreeGenerator {
 	/// - Parameter checksConstructions: Whether an inaccessible construction is an error. A module that computes the plan
 	///   of another module's public mock passes `false` with that module: the declaring module's own run checked its
 	///   constructions, and the plan must promote what that run promoted.
-	/// - Parameter recordingWorldRoot: Handed the root of the mock root's world, which node records are made of
-	///   (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a caller keeps it.
 	func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -58,7 +56,6 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
-		recordingWorldRoot: ((ConstructionScope) -> Void)? = nil,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -486,7 +483,9 @@ extension DependencyTreeGenerator {
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
-		recordingWorldRoot?(ConstructionScope(table: mockRootTable, record: mockRootRecord))
+		// The root of the mock root's world, which node records are made of
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
+		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
@@ -531,6 +530,19 @@ extension DependencyTreeGenerator {
 			}
 		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		// Each place of the tree against the body the plan of a tree by declaration builds for it, built only where a test
+		// compares the two.
+		try Self.compareMockBodies(
+			ofMockOf: instantiable,
+			mockRootScope: mockRootScope,
+			todaysTree: generator,
+			boundProperties: allReceived,
+			receivesPassedNil: receivesPassedNil,
+			lazilyInstantiatedInstanceProperties: instancesReadThroughWrapperParameters,
+			frozenScopeMap: frozenScopeMap,
+			declaredTypeNames: declaredTypeNames,
+			cache: &cache,
+		)
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must
 		// forward one value, as that initializer's places must.
@@ -1189,11 +1201,12 @@ extension DependencyTreeGenerator {
 		return receivesPassedNil
 	}
 
-	/// The properties each required receive of the type of `scope` reads from above it, by label, as
+	/// The properties each required receive of `instantiable`, built as `publicMockCall` where it is one, reads from above
+	/// it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: ConstructionScope) -> [(label: String, propertiesRead: Set<Property>)] {
-		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
+	static func propertiesReadByRequiredReceivesFromAbove(of instantiable: Instantiable, publicMockCall: PublicMockCall?) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: instantiable, publicMockCall: publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
 	}

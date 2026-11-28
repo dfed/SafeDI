@@ -527,8 +527,9 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_readsTheInstanceOfWhatTheSeamsRootIsHanded_whenTypesBeneathTheSeamReceiveItsDeferredParameter() async throws {
 		// `Vault`'s initializer holds `database` in a `LazilyInstantiated`, which no node of its tree declares: what the
-		// root is handed answers the reads of `Store` and `Index`, at two depths, as that wrapper's instance, and the seam's
-		// initializers are written around its body laid out from its records.
+		// root is handed answers the reads of `Store` and `Index`, at two depths, as that wrapper's instance. A record reads
+		// its variant's key alone, and a seam's root's keys are not yet seeded from its parameters, so the receives refuse
+		// the world as `lazy` until they are; the tree writes it meanwhile.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let database: Database", "@Instantiated let vault: Vault"]),
@@ -573,9 +574,8 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 			""",
 		])
 		let seamReports = reports.filter { $0.root == "Vault" }
-		#expect(seamReports.map(\.refusal) == [nil])
-		#expect(seamReports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(seamReports.map(\.everyRefusal) == [[]])
+		#expect(seamReports.map(\.refusal) == ["lazy"])
+		#expect(seamReports.map(\.everyRefusal) == [["lazy"]])
 		#expect(seamReports.flatMap(\.differences) == [])
 	}
 
@@ -634,30 +634,26 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTheTreesFirstError_whenTwoPlacesErrorBesideARootLaidOutFromNodeRecords() async {
-		// `Alpha`'s world is accepted, so a run that builds no tree for it lays it out from its records; each of the other
-		// roots holds a place whose capture the tree reports. Both runs report the errors the run that builds every tree
-		// does, in its order.
-		for buildsNoTreeForAcceptedRoots in [false, true] {
-			await assertThrowsError(
-				diagnostics: { fixtures in
-					"""
-					\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
-					\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
-					\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: SecondRoot -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `SecondRoot` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `SecondRoot`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
-					\(fixtures["SecondRoot.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
-					"""
-				},
-			) {
-				var filesMade = [URL]()
-				defer { filesToDelete += filesMade }
-				return try await NodeRecordsObservation.$buildsNoTreeForAcceptedRoots.withValue(buildsNoTreeForAcceptedRoots) {
-					try await executeSafeDIToolTest(
-						swiftFileContent: Self.twoErroringPlacesFixture,
-						buildSwiftOutputDirectory: true,
-						filesToDelete: &filesMade,
-					)
-				}
-			}
+		// `Alpha`'s world is accepted, so the run lays it out from its records and builds no tree for it; each of the other
+		// roots holds a place whose capture the tree reports. The run reports the errors a run that builds every tree
+		// reports, in its order.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Root -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Root` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `Root`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["Root.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: SecondRoot -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `SecondRoot` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `SecondRoot`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `Root` and `SecondRoot`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["SecondRoot.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				"""
+			},
+		) {
+			var filesMade = [URL]()
+			defer { filesToDelete += filesMade }
+			return try await executeSafeDIToolTest(
+				swiftFileContent: Self.twoErroringPlacesFixture,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesMade,
+			)
 		}
 	}
 

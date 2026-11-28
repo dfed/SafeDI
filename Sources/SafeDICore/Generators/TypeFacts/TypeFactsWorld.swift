@@ -153,8 +153,8 @@ struct TypeFactsReceived: Equatable, Sendable {
 	let isRequiredThroughAlias: Bool
 }
 
-/// One receive a node's own type makes: the read it makes, the properties that fulfill it as a run of
-/// `acceptedProperties(of:)`, whether it is required, and the alias it is read through.
+/// One receive a node's own type makes: the read it makes, the properties that fulfill it (which no world reports yet),
+/// whether it is required, and the alias it is read through.
 struct TypeFactsReceive: Equatable, Sendable {
 	let read: ReadID
 	let acceptedStart: Int32
@@ -179,6 +179,9 @@ struct TypeFactsAnswer: Equatable, Sendable {
 		case optionalLazilyInstantiatedParameter
 		/// As `optionalParameter`, answered by a `SendableLazilyInstantiated`, which the parameter is.
 		case optionalSendableLazilyInstantiatedParameter
+		/// A member of a loop of builders, which the node answering rebinds at the top of its body: made again from the
+		/// member's one function, never being built.
+		case madeAgain
 	}
 
 	let form: Form
@@ -193,8 +196,8 @@ struct TypeFactsAnswer: Equatable, Sendable {
 struct TypeFactsOwedFacts: OptionSet, Sendable {
 	let rawValue: UInt8
 
-	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
-	/// on every declaration beneath one.
+	/// The fill channel (track C): whether a hole's property is still being built inside its own fill. Set on a fill the
+	/// channel refuses (`TypeFactsFillRefusal`) and on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
 	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
 	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
@@ -203,9 +206,6 @@ struct TypeFactsOwedFacts: OptionSet, Sendable {
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
 	/// The mock root's bindings: whether the mock root binds a read. Set on every declaration of a mock world.
 	static let mockRootBinding = TypeFactsOwedFacts(rawValue: 1 << 3)
-	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every member of
-	/// a loop of builders.
-	static let madeAgain = TypeFactsOwedFacts(rawValue: 1 << 4)
 }
 
 /// What every track reads of one world.
@@ -223,6 +223,19 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The members of loops of builders the declaration's body makes again at its top, in the order it rebinds them: a
+	/// column of its own beside `edges(from:)`, which the reads closure and the variants read and the build order,
+	/// `isOnCycle` and `firstRoute` do not.
+	///
+	/// A writer reads the member's own arguments from here too: its argument for a label of `madeAgainLabels(from:)` is
+	/// always that label's rebinding, whatever source its read's answer names. The rebinding shadows the member's own
+	/// receives of the labels it makes again, so those reads leave its row, but for one: the read of the label it is built
+	/// as, which a loop of one makes again too and still reaches above, answered as its parent's declaration being built.
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The label the declaration rebinds each member of `madeAgain(from:)` as, in that order.
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID>
+	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
+	var loopMembersSharedApart: [Int32] { get }
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
 	/// value up to its run ID.
@@ -236,8 +249,6 @@ protocol TypeFactsWorld {
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
 	/// table-side columns.
 	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
-	/// The properties that fulfill a receive. Owed by the table-side columns.
-	func acceptedProperties(of receive: TypeFactsReceive) -> ArraySlice<PropertyID>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -261,12 +272,16 @@ protocol TypeFactsWorld {
 	/// The forms an answer's declaration provides, by value, interned apart from the channel that reads them. Owed with
 	/// answers interned by ID (answers are interned by text tonight).
 	func forms(of answer: AnswerID) -> ArraySlice<PropertyID>
-	/// Whether the answer's declaration provides `property`. Owed with `forms(of:)`: `false` until then.
-	func provides(_ answer: AnswerID, _ property: PropertyID) -> Bool
 	/// The variant each edge of the variant's declaration calls, in edge order.
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
+	/// The variant each member the variant's declaration makes again calls, in `madeAgain(from:)`'s order: a call from the
+	/// top of the declaration's body, handed its answers there.
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID>
+	/// Where each answer a made-again call hands its callee comes from, in the callee's read order: `bound` by the caller
+	/// for a label it rebinds, else passed through from the caller's own answers.
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
 	/// What each read of the variant comes to, parallel to `keys(of:)` (the outcomes fold).
@@ -289,6 +304,15 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+
+	// The fill channel: the fills each call passes, in edge order.
+	var fillCount: Int { get }
+	/// The fill at `index`: its edge, the seam it fills a place of, and why the channel does not model it yet, if it does not.
+	func fill(_ index: Int) -> TypeFactsFill
+	/// The fields the fill at `index` binds for its tree, in their declared order: the call's edge to the fill answers a read
+	/// of one, and every other read of the fill's tree but its place's own label, which the fill builds, goes on to the
+	/// call's caller.
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField>
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -333,6 +357,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 		graph.edges(from: Int(declaration))
 	}
 
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
+		madeAgain?.targets(of: Int(declaration)) ?? []
+	}
+
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
+		madeAgain?.labels(of: Int(declaration)) ?? []
+	}
+
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {
 		edgeFacts(from: Int(declaration))
 	}
@@ -357,16 +389,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		[]
 	}
 
-	func acceptedProperties(of _: TypeFactsReceive) -> ArraySlice<PropertyID> {
-		[]
-	}
-
 	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {
 		[]
-	}
-
-	func provides(_: AnswerID, _: PropertyID) -> Bool {
-		false
 	}
 
 	var rootCount: Int {
@@ -419,7 +443,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 			return TypeFactsAnswer(form: form, forms: -1)
 		}
-		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
+		let form: TypeFactsAnswer.Form = if answerIsMadeAgain[Int(answer)] {
+			.madeAgain
+		} else if answerIsBeingBuilt[Int(answer)] {
+			.beingBuilt
+		} else {
+			.declared
+		}
+		return TypeFactsAnswer(form: form, forms: answerKeys[Int(answer)])
 	}
 
 	func calls(of variant: VariantID) -> ArraySlice<VariantID> {
@@ -428,6 +459,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
 		variants.sources(ofCall: variants.callOffset(of: Int(variant)) + edgeIndex)
+	}
+
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID> {
+		variants.madeAgainCallees(of: Int(variant))
+	}
+
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
+		variants.sources(ofCall: variants.madeAgainCallOffset(of: Int(variant)) + index)
 	}
 
 	func isCalledOnce(_ variant: VariantID) -> Bool {
@@ -512,15 +551,12 @@ extension TypeFactsGraph: TypeFactsWorld {
 		if forMockGeneration {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
 		}
-		// A member of a loop of builders: an edge into it is in a loop.
-		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
-			owed.insert(.madeAgain)
-		}
-		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
+		// A declaration is beneath a fill the channel refuses where any of its routes enters one: a walk up its parents, past
+		// the fills it models.
 		var visited: Set = [declaration]
 		var pending = [declaration]
 		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
+			guard !isRefusedFill(current) else {
 				owed.insert(.fillBeingBuilt)
 				break
 			}
@@ -529,5 +565,52 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 		}
 		return owed
+	}
+
+	/// Whether `declaration` is a fill the channel refuses: a search of the sorted column.
+	private func isRefusedFill(_ declaration: DeclarationID) -> Bool {
+		var low = 0
+		var high = refusedFillDeclarations.count
+		while low < high {
+			let middle = (low + high) / 2
+			if refusedFillDeclarations[middle] < declaration {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low < refusedFillDeclarations.count && refusedFillDeclarations[low] == declaration
+	}
+
+	var fillCount: Int {
+		fills.count
+	}
+
+	func fill(_ index: Int) -> TypeFactsFill {
+		fills[index]
+	}
+
+	/// The indices of the fills whose edges are among `edges`, one node's: the fills are in edge order, as the graph meets
+	/// each node's fill arguments, so they are found by halving.
+	func fillIndices(ofEdgesIn edges: Range<Int>) -> Range<Int> {
+		func firstFill(atOrAfter edge: Int) -> Int {
+			var low = 0
+			var high = fills.count
+			while low < high {
+				let middle = (low + high) / 2
+				if Int(fills[middle].edge) < edge {
+					low = middle + 1
+				} else {
+					high = middle
+				}
+			}
+			return low
+		}
+		return firstFill(atOrAfter: edges.lowerBound)..<firstFill(atOrAfter: edges.upperBound)
+	}
+
+	func fields(ofFill index: Int) -> ArraySlice<TypeFactsFillField> {
+		let fill = fills[index]
+		return fillFields[Int(fill.fieldStart)..<Int(fill.fieldStart + fill.fieldCount)]
 	}
 }

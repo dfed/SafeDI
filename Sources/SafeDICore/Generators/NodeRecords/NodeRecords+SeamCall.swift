@@ -23,31 +23,26 @@ extension NodeRecords {
 	/// discharges stage 1's refusal of a construction other than an initializer, and its refusal of a call that passes
 	/// builders where the call passes each builder up from the seam whose tree makes it (`ConstructionScope.HoleArgument.passUp`);
 	/// `nil` for any other node, and for every node of a mock root's world, which builds every seam inline. Every other
-	/// check of stage 1 still runs on it, so a call that fills a place is still refused as `fill`. It discharges the refusal
-	/// of a receive only if available too: the leaf receives only if available each parameter the seam takes so, which the
-	/// call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds a call in
-	/// place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`), whose
-	/// function takes the values the seam forwards, which the wrapper hands it. A call that forwards values is refused as
-	/// `construction` for now, as the tree writes no record of it (`ScopeGenerator`'s seam call place).
+	/// check of stage 1 still runs on it. A call that fills a place is claimed above it (`filledSeamCallClaim(of:in:)`). It
+	/// discharges the refusal of a receive only if available too: the leaf receives only if available each parameter the
+	/// seam takes so, which the call is passed `nil` for where `OnlyIfAvailableAnswers` finds it unavailable. The engine binds
+	/// a call in place as a built place of its form, a wrapper of its function where the property is one (`InPlaceCall`); a
+	/// call that forwards values, which a wrapper binds inside its function, is refused as `construction`.
 	static func seamCallClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		guard !world.isMockWorld, world.construction(of: declaration) == .seamCall else { return nil }
 		let scope = world.scope(of: declaration)
 		let forwardsValues = scope.instantiable.dependencies.contains { $0.source == .forwarded }
-		let passesEveryBuilderUp = scope.holeArguments.allSatisfy { holeArgument in
-			switch holeArgument {
-			case .passUp:
-				true
-			case .fill:
-				false
-			}
-		}
 		// A call held in a wrapper, erased or not, or in a `@Sendable` function is bound as a built place of its form is, which
 		// discharges what that form's claim does.
 		let wrapperDischarges = (erasedClaim(of: declaration, in: world) ?? lazyClaim(of: declaration, in: world) ?? sendableClaim(of: declaration, in: world))?.discharges ?? []
+		// A call that makes a member of a loop of builders again rebinds it in the call's body, which the tree writes as text
+		// rather than spelling the call where its place is (`ScopeGenerator`'s `seamCallRecord`), and no record holds yet.
+		let rebindsLoopMember = !world.madeAgain(from: declaration).isEmpty
 		return NodeRecordClaim(
 			kind: .seamCall,
-			discharges: (passesEveryBuilderUp ? Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]) : [.construction, .onlyIfAvailable]).union(wrapperDischarges),
-			refusals: forwardsValues ? [.construction] : [],
+			// Every builder the call passes is passed up: a call that fills a place is claimed above (`filledSeamCallClaim(of:in:)`).
+			discharges: Set<NodeRecordRefusal>([.construction, .fill, .onlyIfAvailable]).union(wrapperDischarges),
+			refusals: (forwardsValues ? [.construction] : []) + (rebindsLoopMember ? [.builderLoop] : []),
 		)
 	}
 
@@ -72,7 +67,7 @@ extension NodeRecords {
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
-		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, unavailableProperties: answers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, typesDeclaredEscaping: typesDeclaredEscaping, children: [], declaresFunction: true)
+		let construction = try builtByInitializerRecord(of: declaration, variant: variant, in: world, unavailableProperties: answers.unavailableProperties(of: variant), lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, alwaysDeclaresFunction: true, typesDeclaredEscaping: typesDeclaredEscaping, children: [])
 		var arguments = construction.arguments
 		// A value the call is forwarded is its function's parameter, which no declaration outside it answers.
 		var reads = construction.arguments.filter { read in !construction.forwardedProperties.contains { $0.label == read.label } }
@@ -114,7 +109,7 @@ extension NodeRecords {
 			record.argumentValues = argumentValues
 		}
 		// Never `nil`: the node is of kind `seamCall` (`seamCallClaim(of:in:)`), whose construction is a call of the seam.
-		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
+		record.callFields = CallFields(leadingStatement: scope.seamCall.map { .callGuard($0.callGuard(for: construction.concreteType)) }, closureArguments: closureArguments)
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [construction.functionName]
 		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)
@@ -130,15 +125,15 @@ struct SeamCallRoutes: Sendable {
 		readsByCall = [:]
 	}
 
-	/// The routes of `signature`'s tree, whose world is `world`.
-	init(world: some NodeRecordSources, signature: SeamSignature) {
-		guard !signature.callRoutes.isEmpty else {
+	/// The routes of `seamTree`, whose world is `world`.
+	init(world: some NodeRecordSources, seamTree: DependencyTreeGenerator.RootScopeInfo.SeamTree) {
+		guard !seamTree.callRoutes.isEmpty else {
 			readsByCall = [:]
 			return
 		}
-		let seamHoles = SeamHoles(seamType: signature.seamType, holes: signature.holes, builders: signature.builders, parameters: signature.parameters, callRoutes: signature.callRoutes, scopeEnums: signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+		let seamHoles = seamTree.makeSeamHoles()
 		var routesByCall = [Call: (read: PassedUp?, count: Int)]()
-		for callRoute in signature.callRoutes where !callRoute.reentersEnclosingFill {
+		for callRoute in seamTree.callRoutes where !callRoute.reentersEnclosingFill {
 			// The node at the end of the route's path: each step the child of the step before built as the step's property. A
 			// path into a fill names no edge's property, and leaves its call without a read.
 			let reached = callRoute.sitePath.reduce(DeclarationID?(0)) { declaration, property in

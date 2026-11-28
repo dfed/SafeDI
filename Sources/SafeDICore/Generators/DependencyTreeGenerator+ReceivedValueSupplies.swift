@@ -31,9 +31,13 @@ extension DependencyTreeGenerator {
 	///   that a call made beneath it passes, which the walk does not judge.
 	/// - Throws: The error `generate` reports when the trees are not valid.
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
-		let roots = try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: ownAccessProof(), readersOfEveryTree: [.reader(.receivedValueSupplies)]).roots
+		let proof = ownAccessProof()
+		let roots = try await TypeFactsReceivedValueSupplies.$readsWhereTreesAreBuilt.withValue(unfulfilledReceiveLocations.isEmpty) {
+			try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: proof, readersOfEveryTree: [.reader(.receivedValueSupplies)], plansCyclesPerType: false).roots
+		}
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
+		// Every root's tree is built per path here (`plansCyclesPerType`).
 		var unfulfilledReceiveLabels = Set<String>()
 		if !unfulfilledReceiveLocations.isEmpty {
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
@@ -45,14 +49,16 @@ extension DependencyTreeGenerator {
 		let unfulfilledReceives = ScopeGenerator.UnfulfilledReceives(locations: unfulfilledReceiveLocations, labels: unfulfilledReceiveLabels)
 		if unfulfilledReceiveLocations.isEmpty {
 			for root in roots {
-				// Read from the root's per-type graph, where a node stands for every place of its declaration.
-				let tree = TypeFactsReceivedValueSupplies(root: root.rootScope)
+				// Read from the root's per-type graph, where a node stands for every place of its declaration, where the
+				// tree was built.
+				guard let tree = root.receivedValueSupplies else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
 			}
 		} else {
-			for root in roots.compactMap(\.tree) {
-				guard let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
+			for root in roots {
+				guard let scopeGenerator = root.scopeGenerator else { continue }
+				guard let tree = await scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
 			}

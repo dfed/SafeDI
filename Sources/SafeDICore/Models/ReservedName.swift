@@ -76,6 +76,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// The name of the property, and initializer parameter, of each generated `SafeDIMockConfiguration` that
 	/// overrides how its type is built, and of the binding of that override in a construction expression.
 	public static let configurationBuilderPropertyName = "safeDIBuilder"
+	/// The name of the argument through which a function on a cycle of a generated mock's tree takes the places the
+	/// functions above it entered, and hands on its own.
+	public static let mockEnteredPlacesParameterName = "__safeDI_entered"
+	/// The name such a function binds the place it builds under, in the first line of its body.
+	public static let mockEnteredPlaceName = "__safeDI_place"
 
 	/// `name`, which must begin with `builderFunctionNamePrefix`, without the prefix.
 	public static func removingBuilderFunctionNamePrefix(from name: String) -> String {
@@ -147,6 +152,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(functionName)_received".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the parameter under which a mock's function of a member of a loop of builders takes the overrides of the
+	/// loop's level, a node of the type `typeIdentifier` names, or `mock()` itself, whose overrides every member's
+	/// configuration is a field of (`NodeRecords.mockLoopLevelArgument(of:in:levels:)`).
+	static func loopLevelConfigurationParameterName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function
 	/// named `functionName` of the loop's first member (see `ScopeGenerator.boxedLoops`).
 	static func loopLevelsName(of functionName: String) -> String {
@@ -156,6 +168,9 @@ public enum ReservedName: Hashable, Sendable {
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
 	static let loopLevelsTypeName = "\(builderFunctionNamePrefix)LoopLevels"
+	/// The name of the struct a generated `mock()` whose tree holds a cycle declares: the places the functions on a path
+	/// have entered, a slot for each property a path can close on (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
+	static let mockEnteredPlacesTypeName = "\(builderFunctionNamePrefix)EnteredPlaces"
 
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.

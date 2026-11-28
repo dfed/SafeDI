@@ -54,6 +54,14 @@ struct ConstructionScope: Sendable {
 		record.isUnavailableDependency
 	}
 
+	var isCallPlace: Bool {
+		record.isCallPlace
+	}
+
+	var callPlaceRequiredAliasFulfillingProperties: Set<Property> {
+		record.callPlaceRequiredAliasFulfillingProperties
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
@@ -158,7 +166,7 @@ struct ConstructionScope: Sendable {
 		}
 	}
 
-	fileprivate let table: ScopeTable
+	let table: ScopeTable
 	fileprivate let record: ScopeRecord
 }
 
