@@ -29,6 +29,9 @@ import re
 import sys
 import threading
 MEMBERS='\x00members'
+WALK_PARAMETERS={}
+HANDED='\x01'
+HANDS=[]
 NEAREST='\x00nearest'
 CONFIG='\x00configuration'
 # A fresh configuration and every member path of one hold nil, by the configurations' defaulted initializers.
@@ -129,21 +132,33 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             out.append(line); i+=1; continue
         name,s,e,expr,loop=hit
         newline=line[:s]+line[e:]
-        # entry 20: a fresh configuration, or a member of one, holds no override
-        if name in entered:
+        # entry 20, the places enum: how the call hands its configuration on, which the rewrite kept beside it
+        key=(name,expr,loop)
+        how=None
+        if expr is not None and expr.startswith(HANDED):
+            number,expr=expr[1:].split(HANDED,1)
+            how=HANDS[int(number)]
+        closes=('slot',how[1]) if how and how[0]=='entering' else name if not how else None
+        if closes in entered:
             # entry 20: a call of a function this one is nested in closes the cycle on that function. The records
             # declare one function per place of the list, so the function's name stands for its place.
-            newline=reference(newline,name,hoisted)
-            newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',entered[name],newline)
+            newline=reference(newline,name,hoisted,entered.get(('kept',closes),()))
+            newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',entered[closes],newline)
+            if how:
+                newline=ONE_LINE_WRAPPER.sub(r'\1(\2)',newline)
+                taking=ONE_LINE_CLOSURE.match(newline)
+                if taking:
+                    lines[i:i+1]=three_lines(taking)
+                    continue
             lines[i]=newline
             mm=re.match(r'^\s*(__safeDI_\w+)\(\)$',newline)
             if mm and out and out[-1].rstrip().endswith('> {') and i+1<len(lines) and lines[i+1].strip()=='}':
                 out[-1]=out[-1][:-2].rstrip()+'('+mm.group(1)+')'
                 i+=2
             continue
-        if (name,expr,loop) in visible:
+        if key in visible:
             # entry 16: a member of the loop calls another member, which the level it is nested in declares
-            referenced.add((name,expr,loop))
+            referenced.add(key)
             ALSO_USED.append('16')
             newline=reference(newline,name,hoisted)
             lines[i]=newline
@@ -162,10 +177,21 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             below=dict(nearest,**{key:expr})
             body=body[1:]
         m=FUNC.match(sig)
+        if how:
+            # entry 20, the places enum: a place is entered with the configuration handed, or, where the call
+            # asks for the nearest of its type, with the configuration the nearest place of that type above
+            # was entered with. The type is the one the function declares its configuration with.
+            kind,slot,asks_nearest=how
+            configuration=re.search(r'(?:^|, )safeDIOverrides: (.*)$',m.group(4))
+            if not configuration: raise SystemExit('a call hands places to a function that takes none')
+            of_type=('type',configuration.group(1))
+            if kind=='entering' and asks_nearest and of_type in nearest: expr=nearest[of_type]
+            if kind!='passing':
+                below=dict(below);below[of_type]=expr
         loop_parameter=LOOP_PARAMETER.search(m.group(4))
         params=LOOP_PARAMETER.sub('',m.group(4))
         params=re.sub(r'(^|, )safeDIOverrides: .*$','',params)
-        handed=None
+        handed=None;kept_labels=[]
         if loop_parameter and loop is not None:
             handed=re.compile(r'(?<![\w.])'+re.escape(loop_parameter.group(2))+r'(?![\w:])')
         # a parameter every call hands the value of its own name was a capture
@@ -173,13 +199,18 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         callm=re.search(r'(?<![\w.])'+re.escape(name)+r'\((.*)\)',newline)
         if callm:
             alist=split_top(callm.group(1))
-            keep_p=[];keep_a=[]
+            keep_p=[];keep_a=[];kept_labels=[]
             for pp in plist:
                 lab=pp.split(':')[0]
                 ident=lab+': '+lab
                 bare=lab.strip('`')+': '+lab
                 absent=lab.strip('`')+': nil'
-                if ident in alist: alist.remove(ident)
+                if how and (ident in alist or bare in alist) and pp in WALK_PARAMETERS.get((base_indent,name),()):
+                    # entry 20, the places enum: a function on a cycle that the walk hands this value as a
+                    # parameter keeps the parameter the records declare, and every call keeps its argument, so
+                    # each argument stays in the byte comparison
+                    keep_p.append(pp);kept_labels.append(lab)
+                elif ident in alist: alist.remove(ident)
                 elif bare in alist: alist.remove(bare)
                 elif absent in alist and OPTIONAL_PARAMETER.search(pp) and not declares_again(body,lab):
                     # entry 13's channel in a mock: one function with an optional parameter serves a place that
@@ -211,7 +242,12 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]
         if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
         if base_indent>8000: raise RecursionError('functions nest without end')
-        sub=expand(sub,hoisted,base_indent+4,dict(entered,**{name:newname}),below,visible|level,referenced)
+        inside=dict(entered)
+        if not how: inside[name]=newname
+        elif how[0]=='entering':
+            inside[('slot',how[1])]=newname
+            inside[('kept',('slot',how[1]))]=kept_labels
+        sub=expand(sub,hoisted,base_indent+4,inside,below,visible|level,referenced)
         inst+=sub+[ind+'}']
         # find statement start in out
         k=len(out)
@@ -219,7 +255,6 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         if cur_ind>base_indent:
             k=len(out)-1
             while len(out[k])-len(out[k].lstrip())>base_indent: k-=1
-        key=(name,expr,loop)
         if key not in declared:
             if key in level:
                 # entry 16: the walk declares a loop's members one after another, in the order the records
@@ -229,6 +264,12 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             else:
                 out[k:k]=inst
             declared.add(key)
+        if how:
+            newline=ONE_LINE_WRAPPER.sub(r'\1(\2)',newline)
+            taking=ONE_LINE_CLOSURE.match(newline)
+            if taking:
+                lines[i:i+1]=three_lines(taking)
+                continue
         lines[i]=newline
         # collapse 3-line wrapper closure
         mm=re.match(r'^\s*((?:try |await )*)(__safeDI_\w+)\(\)$',newline)
@@ -241,18 +282,36 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         at=out.index(MEMBERS)
         out[at:at+1]=[line for _,inst in sorted(members,key=lambda member:member[0]) for line in inst]
     return out
-def reference(newline,name,hoisted):
+# entry 20, the places enum: the records write a wrapper's closure on one line where the function is handed the
+# places; once the call hands nothing, the walk hands the wrapper the function itself
+def three_lines(taking):
+    """entry 20, the places enum: a wrapper's closure whose call still hands arguments, on the walk's three lines"""
+    return [taking.group(1)+taking.group(2)+' {',taking.group(1)+'    '+taking.group(3),taking.group(1)+'}']
+ONE_LINE_CLOSURE=re.compile(r'^( *)(let .*>) \{ ((?:try |await )*__safeDI_\w+\(.+\)) \}$')
+ONE_LINE_WRAPPER=re.compile(r'(>) \{ (__safeDI_\w+)\(\) \}$')
+def reference(newline,name,hoisted,kept=()):
     """a call of a function declared above: an argument handed under its own name was a capture there"""
     call=re.search(r'(?<![\w.])'+re.escape(name)+r'\((.*)\)',newline)
     if not call: return newline
     labels=[part.split(':')[0] for part in split_top(FUNC.match(hoisted[name][0]).group(4))]
+    labels=[label for label in labels if label not in kept]
     kept=[a for a in split_top(call.group(1)) if not any(a in (label+': '+label,label.strip('`')+': '+label) for label in labels)]
     return newline[:call.start(1)]+', '.join(kept)+newline[call.end(1):]
 def unhoist(text,walk=None):
     lines=text.split('\n')
     res=[];i=0
+    walk_mocks=mock_bodies(walk)[1:] if walk is not None else []
+    if len(walk_mocks)!=len(mock_bodies(text))-1: walk_mocks=[]
+    number=-1
     while i<len(lines):
-        if lines[i].startswith('    static func mock(') or lines[i].startswith('    public static func mock('):
+        if MOCK.match(lines[i]):
+            number+=1
+            # entry 20, the places enum: the parameters the walk's functions declare in this mock, by indentation
+            # and name, which decide only whether a parameter the records declare too is left declared
+            WALK_PARAMETERS.clear()
+            for walk_line in (walk_mocks[number].split('\n') if number<len(walk_mocks) else []):
+                declared=FUNC.match(walk_line)
+                if declared: WALK_PARAMETERS.setdefault((len(declared.group(1)),declared.group(3)),set()).update(split_top(declared.group(4)))
             j=i
             while not lines[j].endswith('{'): j+=1
             end=j+1
@@ -311,6 +370,7 @@ def e4(text,walk=None):
 def e20(text,walk=None):
     # entry 20, cycle kind form c: the places list's declaration and the calls that hand it on are removed.
     # What a function then reads of its configuration, and every other line, stays in the byte comparison.
+    if 'indirect enum __safeDI_Places' in text: return e20_places(text)
     if 'struct __safeDI_EnteredPlaces {' not in text: return text
     lines=text.split('\n');out=[];i=0
     while i<len(lines):
@@ -327,6 +387,96 @@ def e20(text,walk=None):
             out.append(marked.group(1)+CONFIG+' '+marked.group(2)+' '+marked.group(3)); i+=1; continue
         line=re.sub(r'(, )?__safeDI_entered: __safeDI_EnteredPlaces(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
         line=re.sub(r'(, )?__safeDI_entered: __safeDI_entered(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
+        out.append(line);i+=1
+    return '\n'.join(out)
+def places_declaration(sendable,enters_nearest,passes):
+    """the lines a mock root declares its places with, as the generator writes them for its three arguments"""
+    handed='<Handed: Sendable>' if sendable else '<Handed>'
+    lines=[
+        'nonisolated indirect enum __safeDI_Places: Sendable {' if sendable else 'indirect enum __safeDI_Places {',
+        '    case none',
+        '    case entered(slot: String?, entered: '+('any Sendable' if sendable else 'Any')+', above: __safeDI_Places)',
+        '}',
+        'nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {' if sendable else 'struct __safeDI_Entered<Configuration> {',
+        '    let configuration: Configuration',
+        '    var places = __safeDI_Places.none',
+        '    func entering'+handed+'(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {',
+        '        var nearest: __safeDI_Entered<Handed>?',
+        '        var above = places',
+        '        while case let .entered(enteredSlot, entered, next) = above {',
+        '            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {',
+        '                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }',
+        '                nearest = entered',
+        '            }',
+        '            above = next',
+        '        }',
+        '        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)',
+        '        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))',
+        '    }',
+    ]
+    if enters_nearest:
+        lines+=['    func enteringNearest'+handed+'(_ handed: Handed) -> __safeDI_Entered<Handed> {',
+                '        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed), above: places))',
+                '    }']
+    if passes:
+        lines+=['    func passing'+handed+'(_ handed: Handed) -> __safeDI_Entered<Handed> {',
+                '        .init(configuration: handed, places: places)',
+                '    }']
+    return lines+['}','let __safeDI_entered = __safeDI_Entered(configuration: ())']
+ENTERED_PARAMETER=re.compile(r'(^|, )__safeDI_entered: __safeDI_Entered<(.*)>$')
+HANDS_ON=re.compile(r'__safeDI_entered: __safeDI_entered\.(entering|enteringNearest|passing)\(')
+SLOT=re.compile(r'^"((?:[^"\\])*)"$')
+def e20_places(text):
+    # entry 20, cycle kind form c with the places in an enum: the declaration is removed only where it is,
+    # line for line, the text the generator writes; a function handed its configuration with the places takes
+    # the configuration alone; a call that enters a place, or hands the places on, hands the configuration
+    # alone, and how it handed it stays beside the argument for the function's copy to be placed by: a place
+    # entered again under its slot is the enclosing function's, and a place that asks for the nearest of its
+    # type takes that place's configuration. Every other line stays in the byte comparison.
+    lines=text.split('\n');out=[];i=0;inside=None
+    while i<len(lines):
+        line=lines[i]
+        if line.strip() in ('indirect enum __safeDI_Places {','nonisolated indirect enum __safeDI_Places: Sendable {'):
+            indent=line[:len(line)-len(line.lstrip())]
+            sendable=line.strip().startswith('nonisolated')
+            for enters_nearest in (False,True):
+                for passes in (False,True):
+                    declaration=[indent+d for d in places_declaration(sendable,enters_nearest,passes)]
+                    if lines[i:i+len(declaration)]==declaration: break
+                else: continue
+                break
+            else: return text
+            i+=len(declaration); continue
+        f=FUNC.match(line)
+        if f:
+            parameter=ENTERED_PARAMETER.search(f.group(4))
+            if parameter:
+                inside=(len(f.group(1)),block_end(lines,i))
+                line=f.group(1)+f.group(2)+f.group(3)+'('+f.group(4)[:parameter.start()]+parameter.group(1)+'safeDIOverrides: '+parameter.group(2)+')'+f.group(5)+' {'
+        if inside and i>inside[1]: inside=None
+        while True:
+            call=HANDS_ON.search(line)
+            if not call: break
+            depth=0
+            for k in range(call.end()-1,len(line)):
+                if line[k] in '([': depth+=1
+                elif line[k] in ')]':
+                    depth-=1
+                    if depth==0: break
+            else: return text
+            parts=split_top(line[call.end():k])
+            kind=call.group(1)
+            if kind=='entering':
+                slot=SLOT.match(parts[0]) if parts else None
+                asks=len(parts)==3 and parts[2]=='nearestOfType: true'
+                if not slot or not (len(parts)==2 or asks): return text
+                how=(kind,slot.group(1),asks);handed=parts[1]
+            else:
+                if len(parts)!=1: return text
+                how=(kind,None,False);handed=parts[0]
+            HANDS.append(how)
+            line=line[:call.start()]+'safeDIOverrides: '+HANDED+str(len(HANDS)-1)+HANDED+handed+line[k+1:]
+        if inside: line=line.replace('__safeDI_entered.configuration','safeDIOverrides')
         out.append(line);i+=1
     return '\n'.join(out)
 NEAREST_LINE=re.compile(r'^( +)let __safeDI_entered = __safeDI_entered\.entering\((__safeDI_nearest\w+): \.init\((.+), above: __safeDI_entered\)\)$')

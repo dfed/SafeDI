@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 13, 16,
-20, 21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
+20 in its three forms, 21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
 must differ. Prints one line per case and exits 1 when a pair is not equal before an edit or still equal after one.
 
   node-records-mock-approved-differences-self-test.py
@@ -56,6 +56,28 @@ CASES = [
     ('20', 'the nearest place is entered with another configuration',
      once('entering(__safeDI_nearest1: .init(safeDIOverrides, above: __safeDI_entered))',
           'entering(__safeDI_nearest1: .init(safeDIOverrides.roomBuilder, above: __safeDI_entered))')),
+    ('20-places', 'a call that hands the places on hands another configuration',
+     once('__safeDI_entered.passing(__safeDI_entered.configuration.porch)',
+          '__safeDI_entered.passing(__safeDI_entered.configuration.roomBuilder)')),
+    ('20-places', 'a call no longer asks for the nearest place of its type',
+     once('__safeDI_entered.entering("otherHomeBuilder", Home.SafeDIMockConfiguration(), nearestOfType: true)',
+          '__safeDI_entered.entering("otherHomeBuilder", Home.SafeDIMockConfiguration())')),
+    ('20-places', 'the root’s call enters no nearest place',
+     once('__safeDI_entered.enteringNearest(safeDIOverrides.homeBuilder)',
+          '__safeDI_entered.passing(safeDIOverrides.homeBuilder)')),
+    ('20-places', 'a call enters its place under another function’s slot',
+     once('__safeDI_entered.entering("otherHomeBuilder", Home.SafeDIMockConfiguration(), nearestOfType: true)',
+          '__safeDI_entered.entering("roomBuilder", Home.SafeDIMockConfiguration(), nearestOfType: true)')),
+    ('20-places', 'a line of the places’ declaration is changed',
+     once('if enteredSlot == slot { return .init(', 'if enteredSlot != slot { return .init(')),
+    ('20-places', 'an override read of a configuration that is not fresh is dropped',
+     once('return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(shedBuilder) } else { Porch(shedBuilder: shedBuilder) }',
+          'return Porch(shedBuilder: shedBuilder)')),
+    ('20-parameter', 'the closing call hands another value',
+     once('__safeDI_screenBuilder(session: session, __safeDI_entered: __safeDI_entered.entering("screenBuilder", Screen.SafeDIMockConfiguration()))',
+          '__safeDI_screenBuilder(session: Session(), __safeDI_entered: __safeDI_entered.entering("screenBuilder", Screen.SafeDIMockConfiguration()))')),
+    ('20-parameter', 'the function on the cycle reads the outer value where the walk’s is handed one',
+     once('func __safeDI_screenBuilder(session: Session, __safeDI_entered:', 'func __safeDI_screenBuilder(__safeDI_entered:')),
     ('21', 'a call hands another place’s configuration',
      once('__safeDI_childBuilder_(safeDIOverrides: safeDIOverrides.childBuilder,',
           '__safeDI_childBuilder_(safeDIOverrides: safeDIOverrides.otherBuilder,')),
