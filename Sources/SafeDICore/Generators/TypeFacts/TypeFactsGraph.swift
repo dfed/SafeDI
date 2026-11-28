@@ -344,15 +344,97 @@ struct TypeFactsGraph: Sendable {
 		let constructions = nodes.map { Self.construction(of: $0, forMockGeneration: forMockGeneration) }
 
 		// The receives of each node, its declarations, and the properties they compare.
+		var ownRequired = [[Int32]]()
+		var ownOnlyIfAvailable = [[Int32]]()
+		var ownOnlyIfAvailableUnwrapped = [[Int32]]()
+		var declared = [[Int32]]()
+		var ownEscapingTypes = [[Int32]]()
+		var ownTypesBeneath = [[Int32]]()
+		var ownRequiredThroughAlias = [[Int32]]()
 		let frontiers = nodes.indices.map(frontierRows)
-		let ownFacts = Self.ownFacts(of: nodes, frontiers: frontiers, builtTypes: builtTypes, properties: &properties, types: &types)
-		let ownRequired = ownFacts.required
-		let ownOnlyIfAvailable = ownFacts.onlyIfAvailable
-		let ownOnlyIfAvailableUnwrapped = ownFacts.onlyIfAvailableUnwrapped
-		let declared = ownFacts.declared
-		let ownEscapingTypes = ownFacts.escapingTypes
-		let ownTypesBeneath = ownFacts.typesBeneath
-		var ownRequiredThroughAlias = ownFacts.requiredThroughAlias
+		ownRequired.reserveCapacity(nodes.count)
+		for (index, (node, frontier)) in zip(nodes, frontiers).enumerated() {
+			if let frontier {
+				ownRequired.append(frontier.required.map { properties.id(of: $0) })
+				ownOnlyIfAvailable.append(frontier.onlyIfAvailable.map { properties.id(of: $0) })
+				ownOnlyIfAvailableUnwrapped.append(frontier.onlyIfAvailableUnwrappedIncludingRequired.map { properties.id(of: $0) })
+				ownRequiredThroughAlias.append(frontier.requiredAliasFulfilling.map { properties.id(of: $0) })
+				declared.append([])
+				ownEscapingTypes.append(frontier.typesDeclaredEscaping.map { types.id(of: $0) })
+				ownTypesBeneath.append(frontier.typesBeneath.map { types.id(of: $0) })
+				continue
+			}
+			var required = [Int32]()
+			var onlyIfAvailable = [Int32]()
+			var onlyIfAvailableUnwrapped = [Int32]()
+			var declaredByNode = [Int32]()
+			var escaping = [Int32]()
+			switch node.key.leaf {
+			case .alias:
+				if let fulfillingProperty = node.aliasFulfillingProperty {
+					if node.isOnlyIfAvailableAlias {
+						onlyIfAvailable.append(properties.id(of: fulfillingProperty))
+						onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
+					} else {
+						required.append(properties.id(of: fulfillingProperty))
+					}
+				}
+			case .hole:
+				break
+			case .none:
+				let record = node.scope
+				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives
+				// but the instances of the wrappers among them, which its tree reads from those wrappers.
+				var forwarded = Set(record.forwardedLazilyInstantiatedInstanceProperties)
+				if node.property != nil {
+					for dependency in record.instantiable.dependencies where dependency.source == .forwarded {
+						forwarded.insert(dependency.property)
+					}
+				}
+				let declaredProperties = record.propertiesToDeclare.union(forwarded)
+				for property in declaredProperties.sorted() {
+					declaredByNode.append(properties.id(of: property))
+				}
+				for dependency in record.instantiable.dependencies {
+					switch dependency.source {
+					case .instantiated, .forwarded:
+						continue
+					case let .received(isOnlyIfAvailable):
+						if isOnlyIfAvailable {
+							onlyIfAvailable.append(properties.id(of: dependency.property))
+							onlyIfAvailableUnwrapped.append(properties.id(of: dependency.property.asUnwrappedProperty))
+						} else {
+							required.append(properties.id(of: dependency.property))
+						}
+					case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+						let forms = isOnlyIfAvailable ? fulfillingProperty.formsReadByOnlyIfAvailableReceive : [fulfillingProperty]
+						guard !forms.contains(where: declaredProperties.contains) else { continue }
+						if isOnlyIfAvailable {
+							onlyIfAvailable.append(properties.id(of: fulfillingProperty))
+							onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
+						} else {
+							required.append(properties.id(of: fulfillingProperty))
+						}
+					}
+				}
+				let escapingTypes = Self.ownTypesDeclaredEscaping(of: record)
+				for type in escapingTypes {
+					escaping.append(types.id(of: type))
+				}
+			}
+			ownRequired.append(required)
+			ownOnlyIfAvailable.append(onlyIfAvailable)
+			ownOnlyIfAvailableUnwrapped.append(onlyIfAvailableUnwrapped)
+			declared.append(declaredByNode)
+			ownEscapingTypes.append(escaping)
+			ownTypesBeneath.append(node.key.leaf == .none ? [builtTypes[index]] : [])
+			// A seam call whose tree requires a pass-through through an alias received only if available requires it too.
+			if node.key.leaf == .none, let seamCall = node.scope.seamCall {
+				ownRequiredThroughAlias.append(seamCall.requiredThroughAliasProperties.sorted().map { properties.id(of: $0) })
+			} else {
+				ownRequiredThroughAlias.append([])
+			}
+		}
 		// Every child's property, and the fulfilling property of each alias, compared by the folds.
 		let childProperties = nodes.map { node -> (instance: Int32, aliasFulfilling: Int32) in
 			let instance = node.property.flatMap { property in
@@ -811,128 +893,6 @@ struct TypeFactsGraph: Sendable {
 		/// requires, before the rows `receives` derives from them: what a frontier of a top graph copies.
 		let onlyIfAvailableRows: BitRows
 		let onlyIfAvailableUnwrappedIncludingRequired: BitRows
-	}
-
-	/// What each node receives and declares itself, interned: a frontier's are its subtree's rows (`TypeFactsFrontierRows`).
-	/// A function of its own, apart from `declarationFacts`, whose frame a debug build would otherwise grow past what a
-	/// cooperative thread's stack holds.
-	private static func ownFacts(
-		of nodes: [TypeFactsDeclaration],
-		frontiers: [TypeFactsFrontierRows?],
-		builtTypes: [Int32],
-		properties: inout TypeFactsInterner<Property>,
-		types: inout TypeFactsInterner<TypeDescription>,
-	) -> OwnFacts {
-		var ownRequired = [[Int32]]()
-		var ownOnlyIfAvailable = [[Int32]]()
-		var ownOnlyIfAvailableUnwrapped = [[Int32]]()
-		var declared = [[Int32]]()
-		var ownEscapingTypes = [[Int32]]()
-		var ownTypesBeneath = [[Int32]]()
-		var ownRequiredThroughAlias = [[Int32]]()
-		ownRequired.reserveCapacity(nodes.count)
-		for (index, (node, frontier)) in zip(nodes, frontiers).enumerated() {
-			if let frontier {
-				ownRequired.append(frontier.required.map { properties.id(of: $0) })
-				ownOnlyIfAvailable.append(frontier.onlyIfAvailable.map { properties.id(of: $0) })
-				ownOnlyIfAvailableUnwrapped.append(frontier.onlyIfAvailableUnwrappedIncludingRequired.map { properties.id(of: $0) })
-				ownRequiredThroughAlias.append(frontier.requiredAliasFulfilling.map { properties.id(of: $0) })
-				declared.append([])
-				ownEscapingTypes.append(frontier.typesDeclaredEscaping.map { types.id(of: $0) })
-				ownTypesBeneath.append(frontier.typesBeneath.map { types.id(of: $0) })
-				continue
-			}
-			var required = [Int32]()
-			var onlyIfAvailable = [Int32]()
-			var onlyIfAvailableUnwrapped = [Int32]()
-			var declaredByNode = [Int32]()
-			var escaping = [Int32]()
-			switch node.key.leaf {
-			case .alias:
-				if let fulfillingProperty = node.aliasFulfillingProperty {
-					if node.isOnlyIfAvailableAlias {
-						onlyIfAvailable.append(properties.id(of: fulfillingProperty))
-						onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
-					} else {
-						required.append(properties.id(of: fulfillingProperty))
-					}
-				}
-			case .hole:
-				break
-			case .none:
-				let record = node.scope
-				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives
-				// but the instances of the wrappers among them, which its tree reads from those wrappers.
-				var forwarded = Set(record.forwardedLazilyInstantiatedInstanceProperties)
-				if node.property != nil {
-					for dependency in record.instantiable.dependencies where dependency.source == .forwarded {
-						forwarded.insert(dependency.property)
-					}
-				}
-				let declaredProperties = record.propertiesToDeclare.union(forwarded)
-				for property in declaredProperties.sorted() {
-					declaredByNode.append(properties.id(of: property))
-				}
-				for dependency in record.instantiable.dependencies {
-					switch dependency.source {
-					case .instantiated, .forwarded:
-						continue
-					case let .received(isOnlyIfAvailable):
-						if isOnlyIfAvailable {
-							onlyIfAvailable.append(properties.id(of: dependency.property))
-							onlyIfAvailableUnwrapped.append(properties.id(of: dependency.property.asUnwrappedProperty))
-						} else {
-							required.append(properties.id(of: dependency.property))
-						}
-					case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
-						let forms = isOnlyIfAvailable ? fulfillingProperty.formsReadByOnlyIfAvailableReceive : [fulfillingProperty]
-						guard !forms.contains(where: declaredProperties.contains) else { continue }
-						if isOnlyIfAvailable {
-							onlyIfAvailable.append(properties.id(of: fulfillingProperty))
-							onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
-						} else {
-							required.append(properties.id(of: fulfillingProperty))
-						}
-					}
-				}
-				let escapingTypes = Self.ownTypesDeclaredEscaping(of: record)
-				for type in escapingTypes {
-					escaping.append(types.id(of: type))
-				}
-			}
-			ownRequired.append(required)
-			ownOnlyIfAvailable.append(onlyIfAvailable)
-			ownOnlyIfAvailableUnwrapped.append(onlyIfAvailableUnwrapped)
-			declared.append(declaredByNode)
-			ownEscapingTypes.append(escaping)
-			ownTypesBeneath.append(node.key.leaf == .none ? [builtTypes[index]] : [])
-			// A seam call whose tree requires a pass-through through an alias received only if available requires it too.
-			if node.key.leaf == .none, let seamCall = node.scope.seamCall {
-				ownRequiredThroughAlias.append(seamCall.requiredThroughAliasProperties.sorted().map { properties.id(of: $0) })
-			} else {
-				ownRequiredThroughAlias.append([])
-			}
-		}
-		return OwnFacts(
-			required: ownRequired,
-			onlyIfAvailable: ownOnlyIfAvailable,
-			onlyIfAvailableUnwrapped: ownOnlyIfAvailableUnwrapped,
-			declared: declared,
-			escapingTypes: ownEscapingTypes,
-			typesBeneath: ownTypesBeneath,
-			requiredThroughAlias: ownRequiredThroughAlias,
-		)
-	}
-
-	/// Each node's own receives, declarations and types, by interned ID, one list per node in node order.
-	private struct OwnFacts {
-		let required: [[Int32]]
-		let onlyIfAvailable: [[Int32]]
-		let onlyIfAvailableUnwrapped: [[Int32]]
-		let declared: [[Int32]]
-		let escapingTypes: [[Int32]]
-		let typesBeneath: [[Int32]]
-		let requiredThroughAlias: [[Int32]]
 	}
 
 	/// Each node's cycle identity, dense in first-reach order: the property as cycle validation sees it and the
