@@ -225,16 +225,45 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 		#expect(homes.compactMap { NodeRecords.mockNearestOfTypeEntered(by: $0, in: slots) } == ["__safeDI_nearest1"], "\(graph.description)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mockEnteredSlots_walksEachEdgeAFixedNumberOfTimes_whenFortyEightTypesBeneathAChainAreEachBuiltAgainOnACycle() async throws {
+		// A chain of forty-eight links, the last of which builds forty-eight homes, each built again on a cycle of its
+		// own: forty-eight configurations have a nearest name. A walk up from each configuration’s slots would visit the
+		// chain forty-eight times. The test reads the world, not the generated code, which takes the compiler over ten
+		// minutes to check.
+		let count = 48
+		let graph = try await mockWorld(of: [Self.type(named: "Root", isMockRoot: true, declarations: ["@Instantiated let link0: Link0"])]
+			+ (0..<count).map { index in
+				let declarations = index + 1 < count
+					? ["@Instantiated let link\(index + 1): Link\(index + 1)"]
+					: (0..<count).map { "@Instantiated let home\($0)Builder: Instantiator<Home\($0)>" }
+				return Self.type(named: "Link\(index)", declarations: declarations)
+			}
+			+ (0..<count).flatMap { index in
+				[
+					Self.type(named: "Home\(index)", declarations: ["@Instantiated let room\(index)Builder: Instantiator<Room\(index)>"]),
+					Self.type(named: "Room\(index)", declarations: ["@Instantiated let otherHome\(index)Builder: Instantiator<Home\(index)>"]),
+				]
+			}, skipCompileVerification: true)
+
+		let slots = MockEnteredSlots(world: graph)
+		let declarations = 0..<Int32(graph.declarationCount)
+		try #require(declarations.filter { NodeRecords.mockNearestOfTypeEntered(by: $0, in: slots) != nil }.count == count, "\(graph.description)")
+		let edgeCount = declarations.reduce(0) { $0 + graph.edges(from: $1).count }
+		#expect(slots.walkStepCount <= 5 * (graph.declarationCount + edgeCount), "\(slots.walkStepCount) steps over \(graph.declarationCount) declarations and \(edgeCount) edges")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// The facts graph of the mock world of the type `Root`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func mockWorld(of types: [String]) async throws -> TypeFactsGraph {
+	private mutating func mockWorld(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsGraph {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
-			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: skipCompileVerification)
 		}
 		continuation.finish()
 		var reports = [TypeFactsReport]()

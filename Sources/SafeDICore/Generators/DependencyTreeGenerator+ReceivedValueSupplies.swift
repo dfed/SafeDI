@@ -56,9 +56,8 @@ extension DependencyTreeGenerator {
 				constructedTypes.append(contentsOf: tree.constructedTypes)
 			}
 		} else {
-			for root in roots {
-				guard let scopeGenerator = root.scopeGenerator else { continue }
-				guard let tree = await scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
+			for root in roots.compactMap(\.tree) {
+				guard let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
 			}

@@ -4908,7 +4908,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockLowering.argumentsSurfacedWithoutOverride(of:usesMockInitializer:handWrittenDefaults:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [DefaultParameter]]
 		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
-		/// `sendableConfigurationTypeNames(ofMockRootOf:)` across every root. Such a struct stores each labeled
+		/// `TypeFactsSendableConfigurations` across every root. Such a struct stores each labeled
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
@@ -8252,7 +8252,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: property,
 			rule: .instantiator(isExtension: isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		let expression = instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
+		let expression = instantiatorExpression(of: property, spelledForConstruction: unwrappedTypeDescription, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
 		guard let inlinePlaceBuilder else { return "\(propertyDeclaration.spelled) = \(expression)" }
 		return "\(propertyDeclaration.spelled) = \(inlinePlaceBuilder.inlinePlaceValue(construction: expression, overrideExpression: nil, wrappingBuilderIn: unwrappedTypeDescription))"
 	}
@@ -8260,8 +8260,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:onOneLine:inlinePlaceBuilder:)`
 	/// declares: around the function itself where it is handed nothing and erases nothing, and otherwise around a closure
 	/// that calls it, on one line where `onOneLine` holds.
-	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
-		let unwrappedTypeDescription = property
+	///
+	/// `unwrappedTypeDescription` is the property's unwrapped type as a construction spells it (`spelledForConstruction`),
+	/// which a caller that spells it already hands in rather than spelling it again.
+	private static func instantiatorExpression(of property: Property, spelledForConstruction unwrappedTypeDescription: String? = nil, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
+		let unwrappedTypeDescription = unwrappedTypeDescription ?? property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
@@ -11992,14 +11995,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Concrete type names referenced by this scope's mock tree from a
-	/// `SendableInstantiator` scope. Aggregated across all roots before generation
-	/// so every root emits consistent `@Sendable`-ness for a given type's
-	/// `SafeDIMockConfiguration` struct.
+	/// `SendableInstantiator` scope: the walk the fold over the mock root's world (`TypeFactsSendableConfigurations`),
+	/// which mock generation reads, is compared with where a test sets
+	/// `TypeFactsSendableConfigurationsObservation.comparesWalk`. The tool never runs it.
 	///
-	/// Read from the generator tree before any root's code is generated: a node is the lowering's for each child built
-	/// for a property, inside a `Sendable` scope where it or an ancestor builds in a `@Sendable` function, and needs a
-	/// configuration struct where a child of its own is built for a property, its construction has default-valued
-	/// parameters, or it closes a cycle.
+	/// Read from the generator tree: a node is the lowering's for each child built for a property, inside a `Sendable`
+	/// scope where it or an ancestor builds in a `@Sendable` function, and needs a configuration struct where a child of
+	/// its own is built for a property, its construction has default-valued parameters, or it closes a cycle.
 	nonisolated func sendableConfigurationTypeNames(ofMockRootOf mockedInstantiable: Instantiable) -> Set<String> {
 		var result = Set<String>()
 		var constructions = MockConstructions()
