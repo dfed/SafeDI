@@ -89,7 +89,7 @@ extension ScopeGenerator {
 			report(refusal: refusalOfPlaces, everyRefusal: [refusalOfPlaces].compactMap(\.self), isLaidOut: false, recordCount: 0)
 			return nil
 		}
-		let enteredPlaces: [GeneratedCode] = ((nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: placesThatMustBeSendable != nil, entersNearest: $0.entersNearest, passes: $0.passes, leavesOut: $0.leavesOut) } ?? []) + nodeRecords.mockLoopSendableStructDeclarations)
+		let enteredPlaces: [GeneratedCode] = ((nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: placesThatMustBeSendable != nil, entersNearest: $0.entersNearest, passes: $0.passes, leavesOut: $0.leavesOut, slotCount: $0.slotCount) } ?? []) + nodeRecords.mockLoopSendableStructDeclarations)
 			.map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)

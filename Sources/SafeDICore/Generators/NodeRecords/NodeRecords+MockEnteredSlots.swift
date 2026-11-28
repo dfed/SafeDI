@@ -243,12 +243,13 @@ struct MockEnteredSlots: Sendable {
 
 	/// Whether some function on no cycle enters the nearest place of its type alone, whether some function only hands
 	/// the places on, and whether some place may be entered left out: what `mock()` declares only where a call uses it
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:)`).
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:slotCount:)`).
 	var use: MockEnteredPlacesUse {
 		MockEnteredPlacesUse(
 			entersNearest: nearestEnteredByDeclaration.contains { $0 != nil },
 			passes: takesEnteredPlacesByDeclaration.indices.contains { takesEnteredPlacesByDeclaration[$0] && slotIndexByDeclaration[$0] < 0 && nearestEnteredByDeclaration[$0] == nil },
 			leavesOut: mayBeEnteredLeftOutByDeclaration.contains(true),
+			slotCount: slots.count,
 		)
 	}
 
@@ -277,4 +278,6 @@ struct MockEnteredPlacesUse: Hashable, Sendable {
 	let passes: Bool
 	/// Whether some call enters a place left out, or from one entered so.
 	let leavesOut: Bool
+	/// How many slots the calls enter: a call names its slot by its position among them.
+	let slotCount: Int
 }
