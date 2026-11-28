@@ -54,7 +54,13 @@ enum NodeRecordsChecks {
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// What the tree writes of each filled call's functions and closure arguments, and what node records spell of them,
 		// compared once the body has run.
-		let filledCalls = FilledCallTexts()
+		// `Mutex` needs macOS 15, and this target compiles for the package's platforms, so the comparison runs only where it is
+		// available, which every host that runs these tests is.
+		let filledCalls: (any FilledCallTextsCollecting)? = if #available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *) {
+			FilledCallTexts()
+		} else {
+			nil
+		}
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
 		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
@@ -66,7 +72,7 @@ enum NodeRecordsChecks {
 			for (spelled, written) in zip(call.spelledFromRecord, call.written) where spelled != written {
 				Issue.record(Comment(rawValue: "The record of a seam call spells `\(spelled)` where its text writes `\(written)`:\n\(call.text)"))
 			}
-			filledCalls.addTree(call.written)
+			filledCalls?.addTree(call.written)
 			if call.spelledFromRecord.count != call.written.count {
 				Issue.record(Comment(rawValue: "The record of a seam call spells \(call.spelledFromRecord.count) statements and arguments where its text writes \(call.written.count):\n\(call.text)"))
 			}
@@ -75,7 +81,7 @@ enum NodeRecordsChecks {
 		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
 		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
 		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
-			filledCalls.addTree([FilledCallTexts.normalized(dispatcher.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))])
+			filledCalls?.addTree([normalizedFilledCallText(dispatcher.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))])
 			if dispatcher.spelledFromRecord != dispatcher.text {
 				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
 			}
@@ -84,7 +90,7 @@ enum NodeRecordsChecks {
 		let enclosingFillObserver = FillSignatureObservation.observer
 		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
 		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
-			filledCalls.addTree([FilledCallTexts.normalized(fill.written)])
+			filledCalls?.addTree([normalizedFilledCallText(fill.written)])
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
 			}
@@ -133,7 +139,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingFilledCallObserver = FilledCallRecordsObservation.observer
 		let filledCallObserver: @Sendable (FilledCallRecordsObservation) -> Void = { records in
-			filledCalls.addRecords(records)
+			filledCalls?.addRecords(records)
 			enclosingFilledCallObserver?(records)
 		}
 		let result = try await FilledCallRecordsObservation.$observer.withValue(filledCallObserver) {
@@ -142,10 +148,10 @@ enum NodeRecordsChecks {
 			}
 		}
 		// Each function and closure argument node records spell of a root's filled call is one the tree writes.
-		for mismatch in filledCalls.mismatches() {
+		for mismatch in filledCalls?.mismatches() ?? [] {
 			Issue.record(Comment(rawValue: mismatch))
 		}
-		if let filledCallsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILLED_CALLS_REPORT"] {
+		if let filledCalls, let filledCallsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILLED_CALLS_REPORT"] {
 			append("\(testName)\t\(filledCalls.summary)\n", toFileAt: filledCallsReportPath)
 		}
 		return result
@@ -234,17 +240,27 @@ enum NodeRecordsChecks {
 
 /// What the tree writes of a test's filled seam calls, and what node records spell of them (`FilledCallRecordsObservation`),
 /// each function as its lines with no indentation, joined.
-private final class FilledCallTexts: Sendable {
+private protocol FilledCallTextsCollecting: Sendable {
+	func addTree(_ texts: [String])
+	func addRecords(_ records: FilledCallRecordsObservation)
+	func mismatches() -> [String]
+	var summary: String { get }
+}
+
+/// A filled call's function or closure argument, as its lines with no indentation, joined.
+private func normalizedFilledCallText(_ lines: [String]) -> String {
+	lines.map { String($0.drop { $0 == " " || $0 == "\t" }) }.joined(separator: "\n")
+}
+
+/// `FilledCallTextsCollecting`, holding the texts in a `Mutex`.
+@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+private final class FilledCallTexts: FilledCallTextsCollecting {
 	private struct State {
 		var tree = Set<String>()
 		var records = [(root: String, text: String)]()
 	}
 
 	private let state = Mutex(State())
-
-	static func normalized(_ lines: [String]) -> String {
-		lines.map { String($0.drop { $0 == " " || $0 == "\t" }) }.joined(separator: "\n")
-	}
 
 	func addTree(_ texts: [String]) {
 		state.withLock { $0.tree.formUnion(texts) }
@@ -253,7 +269,7 @@ private final class FilledCallTexts: Sendable {
 	func addRecords(_ records: FilledCallRecordsObservation) {
 		state.withLock { state in
 			for (_, lines) in records.functions.sorted(by: { $0.key < $1.key }) {
-				state.records.append((records.root, Self.normalized(lines)))
+				state.records.append((records.root, normalizedFilledCallText(lines)))
 			}
 			for argument in records.closureArguments {
 				state.records.append((records.root, argument))
