@@ -157,6 +157,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the `Sendable` struct a generated `mock()` declares for the overrides a level, a node of the type
+	/// `typeIdentifier` names, hands the `@Sendable` members of its loops of builders, whose functions cannot take the
+	/// level's configuration (`NodeRecords.SendableLoopStruct`).
+	static func sendableLoopOverridesTypeName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_LoopOverrides".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function
 	/// named `functionName` of the loop's first member (see `ScopeGenerator.boxedLoops`).
 	static func loopLevelsName(of functionName: String) -> String {
