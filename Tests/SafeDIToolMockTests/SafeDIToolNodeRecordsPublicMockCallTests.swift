@@ -1407,6 +1407,45 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_refusesCall_whenRecordsOfFilledCallsAreOnAndFillsTypeInstantiatesValue() async throws {
+		// The fill's tree holds a node beneath the filled type, which the records of a filled call do not lay out yet.
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await mockOfRoot(
+				feed: Self.screen(holdsService: true),
+				app: """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(session: Session, screen: Screen) {
+				        self.session = session
+				        self.screen = screen
+				    }
+
+				    @Instantiated let session: Session
+				    @Instantiated let screen: Screen
+				}
+
+				@Instantiable
+				public final class Clock: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(fulfillingAdditionalTypes: [Service.self])
+				public final class DefaultService: Service, Instantiable {
+				    public init(clock: Clock) {
+				        self.clock = clock
+				    }
+
+				    @Instantiated let clock: Clock
+				}
+				""",
+			)
+		}
+		#expect(reports.map(\.refusal) == ["publicMockCallFills"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_refusesCall_whenCallReceivesValueOnlyIfAvailableMockOverrides() async throws {
 		let (_, reports) = try await mockOfRoot(
 			feed: Self.screen(receivesSessionOnlyIfAvailable: true),
