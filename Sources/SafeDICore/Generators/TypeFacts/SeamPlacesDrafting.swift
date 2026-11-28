@@ -423,7 +423,8 @@ struct SeamPlacesDrafts: Sendable {
 		}
 		struct Best {
 			let suffix: String
-			let step: SeamPlacesLevelID?
+			/// The route's steps from the variant down to the owner, the owner's own edge left out.
+			let steps: [SeamPlacesLevelID]
 		}
 		struct Visit: Hashable {
 			let variant: VariantID
@@ -431,22 +432,25 @@ struct SeamPlacesDrafts: Sendable {
 		}
 		var best = [Visit: Best?]()
 		var onRoute = Set<Visit>()
-		func least(from variant: VariantID, family: SeamPlacesRouteFamily) -> Best? {
+		/// The least route from `variant` down to the owner, and whether finding it cut a loop, which leaves the answer
+		/// one of the routes the visit could take from where it was reached, so it is not kept for other visits.
+		func least(from variant: VariantID, family: SeamPlacesRouteFamily) -> (best: Best?, cutsLoop: Bool) {
 			if variant == owner.variant {
 				switch family {
 				case .plain, .either:
-					return Best(suffix: "", step: nil)
+					return (Best(suffix: "", steps: []), false)
 				case .opensSendableFunction:
-					return nil
+					return (nil, false)
 				}
 			}
 			let visit = Visit(variant: variant, family: family)
 			if let known = best[visit] {
-				return known
+				return (known, false)
 			}
 			// A variant met again on the route it is reached by would loop: no least route passes it twice.
-			guard onRoute.insert(visit).inserted else { return nil }
+			guard onRoute.insert(visit).inserted else { return (nil, true) }
 			defer { onRoute.remove(visit) }
+			var cutsLoop = false
 			let callees = world.calls(of: variant)
 			let callOffset = world.variants.callOffset(of: Int(variant))
 			let edges = world.edgeFacts(from: world.declaration(of: variant))
@@ -463,31 +467,24 @@ struct SeamPlacesDrafts: Sendable {
 				} else {
 					familyBelow = family
 				}
-				guard let below = least(from: callee, family: familyBelow) else { continue }
+				let reached = least(from: callee, family: familyBelow)
+				cutsLoop = cutsLoop || reached.cutsLoop
+				guard let below = reached.best else { continue }
 				let step = SeamPlacesLevelID(variant: variant, edge: Int32(index))
 				let labels = pathLabels(of: step, in: world).joined(separator: "_")
 				let suffix = callee == owner.variant ? labels : "\(labels)_\(below.suffix)"
 				if let current = found {
-					guard suffix < current.suffix || suffix == current.suffix && current.step.map({ Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation(of: step), declarationLocation(of: $0)) }) == true else { continue }
+					guard suffix < current.suffix || suffix == current.suffix && Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation(of: step), declarationLocation(of: current.steps[0])) else { continue }
 				}
-				found = Best(suffix: suffix, step: step)
+				found = Best(suffix: suffix, steps: [step] + below.steps)
 			}
-			best[visit] = found
-			return found
-		}
-		var route = [SeamPlacesLevelID]()
-		var variant = world.rootVariant(0)
-		var routeFamily = family
-		while variant != owner.variant {
-			guard let step = least(from: variant, family: routeFamily)?.step else { return [] }
-			route.append(step)
-			let edges = world.edgeFacts(from: world.declaration(of: variant))
-			if edges[edges.startIndex + Int(step.edge)].opens.opensSendableFunction {
-				routeFamily = .either
+			if !cutsLoop {
+				best[visit] = found
 			}
-			variant = world.calls(of: variant)[world.calls(of: variant).startIndex + Int(step.edge)]
+			return (found, cutsLoop)
 		}
-		return route + [owner]
+		guard let found = least(from: world.rootVariant(0), family: family).best else { return [] }
+		return found.steps + [owner]
 	}
 
 	/// Where each call builds its callee in line and where it closes a cycle, as the tree unfolds it
@@ -611,19 +608,19 @@ struct SeamPlacesDrafts: Sendable {
 			let level = places.levels[placeCase.ownerLevel]
 			storedCasesByKey[caseKey(type: level.key.builtType?.asSource ?? "fill", hole: level.key.nextProperty?.label ?? "fill", isSendable: placeCase.isBuiltInSendableFunction), default: []].append(placeCase)
 		}
-		let draftKeys = cases.map { draftCase in
+		let caseKeys = cases.map { draftCase in
 			caseKey(type: builtType(of: draftCase.owner.variant), hole: world.graph.nodes[Int(draftCase.sites[0].hole)].property?.label ?? "fill", isSendable: draftCase.isBuiltInSendableFunction)
 		}
 		var draftCountByKey = [String: Int]()
-		for draftKey in draftKeys {
+		for draftKey in caseKeys {
 			draftCountByKey[draftKey, default: 0] += 1
 		}
 		for (draftKey, draftCount) in draftCountByKey.sorted(by: { $0.key < $1.key }) {
 			guard let storedCount = storedCasesByKey[draftKey]?.count, storedCount != draftCount else { continue }
 			differences.append("case \(draftKey): \(draftCount) drafted, \(storedCount) stored")
 		}
-		let draftCaseKeys = Set(draftKeys)
-		for (draftCase, draftKey) in zip(cases, draftKeys) {
+		let draftCaseKeys = Set(caseKeys)
+		for (draftCase, draftKey) in zip(cases, caseKeys) {
 			guard let storedCases = storedCasesByKey[draftKey] else {
 				differences.append("case \(draftKey): drafted, not stored")
 				continue
