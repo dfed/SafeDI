@@ -1195,7 +1195,11 @@ extension DependencyTreeGenerator {
 			propertiesToGenerate = scope.propertiesToGenerate
 			declarations = ScopeDeclarations(scope: scope)
 			// A seam call's fills, in a production tree, call no public mock, so only a public mock call's are walked, unless the
-			// walk asks what a seam's fill receives (`ReceivedPropertiesCache.walksSeamCallFills`).
+			// walk asks what a seam's fill receives (`ReceivedPropertiesCache.walksSeamCallFills`). It hands a fill no memo a
+			// route on a carried route hands it (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`),
+			// which the tree decides from the call's dispatchers as it builds the fills, after this walk, and which the
+			// per-type facts pass (`FillsOfCall.structBindings(receivedByFillTarget:)`): a fill that takes one binds the place's
+			// field here, which a seam's fill's `optionalLazilyInstantiatedLabels` alone reads.
 			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
 			if scope.publicMockCall != nil || walksSeamCallFills && scope.seamCall != nil {
 				let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }

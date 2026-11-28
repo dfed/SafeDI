@@ -71,7 +71,7 @@ struct TypeFactsReceives: Sendable {
 	/// order reads `required`, whose fold leaves fills out.
 	let requiredIncludingFills: BitRows
 	/// For each fill edge, by its position among the graph's edges, what the fill binds from the site's scope struct
-	/// (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:)`), each property with its
+	/// (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:handedMemoByLabel:)`), each property with its
 	/// optional forms: all of it, and the part that hides the fill's reads from the caller. `nil` in a world without
 	/// fills.
 	let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
