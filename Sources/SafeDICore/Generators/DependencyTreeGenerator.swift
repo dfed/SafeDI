@@ -896,7 +896,7 @@ public actor DependencyTreeGenerator {
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						built: built,
-						fulfillers: TypeFactsImports(root: constructionScope).fulfillers,
+						fulfillers: TypeFactsImports(root: constructionScope, buildingMock: false).fulfillers,
 						receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
 						rootScope: RootScopeInfo.kept(constructionScope),
 						treeForcers: treeForcers,

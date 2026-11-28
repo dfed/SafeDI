@@ -513,7 +513,7 @@ extension DependencyTreeGenerator {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &constructionMemo,
 				)),
-				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
+				fulfillers: TypeFactsImports(root: rootScope, buildingMock: false).fulfillers,
 				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
 				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
 				// out from them until node records make a seam call (`NodeRecords`).
@@ -558,7 +558,7 @@ extension DependencyTreeGenerator {
 			} else {
 				let tree = try builtTree()
 				scopeGenerator = tree.generator
-				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
+				fulfillers = TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 				rootScope = RootScopeInfo.kept(tree.rootScope)
 			}
@@ -1133,7 +1133,7 @@ extension DependencyTreeGenerator {
 						if skipsConfirmingPass, keepsFirstPassTrees, seamRoot != nil {
 							firstPassTree = SeamRootTree(
 								generator: generator,
-								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
+								fulfillers: TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers,
 								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
 								rootScope: RootScopeInfo.kept(tree.rootScope),
 							)

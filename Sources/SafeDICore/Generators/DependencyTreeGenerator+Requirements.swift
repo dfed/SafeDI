@@ -142,7 +142,7 @@ extension DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
-		)
+		).generator
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
 		if generatesMock, let publicMockContext {
