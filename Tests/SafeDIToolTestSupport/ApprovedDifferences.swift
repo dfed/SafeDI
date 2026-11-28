@@ -39,6 +39,7 @@ enum ApprovedDifferences {
 	static let all: [ApprovedDifference] = [
 		ApprovedDifference(entry: 13, name: "optional channel, rule A", rewrite: OptionalChannelRewrite.rewritten),
 		ApprovedDifference(entry: 28, name: "one function for properties of one type", rewrite: SharedFunctionRewrite.rewritten),
+		ApprovedDifference(entry: 29, name: "a function named apart from another body's", rewrite: NameKeptApartRewrite.rewritten),
 	]
 
 	/// The records' text after each approved difference that it holds is rewritten as the tree writes it, and the entries
@@ -174,6 +175,46 @@ extension FunctionText {
 		guard statement.hasPrefix("let ") else { return nil }
 		let label = statement.dropFirst("let ".count).prefix { isIdentifierCharacter($0) }
 		return label.isEmpty ? nil : String(label)
+	}
+}
+
+/// Entry 29, a function named apart from another body's function of its name. The type key names every builder function
+/// it lays out apart from every other, whatever body declares it, so a function whose name a function of another body
+/// already has takes underscores; the tree names each `__safeDI_<label>` and relies on Swift's scopes, where a nested
+/// function hides an outer one of its name. The rewrite gives such a function the tree's name back only where no
+/// reference to it lies inside a body that declares that name, so the name it takes back hides nothing it reads.
+enum NameKeptApartRewrite {
+	static func rewritten(_ nodeRecordsText: String, treeText: String) -> String? {
+		var code = FunctionText(nodeRecordsText)
+		let treeLines = Set(treeText.components(separatedBy: "\n"))
+		var renamed = false
+		while code.restoreNextNameKeptApart(treeLines: treeLines) {
+			renamed = true
+		}
+		return renamed ? code.text : nil
+	}
+}
+
+extension FunctionText {
+	/// Gives the next function whose name ends in underscores the tree's name without them, where the tree declares a
+	/// function of that name at the same line and no reference to the function lies inside a body declaring that name,
+	/// and returns whether it found one.
+	mutating func restoreNextNameKeptApart(treeLines: Set<String>) -> Bool {
+		let functions = functions
+		for function in functions {
+			let name = String(function.name.reversed().drop { $0 == "_" }.reversed())
+			guard name != function.name, name.hasPrefix("__safeDI_"),
+			      treeLines.contains(Self.replacingReferences(to: function.name, with: name, in: lines[function.range.lowerBound]))
+			else { continue }
+			let hidingBodies = functions.filter { $0.name == name }.map(\.range)
+			guard !lines.indices.contains(where: { index in
+				hidingBodies.contains { $0.contains(index) } && Self.references(function.name, in: lines[index])
+			})
+			else { continue }
+			lines = lines.map { Self.replacingReferences(to: function.name, with: name, in: $0) }
+			return true
+		}
+		return false
 	}
 }
 
