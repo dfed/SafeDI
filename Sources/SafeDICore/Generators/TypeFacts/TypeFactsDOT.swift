@@ -36,6 +36,16 @@ struct TypeFactsDOT {
 		/// An edge to a node no declaration of the graph stands for (an alias, a hole's site, a fill drawn where another
 		/// place's stands for it), with the lines of what that node's place draws beneath it, or `nil` where it draws none.
 		case leaf(node: String, lines: String?)
+
+		/// Whether the item is a fill's edge.
+		var isFill: Bool {
+			switch self {
+			case let .declaration(_, _, isFill):
+				isFill
+			case .leaf:
+				false
+			}
+		}
 	}
 
 	/// What a declaration draws where a path builds its children.
@@ -146,7 +156,7 @@ struct TypeFactsDOT {
 				guard let column = columns[node] else { continue }
 				var childFrames = [Frame]()
 				for item in column.items {
-					if case .declaration(_, _, true) = item, fills.contains(where: { $0.callScope == graph.graph.nodes[node].key.record }) {
+					if item.isFill, fills.contains(where: { $0.callScope == graph.graph.nodes[node].key.record }) {
 						continue
 					}
 					lines.append("    \(column.node) -- \(item.node)")
@@ -174,13 +184,7 @@ struct TypeFactsDOT {
 	/// on (`unfolded`).
 	private static func column(_ column: Column, isWithoutFillsPassedOnOf full: Column) -> Bool {
 		column.node == full.node && column.forwarded == full.forwarded && column.items.count < full.items.count
-			&& column.items.elementsEqual(full.items.lazy.filter {
-				if case .declaration(_, _, true) = $0 {
-					false
-				} else {
-					true
-				}
-			})
+			&& column.items.elementsEqual(full.items.lazy.filter { !$0.isFill })
 	}
 
 	/// The place that draws `generator`'s own edges: a fill draws as its child.

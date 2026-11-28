@@ -517,10 +517,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesWorldAsCallsAnswerAVariantApart_whenOneVariantsRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
-		// `Reader` renames `x`, which `ValueParent` declares as an `X` and `LazyParent` as a `LazilyInstantiated<X>`: one
-		// variant whose rename is bound from the value under one parent and from the wrapper's instance under the other.
-		// Whichever parent the root builds first, the world keeps its tree.
+	mutating func generate_refusesWorldAsNodeHasSeveralVariants_whenRenameReadsAValueUnderOneParentAndAWrapperUnderTheOther() async throws {
+		// `Reader` renames `x`, which `ValueParent` declares as an `X` and `LazyParent` as a `LazilyInstantiated<X>`. The
+		// rename's read keys by the form it is read in, so the value and the wrapper key apart: two variants of `Reader`,
+		// which a production world refuses. Whichever parent the root builds first, the world keeps its tree.
 		var everyRefusal = [[String]]()
 		for parents in [["lazyParent: LazyParent", "valueParent: ValueParent"], ["valueParent: ValueParent", "lazyParent: LazyParent"]] {
 			let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -620,10 +620,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				"""
 			}
 			#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": expectedCode])
-			#expect(reports.map(\.refusal) == ["callsAnswerAVariantApart"])
+			#expect(reports.map(\.refusal) == ["nodeHasSeveralVariants"])
 			everyRefusal += reports.map(\.everyRefusal)
 		}
-		#expect(everyRefusal == [["lazy", "callsAnswerAVariantApart"], ["lazy", "callsAnswerAVariantApart"]])
+		// A rename that reads a lazy wrapper's instance has a record, so the two variants are all the world is refused for.
+		#expect(everyRefusal == [["nodeHasSeveralVariants"], ["nodeHasSeveralVariants"]])
 	}
 
 	@Test
