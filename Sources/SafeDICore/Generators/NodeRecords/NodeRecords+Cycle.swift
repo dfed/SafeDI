@@ -48,12 +48,22 @@ extension NodeRecords {
 		)
 	}
 
-	/// Refuses `world`, which holds a cycle, where a variant of a node on a cycle holds an optional parameter's key: one
-	/// body takes the label as an optional parameter there (rule 1), where today's tree may write a body per value or `nil`;
-	/// or where one cycle identity (`cycle(of:)`) is built both as a lazily instantiated wrapper and otherwise: a twin.
+	/// Refuses `world`, which holds a cycle, where a variant of a node on a cycle holds an optional parameter's key at a
+	/// read that some call passes `nil` (`TypeFactsReadArrivals`): its one body takes the label as an optional parameter
+	/// there (rule 1), where today's tree may write a body per value or `nil`, or pass a value at a call that closes the
+	/// cycle where the first call passes `nil`. A read every call answers is one body in the tree too, which the records
+	/// write. Or where one cycle identity (`cycle(of:)`) is built both as a lazily instantiated wrapper and otherwise: a
+	/// twin.
+	///
+	/// The arrivals are folded only for a world one of whose cycle variants holds the key.
 	static func checkVariantsPartitionAlike(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		var readArrivals: TypeFactsReadArrivals?
 		for variant in 0..<Int32(world.variantCount) where world.isOnCycle(world.declaration(of: variant)) {
-			guard !world.keys(of: variant).contains(TypeFactsGraph.optionalParameterKey) else { throw .cycleVariantsPartitionApart }
+			for (position, key) in world.keys(of: variant).enumerated() where key == TypeFactsGraph.optionalParameterKey {
+				let arrivals = readArrivals ?? TypeFactsReadArrivals(world: world)
+				readArrivals = arrivals
+				guard arrivals.arrivals(at: position, of: variant) == .answer else { throw .cycleVariantsPartitionApart }
+			}
 		}
 		var isLazyByIdentity = [CycleID: Bool]()
 		for declaration in 0..<Int32(world.declarationCount) where world.isOnCycle(declaration) {
