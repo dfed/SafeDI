@@ -101,6 +101,15 @@ CASES = [
     ('21', 'the closing call names the other type’s function of the same label',
      once('__safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration(),',
           '__safeDI_childBuilder_(safeDIOverrides: Child.SafeDIMockConfiguration(),')),
+    ('18', 'a call of the walk hands the parameter a value',
+     once('__safeDI_t3Builder(session: session, logger: nil)',
+          '__safeDI_t3Builder(session: session, logger: Logger(t3Builder: t3Builder))'), 'walk'),
+    ('18', 'the walk’s function reads another name where the records write nil',
+     once('T3(session: session, logger: logger, t0Builder: t0Builder, t4Builder: t4Builder)',
+          'T3(session: session, logger: session, t0Builder: t0Builder, t4Builder: t4Builder)'), 'walk'),
+    ('18', 'the records write a value where the parameter was read',
+     once('T3(session: session, logger: nil, t0Builder: t0Builder, t4Builder: t4Builder)',
+          'T3(session: session, logger: Logger(), t0Builder: t0Builder, t4Builder: t4Builder)')),
     ('21-scopes', 'a call in the second parent names the first parent’s function',
      once('__safeDI_aBuilder_(safeDIOverrides: safeDIOverrides.aBuilder)',
           '__safeDI_aBuilder(safeDIOverrides: safeDIOverrides.aBuilder)')),
@@ -146,7 +155,22 @@ CASES = [
      once('{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered) }', '{ __safeDI_stepBuilder(__safeDI_entered: __safeDI_entered) }')),
     ('20-self', 'the call enters another place instead of handing its own on',
      once('{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered) }', '{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered.entering("detail", __safeDI_entered.configuration)) }')),
+    ('26', 'a call of the walk hands the parameter another value',
+     once('__safeDI_screenBuilder(mark: mark_Mark)', '__safeDI_screenBuilder(mark: mark)'), 'walk'),
+    ('26', 'the records’ function binds another name',
+     once('let mark: Mark = mark_Mark', 'let mark: Mark = other_Mark')),
+    ('26', 'the root’s call enters the place with another configuration',
+     once('__safeDI_entered.entering("screenBuilder", safeDIOverrides.screenBuilder)',
+          '__safeDI_entered.entering("screenBuilder", safeDIOverrides.hubBuilder)')),
 ]
+
+
+def edited_walk(walk_path, edit):
+    """a temporary copy of a fixture's walk text after an edit, for a case whose fact is read from the walk"""
+    file = tempfile.NamedTemporaryFile('w', suffix='.walk', delete=False)
+    file.write(edit(open(walk_path).read()))
+    file.close()
+    return file.name
 
 
 def equal_after_rewrite(records, walk_path):
@@ -169,8 +193,15 @@ for entry in sorted(set(case[0] for case in CASES)):
     else:
         print('entry %s: FAILED, the pair differs before any edit' % entry)
         failures += 1
-    for _, name, edit in [case for case in CASES if case[0] == entry]:
-        if equal_after_rewrite(edit(records), walk_path):
+    for case in [case for case in CASES if case[0] == entry]:
+        name, edit = case[1], case[2]
+        if len(case) == 4:  # the edit is of the walk's text
+            other_walk = edited_walk(walk_path, edit)
+            still_equal = equal_after_rewrite(records, other_walk)
+            os.unlink(other_walk)
+        else:
+            still_equal = equal_after_rewrite(edit(records), walk_path)
+        if still_equal:
             print('entry %s: FAILED, still equal when %s' % (entry, name))
             failures += 1
         else:

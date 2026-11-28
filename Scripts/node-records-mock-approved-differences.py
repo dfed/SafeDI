@@ -706,6 +706,181 @@ def e21(text,walk):
     for i,line in enumerate(lines):
         out.append(name.sub(lambda found:renamed[(found.group(0),declaration(found.group(0),i))],line))
     return '\n'.join(out)
+def e18(text,walk):
+    # entry 18 in a mock (lead, 2026-11-28 04:02Z): a parameter that is nil at every call is dropped. The walk's
+    # function declares an optional parameter; the records' function declares none and writes nil where it
+    # was read. That every call hands nil is read from the walk's text of the same mock: each call of a
+    # function of that name hands the label a literal nil, or hands on the parameter itself from inside the
+    # function, where nothing has declared the name again. A call that hands anything else keeps the
+    # parameter, and the texts stay different. The parameter is then dropped from a copy of the walk's text
+    # (signature, arguments, and nil where it was read), and only if that copy is the records' text, byte for
+    # byte, is the pair equal: nothing else is forgiven.
+    if text==walk: return text
+    lines=walk.split('\n')
+    def indent(i): return len(lines[i])-len(lines[i].lstrip())
+    candidates=[]
+    for line in lines:
+        f=FUNC.match(line)
+        if not f: continue
+        for parameter in split_top(f.group(4)):
+            if OPTIONAL_PARAMETER.search(parameter) and (f.group(3),parameter) not in candidates:
+                candidates.append((f.group(3),parameter))
+    records_declared=set()
+    for line in text.split('\n'):
+        f=FUNC.match(line)
+        if f: records_declared.update((f.group(3),parameter) for parameter in split_top(f.group(4)))
+    dropped_any=False
+    for name,parameter in candidates:
+        if (name,parameter) in records_declared: continue
+        label=parameter.split(':')[0]
+        if not re.match(r'^\w+$',label): continue
+        result=drop_nil_parameter(lines,name,parameter,label)
+        if result is not None:
+            lines=result;dropped_any=True
+    if dropped_any and '\n'.join(lines)==text: return walk
+    return text
+def drop_nil_parameter(lines,name,parameter,label):
+    """the walk's lines without one parameter of every function of one name, or None where some call hands it a
+    value, some function of the name does not declare it, or its name's scope cannot be followed"""
+    lines=list(lines)
+    read=re.compile(r'(?<![\w.`])'+re.escape(label)+r'(?![\w:`(])')
+    binds=re.compile(r'^\s*(?:let|var) `?'+re.escape(label)+r'`?\b(.*)$')
+    hides=re.compile(r'\{ *(?:[\w`, ]*, *)?`?'+re.escape(label)+r'`?(?: *,[\w`, ]*)? in\b|\bfunc (?!'+re.escape(name)+r'\()[^(]+\((?:.*, )?(?:\w+ )?`?'+re.escape(label)+r'`?: ')
+    call=re.compile(r'(?<![\w.])'+re.escape(name)+r'\(')
+    is_parameter=[False]*len(lines)
+    declarations=[]
+    for i,line in enumerate(lines):
+        f=FUNC.match(line)
+        if not (f and f.group(3)==name): continue
+        if parameter not in split_top(f.group(4)): return None
+        declarations.append(i)
+        end=block_end(lines,i)
+        hidden_from=None
+        for k in range(i+1,end):
+            if not lines[k].strip(): continue
+            depth=len(lines[k])-len(lines[k].lstrip())
+            if hidden_from is not None and depth<hidden_from: hidden_from=None
+            if hides.search(lines[k]): return None
+            bound=binds.match(lines[k])
+            if bound:
+                if read.search(bound.group(1)): return None
+                if hidden_from is None or depth<hidden_from: hidden_from=depth
+                is_parameter[k]=False
+                continue
+            again=FUNC.match(lines[k])
+            if again and again.group(3)==name: return None
+            is_parameter[k]=hidden_from is None
+    if not declarations: return None
+    for i,line in enumerate(lines):
+        position=0
+        while True:
+            found=call.search(lines[i],position)
+            if not found: break
+            if FUNC.match(lines[i]) and i in declarations: break
+            depth=0
+            for k in range(found.end()-1,len(lines[i])):
+                if lines[i][k] in '([': depth+=1
+                elif lines[i][k] in ')]':
+                    depth-=1
+                    if depth==0: break
+            else: return None
+            arguments=split_top(lines[i][found.end():k])
+            kept=[a for a in arguments if not (a==label+': nil' or (a==label+': '+label and is_parameter[i]))]
+            if len(kept)!=len(arguments)-1: return None
+            replaced=lines[i][:found.end()]+', '.join(kept)
+            lines[i]=replaced+lines[i][k:]
+            position=len(replaced)
+    for i in declarations:
+        f=FUNC.match(lines[i])
+        parameters=[p for p in split_top(f.group(4)) if p!=parameter]
+        lines[i]=f.group(1)+f.group(2)+f.group(3)+'('+', '.join(parameters)+')'+f.group(5)+' {'
+    for i in range(len(lines)):
+        if is_parameter[i]: lines[i]=read.sub('nil',lines[i])
+    return lines
+e18=per_mock(e18)
+def e26(text,walk):
+    # entry 26 (lead, 2026-11-28 04:02Z): a value mock() takes under a name apart from its label is bound in
+    # the function that reads it, where the walk passes it as a parameter. Read from the walk's text of the
+    # same mock: every function of one name declares the parameter, and every call of that name hands the
+    # label one and the same name, which is a parameter of mock() that nothing in the mock declares again, so
+    # the value is one value however often it is read. In a copy of the walk's text the parameter is then
+    # bound first in the function's body instead (`let label: Type = name`), and each call hands nothing; only
+    # if that copy is the records' text, byte for byte, is the pair equal.
+    if text==walk: return text
+    lines=walk.split('\n')
+    taken=set()
+    for i,line in enumerate(lines):
+        if MOCK.match(line):
+            k=i+1
+            while k<len(lines) and not lines[k].lstrip().startswith(')'):
+                parameter=re.match(r'^\s*`?(\w+)`?: ',lines[k])
+                if parameter: taken.add(parameter.group(1))
+                k+=1
+    candidates=[]
+    for line in lines:
+        f=FUNC.match(line)
+        if not f: continue
+        for parameter in split_top(f.group(4)):
+            if (f.group(3),parameter) not in candidates: candidates.append((f.group(3),parameter))
+    changed=False
+    for name,parameter in candidates:
+        label=parameter.split(':')[0]
+        if not re.match(r'^\w+$',label): continue
+        result=bind_handed_parameter(lines,name,parameter,label,taken)
+        if result is not None:
+            lines=result;changed=True
+    if changed and '\n'.join(lines)==text: return walk
+    return text
+def bind_handed_parameter(lines,name,parameter,label,taken):
+    """the walk's lines with one parameter of every function of one name bound in the function's body to the
+    one name every call hands it, or None where the calls do not all hand one parameter of mock()"""
+    lines=list(lines)
+    call=re.compile(r'(?<![\w.])'+re.escape(name)+r'\(')
+    declarations=[i for i,line in enumerate(lines) if FUNC.match(line) and FUNC.match(line).group(3)==name]
+    if not declarations: return None
+    for i in declarations:
+        if parameter not in split_top(FUNC.match(lines[i]).group(4)): return None
+    handed=set()
+    for i in range(len(lines)):
+        if i in declarations: continue
+        position=0
+        while True:
+            found=call.search(lines[i],position)
+            if not found: break
+            depth=0
+            for k in range(found.end()-1,len(lines[i])):
+                if lines[i][k] in '([': depth+=1
+                elif lines[i][k] in ')]':
+                    depth-=1
+                    if depth==0: break
+            else: return None
+            arguments=split_top(lines[i][found.end():k])
+            ours=[a for a in arguments if a.startswith(label+': ')]
+            if len(ours)!=1: return None
+            handed.add(ours[0][len(label)+2:])
+            replaced=lines[i][:found.end()]+', '.join(a for a in arguments if a is not ours[0])
+            lines[i]=replaced+lines[i][k:]
+            position=len(replaced)
+    if len(handed)!=1: return None
+    value=handed.pop()
+    if value not in taken or value==label: return None
+    if any(re.search(r'\b(?:let|var) `?'+re.escape(value)+r'`?\b|\{ *(?:[\w`, ]*, *)?`?'+re.escape(value)+r'`?(?: *,[\w`, ]*)? in\b',line) for line in lines): return None
+    for i in sorted(declarations,reverse=True):
+        f=FUNC.match(lines[i])
+        parameters=[p for p in split_top(f.group(4)) if p!=parameter]
+        lines[i]=f.group(1)+f.group(2)+f.group(3)+'('+', '.join(parameters)+')'+f.group(5)+' {'
+        lines.insert(i+1,f.group(1)+'    let '+parameter+' = '+value)
+    # a wrapper's closure whose call now hands nothing is the wrapper handed the function
+    out=[];i=0
+    while i<len(lines):
+        alone=re.match(r'^\s*('+re.escape(name)+r')\(\)$',lines[i])
+        if alone and out and out[-1].rstrip().endswith('> {') and i+1<len(lines) and lines[i+1].strip()=='}':
+            out[-1]=out[-1][:-2].rstrip()+'('+name+')';i+=2
+        else:
+            out.append(lines[i]);i+=1
+    return out
+e26=per_mock(e26)
+
 e21=per_mock(e21)
 e3=per_mock(e3)
 e5=per_mock(e5)
@@ -802,7 +977,7 @@ def e19_reads(text,walk=None):
         text=re.sub(r'(?<![\w.])'+re.escape(stand_in)+r'\.(\w+)',read,text)
         if re.search(r'(?<![\w.])'+re.escape(stand_in)+r'(?!\w)',text): raise SystemExit('the loop stand-in is left in the text')
     return text
-REWRITES=[('20',e20),('19',e19),('16',e16_init),('1+2',unhoist),('19 reads',e19_reads),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21)]
+REWRITES=[('20',e20),('19',e19),('16',e16_init),('1+2',unhoist),('19 reads',e19_reads),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21),('18',e18),('26',e26)]
 
 
 def rewritten(text, walk):
