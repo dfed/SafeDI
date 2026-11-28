@@ -128,8 +128,10 @@ extension DependencyTreeGenerator {
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			}
 			let (treeCode, comparisons) = planned
-			// A root whose tree's body holds nothing is compared nowhere.
-			let codeDifferences = (laidOutCode.map { $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences
+			// A root whose tree's body holds nothing is compared nowhere, nor one that fills a place
+			// (`NodeRecordsObservation.holdsAFilledCall`).
+			let comparesText = !NodeRecordsObservation.holdsAFilledCall(nodeRecords.rootBody)
+			let codeDifferences = (laidOutCode.map { !comparesText || $0.spelled() == treeCode.spelled() ? [] : ["root: the code laid out from node records differs from the tree’s"] } ?? []) + fillLevelDifferences
 			for comparison in comparisons {
 				observer(NodeRecordsReport(
 					root: root,
@@ -179,7 +181,7 @@ extension DependencyTreeGenerator {
 		let (treeCode, comparisons) = planned
 		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
-			(treeCode.spelled() == layout.code.spelled(), "root: the code laid out from node records differs from the tree’s"),
+			(NodeRecordsObservation.holdsAFilledCall(layout.rootBody) || treeCode.spelled() == layout.code.spelled(), "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
 			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]
