@@ -25,7 +25,8 @@ import Testing
 /// plan's detector keeps on today's tree: the detector may fire where today reports nothing, never the other way.
 enum UnpassableCycleLabelChecks {
 	/// Runs `operation` while checking each root, handing each to `enclosingObserver` too, and records an issue for each
-	/// root whose tree reports a label the detector missed.
+	/// root whose tree reports a label the detector missed, or a label the facts find otherwise; the facts' comparison is
+	/// handed to the enclosing facts observer too.
 	static func checking<Result>(
 		handingOn enclosingObserver: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?,
 		_ operation: () async throws -> Result,
@@ -36,10 +37,12 @@ enum UnpassableCycleLabelChecks {
 			}
 			enclosingObserver?(root, detectorFires, todaysTreeReports)
 		}) {
-			try await UnpassableCycleLabelObservation.$factsObserver.withValue({ root, factsLabels, todaysTreeLabels in
+			let enclosingFactsObserver = UnpassableCycleLabelObservation.factsObserver
+			return try await UnpassableCycleLabelObservation.$factsObserver.withValue({ root, factsLabels, todaysTreeLabels in
 				if factsLabels != todaysTreeLabels {
 					Issue.record(Comment(rawValue: "UNPASSABLE-FACTS The facts of \(root) find \(factsLabels) where its tree reports \(todaysTreeLabels)."))
 				}
+				enclosingFactsObserver?(root, factsLabels, todaysTreeLabels)
 			}) {
 				try await operation()
 			}

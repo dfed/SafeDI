@@ -25,10 +25,19 @@ public enum UnpassableCycleLabelObservation {
 	/// Called for each production root with the root's type, whether the detector keeps it on today's tree, and whether
 	/// today's tree reports a label no one parameter can pass.
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?
-	/// Called for each production root with the root's type, the labels the per-type facts find no one parameter can
-	/// pass (`TypeFactsWorld.unpassableCycleLabels()`) and those today's tree reports, each as `<built type>.<label>`,
-	/// sorted.
+	/// Called for each production root, mock root and inline tree of a foreign seam with the root's name, the labels the
+	/// per-type facts find no one parameter can pass (`TypeFactsGraph.unpassableCycleLabelValues()`) and those today's
+	/// tree reports, each as its diagnostic reads it (`UnpassableCycleLabel.observedDescription`), sorted.
 	@TaskLocal public static var factsObserver: (@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String]) -> Void)?
+}
+
+extension UnpassableCycleLabel {
+	/// Everything the label's diagnostic reads, for a test that compares the two producers of it. Test only.
+	var observedDescription: String {
+		let receiverDescription = "\(receiver.property.asSource) at \(String(describing: receiver.declarationLocation)) in \(receiver.chain.map(\.asSource).joined(separator: " -> "))"
+		let redeclarationDescription = "\(redeclaration.property.asSource) by \(redeclaration.declaringType.asSource) at \(String(describing: redeclaration.declarationLocation))"
+		return "\(builtType.asSource): \(forms.map(\.asSource).joined(separator: ", ")), first received as \(receiverDescription), declared again as \(redeclarationDescription)"
+	}
 }
 
 extension DependencyTreeGenerator {

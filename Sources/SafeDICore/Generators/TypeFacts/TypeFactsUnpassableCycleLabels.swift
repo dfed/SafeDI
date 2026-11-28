@@ -22,9 +22,27 @@ extension TypeFactsGraph {
 	/// A declaration where the tree builds its function: the declaration, beneath the declarations of its component
 	/// that are being built above it, outermost first. A call of one of those closes a cycle on it, so the declaration's
 	/// body ends there, and two places of one declaration beneath other such declarations have other bodies.
-	private struct CyclePlace: Hashable {
+	struct CyclePlace: Hashable {
 		let declaration: Int32
 		let componentMembersAbove: [Int32]
+	}
+
+	/// A label no one parameter can pass at one place of a function (`unpassableCycleLabels()`): the forms the function's
+	/// body receives of it, in property order, and the declaration of it between the function and a call that closes a
+	/// cycle on it that precedes the others in source order (`CycleParameter.Redeclaration.preceding(_:)`).
+	struct UnpassablePlaceLabel {
+		let place: CyclePlace
+		let label: String
+		let forms: [Property]
+		let redeclaration: CycleParameter.Redeclaration
+	}
+
+	/// What the fold of `unpassableCycleLabels()` settles: the labels no one parameter can pass, each at a place of its
+	/// function in the order a walk from the root first meets the places, then in label order; and the labels each
+	/// place's function takes as parameters.
+	struct UnpassableCycleLabelSolution {
+		let labels: [UnpassablePlaceLabel]
+		let parameterLabels: [CyclePlace: Set<String>]
 	}
 
 	/// What a walk of one function's body has met of the labels its component declares.
@@ -32,6 +50,7 @@ extension TypeFactsGraph {
 		var formsByLabel = [String: Set<Property>]()
 		var requiredForms = Set<Property>()
 		var labelsDeclaredBeforeACloser = Set<String>()
+		var redeclarations = [String: CycleParameter.Redeclaration]()
 	}
 
 	/// The labels the function a cycle closes on receives from above it, which a declaration between the function and
@@ -43,6 +62,17 @@ extension TypeFactsGraph {
 	/// parameter that function takes for it: the functions' parameters are solved together, to a fixed point, as the
 	/// tree's are.
 	func unpassableCycleLabels() -> [(declaration: DeclarationID, label: String)] {
+		var labelsByDeclaration = [Int32: Set<String>]()
+		for placeLabel in unpassableCycleLabelSolution().labels {
+			labelsByDeclaration[placeLabel.place.declaration, default: []].insert(placeLabel.label)
+		}
+		return labelsByDeclaration.keys.sorted().flatMap { declaration in
+			labelsByDeclaration[declaration, default: []].sorted().map { (declaration, $0) }
+		}
+	}
+
+	/// The fold `unpassableCycleLabels()` reads, with what a diagnostic of each label names.
+	func unpassableCycleLabelSolution() -> UnpassableCycleLabelSolution {
 		var ownReceives = [[(property: Property, isRequired: Bool)]]()
 		var declaredLabels = [Set<String>]()
 		for index in 0..<declarationCount {
@@ -104,14 +134,20 @@ extension TypeFactsGraph {
 		visit(0, path: [])
 
 		var parameters = [CyclePlace: [String: Property]]()
+		// The declaration of each parameter's label the function's parameter was typed beneath, which the declarations
+		// between a function and a call that closes a cycle on another function inside it count too.
+		var parameterRedeclarations = [CyclePlace: [String: CycleParameter.Redeclaration]]()
 		// The labels declared between each place's function and a call that closes a cycle on it, with those of every
 		// function whose body holds such a call: where that function is called beneath a declaration, so is the call.
 		var labelsDeclaredBeforeACloser = [CyclePlace: Set<String>]()
-		var unpassableByDeclaration = [Int32: Set<String>]()
+		var redeclarationsBeforeACloser = [CyclePlace: [String: CycleParameter.Redeclaration]]()
+		var unpassableLabels = [UnpassablePlaceLabel]()
+		// The labels each declaration declares, each noted where a diagnostic notes it, built when a walk first passes it.
+		var declarationRedeclarations = [Int32: [String: CycleParameter.Redeclaration]]()
 		// Each pass hands what the last found down the calls that close a cycle, until a pass changes nothing.
 		for _ in 0...(places.count * 4) {
 			var changed = false
-			unpassableByDeclaration = [:]
+			unpassableLabels = []
 			for place in places {
 				var body = BodyReceives()
 				var closedOnPlaces = Set<CyclePlace>()
@@ -131,6 +167,18 @@ extension TypeFactsGraph {
 					for child in edges(from: declaration) {
 						if child == place.declaration {
 							body.labelsDeclaredBeforeACloser.formUnion(declaredBeneath)
+							// The declarations between the function and this call, each noted at its declaration of the label.
+							for (offset, between) in pathBeneath.enumerated().dropFirst(place.componentMembersAbove.count + 1) {
+								let betweenRedeclarations = declarationRedeclarations[between] ?? Self.redeclarations(by: between, in: self)
+								declarationRedeclarations[between] = betweenRedeclarations
+								for (label, redeclaration) in betweenRedeclarations {
+									body.redeclarations[label] = Self.preceding(body.redeclarations[label], redeclaration)
+								}
+								let betweenPlace = CyclePlace(declaration: between, componentMembersAbove: componentMembers(of: between, in: Array(pathBeneath[..<offset])))
+								for (label, parameterRedeclaration) in parameterRedeclarations[betweenPlace, default: [:]] {
+									body.redeclarations[label] = Self.preceding(body.redeclarations[label], parameterRedeclaration)
+								}
+							}
 						} else if let position = pathBeneath.firstIndex(of: child) {
 							// A call that closes a cycle on another function hands it its parameters.
 							let closedOn = CyclePlace(declaration: child, componentMembersAbove: componentMembers(of: child, in: Array(pathBeneath[..<position])))
@@ -148,26 +196,62 @@ extension TypeFactsGraph {
 				}
 				walk(place.declaration, path: place.componentMembersAbove, hidden: [], declaredBelow: [])
 				let declaredBeforeACloser = body.labelsDeclaredBeforeACloser.union(labelsDeclaredBeforeACloser[place, default: []])
-				for closedOn in closedOnPlaces where !declaredBeforeACloser.isSubset(of: labelsDeclaredBeforeACloser[closedOn, default: []]) {
-					labelsDeclaredBeforeACloser[closedOn, default: []].formUnion(declaredBeforeACloser)
-					changed = true
+				var redeclarations = body.redeclarations
+				for (label, redeclaration) in redeclarationsBeforeACloser[place, default: [:]] {
+					redeclarations[label] = Self.preceding(redeclarations[label], redeclaration)
+				}
+				for closedOn in closedOnPlaces {
+					if !declaredBeforeACloser.isSubset(of: labelsDeclaredBeforeACloser[closedOn, default: []]) {
+						labelsDeclaredBeforeACloser[closedOn, default: []].formUnion(declaredBeforeACloser)
+						changed = true
+					}
+					for (label, redeclaration) in redeclarations {
+						let merged = Self.preceding(redeclarationsBeforeACloser[closedOn, default: [:]][label], redeclaration)
+						if redeclarationsBeforeACloser[closedOn, default: [:]][label] != merged {
+							redeclarationsBeforeACloser[closedOn, default: [:]][label] = merged
+							changed = true
+						}
+					}
 				}
 				for label in declaredBeforeACloser.sorted() {
-					guard let forms = body.formsByLabel[label] else { continue }
+					guard let forms = body.formsByLabel[label], let redeclaration = redeclarations[label] else { continue }
 					if let (property, _) = CycleParameter.property(passing: forms, requiredForms: body.requiredForms.intersection(forms)) {
 						if parameters[place, default: [:]][label] != property {
 							parameters[place, default: [:]][label] = property
 							changed = true
 						}
+						parameterRedeclarations[place, default: [:]][label] = redeclaration
 					} else {
-						unpassableByDeclaration[place.declaration, default: []].insert(label)
+						unpassableLabels.append(UnpassablePlaceLabel(place: place, label: label, forms: forms.sorted(), redeclaration: redeclaration))
 					}
 				}
 			}
 			guard changed else { break }
 		}
-		return unpassableByDeclaration.keys.sorted().flatMap { declaration in
-			unpassableByDeclaration[declaration, default: []].sorted().map { (declaration, $0) }
+		return UnpassableCycleLabelSolution(labels: unpassableLabels, parameterLabels: parameters.mapValues { Set($0.keys) })
+	}
+
+	/// The one of `current` and `candidate` that precedes the other in source order (`CycleParameter.Redeclaration.preceding(_:)`).
+	private static func preceding(_ current: CycleParameter.Redeclaration?, _ candidate: CycleParameter.Redeclaration) -> CycleParameter.Redeclaration {
+		current.map { $0.preceding(candidate) } ?? candidate
+	}
+
+	/// The labels `declaration` declares for the declarations it builds, each as a diagnostic notes it: at the first
+	/// dependency of its type that declares the label, or, for a property no dependency declares (a child a mock root
+	/// promotes), at no location.
+	private static func redeclarations(by declaration: Int32, in graph: TypeFactsGraph) -> [String: CycleParameter.Redeclaration] {
+		let instantiable = graph.graph.nodes[Int(declaration)].scope.instantiable
+		let declaringType = instantiable.concreteInstantiable
+		var redeclarations = [String: CycleParameter.Redeclaration]()
+		for child in graph.edges(from: declaration) {
+			if let property = graph.graph.nodes[Int(child)].property {
+				redeclarations[property.label] = preceding(redeclarations[property.label], CycleParameter.Redeclaration(property: property, declaringType: declaringType, declarationLocation: nil))
+			}
 		}
+		// The first dependency that declares a label is noted, whatever else declares it.
+		for dependency in instantiable.dependencies.reversed() where !dependency.source.isReceived {
+			redeclarations[dependency.property.label] = CycleParameter.Redeclaration(property: dependency.property, declaringType: declaringType, declarationLocation: dependency.declarationLocation)
+		}
+		return redeclarations
 	}
 }

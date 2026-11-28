@@ -784,7 +784,7 @@ public actor DependencyTreeGenerator {
 
 	/// The validated scopes, frozen. Made only in this file, once `dependencyTrees(unreadTypeComment:)` has validated them,
 	/// and handed to each construction that validation must come first for: the trees of the roots of a module without
-	/// seams, the inline trees of foreign seams with holes (`inlineTreesOfForeignSeamsWithHoles(in:validatedWorld:foreignSeamRoots:)`),
+	/// seams, the inline worlds of foreign seams with holes (`unpassableCycleLabelsOfForeignSeamsWithHoles(in:validatedWorld:foreignSeamRoots:)`),
 	/// this module's own seams' signature trees (`SignatureConstruction.ownSeams`), and, through a `SeamWorld`, the trees of
 	/// the roots and seams a module with seams generates. It is a convention the compiler enforces by access, not a proof
 	/// that the walks ran correctly. Another module's seams' signature trees and its public mocks' plans take none: they
@@ -868,8 +868,9 @@ public actor DependencyTreeGenerator {
 	///   - readersOfEveryTree: What this run reads of every root's tree beside its code, which no root's node records stand
 	///     in for (`TreeForcer`).
 	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, plansCyclesPerType: Bool, drawsTrees: Bool = false, readersOfEveryTree: [TreeForcer]) async throws -> DependencyTrees {
-		// The trees of the foreign seams with holes, built inline with the fills this module generates.
-		var inlineForeignSeamTrees = [ScopeGenerator]()
+		// The labels no one parameter can pass in the foreign seams with holes, built inline with the fills this module
+		// generates.
+		var inlineForeignSeamUnpassableCycleLabels = [UnpassableCycleLabel]()
 		var validatedScopes = Set<Scope>()
 		var rootsOfOtherModules = [Instantiable]()
 		var storedSeamSignatures = [StoredSeamSignature]()
@@ -914,7 +915,7 @@ public actor DependencyTreeGenerator {
 			}
 			// Every tree built from the validated scopes reads them frozen, once.
 			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
-			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
+			inlineForeignSeamUnpassableCycleLabels = try unpassableCycleLabelsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 			validatedScopes = Set(typeDescriptionToScopeMap.values)
 			// A module whose declarations hold no seam generates from the validated scopes.
 			// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -949,7 +950,7 @@ public actor DependencyTreeGenerator {
 		}
 		// A root planned per type holds no such label (`mayHaveUnpassableCycleLabel(inTreeOf:cache:)`).
 		// A root laid out from its node records has no tree, and no cycle: node records refuse a world with one (`cycle`).
-		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator) + inlineForeignSeamTrees)
+		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.compactMap(\.scopeGenerator), besides: inlineForeignSeamUnpassableCycleLabels)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
@@ -1218,8 +1219,8 @@ public actor DependencyTreeGenerator {
 				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 				observer(
 					typeDescription.asSource,
-					Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
-					Set(todaysTree.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
+					Set(world.unpassableCycleLabelValues().map(\.observedDescription)).sorted(),
+					Set(todaysTree.unpassableCycleLabelsInTree.map(\.observedDescription)).sorted(),
 				)
 			}
 		}
@@ -1229,9 +1230,10 @@ public actor DependencyTreeGenerator {
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
 	/// no one value SafeDI hands it can provide together (see `UnpassableCycleLabel`). Each is reported once, in source
 	/// order, whichever trees hold it: the trees of several roots, production or mock, can each build the function whose
-	/// label it is, and so can the inline tree of a foreign seam with holes (`inlineTreesOfForeignSeamsWithHoles(in:)`).
-	static func validateCycleLabelsArePassable(inTreesRootedAt generators: [ScopeGenerator]) throws {
-		let unpassableCycleLabels = generators.flatMap(\.unpassableCycleLabelsInTree).uniqued()
+	/// label it is, and so can the inline world of a foreign seam with holes, whose labels the facts find
+	/// (`unpassableCycleLabelsOfForeignSeamsWithHoles(in:validatedWorld:foreignSeamRoots:)`), `besides` the trees'.
+	static func validateCycleLabelsArePassable(inTreesRootedAt generators: [ScopeGenerator], besides unpassableCycleLabelsFound: [UnpassableCycleLabel] = []) throws {
+		let unpassableCycleLabels = (generators.flatMap(\.unpassableCycleLabelsInTree) + unpassableCycleLabelsFound).uniqued()
 		if let error = DependencyTreeGeneratorError.reportingAll(of: unpassableCycleLabels.map(DependencyTreeGeneratorError.unpassableCycleLabel)) {
 			throw error
 		}
