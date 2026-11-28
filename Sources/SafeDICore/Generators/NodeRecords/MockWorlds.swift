@@ -146,18 +146,18 @@ struct MockWorlds: Sendable {
 		// Each row, by its key, in the order the worlds first meet it, and the rows its shared variant calls, which are rows
 		// too, in call order: a row's callee is called beneath a shared declaration, so no parent of its declaration is the
 		// root.
-		var rowByKey = [Int32](repeating: -1, count: sharedVariants.variants.count * 2)
-		var keysInFirstMeetOrder = [Int32]()
+		var rowByKey = [Int32](repeating: -1, count: MockWorldsRowKey.indexCount(ofSharedVariantCount: sharedVariants.variants.count))
+		var keysInFirstMeetOrder = [MockWorldsRowKey]()
 		for rows in worldRows {
-			for key in rows.walk.rowKeyByVariant where key >= 0 && rowByKey[Int(key)] < 0 {
-				rowByKey[Int(key)] = Int32(keysInFirstMeetOrder.count)
+			for case let key? in rows.walk.rowKeyByVariant where rowByKey[key.index] < 0 {
+				rowByKey[key.index] = Int32(keysInFirstMeetOrder.count)
 				keysInFirstMeetOrder.append(key)
 			}
 		}
 		let frozenRowByKey = rowByKey
 		let rowKeys = keysInFirstMeetOrder
 		let childRowsByRow = rowKeys.map { key in
-			sources.calls(of: key / 2).map { frozenRowByKey[Int($0) * 2] }
+			sources.calls(of: key.sharedVariant).map { frozenRowByKey[MockWorldsRowKey(sharedVariant: $0, everyParentIsRoot: false).index] }
 		}
 
 		// Each row's record, in levels by height: a leaf's first, each level after the levels its children are in, each
@@ -166,7 +166,7 @@ struct MockWorlds: Sendable {
 		for level in levels(ofRowsCalling: childRowsByRow) {
 			let recordsBelow = recordByRow
 			let levelRecords = try await BoundedConcurrency.map(level, width: width) { row, _ in
-				let variant = rowKeys[Int(row)] / 2
+				let variant = rowKeys[Int(row)].sharedVariant
 				return try record(of: variant, in: sources, childRecords: childRowsByRow[Int(row)].compactMap { recordsBelow[Int($0)] })
 			}
 			for (row, record) in zip(level, levelRecords) {
@@ -176,7 +176,7 @@ struct MockWorlds: Sendable {
 		// Every row's record is made above, in its level.
 		let sharedRecords = recordByRow.compactMap(\.self)
 		let rows = zip(rowKeys, sharedRecords).map { key, record in
-			MockWorldsTable.Row(declaration: sharedGraph.declarations[Int(sources.declaration(of: key / 2))], everyParentIsRoot: key % 2 == 1, record: record)
+			MockWorldsTable.Row(declaration: sharedGraph.declarations[Int(sources.declaration(of: key.sharedVariant))], everyParentIsRoot: key.everyParentIsRoot, record: record)
 		}
 		let sharedTable = table.holding(sharedRecordsOf: rows)
 		// Only a root laid out from its records reads the facts of their nodes.
@@ -186,7 +186,7 @@ struct MockWorlds: Sendable {
 			let records: Result<NodeRecords, NodeRecordRefusal>
 			let world: MockWorld
 			if let view = rows.view {
-				let sharedRecordByVariant = rows.walk.rowKeyByVariant.map { key in key < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(key)])] }
+				let sharedRecordByVariant = rows.walk.rowKeyByVariant.map { key in key.map { sharedRecords[Int(frozenRowByKey[$0.index])] } }
 				records = NodeRecords.refusingWhatRecordsThrow {
 					try NodeRecords(world: view, declaredTypeNames: nil, sharedRecordByVariant: sharedRecordByVariant, refusesOwedFacts: false)
 				}
@@ -194,7 +194,7 @@ struct MockWorlds: Sendable {
 			} else {
 				// Each frontier variant takes the record of its row, of the shared variant it calls.
 				let sharedRecordByVariant = rows.variantOfTopVariant.map { variant in
-					variant < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(rows.walk.rowKey(ofSharedVariant: variant))])]
+					variant < 0 ? nil : sharedRecords[Int(frozenRowByKey[rows.walk.rowKey(ofSharedVariant: variant).index])]
 				}
 				records = NodeRecords.refusingWhatRecordsThrow {
 					try NodeRecords(world: rows.top, declaredTypeNames: nil, sharedRecordByVariant: sharedRecordByVariant, refusesOwedFacts: false)
@@ -578,7 +578,7 @@ struct MockWorlds: Sendable {
 				!isInterior[node] && topNodeBySharedNode[node] >= 0 && everyParentIsRoot(ofTopNode: topNodeBySharedNode[node]) ? Int32(1) : 0
 			}
 			var declarationKeyByVariant = [Int32]()
-			var rowKeyByVariant = [Int32]()
+			var rowKeyByVariant = [MockWorldsRowKey?]()
 			declarationKeyByVariant.reserveCapacity(origins.count)
 			rowKeyByVariant.reserveCapacity(origins.count)
 			for (isShared, variant) in origins {
@@ -587,12 +587,12 @@ struct MockWorlds: Sendable {
 					// The table was built from the same roots by the same walk of each root's declarations, so it holds every
 					// declaration of the world.
 					declarationKeyByVariant.append((table.declarationID(of: top.graph.nodes[Int(node)]) ?? -1) * 2 + (everyParentIsRoot(ofTopNode: node) ? 1 : 0))
-					rowKeyByVariant.append(-1)
+					rowKeyByVariant.append(nil)
 					continue
 				}
 				let node = sources.declaration(of: variant)
 				declarationKeyByVariant.append(sources.graph.declarations[Int(node)] * 2 + bitBySharedNode[Int(node)])
-				rowKeyByVariant.append(isRowVariant[Int(variant)] ? variant * 2 + bitBySharedNode[Int(node)] : -1)
+				rowKeyByVariant.append(isRowVariant[Int(variant)] ? MockWorldsRowKey(sharedVariant: variant, everyParentIsRoot: bitBySharedNode[Int(node)] == 1) : nil)
 			}
 			self.declarationKeyByVariant = declarationKeyByVariant
 			self.rowKeyByVariant = rowKeyByVariant
@@ -603,15 +603,14 @@ struct MockWorlds: Sendable {
 
 		/// The key of each variant's declaration, in the walk's order (`MockWorld.declarationKeyByVariant`).
 		let declarationKeyByVariant: [Int32]
-		/// The row of each variant, in the walk's order: its shared variant times two, plus its declaration's bit, or -1 for
-		/// a variant that is no row.
-		let rowKeyByVariant: [Int32]
+		/// The row key of each variant, in the walk's order, or `nil` for a variant that is no row.
+		let rowKeyByVariant: [MockWorldsRowKey?]
 		/// Whether the world's node records can be made over its top graph alone.
 		let isClean: Bool
 
 		/// The row key of the shared variant `variant`, which the world reaches.
-		func rowKey(ofSharedVariant variant: Int32) -> Int32 {
-			variant * 2 + bitBySharedNode[Int(sources.declaration(of: variant))]
+		func rowKey(ofSharedVariant variant: Int32) -> MockWorldsRowKey {
+			MockWorldsRowKey(sharedVariant: variant, everyParentIsRoot: bitBySharedNode[Int(sources.declaration(of: variant))] == 1)
 		}
 
 		/// Whether every parent of each shared node's declaration in the world is the world's root, as 1 or 0.
@@ -627,4 +626,33 @@ struct MockWorlds: Sendable {
 		let recordCountWithoutTable: Int
 		let differences: [String]
 	}
+}
+
+/// The key of a row of mock world sharing: a shared variant, and whether every parent of its declaration in the world is
+/// the world's root. A row is one record per key, and keys index the dense arrays of rows by key (`index`), two indices
+/// per shared variant.
+private struct MockWorldsRowKey: Sendable, Hashable {
+	init(sharedVariant: VariantID, everyParentIsRoot: Bool) {
+		rawValue = sharedVariant * 2 + (everyParentIsRoot ? 1 : 0)
+	}
+
+	/// How many indices the keys of `sharedVariantCount` shared variants take.
+	static func indexCount(ofSharedVariantCount sharedVariantCount: Int) -> Int {
+		sharedVariantCount * 2
+	}
+
+	var sharedVariant: VariantID {
+		rawValue / 2
+	}
+
+	var everyParentIsRoot: Bool {
+		rawValue % 2 == 1
+	}
+
+	/// The key's index in an array of rows by key.
+	var index: Int {
+		Int(rawValue)
+	}
+
+	private let rawValue: Int32
 }
