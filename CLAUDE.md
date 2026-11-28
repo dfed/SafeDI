@@ -92,7 +92,7 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 - **Anything else is listed debt or needs the maintainer's approval.** Debt is listed here or as a growth row whose limit is above its larger graph's own multiple, with what removes it. No change raises such a limit or adds a row with one; the change that removes the growth lowers or deletes it.
 - **Listed debt:**
   - A tree emits a node for each path to a type, so an inline tree's code, and the time and memory to write it, grow with the paths; building each type once from node records and per-type facts removes it.
-  - A type read in more than one form (as a value and through `LazilyInstantiated` or `SendableLazilyInstantiated`, under a rename or an only-if-available read) is written once per combination of the forms its labels are bound in, which can double with each such label. Production code and mocks both write it so; the life-like graphs the generate-time check builds have none.
+  - A type read in more than one form (as a value and through `LazilyInstantiated` or `SendableLazilyInstantiated`, under a rename or an only-if-available read) is written once per combination of the forms its labels are bound in, which can double with each such label. Production code and mocks both write it so; the lifelike benchmark graphs have none.
   - Each mock root writes its own tree, so a module's mock code grows with its mock roots times their types.
   - A mock root's tree build grows faster than its types.
   - The facts a long chain owes are found again at each link.
