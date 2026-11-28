@@ -2132,6 +2132,7 @@ struct FillsOfCall {
 			for (_, hole) in fillEdges where hole.enumPlace != nil {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
+			let placesQuery = calledBuilders.placesQuery
 			var emittedCaseKeys = Set<String>()
 			for (edge, hole) in fillEdges {
 				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
@@ -2139,7 +2140,9 @@ struct FillsOfCall {
 				let places = placesByCaseKey[caseKey] ?? [hole]
 				var fields = hole.fields
 				if hole.enumPlace != nil {
-					let caseFields = ScopeGenerator.caseFields(of: places)
+					// The tree's rule, read over every route to the case, which one fill edge of a type reached on two
+					// routes does not show.
+					let caseFields = CalledBuilders.caseFields(of: places, calledBuilders: calledBuilders, in: placesQuery, innerScopeReaders: innerScopeReaders)
 					fields = caseFields.fields
 					callerReadLabelsByCaseKey[caseKey] = caseFields.callerReadLabels
 				}

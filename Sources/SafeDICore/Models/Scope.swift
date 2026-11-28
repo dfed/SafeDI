@@ -897,6 +897,49 @@ extension ScopeRecord {
 /// orders nothing.
 /// A case of a place graph as a set tells it apart: its indices are its own graph's, so two graphs' cases are told apart by
 /// the graph's identity, which orders nothing.
+extension CalledBuilders {
+	/// The query of the call's place graph, which reads what every route to a case hands (`SeamSignature.placesHandedToCallers`),
+	/// and the graphs of the seams on the way to a place it passes up; `nil` for a call whose graph was not built.
+	var placesQuery: SeamSignature.Places.Query? {
+		places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: places, calledPlaces: { [placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places })
+	}
+
+	/// What the one fill of a case nested by type binds, `places` being the call's places of the case
+	/// (`ScopeGenerator.caseFields(of:)`): read over every route to the case from the place graph, a place the call passes up
+	/// from the graph of the seam whose tree holds it (`holdingCase(ofSite:in:)`), never from the places alone, whose lists
+	/// are their first route's only; from the places where `placesQuery` is `nil` or does not hold one of them. A label some
+	/// route of the inner seam's enum holds and another lacks is read of the caller's scope too
+	/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). The tree's fills and the per-type facts' fill rows both read it.
+	static func caseFields(of places: [SeamSignature.Hole], calledBuilders: CalledBuilders?, in placesQuery: SeamSignature.Places.Query?, innerScopeReaders: InnerScopeReaders?) -> ScopeGenerator.CaseFields {
+		var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
+		var holdingCasesSeen = Set<HoldingCaseKey>()
+		var readsEveryPlaceFromGraph = placesQuery != nil
+		if let placesQuery, let calledBuilders {
+			for place in places {
+				guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
+					readsEveryPlaceFromGraph = false
+					break
+				}
+				if holdingCasesSeen.insert(HoldingCaseKey(holding)).inserted {
+					holdingCases.append(holding)
+				}
+			}
+		}
+		var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
+			ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
+		} else {
+			ScopeGenerator.caseFields(of: places)
+		}
+		if let innerScopeReaders {
+			let fieldLabels = Set(caseFields.fields.map(\.property.label))
+			for place in places {
+				caseFields.callerReadLabels.formUnion(innerScopeReaders.labelsSomeInnerRouteLacks(of: place).intersection(fieldLabels))
+			}
+		}
+		return caseFields
+	}
+}
+
 struct HoldingCaseKey: Hashable {
 	init(graph: ObjectIdentifier, caseIndex: Int) {
 		self.graph = graph
@@ -1220,34 +1263,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the place, whose lists are its
 			// first route's only. A call whose graph was not built, or whose run does not hold the graph of a seam on the way
 			// to a place it passes up, reads its places.
-			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
+			let placesQuery = scope.calledBuilders?.placesQuery
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
-				var holdingCasesSeen = Set<HoldingCaseKey>()
-				var readsEveryPlaceFromGraph = placesQuery != nil
-				if let placesQuery, let calledBuilders = scope.calledBuilders {
-					for place in places {
-						guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
-							readsEveryPlaceFromGraph = false
-							break
-						}
-						if holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
-							holdingCases.append(holding)
-						}
-					}
-				}
-				var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
-					ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
-				} else {
-					ScopeGenerator.caseFields(of: places)
-				}
-				if let innerScopeReaders {
-					let fieldLabels = Set(caseFields.fields.map(\.property.label))
-					for place in places {
-						caseFields.callerReadLabels.formUnion(innerScopeReaders.labelsSomeInnerRouteLacks(of: place).intersection(fieldLabels))
-					}
-				}
-				return caseFields
+				CalledBuilders.caseFields(of: places, calledBuilders: scope.calledBuilders, in: placesQuery, innerScopeReaders: innerScopeReaders)
 			}
 			// A public mock's caller decides per route, and a route whose nearest type binds another form of a value its fill
 			// reads converts it, so the fill takes each value its case's payload does not carry in the form it reads
