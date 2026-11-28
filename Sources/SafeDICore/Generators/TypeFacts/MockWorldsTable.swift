@@ -285,17 +285,6 @@ struct MockWorldsTable: Sendable {
 		edgeTargets[Int(edgeOffsets[Int(declaration)])..<Int(edgeOffsets[Int(declaration) + 1])]
 	}
 
-	/// Whether the declaration `declaration`, an ID of this table, is shareable: neither a mock root's own nor one that
-	/// reaches what the type's documentation excludes.
-	func isShareable(_ declaration: Int32) -> Bool {
-		shareableByDeclaration[Int(declaration)]
-	}
-
-	/// How many distinct declarations the worlds hold.
-	var declarationCount: Int {
-		shareableByDeclaration.count
-	}
-
 	/// How many worlds the table is built over.
 	var worldCount: Int {
 		worldRootDeclarations.count

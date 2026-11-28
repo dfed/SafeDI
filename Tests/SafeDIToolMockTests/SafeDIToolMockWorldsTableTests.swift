@@ -525,6 +525,146 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [expected, expected])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesSubtreeReceivingAndRenamingLabelOnlyIfAvailable_whenNoWorldRequiresIt() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("theme", "Theme"), ("page", "Page")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("page", "Page")]))
+
+		\(Self.type("Page", instantiating: [("shared", "Shared")]))
+
+		@Instantiable
+		public struct Shared: Instantiable {
+		    public init(theme: Theme?, style: Theme?, first: First) {
+		        self.theme = theme
+		        self.style = style
+		        self.first = first
+		    }
+
+		    @Received(onlyIfAvailable: true) let theme: Theme?
+		    @Received(fulfilledByDependencyNamed: "theme", ofType: Theme.self, onlyIfAvailable: true) let style: Theme?
+		    @Instantiated let first: First
+		}
+
+		\(Self.type("First", receivingOnlyIfAvailable: [("theme", "Theme")]))
+
+		\(Self.type("Theme"))
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Nothing requires `theme`, so no mock root pins it, and nothing declares it lazily: `page` and everything beneath it
+		// are shareable. `Screen0` hands `shared` its `theme` and `Screen1` hands it `nil`, which one optional parameter
+		// carries, so both worlds call one variant of `shared`, which holds the alias `style` and `first` beneath it, and
+		// each world's facts of them equal its own built whole.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 7,
+				sharedDeclarationCount: 3,
+				sharedVariantCount: 3,
+				shareableDeclarations: ["1: theme: Theme", "2: page: Page", "3: shared: Shared", "4: style: Theme?", "5: first: First"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 5, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 0"]),
+					.init(mockedType: "Screen1", rootDeclaration: 6, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 0"]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesSubtreeBuiltInSendableFunction_whenWorldsCallItThroughSendableInstantiator() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("theme", "Theme"), ("page", "Page")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("theme", "Theme"), ("page", "Page")]))
+
+		\(Self.type("Page", instantiating: [("sharedBuilder", "SendableInstantiator<Shared>")]))
+
+		\(Self.type("Shared", instantiating: [("first", "First")], receiving: [("theme", "Theme")]))
+
+		\(Self.type("First", receiving: [("theme", "Theme")]))
+
+		@Instantiable
+		public struct Theme: Instantiable, Sendable {
+		    public init() {}
+		}
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Each world's `page` calls the shared `sharedBuilder`, whose `Shared` and `first` are built in its `@Sendable`
+		// function: one variant, marked `@Sendable`, that reads the `theme` each world's root binds, with `first` beneath it.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 6,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
+				shareableDeclarations: ["1: theme: Theme", "2: page: Page", "3: sharedBuilder: SendableInstantiator<Shared>", "4: first: First"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0"]),
+					.init(mockedType: "Screen1", rootDeclaration: 5, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0"]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesSubtreeReadingValueBoundOutsideSendableFunction_whenWorldsCallItInsideSendableInstantiator() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("theme", "Theme"), ("pageBuilder", "SendableInstantiator<Page>")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("theme", "Theme"), ("pageBuilder", "SendableInstantiator<Page>")]))
+
+		\(Self.type("Page", instantiating: [("shared", "Shared")]))
+
+		\(Self.type("Shared", receiving: [("theme", "Theme")]))
+
+		@Instantiable
+		public struct Theme: Instantiable, Sendable {
+		    public init() {}
+		}
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Each world's root builds `pageBuilder` itself, and its `@Sendable` function builds `page`, which calls the shared
+		// `shared`: one variant in the `@Sendable` family, reading the `theme` each world's root binds outside the function.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 5,
+				sharedDeclarationCount: 1,
+				sharedVariantCount: 1,
+				shareableDeclarations: ["1: theme: Theme", "2: pageBuilder: SendableInstantiator<Page>", "3: shared: Shared"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
+					.init(mockedType: "Screen1", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
+				],
+			),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

@@ -1388,13 +1388,13 @@ struct TypeFactsGraph: Sendable {
 					var keys = [Int32]()
 					reads.rows.forEachColumn(inRow: node) { readID, _ in
 						let read = readTable[Int(readID)]
-						switch keyByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels.values[Int(read.label)] : nil)] {
+						// A seed carries a key for every read of its declaration from above, since its frontier's reads are this
+						// graph's; a read it carried none for would take none.
+						switch keyByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels.values[Int(read.label)] : nil)] ?? .parameter(-1) {
 						case let .parameter(key):
 							keys.append(key)
 						case let .answer(seedAnswer):
 							keys.append(answer(text: seedAnswer.text, beingBuilt: seedAnswer.isBeingBuilt, madeAgain: seedAnswer.isMadeAgain, keyText: seedAnswer.text, kind: seedAnswer.kind, property: seedAnswer.property.flatMap(properties.existingID(of:)) ?? -1, inReadForm: seedAnswer.isInReadForm))
-						case nil:
-							keys.append(-1)
 						}
 					}
 					return TypeFactsVariants.Seed(node: Int32(node), family: seed.family, keys: keys)

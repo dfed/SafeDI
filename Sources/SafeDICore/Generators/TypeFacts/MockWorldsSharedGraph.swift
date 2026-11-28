@@ -127,10 +127,10 @@ extension TypeFactsGraph {
 					.parameter
 				case .keysVariant:
 					.keysVariant
-				case .captured:
+				// A statement of the caller's world, read before a `@Sendable` function or not: whether the variant reads it
+				// before one is the shared graph's to decide, from the variant's family, as for any statement it is offered.
+				case .captured, .readBeforeSendableFunction:
 					.statement(statements.id(of: outcome))
-				case .readBeforeSendableFunction:
-					TypeFactsOutcomes.Outcome(form: .readBeforeSendableFunction, declaration: statements.id(of: outcome), boundBefore: statements.id(of: outcome))
 				}
 			}
 			return (variant, offered)
@@ -150,14 +150,6 @@ extension TypeFactsGraph {
 			let kindPosition: Int
 		}
 
-		/// A required receive of the subtree that a mock root's pins collect beneath the declaration, which a top graph's
-		/// frontier has no edges to: its label and the properties it reads, each once, for a walk of the world's pins over
-		/// the top graph (`TypeFactsMockRootPins`) to read in their place.
-		struct RequiredRead: Hashable, Sendable {
-			let label: String
-			let propertiesRead: Set<Property>
-		}
-
 		let required: [Property]
 		let onlyIfAvailable: [Property]
 		let onlyIfAvailableUnwrappedIncludingRequired: [Property]
@@ -166,7 +158,6 @@ extension TypeFactsGraph {
 		let typesDeclaredEscaping: [TypeDescription]
 		let reads: [Seed.Read]
 		let formsRead: [FormRead]
-		let requiredReads: [RequiredRead]
 	}
 
 	/// A mock world's top graph: the world's graph from `root`, in which each declaration `frontierRows` gives rows of is a
@@ -182,9 +173,7 @@ extension TypeFactsGraph {
 		)
 	}
 
-	/// Each node's rows by value, from the shared graph's own rows; the required receives the pins collect beneath a node
-	/// are folded children first, along the edges the pins' walk enters (no leaf; the shared graph holds no fill), each
-	/// label stopping beneath a node that declares it.
+	/// Each node's rows by value, from the shared graph's own rows.
 	static func frontierRows(
 		of graph: OrderedGraph<TypeFactsDeclaration>,
 		properties: [Property],
@@ -198,25 +187,7 @@ extension TypeFactsGraph {
 		typesBeneath: BitRows,
 		typesDeclaredEscaping: BitRows,
 	) -> [FrontierRows] {
-		let nodes = graph.nodes
-		// The shared graph is on no cycle, so each node is a component of its own, numbered as the walk completes it: in
-		// that order every node follows the nodes it leads to.
-		let completionOrder = nodes.indices.sorted { graph.componentByNode[$0] < graph.componentByNode[$1] }
-		var requiredReadsByNode = [[FrontierRows.RequiredRead]](repeating: [], count: nodes.count)
-		for node in completionOrder where nodes[node].key.leaf == .none {
-			let scope = nodes[node].scope
-			var requiredReads = DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).map {
-				FrontierRows.RequiredRead(label: $0.label, propertiesRead: $0.propertiesRead)
-			}
-			let declaredLabels = DependencyTreeGenerator.labelsDeclared(by: scope)
-			for child in graph.edges(from: node) {
-				for read in requiredReadsByNode[Int(child)] where !declaredLabels.contains(read.label) && !requiredReads.contains(read) {
-					requiredReads.append(read)
-				}
-			}
-			requiredReadsByNode[node] = requiredReads
-		}
-		return nodes.indices.map { node in
+		graph.nodes.indices.map { node in
 			FrontierRows(
 				required: receives.required.columns(inRow: node).map { properties[Int($0)] },
 				onlyIfAvailable: onlyIfAvailable.columns(inRow: node).map { properties[Int($0)] },
@@ -232,7 +203,6 @@ extension TypeFactsGraph {
 					let form = forms.table[Int(formID)]
 					return FrontierRows.FormRead(label: labels[Int(form.label)], kindPosition: form.kind)
 				},
-				requiredReads: requiredReadsByNode[node],
 			)
 		}
 	}
@@ -403,16 +373,13 @@ extension MockWorldsSharedGraph {
 		for (index, (world, whole)) in zip(worlds, worldsBuiltWhole).enumerated() {
 			var isShared = [Bool](repeating: false, count: whole.graph.nodes.count)
 			for (declaration, _) in world.parentsByDeclaration {
-				guard let node = whole.graph.index(of: graph.graph.nodes[Int(declaration)]) else {
-					differences.append("world \(index): shared d\(declaration) is no declaration of the world built whole")
-					continue
-				}
+				let wholeNode = whole.graph.index(of: graph.graph.nodes[Int(declaration)])
+				differences += Self.difference(if: wholeNode == nil, "world \(index): shared d\(declaration) is no declaration of the world built whole")
+				guard let node = wholeNode else { continue }
 				isShared[node] = true
 				let shared = graph.declarationFacts(of: Int(declaration))
 				let built = whole.declarationFacts(of: node)
-				if shared != built {
-					differences.append("world \(index): shared d\(declaration) \(shared) ≠ built whole \(built)")
-				}
+				differences += Self.difference(if: shared != built, "world \(index): shared d\(declaration) \(shared) ≠ built whole \(built)")
 			}
 			// The world built whole's variants of each shared declaration, by what a call of each hands it.
 			var wholeVariantsBySeed = [TypeFactsGraph.Seed.Projection: [Int32]]()
@@ -424,27 +391,22 @@ extension MockWorldsSharedGraph {
 			var pending = [(shared: Int32, whole: Int32)]()
 			for call in world.frontierCalls {
 				let seed = world.topGraph.seed(of: Int(call.frontierVariant)).projection
-				guard let matching = wholeVariantsBySeed[seed], matching.count == 1 else {
-					differences.append("world \(index): call of v\(call.sharedVariant) matches \(wholeVariantsBySeed[seed]?.count ?? 0) variants of the world built whole")
-					continue
-				}
+				let matching = wholeVariantsBySeed[seed] ?? []
+				differences += Self.difference(if: matching.count != 1, "world \(index): call of v\(call.sharedVariant) matches \(matching.count) variants of the world built whole")
+				guard matching.count == 1 else { continue }
 				pending.append((call.sharedVariant, matching[0]))
 			}
 			while let pair = pending.popLast() {
 				let (sharedVariant, wholeVariant) = pair
-				guard sharedByWhole[wholeVariant] == nil, wholeByShared[sharedVariant] == nil else {
-					if sharedByWhole[wholeVariant] != sharedVariant || wholeByShared[sharedVariant] != wholeVariant {
-						differences.append("world \(index): shared v\(sharedVariant) and built whole v\(wholeVariant) pair apart")
-					}
-					continue
-				}
+				let isPaired = sharedByWhole[wholeVariant] != nil || wholeByShared[sharedVariant] != nil
+				let pairsApart = isPaired && (sharedByWhole[wholeVariant] != sharedVariant || wholeByShared[sharedVariant] != wholeVariant)
+				differences += Self.difference(if: pairsApart, "world \(index): shared v\(sharedVariant) and built whole v\(wholeVariant) pair apart")
+				guard !isPaired else { continue }
 				sharedByWhole[wholeVariant] = sharedVariant
 				wholeByShared[sharedVariant] = wholeVariant
 				let shared = graph.variantFacts(of: Int(sharedVariant))
 				let built = whole.variantFacts(of: Int(wholeVariant))
-				if shared != built {
-					differences.append("world \(index): shared v\(sharedVariant) \(shared) ≠ built whole v\(wholeVariant) \(built)")
-				}
+				differences += Self.difference(if: shared != built, "world \(index): shared v\(sharedVariant) \(shared) ≠ built whole v\(wholeVariant) \(built)")
 				wholeOutcomesByShared[sharedVariant, default: []].append((whole.outcomeCells(of: Int(wholeVariant), world: index), whole.parameterFacts(of: Int(wholeVariant))))
 				for (sharedCallee, wholeCallee) in zip(graph.variants.callees(of: Int(sharedVariant)), whole.variants.callees(of: Int(wholeVariant))) {
 					pending.append((sharedCallee, wholeCallee))
@@ -459,9 +421,7 @@ extension MockWorldsSharedGraph {
 		for (sharedVariant, wholeOutcomes) in wholeOutcomesByShared {
 			let shared = graph.outcomeCells(of: Int(sharedVariant), world: -1).map(\.form)
 			let joined = TypeFactsGraph.OutcomeCell.join(wholeOutcomes.map(\.cells))
-			if shared != joined {
-				differences.append("shared v\(sharedVariant) outcomes \(shared) ≠ joined over the worlds built whole \(joined)")
-			}
+			differences += Self.difference(if: shared != joined, "shared v\(sharedVariant) outcomes \(shared) ≠ joined over the worlds built whole \(joined)")
 			// Where the worlds' outcomes agree, the join is each world's, and so are the parameters that follow from it.
 			let sharedParameters = graph.parameterFacts(of: Int(sharedVariant))
 			for whole in wholeOutcomes where Set(wholeOutcomes.map(\.cells)).count == 1 && whole.parameters != sharedParameters {
@@ -470,6 +430,12 @@ extension MockWorldsSharedGraph {
 		}
 		// The unpaired variants and the outcomes were met in dictionary order: sorted, they are reported alike on every run.
 		return differences.sorted()
+	}
+
+	/// `text` as the one difference, where `isDifferent` holds; otherwise none. The text is spelled only for a difference,
+	/// which a passing run never has.
+	private static func difference(if isDifferent: Bool, _ text: @autoclosure () -> String) -> [String] {
+		isDifferent ? [text()] : []
 	}
 }
 
