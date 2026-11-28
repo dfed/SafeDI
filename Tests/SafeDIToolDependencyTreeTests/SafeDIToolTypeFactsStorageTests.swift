@@ -144,6 +144,39 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsOwedFactsOncePerDeclarationAndEdge_whenChainOfDeclarationsGrows() async throws {
+		// Each declaration of a chain instantiates the next, so the last has every other one above it. The owed facts are
+		// found once for the world: a visit per declaration and per edge, 2n + 1 for n links beneath the root, where a walk
+		// up each declaration's parents visited n² parents.
+		var visitsByLength = [[Int]]()
+		for length in [8, 32] {
+			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let link0: Link0"])]
+			for link in 0..<length {
+				let declarations = link + 1 < length ? ["@Instantiated let link\(link + 1): Link\(link + 1)"] : []
+				types.append(seamFixtureType(named: "Link\(link)", isFinalClass: true, declarations: declarations))
+			}
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [types] in
+				var filesToDelete = [URL]()
+				defer {
+					for file in filesToDelete {
+						try? FileManager.default.removeItem(at: file)
+					}
+				}
+				return try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+			}
+			continuation.finish()
+			var visits = [Int]()
+			for await work in stream where work.step == .findingOwedFacts {
+				visits.append(work.elementCount)
+			}
+			visitsByLength.append(visits)
+		}
+		#expect(visitsByLength == [[17], [65]])
+	}
+
 	private var filesToDelete: [URL]
 
 	/// A root whose tree holds what a real adopter's does: a value shared by its screens, a cycle of screens that open
