@@ -414,6 +414,9 @@ extension DependencyTreeGenerator {
 				scope: scope,
 				promotedChildren: mockRootScope.propertiesToGenerate[scope.propertiesToGenerate.count...],
 			)
+		if !receivesPassedNil.pinnedWhereverBuilt.isEmpty || !receivesPassedNil.labelsPinnedFromAbove.isEmpty {
+			MockTreeNamesObservation.recordsMockRootPassingNilToPinnedReceives?(instantiable.concreteInstantiable)
+		}
 
 		// A promoted dependency stands for one the mocked type receives from above it, so in production its tree is built
 		// above the mocked type, wherever the dependency is built. A receive in that tree that a closer declaration in it

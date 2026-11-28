@@ -210,13 +210,13 @@ extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
 	/// emitter throw. `worldRoot` is the root of the mock root's world, where a test observes node records
 	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
-	func lowerMockRoot(context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
+	func lowerMockRoot(context: MockContext, worldRoot: ConstructionScope? = nil, passesNilToPinnedReceives: Bool = false) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
 		// Where a test compares them, the names `mock()`'s parameters are chosen from, read from the tree as
 		// `lowerRootSignature(of:context:)` reads them, against those the root's world answers.
 		if let worldRoot, let observer = MockTreeNamesObservation.observer {
-			observer(MockTreeNamesObservation.report(of: instantiable, tree: treeNames(of: instantiable, readsFills: false), worldRoot: worldRoot))
+			observer(MockTreeNamesObservation.report(of: instantiable, tree: treeNames(of: instantiable, readsFills: false), worldRoot: worldRoot, passesNilToPinnedReceives: passesNilToPinnedReceives))
 		}
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
 			// A public mock's root (`MockLowering+PublicMocks.swift`).

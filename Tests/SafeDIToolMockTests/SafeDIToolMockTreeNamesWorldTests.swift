@@ -664,6 +664,64 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 	}
 
 	@Test
+	mutating func treeNames_refuses_whenMockPassesNilToReceivePinnedByRequiredReceive() async throws {
+		// `Screen`'s required `token: Instantiator<Token>` pins the `Leaf` `Screen` builds, which the mock passes `nil`
+		// (`MockReceivesPassedNil`), a fact of places the world does not hold.
+		let report = try await report(of: "Screen", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(token: Instantiator<Token>, leaf: Leaf, source: Source) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let token: Instantiator<Token>
+			    @Instantiated let leaf: Leaf
+			    @Received let source: Source
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Source: Instantiable {
+			    public init(reader: Reader, leaf: Leaf) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let reader: Reader
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Reader: Instantiable {
+			    public init(token: Token) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let token: Token
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable {
+			    public init(token: Token?) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received(onlyIfAvailable: true) let token: Token?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Token: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(report.refusal == "pins")
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func treeNames_refuses_whenLabelDeclaredOnCycleReachesCreatorOnlyThroughDeclarationOnItsPath() async throws {
 		// `Two` declares an `engine` and reaches `One`, which instantiates one nothing fulfills, only through `Three`;

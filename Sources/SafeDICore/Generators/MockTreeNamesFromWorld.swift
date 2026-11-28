@@ -62,6 +62,10 @@ enum MockTreeNamesFromWorld {
 		/// A public mock's tree is built with builders for its holes, which its world, built from the tree without them,
 		/// does not hold.
 		case publicMockRoot
+		/// A mock that passes `nil` to a receive only if available that a required receive pins (`MockReceivesPassedNil`):
+		/// the receive reads nothing from its sibling, so the tree orders the siblings without that edge, which the world's
+		/// sibling order (`SiblingOrder`) still holds.
+		case pins
 		/// A call of another module's public mock or of a seam, a fill it passes, or a hole's site: the places and passed-up
 		/// builders the tree reads from its generator, which the world does not hold.
 		case callOrPlace
@@ -96,10 +100,14 @@ enum MockTreeNamesFromWorld {
 
 	/// The names of `instantiable`'s mock's tree, read from the world whose root is `worldRoot`
 	/// (`MockRootPlan.freezingRoot()`).
-	/// - Parameter declarationVisits: Incremented once for each declaration a walk visits, which a test reads to show the
-	///   work grows with the world rather than with the tree's paths.
-	static func treeNames(of instantiable: Instantiable, worldRoot: ConstructionScope, declarationVisits: inout Int) -> Answer {
+	/// - Parameters:
+	///   - passesNilToPinnedReceives: Whether the mock passes `nil` to a receive a required receive pins, which
+	///     `createMockRootScopeGenerator` decides before the tree is built.
+	///   - declarationVisits: Incremented once for each declaration a walk visits, which a test reads to show the work
+	///     grows with the world rather than with the tree's paths.
+	static func treeNames(of instantiable: Instantiable, worldRoot: ConstructionScope, passesNilToPinnedReceives: Bool, declarationVisits: inout Int) -> Answer {
 		guard instantiable.generateMock != .public else { return .refused(.publicMockRoot) }
+		guard !passesNilToPinnedReceives else { return .refused(.pins) }
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
 		let declarationCount = world.declarationCount
 
@@ -402,6 +410,9 @@ enum MockTreeNamesFromWorld {
 /// world for it and compares nothing.
 public enum MockTreeNamesObservation {
 	@TaskLocal public static var observer: (@Sendable (MockTreeNamesReport) -> Void)?
+	/// Handed each mocked type whose mock passes `nil` to a receive a required receive pins (`MockReceivesPassedNil`), as
+	/// `createMockRootScopeGenerator` finds it, where an `observer` is set (`DependencyTreeGenerator.generateMockCode`).
+	@TaskLocal static var recordsMockRootPassingNilToPinnedReceives: (@Sendable (TypeDescription) -> Void)?
 
 	/// Every field of `tree` beside the same field of `world`, each projected to text.
 	static func fields(of tree: ScopeGenerator.TreeNames, besideThoseOf world: ScopeGenerator.TreeNames) -> [MockTreeNamesReport.Field] {
@@ -432,9 +443,9 @@ public enum MockTreeNamesObservation {
 	}
 
 	/// The report of the mocked type `instantiable`, whose tree's names are `tree`, against its world's answer.
-	static func report(of instantiable: Instantiable, tree: ScopeGenerator.TreeNames, worldRoot: ConstructionScope) -> MockTreeNamesReport {
+	static func report(of instantiable: Instantiable, tree: ScopeGenerator.TreeNames, worldRoot: ConstructionScope, passesNilToPinnedReceives: Bool) -> MockTreeNamesReport {
 		var declarationVisits = 0
-		let answer = MockTreeNamesFromWorld.treeNames(of: instantiable, worldRoot: worldRoot, declarationVisits: &declarationVisits)
+		let answer = MockTreeNamesFromWorld.treeNames(of: instantiable, worldRoot: worldRoot, passesNilToPinnedReceives: passesNilToPinnedReceives, declarationVisits: &declarationVisits)
 		return switch answer {
 		case let .names(world):
 			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: nil, fields: fields(of: tree, besideThoseOf: world), declarationVisits: declarationVisits)
@@ -459,7 +470,7 @@ public struct MockTreeNamesReport: Sendable {
 	public let refusal: String?
 	/// Every field compared, in a fixed order, empty where the world refused.
 	public let fields: [Field]
-	/// How many declarations the world's walks visited (`MockTreeNamesFromWorld.treeNames(of:worldRoot:declarationVisits:)`).
+	/// How many declarations the world's walks visited (`MockTreeNamesFromWorld.treeNames(of:worldRoot:passesNilToPinnedReceives:declarationVisits:)`).
 	public let declarationVisits: Int
 
 	/// The fields whose two values differ.
