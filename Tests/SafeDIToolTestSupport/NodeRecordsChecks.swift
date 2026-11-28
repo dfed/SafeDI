@@ -195,19 +195,19 @@ enum NodeRecordsChecks {
 							append("\(testName)\t\(root)\tfill findings accepted\t1\t\t\t\n", toFileAt: reportPath)
 						}
 					}) {
-					try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
-						let outcome = Self.outcome(of: report)
-						for difference in outcome.differences {
-							Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+						try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
+							let outcome = Self.outcome(of: report)
+							for difference in outcome.differences {
+								Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
+							}
+							if let reportPath {
+								let state = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
+								append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.map(String.init).joined(separator: ","))\n", toFileAt: reportPath)
+							}
+							enclosingObserver?(report)
+						}) {
+							try await body()
 						}
-						if let reportPath {
-							let state = report.isLaidOutFromNodeRecords ? "laid out" : report.refusal ?? "accepted"
-							append("\(testName)\t\(report.root)\t\(state)\t\(outcome.differences.count)\t\(report.everyRefusal.joined(separator: ","))\t\(report.isMockRoot ? "mock" : "")\t\(outcome.approvedEntries.map(String.init).joined(separator: ","))\n", toFileAt: reportPath)
-						}
-						enclosingObserver?(report)
-					}) {
-						try await body()
-					}
 					}
 				}
 			}
