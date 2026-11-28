@@ -20,6 +20,7 @@
 
 import Foundation
 import SafeDICore
+import SafeDIToolLibrary
 import Testing
 
 /// The comparisons the test helpers make around every `generate()` they run: each compares two computations of the tool
@@ -34,9 +35,22 @@ enum ToolComparisonChecks {
 	/// long run sets it for the seeds it leaves the comparisons out of. Else they are made where a test counts the run’s
 	/// work (`GenerationWork.observer`), because the counts such a test pins include the work the comparisons make the
 	/// tool do; where a test observes the validation walk (`ValidationWalkObservation.observer`), because the walk
-	/// runs only where the comparison of it with the fold is set; and otherwise wherever `areMadeByDefault` says.
+	/// runs only where the comparison of it with the fold is set; where a test observes how a tree is built
+	/// (`observesTreeBuilding`), because a root its node records lay out builds a tree only where a comparison reads
+	/// one; and otherwise wherever `areMadeByDefault` says.
 	static var areMade: Bool {
-		forced ?? (areMadeByDefault || GenerationWork.observer != nil || ValidationWalkObservation.observer != nil)
+		forced ?? (areMadeByDefault || GenerationWork.observer != nil || ValidationWalkObservation.observer != nil || observesTreeBuilding)
+	}
+
+	/// Whether a test set an observer of the work that builds a root's tree or plans its code: the trees the memo oracle
+	/// is handed, the places the memo keys, the sharing schedule's changes, and the tasks that plan a scope's children.
+	/// A test that observes another part of that work adds its observer here, or its run on macOS observes nothing.
+	private static var observesTreeBuilding: Bool {
+		ConstructionMemoOracle.observer != nil
+			|| ConstructionMemoOracle.keyedPlaceObserver != nil
+			|| ConstructionSharingSchedule.observer != nil
+			|| ConcurrentChildCode.observer != nil
+			|| ConcurrentChildCode.ordering != nil
 	}
 
 	/// Set around runs that make the comparisons, or leave them out, whatever the host.
@@ -60,7 +74,7 @@ enum ToolComparisonChecks {
 	/// Runs `generate` with every comparison set around it, or, where none is made, with only the modes a run generates
 	/// in (`ConstructionInternerOrder`, `NodeRecordsChecks.laysOutRootsHere`). An observer a test set around its own run stays set either way: each comparison
 	/// hands on what it observes, and where none is made nothing replaces the test’s.
-	static func aroundGenerate<Result>(_ generate: () async throws -> Result) async throws -> Result {
+	static func aroundGenerate(_ generate: () async throws -> Generate.Output) async throws -> Generate.Output {
 		guard areMade else {
 			return try await NodeRecordsObservation.$laysOutRoots.withValue(NodeRecordsChecks.laysOutRootsHere) {
 				try await ConstructionInternerOrder.applying(.fromEnvironment) {
