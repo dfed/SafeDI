@@ -448,7 +448,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,
@@ -471,7 +471,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func treeForcersReported(byModules modules: [ModuleFixture]) async throws -> [String: [String]] {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

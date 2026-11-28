@@ -25,7 +25,7 @@ public enum CallPlaceOrderObservation {
 	/// more children: the place's root type or property, the order today's tree builds its children in there, and the
 	/// order the place's scope builds them in where each child on a cycle is a call place, each as indices among the
 	/// scope's children.
-	@TaskLocal public static var observer: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void>?
 }
 
 extension DependencyTreeGenerator {

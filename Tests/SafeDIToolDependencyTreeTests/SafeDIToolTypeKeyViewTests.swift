@@ -721,7 +721,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func workCounts(of fixture: [String], by step: GenerationWork.Step) async throws -> [Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-		_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: fixture,
 				buildSwiftOutputDirectory: true,

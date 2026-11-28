@@ -2664,12 +2664,12 @@ public enum SeamSignatureObservation {
 	/// Called, when set, for each seam whose first signature pass settled it without the pass that confirms it
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
-	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+	@TaskLocal public static var confirmsSkippedPasses: TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void>?
 	/// When set, how many tasks settle one level of a module's seam components at once, in place of the processor
 	/// count, so that a test runs a level on one task or on several whatever machine runs it.
 	@TaskLocal public static var width: Int?
 	/// Called, when set, for each level of a module's seam components, in level order, with how many tasks settle it.
-	@TaskLocal public static var observesLevels: (@Sendable (SeamSignatureLevel) -> Void)?
+	@TaskLocal public static var observesLevels: TaskLocalFunction<@Sendable (SeamSignatureLevel) -> Void>?
 }
 
 /// One level of a module's seam components, as `seamSignatures` settles it.
@@ -2690,7 +2690,7 @@ public struct SeamSignatureLevel: Equatable, Sendable {
 public enum SeamTreeReuseObservation {
 	/// Called, when set, for each seam whose tree emission made again, with the code of that tree and of the tree built
 	/// anew as emission builds every other seam's: the two must be the same text.
-	@TaskLocal public static var comparesBuiltTrees: (@Sendable (ReusedSeamTree) -> Void)?
+	@TaskLocal public static var comparesBuiltTrees: TaskLocalFunction<@Sendable (ReusedSeamTree) -> Void>?
 }
 
 /// A seam whose tree emission made again from its first signature pass's, with the code of both trees.

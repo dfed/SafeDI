@@ -28,10 +28,10 @@ enum VariantBodyChecks {
 	/// Runs `operation` while comparing each place with its body, handing each comparison to `enclosingObserver` too, and
 	/// records an issue for each place whose body passes `nil` otherwise.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await VariantBodyObservation.$observer.withValue({ place, todaysUnavailableProperties, bodysUnavailableProperties in
+		try await VariantBodyObservation.$observer.withValue(TaskLocalFunction { place, todaysUnavailableProperties, bodysUnavailableProperties in
 			if todaysUnavailableProperties != bodysUnavailableProperties {
 				Issue.record(Comment(rawValue: """
 				The body of \(place) passes nil to other receives than today's build of the place:

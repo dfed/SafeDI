@@ -27,10 +27,10 @@ enum UnpassableCycleLabelChecks {
 	/// Runs `operation` while checking each root, handing each to `enclosingObserver` too, and records an issue for each
 	/// root whose tree reports a label the detector missed.
 	static func checking<Result>(
-		handingOn enclosingObserver: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await UnpassableCycleLabelObservation.$observer.withValue({ root, detectorFires, todaysTreeReports in
+		try await UnpassableCycleLabelObservation.$observer.withValue(TaskLocalFunction { root, detectorFires, todaysTreeReports in
 			if todaysTreeReports, !detectorFires {
 				Issue.record(Comment(rawValue: "The tree of \(root) reports a label no one parameter can pass, which the plan’s detector does not keep on today’s tree."))
 			}

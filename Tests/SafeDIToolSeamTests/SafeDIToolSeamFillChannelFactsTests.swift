@@ -214,7 +214,7 @@ struct SafeDIToolSeamFillChannelFactsTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		var thrownError: (any Error)?
 		do {
-			_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+			_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 			}
 		} catch {

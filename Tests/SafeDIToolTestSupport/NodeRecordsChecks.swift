@@ -57,7 +57,7 @@ enum NodeRecordsChecks {
 		let filledCalls = FilledCallTexts()
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
-		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
+		let seamCallObserver = TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void> { call in
 			if let boundNames = call.boundNames {
 				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
 					Issue.record(Comment(rawValue: mismatch))
@@ -74,7 +74,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
 		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
-		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+		let dispatcherObserver = TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void> { dispatcher in
 			filledCalls.addTree([FilledCallTexts.normalized(dispatcher.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))])
 			if dispatcher.spelledFromRecord != dispatcher.text {
 				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
@@ -83,7 +83,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingFillObserver = FillSignatureObservation.observer
 		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
-		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+		let fillObserver = TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void> { fill in
 			filledCalls.addTree([FilledCallTexts.normalized(fill.written)])
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
@@ -96,7 +96,7 @@ enum NodeRecordsChecks {
 		let enclosingDecisionsObserver = FillEmissionDecisionsObservation.observer
 		// A root's seam call decides which of its fills and dispatchers are `@Sendable`, held in place, or root functions from
 		// their records alone as the tree decides them.
-		let decisionsObserver: @Sendable (FillEmissionDecisionsObservation) -> Void = { decisions in
+		let decisionsObserver = TaskLocalFunction<@Sendable (FillEmissionDecisionsObservation) -> Void> { decisions in
 			if let decisionsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILL_DECISIONS_REPORT"] {
 				append("\(testName)\t\(decisions.fromRecords == decisions.tree ? "agree" : "differ")\t\(decisions.tree.replacingOccurrences(of: "\n", with: " | "))\n", toFileAt: decisionsReportPath)
 			}
@@ -108,7 +108,7 @@ enum NodeRecordsChecks {
 		let enclosingFillFactsObserver = FillFactsObservation.observer
 		// Each fill of a root's seam call no fill encloses binds, takes and reads, as node records make its facts from the
 		// world, what the tree builds it with.
-		let fillFactsObserver: @Sendable (FillFactsObservation) -> Void = { facts in
+		let fillFactsObserver = TaskLocalFunction<@Sendable (FillFactsObservation) -> Void> { facts in
 			if let fillFactsReportPath = ProcessInfo.processInfo.environment["SAFEDI_FILL_FACTS_REPORT"] {
 				let agreeing = facts.fromRecords.filter { facts.tree[$0.key] == $0.value }.count
 				append("\(testName)\t\(facts.root)\t\(agreeing)/\(facts.fromRecords.count)\t\(facts.refusals.joined(separator: ","))\n", toFileAt: fillFactsReportPath)
@@ -125,14 +125,14 @@ enum NodeRecordsChecks {
 		}
 		let enclosingNamesObserver = FillNamesObservation.observer
 		// A call's names for its fills' and dispatchers' functions, made from its records alone, must be the names it claims.
-		let namesObserver: @Sendable (FillNamesObservation) -> Void = { names in
+		let namesObserver = TaskLocalFunction<@Sendable (FillNamesObservation) -> Void> { names in
 			if names.fromRecords != names.claimed {
 				Issue.record(Comment(rawValue: "A call’s records name its fills and dispatchers \(names.fromRecords) where the call claims \(names.claimed)"))
 			}
 			enclosingNamesObserver?(names)
 		}
 		let enclosingFilledCallObserver = FilledCallRecordsObservation.observer
-		let filledCallObserver: @Sendable (FilledCallRecordsObservation) -> Void = { records in
+		let filledCallObserver = TaskLocalFunction<@Sendable (FilledCallRecordsObservation) -> Void> { records in
 			filledCalls.addRecords(records)
 			enclosingFilledCallObserver?(records)
 		}
@@ -152,12 +152,12 @@ enum NodeRecordsChecks {
 	}
 
 	private static func checkingFills<Result>(
-		seamCallObserver: @escaping @Sendable (SeamCallRecordObservation) -> Void,
-		dispatcherObserver: @escaping @Sendable (DispatcherRecordObservation) -> Void,
-		fillObserver: @escaping @Sendable (FillSignatureObservation) -> Void,
-		decisionsObserver: @escaping @Sendable (FillEmissionDecisionsObservation) -> Void,
-		fillFactsObserver: @escaping @Sendable (FillFactsObservation) -> Void,
-		namesObserver: @escaping @Sendable (FillNamesObservation) -> Void,
+		seamCallObserver: TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void>,
+		dispatcherObserver: TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void>,
+		fillObserver: TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void>,
+		decisionsObserver: TaskLocalFunction<@Sendable (FillEmissionDecisionsObservation) -> Void>,
+		fillFactsObserver: TaskLocalFunction<@Sendable (FillFactsObservation) -> Void>,
+		namesObserver: TaskLocalFunction<@Sendable (FillNamesObservation) -> Void>,
 		_ body: () async throws -> Result,
 	) async rethrows -> Result {
 		try await FillFactsObservation.$observer.withValue(fillFactsObserver) {
@@ -175,13 +175,13 @@ enum NodeRecordsChecks {
 		}
 	}
 
-	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?, _ body: () async throws -> Result) async rethrows -> Result {
 		// Where `SAFEDI_NODE_RECORDS_FILLED_CALLS` is `1`, node records make the records of a root's filled seam calls.
 		let recordsFilledCalls = NodeRecordsObservation.recordsFilledCalls || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_FILLED_CALLS"] == "1"
 		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
 				try await NodeRecordsObservation.$recordsFilledCalls.withValue(recordsFilledCalls) {
-					try await NodeRecordsObservation.$observer.withValue({ report in
+					try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
 						let outcome = Self.outcome(of: report)
 						for difference in outcome.differences {
 							Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))

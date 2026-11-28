@@ -23,7 +23,7 @@
 public enum PlanCodeObservation {
 	/// Called for each root that reaches a cycle with the root's type and the code its plan lays out, `nil` where the type
 	/// key keeps the path key's body.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ code: String?) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ code: String?) -> Void>?
 }
 
 /// Lets a test see, for each production root that reaches a cycle in a module that generates no seam, whether its code
@@ -64,7 +64,7 @@ public enum RootTreeChoiceObservation {
 	}
 
 	/// Called once per such root with the root's type and `nil` where its code is laid out from its plan.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void>?
 
 	/// The number of places a root's tree per path may hold before it is abandoned for the root's plan by type, in place of
 	/// `DependencyTreeGenerator.scopeGeneratorLimitOfTodaysTree`: a test lowers it to plan a small root, or raises it to
@@ -87,11 +87,11 @@ public enum RootTreeChoiceObservation {
 public enum PlanCaptureObservation {
 	/// Called once per such root, where today's tree is built too, with the root's type and whether today's walk finds a
 	/// capture.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void>?
 }
 
 public enum PlanSendableObservation {
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void>?
 }
 
 /// The per-type plan of one root's cycles as the type key reads it, written from the plan's bodies once their code is

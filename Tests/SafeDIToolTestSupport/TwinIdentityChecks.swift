@@ -30,10 +30,10 @@ enum TwinIdentityChecks {
 	/// Runs `operation` while checking each root's calls, handing each root's observation to `enclosingObserver` too, and
 	/// records an issue for each root a call of which runs another function than the plan's.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ root: String, _ shadowsTwinValues: [String], _ plansTwinValues: [String], _ callsOfOtherFunction: [String]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ root: String, _ shadowsTwinValues: [String], _ plansTwinValues: [String], _ callsOfOtherFunction: [String]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await TwinIdentityObservation.$observer.withValue({ root, shadowsTwinValues, plansTwinValues, callsOfOtherFunction in
+		try await TwinIdentityObservation.$observer.withValue(TaskLocalFunction { root, shadowsTwinValues, plansTwinValues, callsOfOtherFunction in
 			if !callsOfOtherFunction.isEmpty {
 				Issue.record(Comment(rawValue: """
 				Calls in the tree of \(root) run another function than the plan's call of the twin value names:

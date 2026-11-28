@@ -51,7 +51,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		// without their trees, so the run draws the DOT graph, which reads every tree, to build them.
 		let fixture = Self.ternaryTree(depth: 4, beneath: ["FirstRoot", "SecondRoot"], rootDeclarations: [], instantiatesLayer: 3)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: fixture,
 				buildSwiftOutputDirectory: true,
@@ -149,7 +149,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	mutating func generate_plansOnlyTheRootsChildrenAtOnce_whenTypeKeyLaysOutTheRoot() async throws {
 		// The root's six children are planned at once, at most four in flight. Each child plans its leaves one after another, so only the root's body reports.
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await ConcurrentChildCode.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.sixChildrenDeclaredLargestFirst,
 				buildSwiftOutputDirectory: true,
@@ -173,7 +173,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		// dependency tree does; each child plans its leaf alone. With the seam's body planning one child after another, no
 		// body reports.
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await ConcurrentChildCode.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.seamWithThreeChildren,
 				buildSwiftOutputDirectory: true,
@@ -195,7 +195,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		// Five seams, one more than a body plans children at once, each planned on a task of its own: each seam's body
 		// plans its two children one after another, so no body reports.
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await ConcurrentChildCode.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.fiveSeamsOfTwoChildren,
 				buildSwiftOutputDirectory: true,

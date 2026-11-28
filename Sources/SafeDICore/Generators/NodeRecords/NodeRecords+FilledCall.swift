@@ -275,7 +275,7 @@ public struct FilledCallRecordsObservation: Sendable {
 	public let closureArguments: [String]
 
 	/// Called with each production root's filled calls, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FilledCallRecordsObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FilledCallRecordsObservation) -> Void>?
 
 	/// Hands the observer, where one is set, the records of `world`'s filled calls that node records accept.
 	static func observe(root: String, world: TypeFactsGraph) {

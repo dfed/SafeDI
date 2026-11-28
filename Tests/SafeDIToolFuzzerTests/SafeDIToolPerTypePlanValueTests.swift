@@ -636,7 +636,7 @@ struct PlanValueGraph {
 			let csv = directory.appendingPathComponent("sources.csv")
 			try fixture.path.write(to: csv, atomically: true, encoding: .utf8)
 			let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
-			let planCode = try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			let planCode = try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {

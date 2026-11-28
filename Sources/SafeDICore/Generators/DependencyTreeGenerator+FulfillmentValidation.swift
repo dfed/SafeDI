@@ -1674,7 +1674,7 @@ extension DependencyTreeGenerator {
 		func labelsReadFromAbove(by scope: Scope) -> Set<String> {
 			let labels = rememberedLabelsReadFromAbove(by: scope)
 			if let labelsReadFromAboveObserver, labelsReadFromAboveObserved.insert(scope).inserted {
-				observeLabelsReadFromAbove(by: scope, remembered: labels, observer: labelsReadFromAboveObserver)
+				observeLabelsReadFromAbove(by: scope, remembered: labels, observer: labelsReadFromAboveObserver.function)
 			}
 			return labels
 		}

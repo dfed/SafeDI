@@ -487,7 +487,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func placeLevels(of files: [String]) async throws -> ([SeamPlaceLevels], TestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamPlaceLevels.self)
-		let output = try await SeamPlaceLevels.$observer.withValue({ continuation.yield($0) }) {
+		let output = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,

@@ -133,5 +133,5 @@ public struct FillNamesObservation: Sendable {
 	public let fromRecords: [String]
 
 	/// Called with each call that fills a builder as it names its functions, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillNamesObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillNamesObservation) -> Void>?
 }

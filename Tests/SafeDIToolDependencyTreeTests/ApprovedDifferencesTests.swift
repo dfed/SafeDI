@@ -92,7 +92,7 @@ struct ApprovedDifferencesTests: ~Copyable {
 	/// rule 1, but no root is laid out from them where a test does not turn that on.
 	private mutating func treeText(of fixture: String) async throws -> String {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		let output = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		let output = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Fixture.swift": fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

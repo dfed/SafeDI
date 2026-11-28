@@ -240,7 +240,7 @@ public struct FillEmissionDecisionsObservation: Sendable {
 	public let fromRecords: String
 
 	/// Called with each call a root's decisions are made for, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillEmissionDecisionsObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillEmissionDecisionsObservation) -> Void>?
 }
 
 extension FillEmissionDecisions: CustomStringConvertible {
