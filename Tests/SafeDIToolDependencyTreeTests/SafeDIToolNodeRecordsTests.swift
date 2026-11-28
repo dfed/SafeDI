@@ -1283,6 +1283,82 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutAHolderOfAForwardingSeamCallInOneFunction_whenTwoParentsRebindWhatTheCallReads() async throws {
+		// `P0` and `P1` each instantiate `x1` again and hold a `Holder`, whose `Instantiator<S1>` calls `Feature`'s seam `S1`,
+		// forwarding it a token, and reads both parents' `x1`: the holder's function, declared once in the root's body,
+		// takes `x1` from each caller and captures only the root's `x0` (stated difference entry 22).
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(modules: Self.holderOfForwardingSeamCallModules(isReversed: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let x0 = X0()
+		        let x1 = X1()
+		        func __safeDI_holder(x1: X1) -> Holder {
+		            func __safeDI_s1Builder(token: Token) -> S1 {
+		                _ = S1.__safeDI_S1_D5164CF5F6C535C2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return S1(__safeDI_token: token, __safeDI_x0: x0, __safeDI_x1: x1)
+		            }
+		            let s1Builder = Instantiator<S1> {
+		                __safeDI_s1Builder(token: $0)
+		            }
+		            return Holder(s1Builder: s1Builder)
+		        }
+		        func __safeDI_p0() -> P0 {
+		            let x1 = X1()
+		            let holder: Holder = __safeDI_holder(x1: x1)
+		            return P0(x1: x1, holder: holder)
+		        }
+		        let p0: P0 = __safeDI_p0()
+		        func __safeDI_p1() -> P1 {
+		            let x1 = X1()
+		            let holder: Holder = __safeDI_holder(x1: x1)
+		            return P1(x1: x1, holder: holder)
+		        }
+		        let p1: P1 = __safeDI_p1()
+		        self.init(x0: x0, x1: x1, p0: p0, p1: p1)
+		    }
+		}
+		""")
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsTheValuesInlineBuilds_whenTwoParentsHoldAHolderOfAForwardingSeamCall(isReversed: Bool) async throws {
+		let modules = Self.holderOfForwardingSeamCallModules(isReversed: isReversed)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		guard compileVerificationIsEnabled else { return }
+		// The inline build declares every type in one module, where `S1` is built in place.
+		let inlineModules = [ModuleFixture(
+			name: "App",
+			packageName: "App",
+			swiftFileContent: inlineFixture(modules.flatMap(\.swiftFileContent)).map {
+				$0.replacingOccurrences(of: "import Base\n", with: "").replacingOccurrences(of: "import Feature\n", with: "")
+			},
+		)]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		try await expectDifferentialValuesAgree(
+			feature: try DifferentialValuePath(output: output, modules: modules),
+			knownRight: try DifferentialValuePath(output: inlineOutput, modules: inlineModules),
+			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("Root().p0.holder.s1Builder.instantiate(Token())"), DifferentialValueProbe("Root().p1.holder.s1Builder.instantiate(Token())")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	@Test
 	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenItsRenameKeepsADeferredParametersLabel() async throws {
 		// `Screen` retypes its pass-through `token` under its own label, so the rename is the parameter's only reader, bound
 		// from the parameter's autoclosure, with no memo beside it.
@@ -1587,6 +1663,32 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			}
 		}
 		return types
+	}
+
+	/// `Feature`'s seam `S1`, which is forwarded a token and whose child `C0` receives it, `x0` and `x1`, and `App`'s root, whose two parents, `P0`
+	/// and `P1`, each instantiate `x1` again and hold a `Holder` of an `Instantiator<S1>`, in holderp0s1's shape (the seam
+	/// world switch attack's draw); `isReversed` declares every property list the other way.
+	private static func holderOfForwardingSeamCallModules(isReversed: Bool) -> [ModuleFixture] {
+		func ordered(_ declarations: [String]) -> [String] {
+			isReversed ? declarations.reversed() : declarations
+		}
+		return [
+			ModuleFixture(name: "Base", packageName: "App", swiftFileContent: [
+				seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "X0", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "X1", isFinalClass: true, declarations: []),
+			]),
+			ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+				seamFixtureType(named: "S1", isSeam: true, isFinalClass: true, declarations: ordered(["@Forwarded let token: Token", "@Instantiated let c0: C0"])),
+				seamFixtureType(named: "C0", isFinalClass: true, declarations: ordered(["@Received let token: Token", "@Received let x0: X0", "@Received let x1: X1"])),
+			].map { "import Base\n\n" + $0 }, dependencies: ["Base"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ordered(["@Instantiated let x0: X0", "@Instantiated let x1: X1", "@Instantiated let p0: P0", "@Instantiated let p1: P1"])),
+				seamFixtureType(named: "P0", isFinalClass: true, declarations: ordered(["@Instantiated let x1: X1", "@Instantiated let holder: Holder"])),
+				seamFixtureType(named: "P1", isFinalClass: true, declarations: ordered(["@Instantiated let x1: X1", "@Instantiated let holder: Holder"])),
+				seamFixtureType(named: "Holder", isFinalClass: true, declarations: ["@Instantiated let s1Builder: Instantiator<S1>"]),
+			].map { "import Base\nimport Feature\n\n" + $0 }, dependencies: ["Base", "Feature"]),
+		]
 	}
 
 	/// What `body` returns with every root node records accept laid out from them, and the report of each root of the run.
