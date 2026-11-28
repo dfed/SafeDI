@@ -82,6 +82,11 @@ on:
         required: false
         type: boolean
         default: false
+      clean:
+        description: Build from nothing, restoring no build directory and no earlier run's build. For a result a restored build could have made, red or green, since a re-run restores the same build.
+        required: false
+        type: boolean
+        default: false
       base:
         description: The commit or branch the coverage reports list changes since (the tests' report of every whole-suite `release` run, and with `pins` the corpora's), or empty for the merge base with main.
         required: false
@@ -175,7 +180,7 @@ jobs:
       # dependencies again too (12 minutes, run 43761135608). This job saves
       # no build, so one branch's build never becomes another's.
       - name: Restore Release Build Directory
-        if: ${{ inputs.mode == 'release' }}
+        if: ${{ inputs.mode == 'release' && !inputs.clean }}
         uses: actions/cache/restore@v6
         with:
           path: .build
@@ -288,7 +293,7 @@ jobs:
             core.info('No earlier Verify run built an ancestor of this commit that is not on main.')
       - name: Download the Earlier Run's Build
         id: download-earlier-build
-        if: ${{ inputs.mode == 'release' && steps.earlier-build.outputs.run != '' }}
+        if: ${{ inputs.mode == 'release' && !inputs.clean && steps.earlier-build.outputs.run != '' }}
         continue-on-error: true
         timeout-minutes: 5
         uses: actions/download-artifact@v8
@@ -324,7 +329,7 @@ jobs:
           test "${#arguments}" -eq 16
           echo "hash=$arguments" >> "$GITHUB_OUTPUT"
       - name: Restore Debug Build Directory
-        if: ${{ inputs.mode == 'fast' }}
+        if: ${{ inputs.mode == 'fast' && !inputs.clean }}
         uses: actions/cache/restore@v6
         with:
           path: .build
