@@ -193,7 +193,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				if try Self.binding(reading: dependency.property, in: context) == nil {
+				if Self.binding(reading: dependency.property, in: context) == nil {
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 				}
 			}
@@ -205,7 +205,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 					let binding: Property? = if let createdBinding = scope.createdBinding(of: fulfillingProperty) {
 						createdBinding
 					} else {
-						try Self.binding(reading: fulfillingProperty, in: context)
+						Self.binding(reading: fulfillingProperty, in: context)
 					}
 					if let binding {
 						renameBindingByVariant[Int(callee)] = .bound(fulfillingBindingIsOptional: binding.typeDescription.isOptional)
@@ -276,17 +276,12 @@ struct OnlyIfAvailableAnswers: Sendable {
 	}
 
 	/// The declaration in `context` a read only if available of `property` is passed, or `nil` where none is available.
-	private static func binding(reading property: Property, in context: [String: [Binding]]) throws(NodeRecordRefusal) -> Property? {
-		let providingBindings = (context[property.label] ?? []).filter { binding in
-			binding.state != .hiddenAvailable && ScopeGenerator.provides(binding.property, aFormReadBy: property)
-		}
-		if let available = providingBindings.first(where: { $0.state == .available }) {
-			return available.property
-		}
-		// An `Instantiator` still being built, or built after the branch, is given to the read where its loop of builders
-		// holds only builders (`ReceivedBuilderLoops`), which rebinds it: a loop of builders, refused.
-		guard !providingBindings.contains(where: \.property.propertyType.isInstantiator) else { throw .builderLoop }
-		return nil
+	/// A declaration still being built, or built after the branch, is passed nothing: where the tree passes a builder of
+	/// its loop instead, the loop's member rebinds it at its top, which its context holds (`TypeFactsWorld.madeAgain(from:)`).
+	private static func binding(reading property: Property, in context: [String: [Binding]]) -> Property? {
+		(context[property.label] ?? []).first { binding in
+			binding.state == .available && ScopeGenerator.provides(binding.property, aFormReadBy: property)
+		}?.property
 	}
 
 	/// The properties `variant`'s construction is passed `nil` for.

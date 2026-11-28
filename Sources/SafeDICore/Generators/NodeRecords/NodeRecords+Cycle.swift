@@ -68,25 +68,6 @@ extension NodeRecords {
 		}
 	}
 
-	/// Refuses `world`, which holds a cycle, where one of its types receives a builder, plainly, only if available or
-	/// through a rename.
-	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
-	static func refuseReceivedBuilders(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		for declaration in 0..<Int32(world.declarationCount) {
-			for dependency in world.scope(of: declaration).instantiable.dependencies {
-				let read: Property? = switch dependency.source {
-				case .received:
-					dependency.property
-				case let .aliased(fulfillingProperty, _, _):
-					fulfillingProperty
-				case .instantiated, .forwarded:
-					nil
-				}
-				guard read?.asUnwrappedProperty.propertyType.isConstant ?? true else { throw .cycleReceivesBuilder }
-			}
-		}
-	}
-
 	/// Whether `declaration` is built in a `@Sendable` function of its own.
 	static func buildsInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {

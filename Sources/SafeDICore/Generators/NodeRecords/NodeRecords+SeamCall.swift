@@ -47,7 +47,7 @@ extension NodeRecords {
 
 	/// The record of `declaration`'s place, a node of kind `seamCall`, a constant: a call the engine spells where its place is
 	/// written (`InPlaceCall`), whose function begins with the call's guard line (`CallFields.leadingStatement`) and builds
-	/// `children` after it, and whose construction calls the seam's tier's initializer (the scope's instantiable is the
+	/// `children` after it (after `loopRebindings`, the members of a loop of builders it makes again, before it), and whose construction calls the seam's tier's initializer (the scope's instantiable is the
 	/// seam's leaf) with `builtByInitializerRecord`'s arguments and, where the call passes builders up, the member of the
 	/// struct it passes each (`SeamCallRoutes`). Its `text` is empty: the engine spells the call from the record.
 	/// - Throws: `NodeRecordRefusal.fill` where the call passes a builder up that `routes` holds no one read for.
@@ -58,6 +58,7 @@ extension NodeRecords {
 		routes: SeamCallRoutes,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,
+		loopRebindings: [GeneratedCode],
 		children: [GeneratedCode],
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
@@ -105,7 +106,8 @@ extension NodeRecords {
 		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: closureArguments)
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [construction.functionName]
-		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: [], statementsAfterLeadingStatement: children)
+		// A call that makes a member of a loop of builders again rebinds it before the seam's guard, as the tree writes it.
+		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: loopRebindings, statementsAfterLeadingStatement: children)
 		return alias
 	}
 }

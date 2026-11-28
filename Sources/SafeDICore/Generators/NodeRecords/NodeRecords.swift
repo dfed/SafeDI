@@ -65,9 +65,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A node on a cycle is built at two places whose trees close the cycle on different places above them, so that one
 	/// place of its variant cannot stand for both.
 	case cycleMemberBuiltTwoWays
-	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
-	/// declares for the loop of builders it closes.
-	case cycleReceivesBuilder
 	/// The function a call closes a cycle on takes a parameter of a label some declaration holds lazily, which a call can
 	/// find as the wrapper at its site where the records read the callee's view.
 	case cycleTakesParameters
@@ -100,6 +97,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
+	/// A member of a loop of builders whose function takes cycle parameters, or that closes a cycle on a function that
+	/// does: the tree wraps it through a `__safeDI_<label>_received` function its loop's parent declares, which no record
+	/// lays out yet.
+	case builderLoopTakesCycleParameters
 	/// Making the records, or laying the root out from them, threw something other than a refusal
 	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
 	case recordsThrew
@@ -209,9 +210,6 @@ struct NodeRecords: Sendable {
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		if holdsCycle {
-			try Self.refuseReceivedBuilders(inWorldWithCycle: world)
-		}
 		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? [])
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
@@ -251,8 +249,10 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
-			// (`NodeRecords+Loops.swift`).
-			let children = Self.loopRebindings(of: declaration, in: world) + children
+			// (`NodeRecords+Loops.swift`): a call of a seam, before its guard.
+			let loopRebindings = Self.loopRebindings(of: declaration, in: world)
+			let calleeChildren = children
+			let children = loopRebindings + children
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
 			// A hole's place is made above, from no record.
 			case .builtByInitializer, .erased, .lazy, .sendable, .seamHole:
@@ -261,7 +261,7 @@ struct NodeRecords: Sendable {
 			case .inlineSeam:
 				try .built(Self.inlineSeamRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
 			case .seamCall:
-				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))
+				try .alias(Self.seamCallRecord(of: declaration, variant: variant, in: world, routes: seamCallRoutes, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, loopRebindings: loopRebindings, children: calleeChildren))
 			case .receivesOnlyIfAvailable:
 				try .built(Self.receivesOnlyIfAvailableRecord(
 					of: declaration,
@@ -465,6 +465,25 @@ struct NodeRecords: Sendable {
 			}
 			for case let .place(callee) in entries[Int(variant)].reversed() {
 				placesToResolve.append((callee, parametersInFunction))
+			}
+		}
+		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
+		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings). The facts give a label a
+		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters.
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
+			let isLoopMember = { (declaration: DeclarationID) in
+				world.parents(of: declaration).contains { parent in
+					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
+				}
+			}
+			let closesFromLoopMember = variantsBetween[Int(variant)].contains { between in
+				entries[Int(between)].contains { entry in
+					guard case let .closer(closingOn: callee) = entry, callee == variant else { return false }
+					return world.edgeFacts(from: world.declaration(of: between)).contains { $0.child == world.declaration(of: variant) && $0.loop >= 0 }
+				}
+			}
+			guard !isLoopMember(world.declaration(of: variant)), !closesFromLoopMember else {
+				throw NodeRecordRefusal.builderLoopTakesCycleParameters
 			}
 		}
 		// What the body of `variant` reads as a wrapper's instance, where a call in it closes a cycle: its function's, but for

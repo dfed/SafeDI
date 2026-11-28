@@ -208,6 +208,64 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootFromNodeRecords_whenTypeRenamesBuilderOnlyIfAvailableThatNoSiblingBuilds() async throws {
+		// `Detail` receives `tokenBuilder` as `authTokenBuilder` only if available, and builds no `tokenBuilder` of its own:
+		// a rename no loop of builders can hold, bound from its fulfilling property as a rename of a value is.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(tokenBuilder: Instantiator<Token>, detail: Detail) {
+				        self.tokenBuilder = tokenBuilder
+				        self.detail = detail
+				    }
+				    @Instantiated let tokenBuilder: Instantiator<Token>
+				    @Instantiated let detail: Detail
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Detail: Instantiable {
+				    public init(authTokenBuilder: Instantiator<Token>?) {
+				        self.authTokenBuilder = authTokenBuilder
+				    }
+				    @Received(fulfilledByDependencyNamed: "tokenBuilder", ofType: Instantiator<Token>.self, onlyIfAvailable: true) let authTokenBuilder: Instantiator<Token>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_tokenBuilder() -> Token {
+		            Token()
+		        }
+		        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
+		        func __safeDI_detail() -> Detail {
+		            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 6)
+		            let authTokenBuilder: Instantiator<Token>? = tokenBuilder
+		            #sourceLocation()
+		            return Detail(authTokenBuilder: authTokenBuilder)
+		        }
+		        let detail: Detail = __safeDI_detail()
+		        self.init(tokenBuilder: tokenBuilder, detail: detail)
+		    }
+		}
+		"""])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

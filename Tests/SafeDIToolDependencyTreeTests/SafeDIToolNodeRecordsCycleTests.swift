@@ -440,7 +440,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenTypeReceivesBuilderInWorldWithCycle() async throws {
-		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds.
+		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds: `Screen` is a loop of one, which
+		// rebinds `screenBuilder` at its top, and the cycle closes on its function. The records refuse a loop member a cycle
+		// closes on, which the tree can wrap through a `_received` function, whatever the facts' parameters.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -491,7 +493,82 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleReceivesBuilder"])
+		#expect(reports.map(\.refusal) == ["builderLoopTakesCycleParameters"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeDoes_whenCycleReentersNodeWhoseReceiveAnotherDeclarationAnswers() async throws {
+		// `Reader` receives `tag`, which the root declares above `A` and `B` declares on the cycle of `A` and `B`: the call
+		// from `B` closes the cycle on `A`'s function, which takes `tag` as a parameter, the facts' parameter of `A`, and
+		// is passed the root's `tag` and `B`'s.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let reader: Reader
+					    @Instantiated let b: B
+					    public init(reader: Reader, b: B) { self.reader = reader; self.b = b }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Instantiated let tag: Instantiator<Tag>
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(tag: Instantiator<Tag>, aBuilder: Instantiator<A>) { self.tag = tag; self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Reader: Instantiable {
+					    @Received let tag: Instantiator<Tag>
+					    public init(tag: Instantiator<Tag>) { self.tag = tag }
+					}
+
+					@Instantiable public final class Tag: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_tag() -> Tag {
+			            Tag()
+			        }
+			        let tag = Instantiator<Tag>(__safeDI_tag)
+			        func __safeDI_aBuilder(tag: Instantiator<Tag>) -> A {
+			            let reader = Reader(tag: tag)
+			            let b: B = __safeDI_b()
+			            return A(reader: reader, b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let tag = Instantiator<Tag>(__safeDI_tag)
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(tag: tag)
+			            }
+			            return B(tag: tag, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(tag: tag)
+			        }
+			        self.init(tag: tag, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
 	}
 
 	@Test
