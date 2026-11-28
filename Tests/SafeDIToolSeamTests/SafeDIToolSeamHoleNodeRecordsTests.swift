@@ -53,6 +53,16 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsSeamsOwnRoot_whenRunLaysOutRootsAndTheEngineKeepsTheSeamsTree() async throws {
+		// A seam's own root keeps its tree's code, around which its initializers are written: no refusal of the engine's,
+		// so the census counts it apart from `notLaidOut`.
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: Panel", "@Instantiated let panelBuilder: Instantiator<Other>"], laysOutRoots: true)
+		#expect(reports.map(\.refusal) == ["ownSeamRoot"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesSeamsWorld_whenItReachesAHoleAlongTwoPaths() async throws {
 		// `Panel`'s node is built beneath `first` and `second`, and its hole's site reads the level each route binds.
 		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let first: First", "@Instantiated let second: Second"])
@@ -81,7 +91,7 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 
 	/// The node records reports of `Office`, a seam whose module cannot fill `Api`, which declares `officeDeclarations`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func reportsOfOffice(officeDeclarations: [String]) async throws -> [NodeRecordsReport] {
+	private mutating func reportsOfOffice(officeDeclarations: [String], laysOutRoots: Bool = false) async throws -> [NodeRecordsReport] {
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol Api {}",
@@ -100,8 +110,10 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 			],
 		)
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+			}
 		}
 		continuation.finish()
 		var reports = [NodeRecordsReport]()

@@ -151,7 +151,7 @@ extension DependencyTreeGenerator {
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
 					root: root,
-					refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? NodeRecordRefusal.notLaidOut.rawValue : nil,
+					refusal: laidOutCode == nil && NodeRecordsObservation.laysOutRoots ? (rootInfo.ownSeamRoot == nil ? NodeRecordRefusal.notLaidOut : .ownSeamRoot).rawValue : nil,
 					everyRefusal: [],
 					isLaidOutFromNodeRecords: laidOutCode != nil,
 					differences: comparison.differences,

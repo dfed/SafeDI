@@ -111,6 +111,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// A seam's own root, whose initializers are written around its tree's body: the root keeps its tree's code where a
+	/// run lays roots out, which is no refusal of the engine's, so the census counts it apart from `notLaidOut`.
+	case ownSeamRoot
 	/// A member of a loop of builders under two parents whose loops make different members of it again.
 	case builderLoopSharedApart
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'

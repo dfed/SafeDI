@@ -465,8 +465,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			)
 		}
 		#expect(reports.map(\.root) == ["Screen", "Home"])
-		// The records of `Screen`'s tree, which holds its hole, and of `Home`'s are made, and a seam's own tree is not laid out.
-		#expect(reports.map(\.refusal) == ["notLaidOut", "notLaidOut"])
+		// The records of `Screen`'s tree, which holds its hole, and of `Home`'s are made, and a seam's own tree keeps its
+		// tree's code, which the report names apart from the engine's refusals.
+		#expect(reports.map(\.refusal) == ["ownSeamRoot", "ownSeamRoot"])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
