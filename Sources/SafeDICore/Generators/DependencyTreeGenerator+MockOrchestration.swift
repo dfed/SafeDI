@@ -30,7 +30,7 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
-		guard NodeRecordsObservation.observer != nil else {
+		guard NodeRecordsObservation.observer != nil || MockWorldsTableObservation.observer != nil else {
 			return try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
 				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
@@ -40,8 +40,9 @@ extension DependencyTreeGenerator {
 				worldRootRecording: nil,
 			)
 		}
-		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
-		// local, so that a run no test observes threads nothing through the mock roots' construction.
+		// The root of each mock root's world, by mocked type, where a test observes node records or the mock worlds' sharing:
+		// handed on through a task local, so that a run no test observes threads nothing through the mock roots'
+		// construction.
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await generateMockCode(
@@ -280,7 +281,16 @@ extension DependencyTreeGenerator {
 				recordedWorldRoots[mockedType] = worldRoot
 			}
 		}
-		let worldRoots = recordedWorldRoots
+		// Where a test observes the mock worlds' sharing, it is decided once here, from the worlds in the order their roots
+		// are lowered, before any lowering starts.
+		if let observer = MockWorldsTableObservation.observer {
+			let worlds = mockRoots.compactMap { mockRoot in
+				recordedWorldRoots[mockRoot.instantiable.concreteInstantiable].map { (mockedType: mockRoot.instantiable.concreteInstantiable, root: $0.scope) }
+			}
+			observer(MockWorldsTable(worlds: worlds).report(differences: []))
+		}
+		// The lowering lays a mock out from node records only where a test observes them.
+		let worldRoots = NodeRecordsObservation.observer == nil ? [:] : recordedWorldRoots
 		let foldedMockImports = foldedMockImportsByType
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
