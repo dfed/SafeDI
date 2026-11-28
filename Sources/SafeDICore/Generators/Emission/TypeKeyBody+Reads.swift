@@ -197,22 +197,32 @@ extension TypeKeyLayout {
 		return required.intersection(reads[body])
 	}
 
+	/// Whether `body` binds `label` where a read of it does not reach outside the body: before `aliasIndex`, for a
+	/// rename's read at that index, which reads its label before binding it (`let x = x`); anywhere in the body for every
+	/// other read, which the tree answers inside the body even when the binding is still being built around it.
+	func bodyAnswers(_ label: String, inBody body: Int, readByAliasAt aliasIndex: Int?) -> Bool {
+		guard let aliasIndex else { return bodies[body].positionsByLabel[label] != nil }
+		return Self.lastPosition(in: bodies[body].positionsByLabel[label], before: aliasIndex) != nil
+	}
+
+	/// The labels `body`'s statements read from outside it: each read the body does not answer (`bodyAnswers`). A
+	/// label-keeping rename (`let x = x`) reads its label before binding it, so its read stays one from outside.
 	func readsOfBody(_ body: Int) -> [String] {
 		var seen = Set<String>()
 		var list = [String]()
 		var variantCallSiteReads = [String]()
-		func add(_ label: String) {
-			if seen.insert(label).inserted {
+		func add(_ label: String, readByAliasAt aliasIndex: Int? = nil) {
+			if !bodyAnswers(label, inBody: body, readByAliasAt: aliasIndex), seen.insert(label).inserted {
 				list.append(label)
 			}
 		}
 		for argument in bodies[body].record?.constructionReads ?? [] {
 			add(argument.label)
 		}
-		for statement in bodies[body].statements {
+		for (index, statement) in bodies[body].statements.enumerated() {
 			switch statement {
 			case let .built(child):
-				reads[child].forEach(add)
+				reads[child].forEach { add($0) }
 				for argument in bodies[child].record?.callSiteReads ?? [] {
 					add(argument.label)
 				}
@@ -221,7 +231,7 @@ extension TypeKeyLayout {
 			case let .closer(record, target):
 				if record.targetVariant == nil {
 					record.callSiteReads.forEach { add($0.label) }
-					reads[target].forEach(add)
+					reads[target].forEach { add($0) }
 				} else {
 					// A call of a variant of the per-type plan stands where today's tree builds the child or closes the cycle;
 					// it reads what the variant's body reads, in the body's order, as a built child does. A call of the body's
@@ -229,24 +239,29 @@ extension TypeKeyLayout {
 					// function takes its parameters in the order today's walk of its body first meets them
 					// (`inOrderTheBodyFirstReceives`) rather than in the order a call's arguments settled on a pass before.
 					if target != body {
-						reads[target].forEach(add)
+						reads[target].forEach { add($0) }
 					}
 					variantCallSiteReads += record.callSiteReads.map(\.label)
 				}
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
-					add(fulfillingProperty.label)
+					add(fulfillingProperty.label, readByAliasAt: index)
 				}
-				record.listedReads.forEach { add($0.label) }
+				record.listedReads.forEach { add($0.label, readByAliasAt: index) }
 			}
 		}
-		variantCallSiteReads.forEach(add)
-		return list.filter { !bodies[body].forwardedLabels.contains($0) && bodies[body].positionsByLabel[$0] == nil }
+		variantCallSiteReads.forEach { add($0) }
+		return list.filter { !bodies[body].forwardedLabels.contains($0) }
 	}
 
+	/// Where the reads `readsOfBody` lists escape `body`: a label a rename reads before a binding of it keeps the value
+	/// of its first read from outside.
 	func escapingReadsOfBody(_ body: Int) -> [String: PathValue] {
+		let statements = bodies[body].statements
 		var escaping = [String: PathValue]()
-		func note(_ label: String, _ value: PathValue) {
+		func note(_ label: String, readByAliasAt aliasIndex: Int? = nil, _ value: @autoclosure () -> PathValue) {
+			guard !bodyAnswers(label, inBody: body, readByAliasAt: aliasIndex) else { return }
+			let value = value()
 			switch value {
 			case .none:
 				if escaping[label] == nil {
@@ -260,7 +275,6 @@ extension TypeKeyLayout {
 				}
 			}
 		}
-		let statements = bodies[body].statements
 		for argument in bodies[body].record?.constructionReads ?? [] {
 			note(argument.label, pathValue(of: argument, inBody: body, before: statements.count))
 		}
@@ -283,13 +297,13 @@ extension TypeKeyLayout {
 				}
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
-					note(fulfillingProperty.label, lookUp(fulfillingProperty.label, inBody: body, before: index))
+					note(fulfillingProperty.label, readByAliasAt: index, lookUp(fulfillingProperty.label, inBody: body, before: index))
 				}
 				for read in record.listedReads {
-					note(read.label, pathValue(of: read, inBody: body, before: index))
+					note(read.label, readByAliasAt: index, pathValue(of: read, inBody: body, before: index))
 				}
 			}
 		}
-		return escaping.filter { !bodies[body].forwardedLabels.contains($0.key) && !bodies[body].cycleParameterLabels.contains($0.key) && bodies[body].positionsByLabel[$0.key] == nil }
+		return escaping.filter { !bodies[body].forwardedLabels.contains($0.key) && !bodies[body].cycleParameterLabels.contains($0.key) }
 	}
 }

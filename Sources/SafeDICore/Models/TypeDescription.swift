@@ -1343,10 +1343,12 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// type parser does: for such a type this is the wrapper's name alone, whose generic arguments come from the type
 	/// annotation `isConstructedByAnnotation` then calls for.
 	var spelledForConstruction: String {
-		if isConstructedByAnnotation, let name = simpleNameAndGenerics?.name {
-			name
+		// Spelled once: a builder's wrapper is spelled for each call a layout writes.
+		let source = asSource
+		if let name = simpleNameAndGenerics?.name, source.contains("nonisolated(") {
+			return name
 		} else {
-			asSource
+			return source
 		}
 	}
 

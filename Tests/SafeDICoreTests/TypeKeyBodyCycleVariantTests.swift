@@ -26,6 +26,25 @@ import Testing
 /// variants as the plan would.
 struct TypeKeyBodyCycleVariantTests {
 	@Test
+	func buildsInCallersBody_isTrue_whenAValueCallBuildsAVariantThatDeclaresNoFunction() {
+		let variant = Self.variant("a", building: "A", reading: [], hasFunction: false, children: [])
+		#expect(variant.buildsInCallersBody(throughCallOfKind: .value))
+	}
+
+	@Test
+	func buildsInCallersBody_isFalse_whenAValueCallBuildsAVariantThatDeclaresItsOwnFunction() {
+		let variant = Self.variant("a", building: "A", reading: [], children: [Self.inline("k", "K", reading: "q", "Q")])
+		#expect(!variant.buildsInCallersBody(throughCallOfKind: .value))
+	}
+
+	@Test
+	func buildsInCallersBody_isFalse_whenAWrapperCallBuildsAVariantThatDeclaresNoFunction() {
+		let variant = Self.variant("a", building: "A", reading: [], hasFunction: false, children: [])
+		#expect(!variant.buildsInCallersBody(throughCallOfKind: .wrapper))
+		#expect(!variant.buildsInCallersBody(throughCallOfKind: .generatedInitializer))
+	}
+
+	@Test
 	func statements_declaresOneFunctionPerVariantCapturingWhatEveryCallPasses_whenTheRootEntersTheCycleFromBothMembers() throws {
 		let statements = try #require(TypeKeyBody.statements(
 			ofRootBody: [
@@ -779,7 +798,7 @@ struct TypeKeyBodyCycleVariantTests {
 	/// The variant whose function builds `type` for `label`, an `Instantiator`, whose body answers every label of
 	/// `reading` with a declaration of the label's type, or with each of `answers` where given, with `children` its body,
 	/// each of which its construction reads.
-	private static func variant(_ label: String, building type: String, reading: [String], answers: [Answer]? = nil, children: [GeneratedCode]) -> CycleVariantRecord {
+	private static func variant(_ label: String, building type: String, reading: [String], answers: [Answer]? = nil, hasFunction: Bool = true, children: [GeneratedCode]) -> CycleVariantRecord {
 		let childReads = children.compactMap { child -> PlaceRead? in
 			guard case let .place(plan) = child.node, let record = plan.record else { return nil }
 			let property = switch record {
@@ -806,7 +825,7 @@ struct TypeKeyBodyCycleVariantTests {
 			isSendable: false,
 			typesDeclaredEscaping: [],
 			lineEnd: "",
-			hasFunction: true,
+			hasFunction: hasFunction,
 			children: children,
 			node: PlanNode(),
 		), isInSendableFamily: false, labels: reading, answers: answers ?? declarations(of: reading))

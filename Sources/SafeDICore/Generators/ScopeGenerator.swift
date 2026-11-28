@@ -8149,7 +8149,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: property,
 			rule: .instantiator(isExtension: isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		let expression = instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
+		let expression = instantiatorExpression(of: property, spelledForConstruction: unwrappedTypeDescription, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
 		guard let inlinePlaceBuilder else { return "\(propertyDeclaration.spelled) = \(expression)" }
 		return "\(propertyDeclaration.spelled) = \(inlinePlaceBuilder.inlinePlaceValue(construction: expression, overrideExpression: nil, wrappingBuilderIn: unwrappedTypeDescription))"
 	}
@@ -8157,8 +8157,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:onOneLine:inlinePlaceBuilder:)`
 	/// declares: around the function itself where it is handed nothing and erases nothing, and otherwise around a closure
 	/// that calls it, on one line where `onOneLine` holds.
-	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
-		let unwrappedTypeDescription = property
+	///
+	/// `unwrappedTypeDescription` is the property's unwrapped type as a construction spells it (`spelledForConstruction`),
+	/// which a caller that spells it already hands in rather than spelling it again.
+	private static func instantiatorExpression(of property: Property, spelledForConstruction unwrappedTypeDescription: String? = nil, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
+		let unwrappedTypeDescription = unwrappedTypeDescription ?? property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
