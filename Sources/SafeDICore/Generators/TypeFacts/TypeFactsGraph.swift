@@ -136,8 +136,8 @@ struct TypeFactsGraph: Sendable {
 		var edgeEntries = [Int32]()
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
-		// What each fill binds from its site's scope struct, parallel to `fillHoles`.
-		var fillStructBindings = [ScopeGenerator.FillStructBindings]()
+		// Each call that passes fills, with what the memos it hands them read (`FillsOfCall`).
+		var fillsOfCalls = [FillsOfCall]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
@@ -153,13 +153,16 @@ struct TypeFactsGraph: Sendable {
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(false)
 			}
-			let innerScopeReaders = declaration.scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+			var fillEdges = [(edge: Int32, hole: SeamSignature.Hole)]()
 			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
-				fillStructBindings.append(ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: declaration.scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders))
-				fillHoles.append((Int32(edgeEntries.count), hole))
+				fillEdges.append((Int32(edgeEntries.count), hole))
 				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
 				edgeEntries.append(Int32(index))
 				edgeIsFill.append(true)
+			}
+			if !fillEdges.isEmpty {
+				fillHoles += fillEdges
+				fillsOfCalls.append(FillsOfCall(scope: declaration.scope, fillEdges: fillEdges))
 			}
 			return targets
 		}
@@ -301,38 +304,6 @@ struct TypeFactsGraph: Sendable {
 			hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
 			followsEdge: followsEdge,
 		).rows
-		// What a seam's caller is asked for counts the receives inside the fills its tree's seam calls pass
-		// (`ScopeGenerator.requiredReceivedProperties`), so a second fold follows every edge. A world without fills
-		// shares the first.
-		// Along a fill edge, what the fill binds from the site's scope struct hides the fill's reads of it from the caller.
-		let requiredIncludingFillsRows: BitRows
-		let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
-		if fillHoles.isEmpty {
-			requiredIncludingFillsRows = requiredRows
-			fillStructRows = nil
-		} else {
-			var fillStructBindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
-			for (fill, bindings) in zip(fillHoles, fillStructBindings) {
-				fillStructBindingsByEdge[fill.edge] = bindings
-			}
-			// A property no node reads or declares has no ID, and hides nothing.
-			func rows(_ selected: (ScopeGenerator.FillStructBindings) -> Set<Property>) -> BitRows {
-				BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
-					for case let id? in (fillStructBindingsByEdge[Int32(edge)].map(selected) ?? []).map(properties.existingID(of:)) {
-						insert(id)
-						propertiesByUnwrapped[id]?.forEach(insert)
-					}
-				}
-			}
-			let hiddenFromCaller = rows(\.hiddenFromCaller)
-			requiredIncludingFillsRows = ReadsFromAbove(
-				graph: graph,
-				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownRequired[node].forEach(insert) },
-				hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
-				hiddenAtEdge: hiddenFromCaller,
-			).rows
-			fillStructRows = (rows(\.bound), hiddenFromCaller)
-		}
 		let onlyIfAvailableRows = ReadsFromAbove(
 			graph: graph,
 			own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownOnlyIfAvailable[node].forEach(insert) },
@@ -351,6 +322,43 @@ struct TypeFactsGraph: Sendable {
 		let received = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
 			requiredRows.columns(inRow: node).forEach(insert)
 			onlyIfAvailableRows.columns(inRow: node).forEach(insert)
+		}
+		// What a seam's caller is asked for counts the receives inside the fills its tree's seam calls pass
+		// (`ScopeGenerator.requiredReceivedProperties`), so a second fold follows every edge. A world without fills
+		// shares the first.
+		// Along a fill edge, what the fill binds from the site's scope struct hides the fill's reads of it from the caller:
+		// the place's fields, but where some route hands the fill a memo, the memo's (`FillsOfCall.structBindings`).
+		let requiredIncludingFillsRows: BitRows
+		let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
+		if fillHoles.isEmpty {
+			requiredIncludingFillsRows = requiredRows
+			fillStructRows = nil
+		} else {
+			var fillStructBindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
+			let propertyValues = properties.values
+			for fillsOfCall in fillsOfCalls {
+				let bindingsByEdge = fillsOfCall.structBindings { edge in
+					Set(received.columns(inRow: Int(graph.edgeTargets[Int(edge)])).map { propertyValues[Int($0)] })
+				}
+				fillStructBindingsByEdge.merge(bindingsByEdge) { bindings, _ in bindings }
+			}
+			// A property no node reads or declares has no ID, and hides nothing.
+			func rows(_ selected: (ScopeGenerator.FillStructBindings) -> Set<Property>) -> BitRows {
+				BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
+					for case let id? in (fillStructBindingsByEdge[Int32(edge)].map(selected) ?? []).map(properties.existingID(of:)) {
+						insert(id)
+						propertiesByUnwrapped[id]?.forEach(insert)
+					}
+				}
+			}
+			let hiddenFromCaller = rows(\.hiddenFromCaller)
+			requiredIncludingFillsRows = ReadsFromAbove(
+				graph: graph,
+				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownRequired[node].forEach(insert) },
+				hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
+				hiddenAtEdge: hiddenFromCaller,
+			).rows
+			fillStructRows = (rows(\.bound), hiddenFromCaller)
 		}
 		let onlyIfAvailableUnwrapped = BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in
 			let requiredUnwrapped = Set(requiredRows.columns(inRow: node).map { propertyFactsOfNodes.unwrapped[Int($0)] })
@@ -1873,4 +1881,91 @@ struct TypeFactsGraph: Sendable {
 			reads.append(Read(.mock, label: label))
 		}
 	}
+}
+
+/// A seam call or a call of another module's public mock that passes fills, as the graph's build reads it to find what
+/// each fill binds from its site's scope struct (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:handedMemoByLabel:)`).
+/// Held only while the graph is built.
+struct FillsOfCall {
+	init(scope: ConstructionScope, fillEdges: [(edge: Int32, hole: SeamSignature.Hole)]) {
+		self.fillEdges = fillEdges
+		isPublicMockCall = scope.publicMockCall != nil
+		calledBuilders = scope.calledBuilders
+	}
+
+	/// What each fill edge's fill binds from its site's scope struct, by the edge's position: `receivedByFillTarget` gives
+	/// what the subtree of an edge's target reads from above it, along the edges that are no fills.
+	///
+	/// Where some route hands a fill a memo, the fill binds the memo's forms of its label in place of the place's field
+	/// (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`,
+	/// the tree's own rule, over the call's dispatchers, which the tree's rule declares from the call's builders and
+	/// filled places; only their names, which no memo reads, come from an allocator of their own). The tree finds the
+	/// labels a fill's tree reads only as the place's field on the pass before, and on the next pass hands no memo of them
+	/// (`ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`); here the fill's
+	/// target's reads answer it, and a second round of the rule leaves them out. Three inputs of the tree's are not a
+	/// record's, and stay at what they are for a call outside a fill in a tree that is no seam's: the dispatchers enclosing
+	/// calls declare (none), the scope values a seam's tree hands its fills (`SeamHoles.innerScope(at:innerKey:)`, none),
+	/// and the fields the sites inside a fill carry (none); `readingSendableWrapper` decides only a memo's deferral, which
+	/// hides nothing.
+	func structBindings(receivedByFillTarget: (_ edge: Int32) -> Set<Property>) -> [Int32: ScopeGenerator.FillStructBindings] {
+		let innerScopeReaders = calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
+		var handedMemosByKey = [String: ScopeGenerator.FillDispatcher.HandedMemos]()
+		var emittedFills = [(fill: ScopeGenerator.FillDispatcher.EmittedFill, edge: Int32, placeFields: [SeamSignature.Hole.Field])]()
+		// A public mock's caller hands values.
+		if let calledBuilders, !isPublicMockCall {
+			// Every place of a case nested by type is filled by one fill, the first place's, which takes every field any
+			// place of the case carries (`ScopeGenerator.caseFields(of:)`).
+			var placesByCaseKey = [String: [SeamSignature.Hole]]()
+			for (_, hole) in fillEdges where hole.enumPlace != nil {
+				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
+			}
+			var emittedCaseKeys = Set<String>()
+			for (edge, hole) in fillEdges {
+				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+				guard hole.enumPlace == nil || emittedCaseKeys.insert(caseKey).inserted else { continue }
+				let places = placesByCaseKey[caseKey] ?? [hole]
+				let fields = hole.enumPlace == nil ? hole.fields : ScopeGenerator.caseFields(of: places).fields
+				emittedFills.append((ScopeGenerator.FillDispatcher.EmittedFill(key: ScopeGenerator.fillKey(of: hole), hole: hole, fields: fields), edge, places.flatMap(\.fields)))
+			}
+			var names = GeneratedNameAllocator(reserving: [])
+			let dispatchers = ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Set(fillEdges.map(\.hole.site)),
+				enclosingDispatchers: [:],
+				fillNames: [:],
+				names: &names,
+			)
+			func memosHanded(leavingOut labelsReadOnlyAsPlaceField: [String: Set<String>]) -> [String: ScopeGenerator.FillDispatcher.HandedMemos] {
+				ScopeGenerator.FillDispatcher.memosHanded(toFills: emittedFills.map(\.fill), ofPublicMockCall: isPublicMockCall, labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField, readingSendableWrapper: [:], among: dispatchers)
+			}
+			handedMemosByKey = memosHanded(leavingOut: [:])
+			var labelsReadOnlyAsPlaceField = [String: Set<String>]()
+			for (fill, edge, placeFields) in emittedFills {
+				guard let memoByLabel = handedMemosByKey[fill.key]?.memoByLabel, !memoByLabel.isEmpty else { continue }
+				let received = receivedByFillTarget(edge)
+				for field in fill.fields {
+					guard let memo = memoByLabel[field.property.label],
+					      ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(field.handedAsMemo(memo), placeFields: placeFields, reads: { ScopeGenerator.reads($0, among: received) }, carriedBySites: [])
+					else { continue }
+					labelsReadOnlyAsPlaceField[fill.key, default: []].insert(field.property.label)
+				}
+			}
+			if !labelsReadOnlyAsPlaceField.isEmpty {
+				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField)
+			}
+		}
+		var memoByLabelByEdge = [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
+		for (fill, edge, _) in emittedFills {
+			memoByLabelByEdge[edge] = handedMemosByKey[fill.key]?.memoByLabel
+		}
+		var bindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
+		for (edge, hole) in fillEdges {
+			bindingsByEdge[edge] = ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: isPublicMockCall, innerScopeReaders: innerScopeReaders, handedMemoByLabel: memoByLabelByEdge[edge] ?? [:])
+		}
+		return bindingsByEdge
+	}
+
+	private let fillEdges: [(edge: Int32, hole: SeamSignature.Hole)]
+	private let isPublicMockCall: Bool
+	private let calledBuilders: CalledBuilders?
 }
