@@ -768,7 +768,7 @@ struct TypeFactsGraph: Sendable {
 		self.propertyFacts = propertyFacts
 		// What a seam's root is handed answers its tree's reads of a label no node declares.
 		var seamRootDeclarationByLabel = [Int32: Property]()
-		for case let (property, label?) in zip(seamRootDeclarations, seamRootDeclarations.map({ labels.existingID(of: $0.label) })) {
+		for case let (property, label?) in zip(seamRootDeclarations, seamRootDeclarations.map { labels.existingID(of: $0.label) }) {
 			seamRootDeclarationByLabel[label] = property
 		}
 		propertyTable = properties.values
