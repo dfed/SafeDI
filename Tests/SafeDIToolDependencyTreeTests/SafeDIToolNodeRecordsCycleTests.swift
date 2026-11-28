@@ -441,7 +441,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenFunctionBetweenCycleClosingCallAndClosedOnFunctionMakesLoopMemberAgain() async throws {
 		// `T1` makes its own `t1Builder` again and closes the cycle on `T3`'s function, which `T0` builds `T1` in: the tree
-		// nests each function in the body that builds it, where the engine would declare the three together in `Host`'s.
+		// nests each function in the body that builds it, and so does the engine, which lays the root out from its records.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -488,7 +488,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleHoldsLoopRebinding"])
+		#expect(reports.map(\.refusal) == [nil])
 	}
 
 	@Test
