@@ -421,8 +421,9 @@ struct NodeRecords: Sendable {
 			}
 		}
 		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
-		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings).
-		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty && !cycleParameters(of: variant).isEmpty {
+		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings). The facts give a label a
+		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters.
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
 			let isLoopMember = { (declaration: DeclarationID) in
 				world.parents(of: declaration).contains { parent in
 					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
