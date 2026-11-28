@@ -166,8 +166,9 @@ extension DependencyTreeGenerator {
 	/// otherwise. Where a test observes node records (`NodeRecordsObservation`), each root's records are compared with its
 	/// tree's at every place, and a root laid out from them is compared with the tree built beside them: its code, its
 	/// imports, and the checks its records stand in for (`TreeForcer`). A forced root whose world node records accept is
-	/// laid out from them where the test turns `NodeRecordsObservation.laysOutRoots` on. A run no test observes builds
-	/// no tree beside the records, and lays out a seam's own root from its records where they accept its world.
+	/// laid out from them where `NodeRecordsObservation.laysOutRoots` is on, whether or not a test observes them. A run no
+	/// test observes builds no tree beside the records, and lays out a seam's own root from its records where they accept
+	/// its world.
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
@@ -200,7 +201,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			}
-			guard let observer = NodeRecordsObservation.observer, let rootScope = rootInfo.rootScope else {
+			guard let rootScope = rootInfo.rootScope, NodeRecordsObservation.observer != nil || NodeRecordsObservation.laysOutRoots else {
 				// A seam's own root is laid out from its node records where they accept its world, holes included: each hole
 				// they accept is reached on one route (`NodeRecords.holesReachedOnSeveralRoutes(in:)`). Its tree is still
 				// built, for its signature and the checks that read it, but its places are not planned.
@@ -210,6 +211,15 @@ extension DependencyTreeGenerator {
 				return code
 			}
 			let seamTree = rootInfo.seamTree
+			// A run with `laysOutRoots` on and no observer lays the root out as an observed run does, and plans its tree only
+			// where the records refuse its world or the engine cannot lay it out: the observer records, and chooses nothing.
+			guard let observer = NodeRecordsObservation.observer else {
+				let records = NodeRecords.refusingWhatRecordsThrow { try NodeRecords(world: TypeFactsGraph(root: rootScope, forMockGeneration: false), seamTree: seamTree, seamHoles: seamTree.map { $0.makeSeamHoles() }, declaredTypeNames: declaredTypeNames) }
+				guard case let .success(nodeRecords) = records, let code = try laidOutCode(of: rootInfo, nodeRecords: nodeRecords) else {
+					return try await scopeGenerator.generatePlan()
+				}
+				return code
+			}
 			// The work of making the records is no run's, so the tests that count a run's work count none of it.
 			let (world, records) = GenerationWork.$observer.withValue(nil) {
 				let world = TypeFactsGraph(root: rootScope, forMockGeneration: false)
@@ -228,12 +238,8 @@ extension DependencyTreeGenerator {
 			}
 			// A seam's own tree's initializers are written around its body. A root its records cannot lay out keeps its tree's
 			// code.
-			let laidOutCode: GeneratedCode? = if !NodeRecordsObservation.laysOutRoots {
-				nil
-			} else if let ownSeamRoot = rootInfo.ownSeamRoot {
-				try laidOutSeamRootCode(of: rootInfo.instantiable, seamRoot: ownSeamRoot, nodeRecords: nodeRecords)
-			} else if case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) }) {
-				code
+			let laidOutCode: GeneratedCode? = if NodeRecordsObservation.laysOutRoots {
+				try Self.laidOutCode(of: rootInfo, nodeRecords: nodeRecords)
 			} else {
 				nil
 			}
@@ -381,6 +387,20 @@ extension DependencyTreeGenerator {
 		      let statements = TypeKeyBody.statements(ofRootBody: body, laysOutEveryLoop: true, declaresLoopMembersAsThePathKeyDoes: true)
 		else { return nil }
 		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
+	}
+
+	/// The code of `rootInfo` laid out from `nodeRecords`, its world's records, where `NodeRecordsObservation.laysOutRoots`
+	/// is on: a seam's own root's initializers written around its body, or a root's initializer, or `nil` where the engine
+	/// cannot lay every statement out. Read alike whether or not a test observes node records.
+	/// - Throws: What a seam's initializers' arguments throw, as its tree's construction of the same place throws it.
+	private static func laidOutCode(of rootInfo: RootScopeInfo, nodeRecords: NodeRecords) throws -> GeneratedCode? {
+		if let ownSeamRoot = rootInfo.ownSeamRoot {
+			try laidOutSeamRootCode(of: rootInfo.instantiable, seamRoot: ownSeamRoot, nodeRecords: nodeRecords)
+		} else if case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) }) {
+			code
+		} else {
+			nil
+		}
 	}
 
 	/// The code of `rootInfo`, a seam's own root whose tree's root is `ownSeamRoot`, laid out from its world's node records,
