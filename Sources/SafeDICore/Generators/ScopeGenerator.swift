@@ -6089,7 +6089,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// when no scope it builds receives it, or when it is one of its own `onlyIfAvailable` dependencies. A receive only if
 	/// available that every route finds unavailable is passed `nil` wherever it is read, so a seam call's record lists no
 	/// read of it (`SeamCallBody.formsAvailableToFills`). Set once, bottom-up, by the initializer that builds a scope's
-	/// generator, from its children's.
+	/// generator, from its children's. It holds only forms the scope receives, so a form moves up only as far as the scopes
+	/// that receive it, and the work stays linear in the receives.
 	let formsReadWhereAvailable: Set<Property>
 
 	/// Whether a fill whose tree this scope's property roots is handed the structs of its own level
@@ -8425,7 +8426,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		GenerationWork.record(work, by: .readingFormsWhereAvailable)
-		return forms.subtracting(unavailableOptionalProperties)
+		return forms.intersection(receivedProperties).subtracting(unavailableOptionalProperties)
 	}
 
 	/// The keys of the fills of `body`'s call that read in the call's code: each the code keeps, which is neither a root
