@@ -180,11 +180,12 @@ struct MockEnteredSlots: Sendable {
 
 	/// Whether some function on no cycle enters the nearest place of its type alone, and whether some function only hands
 	/// the places on: the two functions `mock()` declares for them only where one is called
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`).
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`).
 	var use: MockEnteredPlacesUse {
 		MockEnteredPlacesUse(
 			entersNearest: nearestEnteredByDeclaration.contains { $0 != nil },
 			passes: takesEnteredPlacesByDeclaration.indices.contains { takesEnteredPlacesByDeclaration[$0] && slotIndexByDeclaration[$0] < 0 && nearestEnteredByDeclaration[$0] == nil },
+			slotCount: slots.count,
 		)
 	}
 
@@ -202,4 +203,6 @@ struct MockEnteredPlacesUse: Hashable, Sendable {
 	let entersNearest: Bool
 	/// Whether some call only hands the places on.
 	let passes: Bool
+	/// How many slots the calls enter: a call names its slot by its position among them.
+	let slotCount: Int
 }

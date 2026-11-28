@@ -622,7 +622,7 @@ struct NodeRecords: Sendable {
 	let rootBody: [GeneratedCode]
 
 	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
-	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no
+	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`); `nil` for a world with no
 	/// cycle and for a production root's.
 	let mockEnteredPlacesUse: MockEnteredPlacesUse?
 

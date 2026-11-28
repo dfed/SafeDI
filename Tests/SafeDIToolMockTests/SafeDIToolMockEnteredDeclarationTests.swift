@@ -24,7 +24,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// What a mock root declares once for the functions on its tree's cycles
-/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`): the list of the places entered
+/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`): the list of the places entered
 /// along a path, and the struct a function is handed. The text tests compare the whole declaration; the others compile it
 /// into a program of hand-made functions that are handed the struct as a function of a mock is, walk a route through
 /// them, and print the configuration each function reads.
@@ -45,26 +45,64 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 
 	@Test
 	func mockEnteredPlacesDeclaration_declaresOnlyTheFunctionThatEntersASlot_whenNoCallEntersTheNearestOrPasses() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: false, passes: false).joined(separator: "\n") == """
-		indirect enum __safeDI_Places {
-		    case none
-		    case entered(slot: String?, entered: Any, above: __safeDI_Places)
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: false, passes: false, slotCount: 1).joined(separator: "\n") == """
+		struct __safeDI_Configured<Configuration> {
+		    let configuration: Configuration
+		}
+		final class __safeDI_Place {
+		    let slot: Int?
+		    let isNearestOfType: Bool
+		    let configured: Any
+		    let above: __safeDI_Place?
+		    let jump: __safeDI_Place?
+		    let nearestOfTypeAbove: __safeDI_Place?
+		    let depth: Int
+		    let entered0: UInt64
+		    init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
+		        self.slot = slot
+		        self.isNearestOfType = isNearestOfType
+		        self.configured = configured
+		        self.above = above
+		        let depthAbove = above?.depth ?? 0
+		        let near = above?.jump
+		        let nearDepth = near?.depth ?? 0
+		        depth = depthAbove + 1
+		        jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		        nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        let word = slot.map { $0 >> 6 } ?? -1
+		        let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		        entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		    }
+		    func has(_ slot: Int) -> Bool {
+		        let bit: UInt64 = 1 << UInt64(slot & 63)
+		        switch slot >> 6 {
+		        case 0: return entered0 & bit != 0
+		        default: return false
+		        }
+		    }
 		}
 		struct __safeDI_Entered<Configuration> {
 		    let configuration: Configuration
-		    var places = __safeDI_Places.none
-		    func entering<Handed>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
-		        var nearest: __safeDI_Entered<Handed>?
-		        var above = places
-		        while case let .entered(enteredSlot, entered, next) = above {
-		            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
-		                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
-		                nearest = entered
-		            }
-		            above = next
+		    var top: __safeDI_Place?
+		    func nearest<Handed>(_: Handed.Type) -> Handed? {
+		        var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        while let candidate = place {
+		            if let found = candidate.configured as? __safeDI_Configured<Handed> { return found.configuration }
+		            place = candidate.nearestOfTypeAbove
 		        }
-		        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
-		        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		        return nil
+		    }
+		    func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		        if var place = top, place.has(slot) {
+		            while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                place = next
+		            }
+		            if let found = place.configured as? __safeDI_Configured<Handed> {
+		                return .init(configuration: found.configuration, top: place)
+		            }
+		        }
+		        let configuration: Handed = (nearestOfType ? nearest(Handed.self) : nil) ?? handed()
+		        return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		    }
 		}
 		let __safeDI_entered = __safeDI_Entered(configuration: ())
@@ -73,32 +111,70 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 
 	@Test
 	func mockEnteredPlacesDeclaration_declaresAFunctionForEachWayACallHandsThePlaces_whenCallsEnterTheNearestAndPass() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true).joined(separator: "\n") == """
-		indirect enum __safeDI_Places {
-		    case none
-		    case entered(slot: String?, entered: Any, above: __safeDI_Places)
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true, slotCount: 1).joined(separator: "\n") == """
+		struct __safeDI_Configured<Configuration> {
+		    let configuration: Configuration
+		}
+		final class __safeDI_Place {
+		    let slot: Int?
+		    let isNearestOfType: Bool
+		    let configured: Any
+		    let above: __safeDI_Place?
+		    let jump: __safeDI_Place?
+		    let nearestOfTypeAbove: __safeDI_Place?
+		    let depth: Int
+		    let entered0: UInt64
+		    init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
+		        self.slot = slot
+		        self.isNearestOfType = isNearestOfType
+		        self.configured = configured
+		        self.above = above
+		        let depthAbove = above?.depth ?? 0
+		        let near = above?.jump
+		        let nearDepth = near?.depth ?? 0
+		        depth = depthAbove + 1
+		        jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		        nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        let word = slot.map { $0 >> 6 } ?? -1
+		        let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		        entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		    }
+		    func has(_ slot: Int) -> Bool {
+		        let bit: UInt64 = 1 << UInt64(slot & 63)
+		        switch slot >> 6 {
+		        case 0: return entered0 & bit != 0
+		        default: return false
+		        }
+		    }
 		}
 		struct __safeDI_Entered<Configuration> {
 		    let configuration: Configuration
-		    var places = __safeDI_Places.none
-		    func entering<Handed>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
-		        var nearest: __safeDI_Entered<Handed>?
-		        var above = places
-		        while case let .entered(enteredSlot, entered, next) = above {
-		            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
-		                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
-		                nearest = entered
-		            }
-		            above = next
+		    var top: __safeDI_Place?
+		    func nearest<Handed>(_: Handed.Type) -> Handed? {
+		        var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        while let candidate = place {
+		            if let found = candidate.configured as? __safeDI_Configured<Handed> { return found.configuration }
+		            place = candidate.nearestOfTypeAbove
 		        }
-		        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
-		        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		        return nil
+		    }
+		    func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		        if var place = top, place.has(slot) {
+		            while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                place = next
+		            }
+		            if let found = place.configured as? __safeDI_Configured<Handed> {
+		                return .init(configuration: found.configuration, top: place)
+		            }
+		        }
+		        let configuration: Handed = (nearestOfType ? nearest(Handed.self) : nil) ?? handed()
+		        return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		    }
 		    func enteringNearest<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
-		        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed), above: places))
+		        .init(configuration: handed, top: __safeDI_Place(slot: nil, isNearestOfType: true, configured: __safeDI_Configured(configuration: handed), above: top))
 		    }
 		    func passing<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
-		        .init(configuration: handed, places: places)
+		        .init(configuration: handed, top: top)
 		    }
 		}
 		let __safeDI_entered = __safeDI_Entered(configuration: ())
@@ -107,32 +183,73 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 
 	@Test
 	func mockEnteredPlacesDeclaration_declaresBothTypesSendableAndNonisolated_whenAFunctionHandedThePlacesIsSendable() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: true, entersNearest: true, passes: true).joined(separator: "\n") == """
-		nonisolated indirect enum __safeDI_Places: Sendable {
-		    case none
-		    case entered(slot: String?, entered: any Sendable, above: __safeDI_Places)
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: true, entersNearest: true, passes: true, slotCount: 65).joined(separator: "\n") == """
+		nonisolated struct __safeDI_Configured<Configuration: Sendable>: Sendable {
+		    let configuration: Configuration
+		}
+		nonisolated final class __safeDI_Place: Sendable {
+		    let slot: Int?
+		    let isNearestOfType: Bool
+		    let configured: any Sendable
+		    let above: __safeDI_Place?
+		    let jump: __safeDI_Place?
+		    let nearestOfTypeAbove: __safeDI_Place?
+		    let depth: Int
+		    let entered0: UInt64
+		    let entered1: UInt64
+		    init(slot: Int?, isNearestOfType: Bool, configured: any Sendable, above: __safeDI_Place?) {
+		        self.slot = slot
+		        self.isNearestOfType = isNearestOfType
+		        self.configured = configured
+		        self.above = above
+		        let depthAbove = above?.depth ?? 0
+		        let near = above?.jump
+		        let nearDepth = near?.depth ?? 0
+		        depth = depthAbove + 1
+		        jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		        nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        let word = slot.map { $0 >> 6 } ?? -1
+		        let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		        entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		        entered1 = (above?.entered1 ?? 0) | (word == 1 ? bit : 0)
+		    }
+		    func has(_ slot: Int) -> Bool {
+		        let bit: UInt64 = 1 << UInt64(slot & 63)
+		        switch slot >> 6 {
+		        case 0: return entered0 & bit != 0
+		        case 1: return entered1 & bit != 0
+		        default: return false
+		        }
+		    }
 		}
 		nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {
 		    let configuration: Configuration
-		    var places = __safeDI_Places.none
-		    func entering<Handed: Sendable>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
-		        var nearest: __safeDI_Entered<Handed>?
-		        var above = places
-		        while case let .entered(enteredSlot, entered, next) = above {
-		            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
-		                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }
-		                nearest = entered
-		            }
-		            above = next
+		    var top: __safeDI_Place?
+		    func nearest<Handed: Sendable>(_: Handed.Type) -> Handed? {
+		        var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		        while let candidate = place {
+		            if let found = candidate.configured as? __safeDI_Configured<Handed> { return found.configuration }
+		            place = candidate.nearestOfTypeAbove
 		        }
-		        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)
-		        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))
+		        return nil
+		    }
+		    func entering<Handed: Sendable>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		        if var place = top, place.has(slot) {
+		            while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                place = next
+		            }
+		            if let found = place.configured as? __safeDI_Configured<Handed> {
+		                return .init(configuration: found.configuration, top: place)
+		            }
+		        }
+		        let configuration: Handed = (nearestOfType ? nearest(Handed.self) : nil) ?? handed()
+		        return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		    }
 		    func enteringNearest<Handed: Sendable>(_ handed: Handed) -> __safeDI_Entered<Handed> {
-		        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed), above: places))
+		        .init(configuration: handed, top: __safeDI_Place(slot: nil, isNearestOfType: true, configured: __safeDI_Configured(configuration: handed), above: top))
 		    }
 		    func passing<Handed: Sendable>(_ handed: Handed) -> __safeDI_Entered<Handed> {
-		        .init(configuration: handed, places: places)
+		        .init(configuration: handed, top: top)
 		    }
 		}
 		let __safeDI_entered = __safeDI_Entered(configuration: ())
@@ -252,7 +369,7 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 		// `Int?`, passes it and reads the place of `Int?` above, and every `Parent` reads the root's configuration past the
 		// places of other types. The root's configuration holds a marker, which is released with the tree: a place points
 		// only at the places above it.
-		let declaration = MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true).map { "    " + $0 }.joined(separator: "\n")
+		let declaration = MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true, slotCount: 3).map { "    " + $0 }.joined(separator: "\n")
 		let printed = try await DifferentialValueOracle.output(
 			of: DifferentialValuePath(fixtureFiles: ["Program.swift": """
 			final class Marker {}
@@ -264,13 +381,13 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 			@MainActor func mock(safeDIOverrides: ParentConfiguration) -> Builder<Parent> {
 			\(declaration)
 			    func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<ParentConfiguration>) -> Parent {
-			        let childBuilder = Builder<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.enteringNearest(Optional<Int>.some(3)).entering("childBuilder", ChildConfiguration())) }
+			        let childBuilder = Builder<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.enteringNearest(Optional<Int>.some(3)).entering(0, ChildConfiguration())) }
 			        return Parent(tag: __safeDI_entered.configuration.tag, childBuilder: childBuilder)
 			    }
 			    func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<ChildConfiguration>) -> Child {
 			        let parentBuilder = Builder<Parent> {
-			            let parentEntered = __safeDI_entered.entering("otherParentBuilder", ParentConfiguration(tag: "fresh"), nearestOfType: true)
-			            let probe = parentEntered.enteringNearest(Optional<String>.none).entering("probe", Optional<Int>.some(7), nearestOfType: true)
+			            let parentEntered = __safeDI_entered.entering(1, ParentConfiguration(tag: "fresh"), nearestOfType: true)
+			            let probe = parentEntered.enteringNearest(Optional<String>.none).entering(2, Optional<Int>.some(7), nearestOfType: true)
 			            return __safeDI_parentBuilder(__safeDI_entered: probe.passing(probe.configuration == 3 ? parentEntered.configuration : ParentConfiguration(tag: "a nil was taken for a place")))
 			        }
 			        return Child(tag: __safeDI_entered.configuration.tag, parentBuilder: parentBuilder)
@@ -353,6 +470,38 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 		""")
 	}
 
+	@Test(arguments: [20, 40])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func entered_looksAtPlacesByTheLogarithmOfTheRing_whenALapClosesOnItsFirstFunction(ringSize: Int) async throws {
+		// A ring of `ringSize` functions, each of a type of its own. One lap enters every function's place and finds none
+		// entered, which is one test of a bit and no step. The call that closes the lap finds the first function's place
+		// beneath every other: a walk of the places one by one would take `ringSize - 1` steps, 19 and 39, and the pointers
+		// that skip take about the logarithm. A second lap starts from the first function's place again, so it costs what
+		// the first did.
+		let functions = (0..<ringSize).map { Function(name: "builder\($0)", typeName: "Type\($0)", entry: .slot(nearestOfType: false)) }
+		let program = Self.program(functions: functions, isSendable: false, countsPlacesLookedAt: true)
+		#expect(program.components(separatedBy: "placesLookedAt += 1").count == 2)
+		let lap = functions.map { "\"\($0.name)\"" }.joined(separator: ", ")
+		let printed = try await DifferentialValueOracle.output(
+			of: DifferentialValuePath(fixtureFiles: ["Program.swift": program]),
+			running: """
+			let lap: [String] = [\(lap)]
+			for route in [lap, lap + [lap[0]], lap + lap + [lap[0]]] {
+			    placesLookedAt = 0
+			    print(Root.reads(along: route[...]).last ?? "", "after looking at", placesLookedAt)
+			}
+			""",
+			filesToDelete: &filesToDelete,
+		)
+		let stepsToCloseALap = [20: 9, 40: 11][ringSize] ?? 0
+		#expect(printed == nil || printed == """
+		builder\(ringSize - 1) reads root\(functions.map { "." + $0.name }.joined()) after looking at 0
+		builder0 reads root.builder0 after looking at \(stepsToCloseALap)
+		builder0 reads root.builder0 after looking at \(2 * stepsToCloseALap)
+
+		""", "\(printed ?? "")")
+	}
+
 	// MARK: Private
 
 	/// A hand-made function that is handed the entered places as a function of a mock's tree is.
@@ -376,10 +525,11 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 		var isSendable = false
 
 		/// What a call hands the function for the places, where the caller's own are `__safeDI_entered`.
-		func entered(handing configuration: String) -> String {
+		/// - Parameter slot: The function's position among the program's functions, which numbers its slot.
+		func entered(handing configuration: String, slot: Int) -> String {
 			switch entry {
 			case let .slot(nearestOfType):
-				"__safeDI_entered.entering(\"\(name)\", \(configuration)\(nearestOfType ? ", nearestOfType: true" : ""))"
+				"__safeDI_entered.entering(\(slot), \(configuration)\(nearestOfType ? ", nearestOfType: true" : ""))"
 			case .nearest:
 				"__safeDI_entered.enteringNearest(\(configuration))"
 			case .passing:
@@ -412,14 +562,17 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 	/// for a `SendableInstantiator`, for a `@Sendable` function, and a `PlainBuilder` otherwise. A route names only
 	/// `@Sendable` functions after one of them, as everything a `@Sendable` function builds is built in `@Sendable`
 	/// functions.
-	private static func program(functions: [Function], isSendable: Bool) -> String {
+	/// - Parameter countsPlacesLookedAt: Whether the program counts, in a global `placesLookedAt`, each step the
+	///   declaration's walk takes from one place to another while it looks a slot up: the test adds the count to the one
+	///   line of the declaration that takes the step.
+	private static func program(functions: [Function], isSendable: Bool, countsPlacesLookedAt: Bool = false) -> String {
 		func calls(on configuration: String, insideSendableFunction: Bool, indent: String) -> [String] {
 			["\(indent)switch route.first {"]
-				+ functions.filter { !insideSendableFunction || $0.isSendable }.flatMap { function in
+				+ functions.enumerated().filter { !insideSendableFunction || $0.element.isSendable }.flatMap { slot, function in
 					[
 						"\(indent)case \"\(function.name)\":",
 						"\(indent)    let next = route.dropFirst()",
-						"\(indent)    return reads + \(function.isSendable ? "SendableBuilder" : "PlainBuilder")<[String]> { __safeDI_\(function.name)(__safeDI_entered: \(function.entered(handing: "\(configuration).\(function.name)")), route: next) }.build()",
+						"\(indent)    return reads + \(function.isSendable ? "SendableBuilder" : "PlainBuilder")<[String]> { __safeDI_\(function.name)(__safeDI_entered: \(function.entered(handing: "\(configuration).\(function.name)", slot: slot)), route: next) }.build()",
 					]
 				}
 				+ ["\(indent)default:", "\(indent)    return reads", "\(indent)}"]
@@ -429,7 +582,8 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 			typeNames.append(function.typeName)
 		}
 		// `SafeDI`'s builders take an `Instantiable` type: these stand in for them, `nonisolated` as `SafeDI`'s module is.
-		var lines = [
+		var lines = countsPlacesLookedAt ? ["nonisolated(unsafe) var placesLookedAt = 0"] : []
+		lines += [
 			"nonisolated struct PlainBuilder<Built> {",
 			"    let build: () -> Built",
 			"}",
@@ -461,7 +615,8 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 					false
 				}
 			},
-		).map { "        " + $0 }
+			slotCount: functions.count,
+		).map { "        " + (countsPlacesLookedAt && $0.hasSuffix("place = next") ? $0 + "; placesLookedAt += 1" : $0) }
 		for function in functions {
 			lines += [
 				"        \(function.isSendable ? "@Sendable nonisolated " : "")func __safeDI_\(function.name)(__safeDI_entered: __safeDI_Entered<\(function.typeName).SafeDIMockConfiguration>, route: ArraySlice<String>) -> [String] {",

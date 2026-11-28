@@ -166,11 +166,13 @@ public enum ReservedName: Hashable, Sendable {
 	/// The start of the name of each private final class a seam declares beside its initializers when its tree holds a
 	/// loop's levels in one box, which the hash of what the class holds follows (`ScopeGenerator.LoopLevelsType`).
 	static let loopLevelsTypeName = "\(builderFunctionNamePrefix)LoopLevels"
-	/// The name of the enum a generated `mock()` whose tree holds a cycle declares: the places the functions on a path
-	/// have entered, nearest first (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
-	static let mockEnteredPlacesTypeName = "\(builderFunctionNamePrefix)Places"
+	/// The name of the class a generated `mock()` whose tree holds a cycle declares: a place a function on a path has
+	/// entered, which points at the one above it (`MockEnteredSlot.mockEnteredPlacesDeclaration`).
+	static let mockEnteredPlaceTypeName = "\(builderFunctionNamePrefix)Place"
+	/// The name of the struct such a `mock()` declares to box a place's configuration, generic over it.
+	static let mockEnteredConfiguredTypeName = "\(builderFunctionNamePrefix)Configured"
 	/// The name of the struct such a `mock()` declares beside it, generic over a configuration: what a function on a
-	/// cycle is handed, its configuration with the places entered.
+	/// cycle is handed, its configuration with the nearest place entered.
 	static let mockEnteredTypeName = "\(builderFunctionNamePrefix)Entered"
 	/// The member of that struct that holds the configuration.
 	static let mockEnteredConfigurationMemberName = "configuration"

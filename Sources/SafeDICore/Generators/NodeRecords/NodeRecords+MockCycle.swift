@@ -81,14 +81,14 @@ extension NodeRecords {
 			.callHanding(
 				ReservedName.mockEnteringFunctionName,
 				of: entered,
-				literal: slot.name,
+				slot: Int(slots.slotIndexByDeclaration[Int(declaration)]),
 				value: configuration,
 				flags: slot.nearestOfTypeSlotName == nil ? [] : [ReservedName.mockEnteringNearestOfTypeArgumentLabel],
 			)
 		} else if mockNearestOfTypeEntered(by: declaration, in: slots) != nil {
-			.callHanding(ReservedName.mockEnteringNearestFunctionName, of: entered, literal: nil, value: configuration, flags: [])
+			.callHanding(ReservedName.mockEnteringNearestFunctionName, of: entered, slot: nil, value: configuration, flags: [])
 		} else {
-			.callHanding(ReservedName.mockPassingFunctionName, of: entered, literal: nil, value: configuration, flags: [])
+			.callHanding(ReservedName.mockPassingFunctionName, of: entered, slot: nil, value: configuration, flags: [])
 		}
 		return [
 			// No call inside a `@Sendable` function hands the configuration or the places on, also where the places are declared
@@ -154,7 +154,7 @@ extension NodeRecords {
 	/// where an actor the mock builds with its initializer is sent a value such a function builds; `nil` where none is.
 	///
 	/// A value a function builds of an argument that is not `Sendable` cannot be sent, so there `mock()` declares the
-	/// places in their `Sendable` form (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`),
+	/// places in their `Sendable` form (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`),
 	/// which holds only configurations of the `Sendable` form: the root's lowering, which knows which types take that
 	/// form, refuses the world as `mockActor` where one of these does not
 	/// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
