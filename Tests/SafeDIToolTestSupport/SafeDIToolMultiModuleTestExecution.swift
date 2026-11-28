@@ -240,6 +240,9 @@ struct ModuleTestOutput {
 	/// What `generate` read, when it ran: the module it generated code for, whose declarations under
 	/// `.swiftPackagePlugin` include those of every module the CSV lists, and the dependent modules' `.safedi`.
 	let generateOutput: Generate.Output?
+	/// What the same run with none of the test's observers set returned, as a production run does (`UnobservedRun`), where
+	/// the module ran over module info files and succeeded.
+	var unobservedGenerateOutput: Generate.Output?
 	/// The DOT tree `generate` wrote (`--dot-file-output`), when the test asked for one under `.moduleInfo`.
 	var dotTree: String?
 	/// The lines of the list of unused inputs `generate` wrote (`--unused-inputs-list-output`), which `.moduleInfo` asks
@@ -412,6 +415,10 @@ func executeSafeDIToolMultiModuleTest(
 	// (`--module-info-positions-in-own-file`), which must generate, warn and fail exactly as the run over whole files does.
 	// A test that hands a module another run's file, or rewrites a written file, has no split twin.
 	let splitsPositions = integration == .moduleInfo && moduleInfoOverrides.isEmpty && !discardsStoredSeamSignatures
+	// Each module also runs with none of the test's observers set, as production runs, which must generate, warn and fail
+	// exactly as the observed run does (`UnobservedRun`). Under the plugin's flow the outputs a manifest names are not
+	// respelled, so only runs over module info files have the twin.
+	let comparesUnobservedRun = integration == .moduleInfo && moduleInfoOverrides.isEmpty
 	var outputs = [String: ModuleTestOutput]()
 	// What `modulesBeneath` gave for each module it was asked about, which a record's inputs hold.
 	var modulesBeneathByModuleName = [String: [String]]()
@@ -637,6 +644,9 @@ func executeSafeDIToolMultiModuleTest(
 				if splitsPositions {
 					try await SplitPositionsRun.expectMatches(.failure(error), arguments: generateArguments, moduleName: moduleName, fixtureRoot: fixtureRoot, sourceLocation: sourceLocation)
 				}
+				if comparesUnobservedRun {
+					try await UnobservedRun.expectMatches(.failure(error), arguments: generateArguments, moduleName: moduleName, fixtureRoot: fixtureRoot, sourceLocation: sourceLocation)
+				}
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
 				throw SafeDIToolMultiModuleTestError(
@@ -656,6 +666,16 @@ func executeSafeDIToolMultiModuleTest(
 		if splitsPositions, let generateArguments, let generateOutput {
 			// The same run over module info files that store their positions apart must generate and warn alike.
 			try await SplitPositionsRun.expectMatches(
+				.success((warnings: generateOutput.warnings, generatedFiles: generatedSwiftFiles(in: outputDirectory))),
+				arguments: generateArguments,
+				moduleName: moduleName,
+				fixtureRoot: fixtureRoot,
+				sourceLocation: sourceLocation,
+			)
+		}
+		var unobservedGenerateOutput: Generate.Output?
+		if comparesUnobservedRun, let generateArguments, let generateOutput {
+			unobservedGenerateOutput = try await UnobservedRun.expectMatches(
 				.success((warnings: generateOutput.warnings, generatedFiles: generatedSwiftFiles(in: outputDirectory))),
 				arguments: generateArguments,
 				moduleName: moduleName,
@@ -698,6 +718,7 @@ func executeSafeDIToolMultiModuleTest(
 			warnings: generateOutput?.warnings ?? [],
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
+			unobservedGenerateOutput: unobservedGenerateOutput,
 			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
 			unusedInputs: integration == .moduleInfo && modulesBeneath != nil
 				? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt"), encoding: .utf8).split(separator: "\n").map(String.init)
@@ -961,5 +982,56 @@ enum SplitPositionsRun {
 		case let (.failure(whole), .success):
 			Issue.record("Module \(moduleName) succeeds over module info files that store their positions apart, where it fails over whole files: \(whole)", sourceLocation: sourceLocation)
 		}
+	}
+}
+
+/// The run of a module with none of the observers a test sets, as a production run of `generate` has: observers record and
+/// never choose a path (`test-design.md`), so it must generate, warn and fail as the observed run does.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+enum UnobservedRun {
+	/// Runs `generate` with `arguments` respelled to write its code and module info file to directories of their own,
+	/// detached, so it inherits no task-local value of the test's, and expects it to warn and generate as `observedRun` did,
+	/// or to throw its description. Returns what the unobserved run returned, where it succeeded.
+	@discardableResult
+	static func expectMatches(
+		_ observedRun: Result<(warnings: [SourceDiagnostic], generatedFiles: [String: String]), any Error>,
+		arguments: [String],
+		moduleName: String,
+		fixtureRoot: URL,
+		sourceLocation: SourceLocation,
+	) async throws -> Generate.Output? {
+		let observedOutputDirectory = fixtureRoot.appendingPathComponent("Output").appendingPathComponent(moduleName).path
+		let unobservedOutputDirectory = fixtureRoot.appendingPathComponent("OutputUnobserved").appendingPathComponent(moduleName)
+		let unobservedModuleInfoDirectory = fixtureRoot.appendingPathComponent("ModuleInfoUnobserved")
+		try FileManager.default.createDirectory(at: unobservedOutputDirectory, withIntermediateDirectories: true)
+		try FileManager.default.createDirectory(at: unobservedModuleInfoDirectory, withIntermediateDirectories: true)
+		var unobservedArguments = [String]()
+		for (index, argument) in arguments.enumerated() {
+			if index > 0, arguments[index - 1] == "--module-info-output" {
+				unobservedArguments.append(unobservedModuleInfoDirectory.appendingPathComponent(URL(fileURLWithPath: argument).lastPathComponent).path)
+			} else {
+				unobservedArguments.append(argument.replacingOccurrences(of: observedOutputDirectory + "/", with: unobservedOutputDirectory.path + "/"))
+			}
+		}
+		let unobservedRun: Result<Generate.Output, any Error> = await Task.detached {
+			do {
+				return try await .success(Generate.parse(unobservedArguments).generate())
+			} catch {
+				return .failure(error)
+			}
+		}.value
+		switch (observedRun, unobservedRun) {
+		case let (.success(observed), .success(unobserved)):
+			#expect(unobserved.warnings.map(\.formatted) == observed.warnings.map(\.formatted), "Module \(moduleName) warns otherwise when no test observes the run.", sourceLocation: sourceLocation)
+			let unobservedFiles = try generatedSwiftFiles(in: unobservedOutputDirectory)
+			#expect(unobservedFiles == observed.generatedFiles, "Module \(moduleName) generates other code when no test observes the run.", sourceLocation: sourceLocation)
+		case let (.failure(observed), .failure(unobserved)):
+			#expect("\(unobserved)" == "\(observed)", "Module \(moduleName) fails otherwise when no test observes the run.", sourceLocation: sourceLocation)
+		case let (.success, .failure(unobserved)):
+			Issue.record("Module \(moduleName) fails when no test observes the run: \(unobserved)", sourceLocation: sourceLocation)
+		case let (.failure(observed), .success):
+			Issue.record("Module \(moduleName) succeeds when no test observes the run, where the observed run fails: \(observed)", sourceLocation: sourceLocation)
+		}
+		return try? unobservedRun.get()
 	}
 }

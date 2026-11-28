@@ -121,6 +121,23 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func casePlaces_holdEveryPlaceAsACaseOfItsOwn_whenNoTestObservesTheRun() async throws {
+		// A run no test observes, as a production run is, drafts no place graph (`SeamBuilderParameters.holes`), so its
+		// signature names no case: each of shape E's 36 places is a case of its own, in builder order.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: SafeDIToolSeamScopeByTypeTests.shapeEModules(screenCount: 12),
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			filesToDelete: &filesToDelete,
+		)
+		let signature = try #require(output.modules["Feature"]?.unobservedGenerateOutput?.seamSignaturesWrittenToModuleInfo?.first?.signature)
+		#expect(signature.holes.count == 36)
+		#expect(signature.casePlaces.map(\.caseIndex) == [Int?](repeating: nil, count: 36))
+		#expect(signature.casePlaces.map(\.hole.site) == signature.holes.map(\.site))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFindingOfEveryPlaceOnce_whenAnotherPlacesFillStandsForPlaceWithFinding() async {
 		// `Home` builds `Panel` beneath `First`, `Second` and `Third`, so `Panel`'s `api` is three places of one case, each
 		// handed the same values, as is `Row`'s. `LiveApi` receives `rowBuilder`, which `Panel` builds after `api` and is
