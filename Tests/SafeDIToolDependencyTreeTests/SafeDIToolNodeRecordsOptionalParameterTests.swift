@@ -172,15 +172,17 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		case declarationOfTheLabel
 		case declarationOfAnotherLabel
 		case lazyInstanceOfTheLabel
+		case lazyInstanceThroughOptionalOfTheLabel
+		case lazyInstanceOfAnotherLabel
 		case anotherArgumentLabel
 		case oneArgumentMore
 		case noArgument
 
 		var isOfAnOptionalParameter: Bool {
 			switch self {
-			case .theSame, .declarationOfTheLabel:
+			case .theSame, .declarationOfTheLabel, .lazyInstanceOfTheLabel, .lazyInstanceThroughOptionalOfTheLabel:
 				true
-			case .declarationOfAnotherLabel, .lazyInstanceOfTheLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
+			case .declarationOfAnotherLabel, .lazyInstanceOfAnotherLabel, .anotherArgumentLabel, .oneArgumentMore, .noArgument:
 				false
 			}
 		}
@@ -200,6 +202,10 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .binding(label: "name"))]
 		case .lazyInstanceOfTheLabel:
 			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: false))]
+		case .lazyInstanceThroughOptionalOfTheLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "mark", throughOptional: true))]
+		case .lazyInstanceOfAnotherLabel:
+			[unchanged, PlaceRead(argumentLabel: "mark", label: "mark", property: property, source: .lazyInstance(label: "name", throughOptional: false))]
 		case .anotherArgumentLabel:
 			[unchanged, PlaceRead(argumentLabel: "other", label: "mark", property: property, source: .binding(label: "mark"))]
 		case .oneArgumentMore:

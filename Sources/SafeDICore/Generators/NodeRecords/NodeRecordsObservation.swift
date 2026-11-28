@@ -169,12 +169,15 @@ public enum NodeRecordsObservation {
 
 	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the optional parameter of one function that serves a
 	/// call that answers a read only if available and a call that does not: the nearest declaration of its label where
-	/// `tree`'s, the same argument otherwise, reads `nil`; or, where the parameter is a lazily instantiated wrapper some
-	/// call passes `nil` (rule 3), the wrapper's instance through the optional where `tree`'s reads `nil` or the instance.
+	/// `tree`'s, the same argument otherwise, reads `nil`, by value or, where the declaration is a lazily instantiated
+	/// wrapper, as its instance (a wrapper still being built where `tree` reads `nil`, which the facts key as the wrapper);
+	/// or, where the parameter is a lazily instantiated wrapper some call passes `nil` (rule 3), the wrapper's instance
+	/// through the optional where `tree`'s reads `nil` or the instance.
 	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
 		guard tree.count == nodeRecords.count else { return false }
 		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
-			let readsValue = treeRead.source == .nil && nodeRecordsRead.source == .binding(label: treeRead.label)
+			let readsValue = treeRead.source == .nil
+				&& (nodeRecordsRead.source == .binding(label: treeRead.label) || nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
 			let readsWrappersInstance = (treeRead.source == .nil || treeRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
 				&& nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: true)
 			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: nodeRecordsRead.source, staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
