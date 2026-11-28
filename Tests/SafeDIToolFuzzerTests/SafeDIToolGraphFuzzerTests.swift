@@ -9879,22 +9879,24 @@ struct SafeDIToolGraphFuzzerTests {
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues = addingLaidOutMockShapes(to: addingReportedIssueShapes(to: knownIssuesBesideReportedIssueShapes))
 
-	/// Why a laid-out mock's code changes under a renaming where one naming leaves a place out and the other does not:
-	/// which back-edge of a lazy cycle `computeCycleEdges` keeps follows the order of type names, and the naming that keeps
-	/// it walks a place the other leaves out, so the mock's functions take the places they enter in another form, not only
-	/// the configuration's fields. The executed values of both namings are equal, as the value oracle shows when it runs
-	/// each naming of these seeds' value-oracle fixtures with every mock root laid out.
-	static let cycleEdgeChosenByNameReason = "With every mock root laid out from node records, the cycle edge chosen by name leaves a place out under one naming and not under another, so a laid-out mock's code differs beyond its configuration's fields, while the values both namings build are equal"
+	/// Why a laid-out mock's code changes under a renaming beyond its configuration's fields: which back-edge of a lazy
+	/// cycle `computeCycleEdges` keeps follows the order of type names. Under one naming the mock leaves a place out that the
+	/// other walks (2553, 2669, 3577), or a function is reached only through the nearest place of its type within a function
+	/// entered only with new configurations, so it reads no override that the other naming reads (508, 991, 3180). The
+	/// executed values of both namings are equal, as the value oracle shows when it runs each naming of these seeds'
+	/// value-oracle fixtures with every mock root laid out.
+	static let cycleEdgeChosenByNameReason = "With every mock root laid out from node records, the cycle edge chosen by name changes which places a laid-out mock leaves out, or which of its functions read an override, so its code differs beyond its configuration's fields, while the values both namings build are equal"
 
 	/// The base corpus's seeds whose laid-out mocks show `cycleEdgeChosenByNameReason`, observed in the long run with every
 	/// mock root laid out. Each is listed under another shape too, which the run without layout shows alone. The change that
 	/// stops choosing a cycle edge by name deletes this list.
-	static let cycleEdgeChosenByNameSeeds: [UInt64] = [2_553, 2_669, 3_577]
+	static let cycleEdgeChosenByNameSeeds: [UInt64] = [508, 991, 2_553, 2_669, 3_180, 3_577]
 
 	/// `issues` with `cycleEdgeChosenByNameReason`'s shape combined with each of its seeds' other shapes, where the run lays
-	/// out every mock root, as the mock on/off gate's build does; `issues` unchanged otherwise.
+	/// out every mock root (`NodeRecordsChecks.laysOutMockRoots`: the tool edited to, as the mock on/off gate builds it, or
+	/// `SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS=1`); `issues` unchanged otherwise.
 	private static func addingLaidOutMockShapes(to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
-		guard NodeRecordsObservation.laysOutMockRoots else { return issues }
+		guard NodeRecordsChecks.laysOutMockRoots else { return issues }
 		return GraphFuzzerKnownIssue.adding(.renamedGraphDiffers(.mockCode), reason: cycleEdgeChosenByNameReason, seeds: cycleEdgeChosenByNameSeeds, to: issues)
 	}
 
