@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
-@testable import SafeDICore
 import Testing
+@testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
@@ -1588,7 +1588,6 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 			""",
 		], dependencies: ["Feature"]),
 	]
-
 
 	private var filesToDelete: [URL]
 
