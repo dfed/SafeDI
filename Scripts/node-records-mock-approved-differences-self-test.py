@@ -187,6 +187,14 @@ CASES = [
      once('        let t2: Z1080_T0 = __safeDI_t2()\n', '        let t2: Z1080_T0 = __safeDI_t2()\n        let lazyT2 = 0\n'), 'both'),
     ('28', 'a later property calls another function',
      once('        let t0: Z1080_T0 = __safeDI_t2()', '        let t0: Z1080_T0 = __safeDI_t7Builder()')),
+    ('20-classes', 'a place is entered, and closed on, under a slot beyond the words the declaration holds',
+     lambda text: text.replace('__safeDI_entered.entering(0, ', '__safeDI_entered.entering(64, ')),
+    ('20-classes', 'a call no longer asks for the nearest place of its type',
+     once('__safeDI_entered.entering(2, Home.SafeDIMockConfiguration(), nearestOfType: true)',
+          '__safeDI_entered.entering(2, Home.SafeDIMockConfiguration())')),
+    ('20-classes', 'a call enters its place under another function’s slot',
+     once('__safeDI_entered.entering(2, Home.SafeDIMockConfiguration(), nearestOfType: true)',
+          '__safeDI_entered.entering(1, Home.SafeDIMockConfiguration(), nearestOfType: true)')),
 ]
 
 
