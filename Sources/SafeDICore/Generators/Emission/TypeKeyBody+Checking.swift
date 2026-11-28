@@ -18,14 +18,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
 extension TypeKeyLayout {
 	// MARK: Checking every read
 
 	/// The body of class `owner` that encloses `body`, where `owner` is `body`'s class or the root's: what `typeLookUp`
 	/// finds in `body`'s class is declared in `body` itself or, since every function is declared in the root's body
-	/// (`computePlacement`), in the root's.
+	/// (`computePlacement`), in the root's. A function a place written as text declares is declared where that place is,
+	/// so what its class finds is declared in its body or in a body enclosing it.
 	func instance(ofClass owner: Int, enclosing body: Int) -> Int {
-		owner == 0 ? 0 : body
+		guard owner != 0 else { return 0 }
+		var instance = body
+		while bodies[instance].callingFunction != nil, classByBody[instance] != owner {
+			instance = bodies[instance].parent
+		}
+		return instance
 	}
 
 	/// What the type key's `declaration`, which `typeLookUp` found in the class of `body`, holds in `body`, as a path
@@ -140,8 +147,18 @@ extension TypeKeyLayout {
 					      let pathType = type(of: expected, label: fulfillingProperty.label),
 					      typeModeType.asSource == pathType.asSource
 					else { return false }
+				case let .function(record, _):
+					// The function takes no parameters (`callingFunctionsTakeNoParameters`), so only what its statement lists is
+					// read here; its own statements are its body's, checked as every body's are.
+					for position in record.listedReads.indices {
+						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
+							isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						}
+						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
+					}
 				case let .built(child):
-					guard checkCall(of: child, from: body, at: index, closer: nil) else { return false }
+					// A place that declares only its function makes no call of it: its closers' calls are checked.
+					guard bodies[child].record?.bindsProperty == false || checkCall(of: child, from: body, at: index, closer: nil) else { return false }
 				case let .closer(record, target):
 					guard checkCall(of: target, from: body, at: index, closer: record) else { return false }
 				}
@@ -188,8 +205,16 @@ extension TypeKeyLayout {
 	/// Whether the read at `position` of the text place at `index` is `nil` in every member of `owner`'s class, as
 	/// `isNilAtEveryMember(owner:inlineStatement:argument:)` judges an inline place's.
 	func isNilAtEveryMember(owner: Int, aliasStatement index: Int, read position: Int) -> Bool {
-		for case let .alias(record) in statements(at: index, ofEveryMemberOf: owner) where record.listedReads[position].source != .nil {
-			return false
+		for statement in statements(at: index, ofEveryMemberOf: owner) {
+			switch statement {
+			case let .alias(record),
+			     let .function(record, _):
+				guard record.listedReads[position].source == .nil else { return false }
+			case .built,
+			     .closer,
+			     .inline:
+				break
+			}
 		}
 		return true
 	}
@@ -262,7 +287,9 @@ extension TypeKeyLayout {
 	/// place: a member of a loop of builders calling a sibling's. Any other closer calls an enclosing place's function or a
 	/// statement the view's key pins (`KeyedDeclaration.absolute`).
 	func closesOnSibling(_ closer: ClosingPlaceRecord, from body: Int) -> Bool {
-		guard closer.rebindsLoopMember || enclosingFunction(named: closer.closedOnFunctionName, from: body) == 0, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
+		// A function a place written as text declares is no place: its closers pass what it reads where it is declared, as
+		// any closer's call is checked.
+		guard bodies[body].callingFunction == nil, closer.rebindsLoopMember || enclosingFunction(named: closer.closedOnFunctionName, from: body) == 0, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
 		return declaringBody == bodies[body].parent
 	}
 

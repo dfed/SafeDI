@@ -25,12 +25,34 @@ extension TypeKeyLayout {
 	func callee(of statement: Statement) -> Int? {
 		switch statement {
 		case let .built(child):
-			classByBody[child]
+			// A place that declares only its function makes no call of it.
+			bodies[child].record?.bindsProperty == false ? nil : classByBody[child]
 		case let .closer(_, target):
 			classByBody[target]
+		case let .function(_, function):
+			// The statement declares the function, which is placed there (`computePlacement`), so it stands to the cycles of
+			// calls as a call of it does.
+			classByBody[function]
 		case .inline, .alias:
 			nil
 		}
+	}
+
+	/// Whether `owner` is the class of functions places written as text declare (`AliasPlaceRecord.function`), each
+	/// declared where its statement is, under its own name.
+	func isCallingFunctionClass(_ owner: Int) -> Bool {
+		owner != 0 && bodies[membersByClass[owner][0]].callingFunction != nil
+	}
+
+	/// `site`, or, for a call made in a function a place written as text declares, the statement declaring the function, out
+	/// to the first that is no such call: where the call is made in the body that declares the function.
+	func declaringSite(of site: CallSite) -> CallSite {
+		var site = site
+		while isCallingFunctionClass(site.owner) {
+			let member = membersByClass[site.owner][0]
+			site = CallSite(owner: classByBody[bodies[member].parent], index: bodies[member].position)
+		}
+		return site
 	}
 
 	/// The statements of a class's body, which every member's body shares: its first member's, or the root's.
@@ -63,13 +85,26 @@ extension TypeKeyLayout {
 		placementIndex = Array(repeating: 0, count: classCount)
 		placementDepth = Array(repeating: 0, count: classCount)
 		placementOwner[0] = 0
+		// A function a place written as text declares is placed at its statement, in the body of its first member's: the
+		// members of its class spell one function, each at its own statement (`spelledStatement`), and a read its function
+		// would take from its callers it cannot take (`callingFunctionsTakeNoParameters`).
+		let callingFunctionClasses = (1..<max(classCount, 1)).filter(isCallingFunctionClass)
+		for owner in callingFunctionClasses {
+			let member = membersByClass[owner][0]
+			placementOwner[owner] = classByBody[bodies[member].parent]
+			placementIndex[owner] = bodies[member].position
+		}
 		// Tarjan's algorithm finishes a component after every component it reaches, so callers come last: they are placed
 		// first.
 		for component in classesByComponent.keys.sorted(by: >) {
-			guard let members = classesByComponent[component]?.sorted() else { continue }
-			let memberSet = Set(members)
-			let allSites = members.flatMap { callSitesByClass[$0] }
-			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
+			guard let componentClasses = classesByComponent[component]?.sorted() else { continue }
+			let memberSet = Set(componentClasses)
+			let members = componentClasses.filter { !isCallingFunctionClass($0) }
+			guard !members.isEmpty else { continue }
+			let allSites = members.flatMap { callSitesByClass[$0] }.filter { !memberSet.contains($0.owner) || !isCallingFunctionClass($0.owner) }
+			// A call made in a function a place written as text declares is made, for placement, where that function's
+			// statement is.
+			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) }.map(declaringSite(of:)).filter { !memberSet.contains($0.owner) })
 			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
 			// each level of nested local functions past about twenty. Under `declaresLoopMembersAsThePathKeyDoes` the nesting
 			// is the path key's own, which the tree writes too, so the type key adds no depth.
@@ -109,6 +144,11 @@ extension TypeKeyLayout {
 				hoistedFunctions[CallSite(owner: owner, index: index), default: []].append(contentsOf: members)
 			}
 		}
+		// Each member is spelled at its own statement, in whichever body holds it, so the function is spelled before every
+		// class one of its statements is in.
+		for owner in callingFunctionClasses {
+			placementDepth[owner] = (membersByClass[owner].map { placementDepth[classByBody[bodies[$0].parent]] }.max() ?? 0) + 1
+		}
 		// Functions declared before one statement are ordered by the first reach of their cycle, then by their own.
 		for (site, functions) in hoistedFunctions {
 			hoistedFunctions[site] = functions.sorted { lhs, rhs in
@@ -130,8 +170,12 @@ extension TypeKeyLayout {
 	/// captures 'x' before it is declared"): a member declared before a later member's statement calls that member's
 	/// function, which captures what the root binds before its own statement. Read after `computeOutcomes()`, which
 	/// settles what each function captures from where `computePlacement()` declares it, so placement cannot check it.
+	///
+	/// A function a place written as text declares stays at that place's statement, while a function that calls it is
+	/// declared where `computePlacement()` puts it, so each class whose function reaches one (`classesReachingCallingFunctions()`)
+	/// is checked the same way.
 	func keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() -> Bool {
-		loopMembersDeclaredAsThePathKeyDoes.allSatisfy { member in
+		(loopMembersDeclaredAsThePathKeyDoes + classesReachingCallingFunctions()).allSatisfy { member in
 			let declaringOwner = placementOwner[member]
 			let use = placementIndex[member]
 			var reached: Set = [member]
@@ -148,5 +192,24 @@ extension TypeKeyLayout {
 			}
 			return capturesOnlyWhatIsBoundBefore
 		}
+	}
+
+	/// The classes whose functions call a function a place written as text declares, directly or through other functions,
+	/// in class order.
+	func classesReachingCallingFunctions() -> [Int] {
+		var callersByClass = [[Int]](repeating: [], count: membersByClass.count)
+		for owner in membersByClass.indices.dropFirst() {
+			for callee in calleesByClass[owner] {
+				callersByClass[callee].append(owner)
+			}
+		}
+		var reached = Set<Int>()
+		var pending = membersByClass.indices.filter(isCallingFunctionClass)
+		while let callee = pending.popLast() {
+			for caller in callersByClass[callee] where reached.insert(caller).inserted {
+				pending.append(caller)
+			}
+		}
+		return reached.sorted()
 	}
 }

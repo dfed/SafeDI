@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
 /// The production type key (R1): a root's body laid out so that the places that build one type alike share one builder
 /// function. Places are alike when they build one type in one way, in one family (plain or `@Sendable`), read the same
 /// labels they do not bind, write bodies of the same shape whose calls reach alike places, and resolve each read to a
@@ -115,6 +116,7 @@ enum TypeKeyBody {
 		guard layout.computePlacement() else { return .failure(.functionNotPlaced) }
 		layout.computeOutcomes()
 		guard layout.keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes() else { return .failure(.loopMemberCapturesLaterBinding) }
+		guard layout.callingFunctionsTakeNoParameters() else { return .failure(.callingFunctionTakesParameter) }
 		guard layout.computeParameterTypes() else { return .failure(.parameterHasNoType) }
 		guard layout.checkEveryRead() else { return .failure(.readResolvesOtherwise) }
 		guard layout.checkValuePaths() else { return .failure(.valuePathResolvesOtherwise) }
@@ -217,6 +219,10 @@ struct TypeKeyLayout {
 		let cycleParameters: [Property]
 		/// The labels of `cycleParameters`, which every look-up through the body reads.
 		let cycleParameterLabels: Set<String>
+		/// The function a statement of `parent` declares (`AliasPlaceRecord.function`), whose body this is: its statements,
+		/// then its returned call, the body's last statement; `nil` for a place's body. Such a body has no place of its own:
+		/// it is declared where its statement is, under its own name, and called by the closers on that name.
+		var callingFunction: CallingFunction?
 
 		/// The parent body and statement index of each of the view's places.
 		var edges: [(parent: Int, position: Int)] {
@@ -284,13 +290,15 @@ struct TypeKeyLayout {
 		let cycleArguments: [KeyedDeclaration]
 	}
 
-	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
-	/// rename.
+	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, a
+	/// rename, or a place written as text that declares a function of its own before its binding (`function`), whose body
+	/// is `body`.
 	enum Statement {
 		case built(body: Int)
 		case inline(BuiltPlaceRecord)
 		case closer(ClosingPlaceRecord, target: Int)
 		case alias(AliasPlaceRecord)
+		case function(AliasPlaceRecord, body: Int)
 	}
 
 	var bodies = [Body]()

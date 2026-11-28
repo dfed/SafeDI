@@ -262,7 +262,8 @@ struct AliasPlaceRecord: Sendable {
 	var call: InPlaceCall?
 	/// The function the text declares before its binding, which is among `declaredFunctionNames` and which the binding
 	/// hands its wrapper: a body of its own whose value is a call of another function; `nil` where the text declares none
-	/// the engine plans.
+	/// the engine plans. Where it is set, `text` is the binding alone, which the engine writes after the function it
+	/// spells.
 	var function: CallingFunction?
 }
 

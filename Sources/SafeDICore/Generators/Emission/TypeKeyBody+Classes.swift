@@ -29,7 +29,7 @@ extension TypeKeyLayout {
 		case let .statement(body, index):
 			property(of: bodies[body].statements[index], label: readLabel)?.typeDescription
 		case let .forwarded(body, label):
-			bodies[body].record?.parameterProperties.first(where: { $0.label == label })?.typeDescription
+			parameterProperties(ofBody: body).first(where: { $0.label == label })?.typeDescription
 		case let .cycleParameter(body, label):
 			bodies[body].cycleParameters.first(where: { $0.label == label })?.typeDescription
 		}
@@ -93,12 +93,31 @@ extension TypeKeyLayout {
 		}
 		// Every lookup in a class's body asks whether its function is handed a label, so each class's labels are kept once.
 		parameterLabelsByClass = membersByClass.map { members in
-			members.first.flatMap { bodies[$0].record }.map { Set($0.parameterProperties.map(\.label)) } ?? []
+			members.first.map { Set(parameterProperties(ofBody: $0).map(\.label)) } ?? []
 		}
 	}
 
+	/// The properties `body`'s function is handed: a place's (`BuiltPlaceRecord.parameterProperties`), or the parameters of
+	/// a function a place written as text declares; none for the root's.
+	func parameterProperties(ofBody body: Int) -> [Property] {
+		bodies[body].record?.parameterProperties ?? bodies[body].callingFunction?.parameters ?? []
+	}
+
 	func structuralKey(of body: Int, isInSendableFamily: Bool, parts: inout StructuralKeyParts) -> [Int] {
-		guard let record = bodies[body].record else { return [] }
+		guard let record = bodies[body].record else {
+			// A function a place written as text declares is told apart by what its declaration spells and by its statements,
+			// its call the last.
+			guard let function = bodies[body].callingFunction else { return [] }
+			var key = [parts.id(of: .callingFunction(
+				name: function.name,
+				isSendable: isInSendableFamily,
+				parameters: function.parameters.map(\.asSource),
+				typesDeclaredEscaping: function.typesDeclaredEscaping.map(\.asSource).sorted(),
+				returnType: function.returnType.asSource,
+			))]
+			appendStatementParts(ofBody: body, to: &key, parts: &parts)
+			return key
+		}
 		var key = [parts.id(of: .header(
 			concreteType: record.concreteType.asSource,
 			callee: record.target.callee,
@@ -127,6 +146,12 @@ extension TypeKeyLayout {
 				key.append(parts.id(of: .variantParameter(parameter.asSource)))
 			}
 		}
+		appendStatementParts(ofBody: body, to: &key, parts: &parts)
+		return key
+	}
+
+	/// Appends the parts of `body`'s statements to `key`.
+	func appendStatementParts(ofBody body: Int, to key: inout [Int], parts: inout StructuralKeyParts) {
 		for (index, statement) in bodies[body].statements.enumerated() {
 			key.append(parts.id(of: statementPart(statement, parts: &parts)))
 			let passedArguments = passedArguments(ofStatementAt: index, inBody: body)
@@ -141,16 +166,22 @@ extension TypeKeyLayout {
 				}
 			}
 		}
-		return key
 	}
 
 	func statementPart(_ statement: Statement, parts: inout StructuralKeyParts) -> StructuralKeyParts.Part {
 		switch statement {
 		case let .built(child):
 			guard let record = bodies[child].record else { return .text("") }
-			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension, bindsProperty: record.bindsProperty)
 		case let .closer(record, _):
-			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension)
+			return .call(property: record.property.asSource, isErased: record.isErased, isExtension: record.isExtension, bindsProperty: true)
+		case let .function(record, function):
+			return .functionStatement(
+				property: record.property.asSource,
+				functionName: bodies[function].callingFunction?.name ?? "",
+				reads: record.listedReads.map { "\($0.label):\($0.property.asSource)" },
+				binding: record.text,
+			)
 		case let .inline(record):
 			let arguments = record.arguments.map { "\($0.argumentLabel):\($0.label):\($0.property.asSource)" }.joined(separator: ",")
 			return .text("inline|\(record.property.asSource)|\(record.concreteType.asSource)|\(record.target.callee)|\(record.isErased)|\(record.isExtension)|\(record.lineEnd)|\(arguments)|\(record.constructionShape(shapes: &parts).joined(separator: ";"))")
@@ -207,7 +238,8 @@ extension TypeKeyLayout {
 			var key = [previous[body]]
 			for statement in bodies[body].statements {
 				switch statement {
-				case let .built(child):
+				case let .built(child),
+				     let .function(_, child):
 					key.append(previous[child])
 				case let .closer(_, target):
 					key.append(previous[target])

@@ -116,6 +116,14 @@ extension TypeKeyLayout {
 	/// (`computePlacement`), and a cycle parameter is read from the caller, or, where a variant captures it, is the
 	/// root's statement, so the variants' classes are settled first. Every other function's outcomes depend only on those
 	/// of the functions declaring it (`computePlacement`), so one pass after them, outer functions first, settles them.
+	/// Whether no function a place written as text declares reads a label its calls pass: the text's binding hands its
+	/// wrapper the function by name, with only what the wrapper forwards.
+	func callingFunctionsTakeNoParameters() -> Bool {
+		membersByClass.indices.allSatisfy { owner in
+			!isCallingFunctionClass(owner) || !outcomes[owner].values.contains(.passed)
+		}
+	}
+
 	mutating func computeOutcomes() {
 		rootStatementsCapturedByVariant = rootStatementsCapturedByVariants()
 		outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
@@ -145,7 +153,8 @@ extension TypeKeyLayout {
 				for member in membersByClass[owner] {
 					// A view's places can resolve a label to other declarations outside it, alike in kind and type, each of
 					// which its call passes.
-					for edge in bodies[member].edges {
+					// A place that declares only its function makes no call of it: only its closers pass it anything.
+					for edge in bodies[member].edges where bodies[member].record?.bindsProperty != false {
 						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member, edge: edge)))
 					}
 					for closer in closersByTarget[member] ?? [] {

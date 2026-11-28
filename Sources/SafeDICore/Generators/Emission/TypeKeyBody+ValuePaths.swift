@@ -223,7 +223,8 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.passedArguments
 		case .inline,
-		     .alias:
+		     .alias,
+		     .function:
 			[]
 		}
 	}
@@ -277,10 +278,12 @@ extension TypeKeyLayout {
 	func checkSendableMarks() -> Bool {
 		for owner in membersByClass.indices.dropFirst() where isDecorated[owner] {
 			for member in membersByClass[owner] {
-				guard let record = bodies[member].record,
-				      !record.constructionReads.contains(where: \.staysOutsideSendableFunctions),
-				      // A value bound before the call is read where the call is made, outside this function.
-				      !record.passedArguments.contains(where: { $0.staysOutsideSendableFunctions && !$0.bindsBeforeCall })
+				// A function written as text reads only what its statements read, which the loop below checks.
+				guard bodies[member].record.map({ record in
+					!record.constructionReads.contains(where: \.staysOutsideSendableFunctions)
+						// A value bound before the call is read where the call is made, outside this function.
+						&& !record.passedArguments.contains(where: { $0.staysOutsideSendableFunctions && !$0.bindsBeforeCall })
+				}) ?? (bodies[member].callingFunction != nil)
 				else { return false }
 				for (index, statement) in bodies[member].statements.enumerated() {
 					let reads: [PlaceRead] = switch statement {
@@ -293,6 +296,8 @@ extension TypeKeyLayout {
 					case .alias:
 						// A place written as text reads what the layout's text reads list (another lane's).
 						[]
+					case let .function(record, _):
+						record.listedReads
 					}
 					let passed = passedArguments(ofStatementAt: index, inBody: member)
 					guard !reads.contains(where: \.staysOutsideSendableFunctions),
@@ -418,8 +423,14 @@ struct StructuralKeyParts {
 		case parameter(name: String, type: String)
 		/// A parameter a variant of the per-type plan takes for a label its body's answers declare.
 		case variantParameter(String)
-		/// A call of a built place's function or a closer's.
-		case call(property: String, isErased: Bool, isExtension: Bool)
+		/// A call of a built place's function or a closer's; for a built place that declares only its function
+		/// (`BuiltPlaceRecord.bindsProperty`), its declaration, which binds nothing.
+		case call(property: String, isErased: Bool, isExtension: Bool, bindsProperty: Bool)
+		/// A function a place written as text declares before its binding (`AliasPlaceRecord.function`): what its
+		/// declaration spells besides its statements and its call, which the body's own parts hold.
+		case callingFunction(name: String, isSendable: Bool, parameters: [String], typesDeclaredEscaping: [String], returnType: String)
+		/// The statement of a place written as text that declares such a function: its binding and the function's name.
+		case functionStatement(property: String, functionName: String, reads: [String], binding: String)
 		case passedArgumentCount(Int)
 		case passed(parameterName: String, type: String, value: Int, staysOutsideSendableFunctions: Bool, bindsBeforeCall: Bool)
 		case passedRead(parameterName: String, type: String, label: String, bindsBeforeCall: Bool)

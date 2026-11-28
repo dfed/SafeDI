@@ -55,7 +55,8 @@ extension TypeKeyLayout {
 		for body in bodies.indices.dropFirst() {
 			for statement in bodies[body].statements {
 				switch statement {
-				case let .built(child):
+				case let .built(child),
+				     let .function(_, child):
 					dependents[child].append(body)
 				case let .closer(_, target):
 					dependents[target].append(body)
@@ -94,7 +95,8 @@ extension TypeKeyLayout {
 			frames[frames.count - 1].next += 1
 			switch statements[frame.next] {
 			case let .built(child),
-			     let .closer(_, child):
+			     let .closer(_, child),
+			     let .function(_, child):
 				if !isVisited[child] {
 					isVisited[child] = true
 					frames.append((body: child, next: 0))
@@ -180,7 +182,7 @@ extension TypeKeyLayout {
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
-				required.formUnion(requiredReads[child])
+				required.formUnion(bodies[child].record?.bindsProperty == false ? requiredReads[child].subtracting(bodies[child].cycleParameterLabels) : requiredReads[child])
 				bodies[child].record?.callSiteReads.forEach(note)
 			case let .inline(record):
 				record.constructionReads.forEach(note)
@@ -191,6 +193,9 @@ extension TypeKeyLayout {
 				if let fulfillingProperty = record.fulfillingProperty, !fulfillingProperty.typeDescription.isOptional, !record.readsOnlyIfAvailable {
 					required.insert(fulfillingProperty.label)
 				}
+				record.listedReads.forEach(note)
+			case let .function(record, function):
+				required.formUnion(requiredReads[function])
 				record.listedReads.forEach(note)
 			}
 		}
@@ -212,7 +217,11 @@ extension TypeKeyLayout {
 		for statement in bodies[body].statements {
 			switch statement {
 			case let .built(child):
-				reads[child].forEach(add)
+				// A place that declares only its function makes no call of it: what its function takes as cycle parameters, the
+				// functions that call it pass.
+				for label in reads[child] where bodies[child].record?.bindsProperty != false || !bodies[child].cycleParameterLabels.contains(label) {
+					add(label)
+				}
 				for argument in bodies[child].record?.callSiteReads ?? [] {
 					add(argument.label)
 				}
@@ -237,6 +246,9 @@ extension TypeKeyLayout {
 				if let fulfillingProperty = record.fulfillingProperty {
 					add(fulfillingProperty.label)
 				}
+				record.listedReads.forEach { add($0.label) }
+			case let .function(record, function):
+				reads[function].forEach(add)
 				record.listedReads.forEach { add($0.label) }
 			}
 		}
@@ -284,6 +296,13 @@ extension TypeKeyLayout {
 			case let .alias(record):
 				if let fulfillingProperty = record.fulfillingProperty {
 					note(fulfillingProperty.label, lookUp(fulfillingProperty.label, inBody: body, before: index))
+				}
+				for read in record.listedReads {
+					note(read.label, pathValue(of: read, inBody: body, before: index))
+				}
+			case let .function(record, function):
+				for (label, value) in escapingReads[function].sorted(by: { $0.key < $1.key }) {
+					note(label, value)
 				}
 				for read in record.listedReads {
 					note(read.label, pathValue(of: read, inBody: body, before: index))

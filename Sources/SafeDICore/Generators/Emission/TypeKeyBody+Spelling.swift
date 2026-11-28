@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	mutating func computeDecoratorsAndNames() {
 		let classCount = membersByClass.count
 		isDecorated = membersByClass.indices.map { owner in
-			owner != 0 && membersByClass[owner].contains { bodies[$0].record?.isSendable == true }
+			owner != 0 && membersByClass[owner].contains { bodies[$0].record?.isSendable == true || bodies[$0].callingFunction?.isSendable == true }
 		}
 		// A function a `@Sendable` function declared beneath it calls is captured by that function, so it is `@Sendable` too.
 		var changed = true
@@ -53,7 +53,12 @@ extension TypeKeyLayout {
 		for owner in membersByClass.indices {
 			allocator.reserve(representative(of: owner)?.passedArguments.map(\.parameterName) ?? [])
 		}
+		// A function a place written as text declares keeps its name, which the text's binding hands its wrapper.
+		allocator.reserve(membersByClass.indices.compactMap { callingFunction(ofClass: $0)?.name })
 		functionNames = membersByClass.indices.map { owner in
+			if let function = callingFunction(ofClass: owner) {
+				return function.name
+			}
 			guard let representative = representative(of: owner) else { return "" }
 			return allocator.claim(ScopeGenerator.functionName(toBuildPropertyNamed: representative.property.label))
 		}
@@ -67,7 +72,8 @@ extension TypeKeyLayout {
 				case let .closer(_, target):
 					callee = classByBody[target]
 				case .inline,
-				     .alias:
+				     .alias,
+				     .function:
 					continue
 				}
 				for argument in passedArguments(ofStatementAt: index, inBody: owner == 0 ? 0 : membersByClass[owner][0]) where argument.bindsBeforeCall {
@@ -83,6 +89,11 @@ extension TypeKeyLayout {
 		var functionCode = [GeneratedCode](repeating: .empty, count: membersByClass.count)
 		let classesByDepth = membersByClass.indices.dropFirst().sorted { placementDepth[$0] > placementDepth[$1] }
 		for owner in classesByDepth {
+			if let function = callingFunction(ofClass: owner) {
+				guard let code = spelledCallingFunction(function, ofClass: owner, functionCode: functionCode) else { return nil }
+				functionCode[owner] = code
+				continue
+			}
 			guard let representative = representative(of: owner),
 			      let body = spelledStatements(ofClass: owner, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
 			      let argumentValues = spelledArgumentValues(representative.arguments, replacedAt: representative.argumentValues, inClass: owner, before: statements(ofClass: owner).count, sourceAtMember: { member, position in bodies[member].record?.arguments[position].source })
@@ -127,9 +138,9 @@ extension TypeKeyLayout {
 	}
 
 	/// The statements of `owner`'s body, each with the functions declared before it, each indented by `indentation`.
-	func spelledStatements(ofClass owner: Int, indentation: String, functionCode: [GeneratedCode]) -> [GeneratedCode]? {
+	func spelledStatements(ofClass owner: Int, upTo end: Int? = nil, indentation: String, functionCode: [GeneratedCode]) -> [GeneratedCode]? {
 		var code = [GeneratedCode]()
-		for (index, statement) in statements(ofClass: owner).enumerated() where owner != 0 || index >= outerDeclarationCount {
+		for (index, statement) in statements(ofClass: owner).prefix(end ?? .max).enumerated() where owner != 0 || index >= outerDeclarationCount {
 			let site = CallSite(owner: owner, index: index)
 			for function in hoistedFunctions[site] ?? [] {
 				code.append(.indented(functionCode[function], by: indentation))
@@ -137,7 +148,15 @@ extension TypeKeyLayout {
 			if let function = attachedFunction[site] {
 				code.append(.indented(functionCode[function], by: indentation))
 			}
+			if case let .function(_, function) = statement {
+				// The function is spelled at each statement that declares it, before the text's binding of its wrapper.
+				code.append(.indented(functionCode[classByBody[function]], by: indentation))
+			}
 			guard let text = spelledStatement(statement, inClass: owner, at: index) else { return nil }
+			// A place that declares only its function writes no line of its own.
+			if case let .built(child) = statement, bodies[child].record?.bindsProperty == false {
+				continue
+			}
 			code.append(.indented(.text(text), by: indentation))
 		}
 		return code
@@ -165,13 +184,47 @@ extension TypeKeyLayout {
 			return "\(declaration.spelled) = \(value)\(record.lineEnd)"
 		case let .built(child):
 			guard let record = bodies[child].record else { return nil }
+			// A place that declares only its function binds nothing: a later statement hands its wrapper the function.
+			guard record.bindsProperty else { return "" }
 			return spelledCall(of: classByBody[child], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .closer(record, target):
 			return spelledCall(of: classByBody[target], binding: record.property, isErased: record.isErased, isExtension: record.isExtension, inClass: owner, at: index)
 		case let .alias(record):
 			guard let call = record.call else { return record.text }
 			return spelledInPlace(call, inClass: owner, at: index)
+		case let .function(record, _):
+			// The text holds the binding alone (`AliasPlaceRecord.function`); `spelledStatements` writes the function before it.
+			return record.text
 		}
+	}
+
+	/// The function of `owner`'s class if it is the class of a function a place written as text declares.
+	func callingFunction(ofClass owner: Int) -> CallingFunction? {
+		owner == 0 ? nil : bodies[membersByClass[owner][0]].callingFunction
+	}
+
+	/// The function a place written as text declares, spelled from its class: its statements, then the call its last
+	/// statement makes of another function, which the function returns.
+	func spelledCallingFunction(_ function: CallingFunction, ofClass owner: Int, functionCode: [GeneratedCode]) -> GeneratedCode? {
+		let statements = statements(ofClass: owner)
+		guard case let .closer(returnedCall, target) = statements.last,
+		      var body = spelledStatements(ofClass: owner, upTo: statements.count - 1, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
+		      let call = spelledArguments(toCallOf: classByBody[target], inClass: owner, at: statements.count - 1)
+		else { return nil }
+		if !call.bindings.isEmpty {
+			body.append(.indented(.text(String(call.bindings.dropLast())), by: ScopeGenerator.standardIndent))
+		}
+		let forwardedArguments = returnedCall.forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled }
+		return BuilderNode(
+			name: function.name,
+			isSendable: isDecorated[owner],
+			parameters: function.parameters,
+			typesDeclaredEscaping: function.typesDeclaredEscaping,
+			returnType: function.returnType,
+			body: BuilderBody(statements: body),
+			value: .call(function: functionNames[classByBody[target]], arguments: (forwardedArguments + call.arguments).joined(separator: ", ")),
+			lineEnd: "",
+		).spelled()
 	}
 
 	/// The text of a call written where its place is, at `index` of `owner`'s body: its builder function, then the binding
@@ -216,9 +269,25 @@ extension TypeKeyLayout {
 
 	/// The binding of `property` to a call of `callee`'s function, made before the statement at `index` of `owner`'s body.
 	func spelledCall(of callee: Int, binding property: Property, isErased placeIsErased: Bool, isExtension: Bool, inClass owner: Int, at index: Int) -> String? {
-		guard let representative = representative(of: callee) else { return nil }
+		guard let representative = representative(of: classBuilt(by: callee)),
+		      let call = spelledArguments(toCallOf: callee, inClass: owner, at: index)
+		else { return nil }
 		// A function that returns a type of its own erased the value already (`spelledRootStatements`).
 		let isErased = placeIsErased && representative.functionReturnType == nil
+		let forwardedProperties = callingFunction(ofClass: callee)?.parameters ?? representative.forwardedProperties
+		return call.bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: call.arguments, forwarding: forwardedProperties)
+	}
+
+	/// The class whose place `callee`'s function builds: the class of the call it returns where `callee` is the class of a
+	/// function a place written as text declares, and `callee` otherwise.
+	func classBuilt(by callee: Int) -> Int {
+		guard callingFunction(ofClass: callee) != nil, case let .closer(_, target) = statements(ofClass: callee).last else { return callee }
+		return classByBody[target]
+	}
+
+	/// The arguments a call of `callee`'s function made at `index` of `owner`'s body hands it, after what it passes for
+	/// each read the function takes as a parameter, with the bindings of the values it binds before the call.
+	func spelledArguments(toCallOf callee: Int, inClass owner: Int, at index: Int) -> (bindings: String, arguments: [String])? {
 		var arguments = [String]()
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
 			guard let parameterType = parameterTypes[callee][label],
@@ -238,19 +307,19 @@ extension TypeKeyLayout {
 				arguments.append("\(argument.parameterName.spelledAsArgumentLabel): \(value)")
 			}
 		}
-		return bindings + spelledCall(of: callee, binding: property, isErased: isErased, isExtension: isExtension, handing: arguments, representative: representative)
+		return (bindings, arguments)
 	}
 
 	/// The binding of `property` to a call of `callee`'s function that hands it `arguments`.
-	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], representative: BuiltPlaceRecord) -> String {
+	private func spelledCall(of callee: Int, binding property: Property, isErased: Bool, isExtension: Bool, handing arguments: [String], forwarding forwardedProperties: [Property]) -> String {
 		let functionName = functionNames[callee]
 		switch property.propertyType {
 		case .instantiator,
 		     .erasedInstantiator,
 		     .sendableInstantiator,
 		     .sendableErasedInstantiator:
-			let isOnly = representative.forwardedProperties.count == 1
-			let forwardedArguments = representative.forwardedProperties.map {
+			let isOnly = forwardedProperties.count == 1
+			let forwardedArguments = forwardedProperties.map {
 				CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: "$0")).spelled
 			}
 			return ScopeGenerator.instantiatorDeclaration(

@@ -9179,10 +9179,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				"""
-				let receivedFunctionText = receivedFunctionDeclaration + instantiatorDeclaration(
+				let receivedFunctionBinding = instantiatorDeclaration(
 					handing: receivedFunctionName,
 					forwardedArguments: Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue).joined(separator: ", "),
 				)
+				let receivedFunctionText = receivedFunctionDeclaration + receivedFunctionBinding
 				// The type key reads the member's function as a place that binds nothing, and the `_received` function as a
 				// statement after it that declares the function and binds the member's wrapper; a scope that closes a cycle
 				// declares only the latter.
@@ -9199,7 +9200,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						.text(receivedFunctionText),
 					])))
 				}
-				var receivedFunctionRecord = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: receivedFunctionText, reads: readsOutsideFunction)
+				var receivedFunctionRecord = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: receivedFunctionBinding, reads: readsOutsideFunction)
 				receivedFunctionRecord.declaredFunctionNames = [receivedFunctionName]
 				receivedFunctionRecord.function = CallingFunction(
 					name: receivedFunctionName,
