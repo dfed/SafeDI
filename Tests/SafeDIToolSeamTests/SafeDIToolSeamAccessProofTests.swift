@@ -3581,6 +3581,39 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsCallersViewDecidedOtherwise_whenViewOfRunThatThrowsIsComputedAgainWithoutItsError() async {
+		// The callers' view oracle (`SeamCallersViewChecks`) judges the view of a run that throws, whose error is the view's
+		// own: with the diagnostics of the view computed again dropped, the seam `Vault` explains is decided otherwise. A
+		// checker that let the throw end it before comparing records nothing here.
+		let fixture = Self.extensionBasedTokenMentionedInAdditionalDirectory(receive: "@Received let token: Rack.Token")
+		await withKnownIssue {
+			await SeamCallersViewChecks.$dropsRecomputedDiagnostics.withValue(true) {
+				await assertThrowsError(diagnostics: { fixtures in
+					"""
+					\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: the initializer SafeDI generates for it depends on `Vault`, which is declared in a directory this module’s `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Vault` in a file of this module, or of a module it depends on.
+					"""
+				}) {
+					try await executeSafeDIToolTest(
+						swiftFileContent: fixture.swiftFileContent,
+						additionalDirectorySwiftFileContent: fixture.additionalDirectorySwiftFileContent,
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesToDelete,
+						pluginTargetGraph: { inputSwiftFilePaths in
+							PluginTargetGraph(
+								target: PluginTargetGraph.Target(moduleName: "Feature", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+								dependencyTargets: [],
+							)
+						},
+					)
+				}
+			}
+		} matching: { issue in
+			issue.comments.contains { $0.rawValue.contains("The callers’ view of module Feature decided otherwise when computed again") }
+		}
+	}
+
 	// MARK: R9: a type's plain declaration proves it
 
 	@Test(arguments: MultiModuleIntegration.allCases)

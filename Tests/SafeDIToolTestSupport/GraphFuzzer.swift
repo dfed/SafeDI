@@ -2201,9 +2201,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Whether `addingCallersViewShapes` draws this shape, whose count in accepted graphs the seam corpus pins
 	/// (`acceptedDrawFeatureCounts`): every one but `callersViewDeclarationInstantiatedBySeam`, which the tool rejects by
 	/// design. Every graph the draw lands in computes the callers' view of each seam it generates, which the executors'
-	/// callers' view oracle (`SeamCallersViewChecks`) computes again, so an accepted graph is one that oracle judged; the
-	/// shapes accepted whatever the seam's tiers are, the draw itself included, are floored at ten
-	/// (`isFlooredCallersViewShape`).
+	/// callers' view oracle (`SeamCallersViewChecks`) computes again, so every such graph is one that oracle judges, a
+	/// rejected one too, whose error is the view's own; the shapes accepted whatever the seam's tiers are, the draw itself
+	/// included, are floored at ten accepted graphs (`isFlooredCallersViewShape`).
 	var isCallersViewShape: Bool {
 		rawValue.hasPrefix("callersView") && self != .callersViewDeclarationInstantiatedBySeam
 	}
