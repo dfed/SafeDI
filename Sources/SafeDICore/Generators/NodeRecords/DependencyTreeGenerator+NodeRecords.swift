@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// The layout of `instantiable`'s code from the node records of its world, the root `constructionScope` builds, and
 	/// what forces its tree (`TreeForcer`): the kind node records refused, then `readersOfEveryTree`. The layout is `nil`
-	/// wherever anything forces the tree.
+	/// wherever anything forces the tree, and for a world that holds a cycle, whose records are only compared.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose tree reports it.
 	static func nodeRecordsLayout(
 		of instantiable: Instantiable,
@@ -33,8 +33,17 @@ extension DependencyTreeGenerator {
 		// world, to name what they refuse.
 		guard readersOfEveryTree.isEmpty || NodeRecordsObservation.observer != nil else { return (nil, readersOfEveryTree) }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		switch NodeRecords.refusingWhatRecordsThrow({ try NodeRecordsLayout(of: instantiable, nodeRecords: NodeRecords(world: world, declaredTypeNames: declaredTypeNames)) }) {
+		switch NodeRecords.refusingWhatRecordsThrow({ () throws -> NodeRecordsLayout? in
+			let nodeRecords = try NodeRecords(world: world, declaredTypeNames: declaredTypeNames)
+			// A world that holds a cycle keeps its tree, or its plan by type, until node records write every production
+			// cycle root as today's tree does: its records are made and compared beside the tree where a test observes
+			// them (`plannedRootCode(of:declaredTypeNames:)`), and what forces the tree is named as the kind they refused
+			// before they made any cycle's records.
+			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
+		}) {
 		case let .success(layout):
+			guard let layout else { return (nil, [.nodeRecordKind(NodeRecordRefusal.cycle.rawValue)] + readersOfEveryTree) }
 			return (readersOfEveryTree.isEmpty ? layout : nil, readersOfEveryTree)
 		case let .failure(refusal):
 			return (nil, [.nodeRecordKind(refusal.rawValue)] + readersOfEveryTree)
@@ -59,6 +68,9 @@ extension DependencyTreeGenerator {
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
+		case let .perType(code, _):
+			// A root laid out from the per-type plan of its cycles, which node records refuse (`cycle`).
+			return code
 		case let .nodeRecords(layout, comparisonTree):
 			if let comparisonTree, let observer = NodeRecordsObservation.observer {
 				try await observer(comparison(of: layout, with: comparisonTree, of: rootInfo.instantiable))

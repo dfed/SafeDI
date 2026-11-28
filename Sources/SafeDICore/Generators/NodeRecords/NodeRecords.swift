@@ -80,8 +80,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// A world with a cycle in which a type receives a builder, whose call today's tree makes through a function it
 	/// declares for the loop of builders it closes.
 	case cycleReceivesBuilder
-	/// A place between a place on a cycle and the call that closes the cycle on it declares a label some type receives, so
-	/// that the function the call refers to may take that label's value as a parameter.
+	/// The function a call closes a cycle on takes a parameter of a label some declaration holds lazily, which a call can
+	/// find as the wrapper at its site where the records read the callee's view.
 	case cycleTakesParameters
 	/// Two bodies of a world with a cycle name one variant's function apart, or hand the functions its body refers to
 	/// different names (`CycleFunctionNames`), where its one place cannot stand for both.
@@ -255,7 +255,9 @@ struct NodeRecords: Sendable {
 		// A world whose edges close a cycle builds each node's children in the order step 0's sibling-order fixed point gives
 		// them (`TypeFactsEdge.buildPosition`), which `NodeBuildOrder` stands in for only off every cycle.
 		let order: NodeBuildOrder? = holdsCycle ? nil : try NodeBuildOrder(world: world)
-		let labelsReceived = holdsCycle ? try Self.labelsReceived(inWorldWithCycle: world) : []
+		if holdsCycle {
+			try Self.refuseReceivedBuilders(inWorldWithCycle: world)
+		}
 		// A mock root's functions on a cycle are handed the places entered above them (`NodeRecords+MockCycle.swift`).
 		let enteredSlots = holdsCycle && world.isMockWorld ? MockEnteredSlots(world: world) : nil
 		if let enteredSlots {
@@ -385,6 +387,8 @@ struct NodeRecords: Sendable {
 		var variantsClosedOn = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var cycleVariantsBuilt = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
+		var labelsDeclaredBetween = [Set<String>](repeating: [], count: world.variantCount)
+		var variantsBetween = [Set<VariantID>](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
@@ -400,15 +404,14 @@ struct NodeRecords: Sendable {
 				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { twins.isTwin(world.declaration(of: $0.variant), of: calleeDeclaration) })?.variant
 				if let closedOnVariant = isOnPath[Int(callee)] ? callee : closedOnTwin {
 					let callee = closedOnVariant
-					// The closed-on property's own label is never a parameter of its function: every call is made inside a tree
-					// that builds a declaration of it (`CycleParameter`).
-					let ownLabel = world.property(of: world.declaration(of: callee))?.label
-					if let closedOn = stack.lastIndex(where: { $0.variant == callee }),
-					   stack[(closedOn + 1)...].contains(where: { frame in Self.labelsDeclared(by: world.declaration(of: frame.variant), in: world).contains { $0 != ownLabel && labelsReceived.contains($0) } }),
-					   world.parameters(of: callee).isEmpty
-					{
-						// The function the call refers to may take a parameter the facts do not answer.
-						throw NodeRecordRefusal.cycleTakesParameters
+					// The places between the place the call closes on and the call: what they declare, and the parameters of
+					// their own functions, are what the closed-on function takes as parameters rather than capturing.
+					if let closedOn = stack.lastIndex(where: { $0.variant == callee }) {
+						for frame in stack[(closedOn + 1)...] {
+							let declared = Self.labelsDeclared(by: world.declaration(of: frame.variant), in: world)
+							labelsDeclaredBetween[Int(callee)].formUnion(declared)
+							variantsBetween[Int(callee)].insert(frame.variant)
+						}
 					}
 					stack[stack.count - 1].entries.append(.closer(closingOn: callee, building: calleeDeclaration))
 					stack[stack.count - 1].variantsClosedOn.insert(callee)
@@ -470,9 +473,34 @@ struct NodeRecords: Sendable {
 			if let parameters = cycleParametersByVariant[Int(variant)] {
 				return parameters
 			}
-			let parameters = world.parameters(of: variant)
+			// The facts list every read their outcomes fold marks a parameter, which holds today's parameters in their order
+			// and also values today's function captures where a call nested in its scope closes on it. Today's function
+			// takes a label as a parameter only where a place between it and a call that closes on it declares that label,
+			// or takes it as a parameter of its own function (`CycleParameter`).
+			cycleParametersByVariant[Int(variant)] = []
+			let parameters = world.parameters(of: variant).filter { parameter in
+				let label = parameter.property.label
+				return labelsDeclaredBetween[Int(variant)].contains(label)
+					|| variantsBetween[Int(variant)].contains { $0 != variant && cycleParameters(of: $0).contains { $0.property.label == label } }
+			}
 			cycleParametersByVariant[Int(variant)] = parameters
 			return parameters
+		}
+		// Each call of a function passes a parameter what the nearest declaration of its label at the call is, which the
+		// records read from the callee's view alone (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`):
+		// where some declaration holds the label lazily, calls can find the wrapper at one site and the value at another.
+		let lazilyHeldLabels = Set((0..<Int32(declarationCount)).compactMap { declaration -> String? in
+			switch world.kind(of: declaration) {
+			case .lazy, .sendableLazy:
+				world.property(of: declaration)?.label
+			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .alias, .hole:
+				nil
+			}
+		})
+		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
+			guard !cycleParameters(of: variant).contains(where: { lazilyHeldLabels.contains($0.property.label) }) else {
+				throw NodeRecordRefusal.cycleTakesParameters
+			}
 		}
 		func cycleArguments(of variant: VariantID) -> [PlaceRead] {
 			Self.cycleArguments(
