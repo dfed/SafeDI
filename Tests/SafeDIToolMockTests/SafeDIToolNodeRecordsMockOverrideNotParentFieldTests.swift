@@ -614,50 +614,50 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 	/// `fixture` with a root that builds `Third` in the second child’s place: `Third` receives `thing` only if available
 	/// as the value and builds `First`, which requires the value.
 	private static let fixtureOfReceiveOnlyIfAvailable: [String: String] = fixture.merging([
-			"Root.swift": """
-			@Instantiable(generateMock: true)
-			public final class Root: Instantiable, Marked {
-			    public init(leaf: Leaf, third: Third) {
-			        self.leaf = leaf
-			        self.third = third
-			    }
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable, Marked {
+		    public init(leaf: Leaf, third: Third) {
+		        self.leaf = leaf
+		        self.third = third
+		    }
 
-			    @Instantiated let leaf: Leaf
-			    @Instantiated let third: Third
-			    public var marker = "built"
-			}
-			""",
-			"Third.swift": """
-			@Instantiable
-			public final class Third: Instantiable, Marked {
-			    public init(thing: Thing?, first: First) {
-			        self.thing = thing
-			        self.first = first
-			    }
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let third: Third
+		    public var marker = "built"
+		}
+		""",
+		"Third.swift": """
+		@Instantiable
+		public final class Third: Instantiable, Marked {
+		    public init(thing: Thing?, first: First) {
+		        self.thing = thing
+		        self.first = first
+		    }
 
-			    @Received(onlyIfAvailable: true) let thing: Thing?
-			    @Instantiated let first: First
-			    public var marker = "built"
-			}
-			""",
+		    @Received(onlyIfAvailable: true) let thing: Thing?
+		    @Instantiated let first: First
+		    public var marker = "built"
+		}
+		""",
 	]) { $1 }
 
 	/// `fixtureOfReceiveOnlyIfAvailable` with a `Third` that receives `thing` only if available as an `Instantiator`,
 	/// which `First`’s required receive of the value beneath it pins.
 	private static let fixtureOfReceivePinnedWhereverBuilt: [String: String] = fixtureOfReceiveOnlyIfAvailable.merging([
-			"Third.swift": """
-			@Instantiable
-			public final class Third: Instantiable, Marked {
-			    public init(thing: Instantiator<Thing>?, first: First) {
-			        self.thing = thing
-			        self.first = first
-			    }
+		"Third.swift": """
+		@Instantiable
+		public final class Third: Instantiable, Marked {
+		    public init(thing: Instantiator<Thing>?, first: First) {
+		        self.thing = thing
+		        self.first = first
+		    }
 
-			    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
-			    @Instantiated let first: First
-			    public var marker = "built"
-			}
-			""",
+		    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
+		    @Instantiated let first: First
+		    public var marker = "built"
+		}
+		""",
 	]) { $1 }
 
 	/// A root whose leaf builds two children that each receive `thing`, one as a value and one as an `Instantiator`, so
