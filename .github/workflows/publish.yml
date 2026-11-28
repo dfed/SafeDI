@@ -72,7 +72,9 @@ jobs:
         run: .build/*/release/SafeDITool --version
       # The binary as it will ship (stripped, before signing), run as a user
       # runs it: a release build can miscompile what every test passed, as
-      # 2.3.1's did for `query`. The x86_64 binary runs under Rosetta on this
+      # 2.3.1's did for `query`, and as Xcode 26.4's did for 2.4.2's arm64
+      # binary, whose `query graph` crashed binding a task-local function
+      # (`TaskLocalFunction`). The x86_64 binary runs under Rosetta on this
       # arm64 runner, as the smoke test above already does. A failure stops
       # the publish before anything is uploaded. The limit is for a hang.
       - name: Run generate and query with the Release SafeDITool

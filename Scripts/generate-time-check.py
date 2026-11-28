@@ -130,8 +130,12 @@ GROWTH-LIMIT (default 2) times the smaller one's wall time or more, or that many
 it (0.1 s, 8 MB, 4 KB). But for T, TS, TC and TW, whose larger graph is two or three times the smaller one and whose
 limits are that multiple's, the two graphs differ by a third of the smaller one's layers or less, so work that grows
 with the graph stays far under 2, and work that grows by a factor of 1.5 or more per layer is over it: no base build
-is needed, and a busy machine slows both graphs alike. Time and peak memory are the medians of GROWTH-RUNS (default 3)
-alternating runs after one untimed run of each graph. A run still going after 300 s is stopped and fails its row.
+is needed, and a busy machine slows both graphs alike. Time is the median of GROWTH-RUNS (default 3) alternating
+runs after one untimed run of each graph, and peak memory the median of as many more alternating runs with one
+allocator arena (`MALLOC_ARENA_MAX=1`), whose times are not read. With the default arenas the smaller graph's peak
+moves by a quarter between runs of one tool: on one commit TC read 101.0 MB at 2 layers in one CI run and 77.3 MB in
+the next, against 165.3 MB and 165.5 MB at 4, so the row passed at 1.64 and failed at 2.14. A run still going after
+300 s is stopped and fails its row.
 `--growth` picks among the rows (default all; `none` runs none, as `--shapes none` runs no comparison):
   P-seam-hole-at-every-screen  module `Feature`: a seam over layers of six screens, each holding `Instantiator`s of
                                three screens of the next layer, instantiating `any Tracker`, which only `LiveTracker`
@@ -1122,8 +1126,8 @@ GROWTH_ROWS = {
     # TW's graph is twice as large at the larger size, 50 and 100 components to a screen, and nothing in it is more than
     # three scopes from the root: 1.58 s and 3.09 s (1.96), 167 MB and 243 MB to 292 MB (1.46 to 1.73 in two
     # runs), 687,827 and 1,366,396 bytes of `.safedi` (1.99), 790,823 and 1,558,723 bytes of code (1.97). Its memory is
-    # held to 2.3: with one allocator arena the larger graph needs 1.62 times the smaller one's peak, and with the
-    # default arenas, which the growth rows run with, a run on CI read up to 2.01. A walk remembered by its whole
+    # held to 2.3: with one allocator arena, which the growth rows read peak memory with, the larger graph needs 1.62
+    # times the smaller one's peak; with the default arenas, which they once read it with, a run on CI read up to 2.01. A walk remembered by its whole
     # context only near the root, which T and TC pass, took 209 MB and 537 MB here (2.57), since what a walk hands a
     # scope grows with the labels above it and with its parent's width, not with its depth.
     "TW-components-on-two-wide-screens": (lambda layers: shape_components_on_two_wide_screens(25 * layers), 2, {"time": 2.5, "memory": 2.3, "size": 2.3, "code": 2.3}),
@@ -1143,7 +1147,7 @@ GROWTH_ROWS = {
     # scope once, for every label together: 1.45 s and 2.11 s (1.46), each within a hundredth of a tool that never asks.
     # Asked once for each label and each scope that declares it, over every scope beneath that scope, the shared tree
     # included, it took 2.26 s and 5.94 s (2.63). Its memory is held to 2.3: with the default arenas, which the growth
-    # rows run with, a run on CI read 110.9 MB and 222.9 MB (2.01, run 45938379663).
+    # rows once read peak memory with, a run on CI read 110.9 MB and 222.9 MB (2.01, run 45938379663).
     "BLS-back-links-with-feature-labels-over-shared-tree": (lambda layers: shape_feature_labels_over_shared_tree(10 * layers - 5), 1, {"memory": 2.3}),
     # `F4` of five features and `F9` of ten: twice the features beneath the module on top. Four runs of the row with
     # each of three tools that build the features beneath inline (the 2.4.0 release among them) measured 0.63 to
@@ -1398,6 +1402,7 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
         under_plugin = {depth: timed_module(depth) if timed_module else None for depth in depths}
         modules = {depth: build(depth) for depth in depths}
         samples = {depth: [] for depth in depths}
+        peaks = {depth: [] for depth in depths}
         sizes = {}
         code = {}
         try:
@@ -1411,6 +1416,11 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
             for run in range(runs):
                 for depth in depths:
                     samples[depth].append(generate(head_tool, modules[depth], f"{directory}/growth-{name}/{depth}/sources", f"{directory}/growth-{name}/{depth}/{run}", time_limit=time_limit, under_plugin=under_plugin[depth]))
+            # Peak memory is read from runs of their own with one allocator arena ("Growth" above): with the default
+            # arenas the smaller graph's peak moves by a quarter between runs of one tool.
+            for run in range(runs):
+                for depth in depths:
+                    peaks[depth].append(generate(head_tool, modules[depth], f"{directory}/growth-{name}/{depth}/sources", f"{directory}/growth-{name}/{depth}/one-arena-{run}", ONE_ARENA, time_limit=time_limit, under_plugin=under_plugin[depth])[2])
         except Failure as failure:
             rows.append(f"| {name} | {depths[0]} and {depths[1]} | did not generate | | | | **failed** |")
             failures.append(f"{name}: the head tool did not generate it at {depth} layers: {failure}")
@@ -1419,7 +1429,7 @@ def grow(head_tool, directory, growth_rows, runs, limit, time_limit=GROWTH_TIME_
         # Each measure: (what the failure calls it, the figure at each depth, how to print one, the least difference that counts).
         measures = [
             ("time", "took {ratio:.2f} times as long as at {fewer} layers", {depth: median[depth][0] for depth in depths}, lambda value: f"{value:.3f} s", NOISE_FLOOR_SECONDS),
-            ("memory", "needed {ratio:.2f} times the peak memory it needed at {fewer} layers", {depth: median[depth][2] for depth in depths}, megabytes, MEMORY_NOISE_FLOOR_BYTES),
+            ("memory", "needed {ratio:.2f} times the peak memory it needed at {fewer} layers", {depth: statistics.median(peaks[depth]) for depth in depths}, megabytes, MEMORY_NOISE_FLOOR_BYTES),
             ("size", "wrote `.safedi` files {ratio:.2f} times the size of those at {fewer} layers", sizes, lambda value: f"{value} bytes", SIZE_NOISE_FLOOR_BYTES),
             ("code", "generated {ratio:.2f} times the code it generated at {fewer} layers", code, lambda value: f"{value} bytes", SIZE_NOISE_FLOOR_BYTES),
         ]
@@ -1445,7 +1455,7 @@ def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, sum
     lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
               "| Shape | Module | Base bytes | Head bytes | Head / base | Verdict |", "|---|---|---|---|---|---|"] + size_rows
     if growth_rows:
-        lines += ["", f"Growth, the head tool alone: each row at its layers and at {GROWTH_STEP} more, or at the two numbers it names; median of {growth_runs} alternating runs for time and peak memory. A measure fails at {growth_limit:g} times the smaller graph's, or at the limit beside it.", "",
+        lines += ["", f"Growth, the head tool alone: each row at its layers and at {GROWTH_STEP} more, or at the two numbers it names; median of {growth_runs} alternating runs for time, and of {growth_runs} more with one allocator arena for peak memory. A measure fails at {growth_limit:g} times the smaller graph's, or at the limit beside it.", "",
                   "| Row | Layers | Wall: fewer layers, more, ratio | Peak memory | `.safedi` bytes | Generated code | Verdict |", "|---|---|---|---|---|---|---|"] + growth_rows
     lines += [""] + [f"- {failure}" for failure in failures]
     text = "\n".join(lines) + "\n"
@@ -1479,7 +1489,7 @@ if scans:
 types = sum(open(path).read().count("final class ") for path in open(arguments[0 if under_plugin else 1]).read().replace(",", " ").split())
 factor = lambda measure: types ** {grows!r}.get(measure, 0)
 # Touched page by page, so that the memory is resident.
-held = bytearray({allocates!r} * factor("memory") + (0 if os.environ.get("MALLOC_ARENA_MAX") == "1" else {allocates_without_one_arena!r}))
+held = bytearray(int({allocates!r} * factor("memory")) + (0 if os.environ.get("MALLOC_ARENA_MAX") == "1" else {allocates_without_one_arena!r} * factor("arenas")))
 for index in range(0, len(held), 4096):
     held[index] = 1
 time.sleep({sleep!r} * factor("time"))
@@ -1567,6 +1577,13 @@ def self_test(directory):
     expect_growth("growth-of-time-with-their-cube", tool("cubic-time", 0.00001, grows={"time": 3}), 1, "**time over the limit**")
     expect_growth("growth-of-memory-with-the-types", tool("linear-memory", 0.0, allocates=1024 * 1024, grows={"memory": 1}), 0, "within the limits")
     expect_growth("growth-of-memory-with-their-cube", tool("cubic-memory", 0.0, allocates=2048, grows={"memory": 3}), 1, "**memory over the limit**")
+    # Peak memory is read with one arena: what only the default arenas hold, growing with the cube here, fails no row.
+    expect_growth("growth-of-what-the-arenas-hold-with-their-cube", tool("cubic-arenas", 0.0, allocates_without_one_arena=2048, grows={"arenas": 3}), 0, "within the limits")
+    # The defects TC and TW exist to catch read 2.42 and 2.57 times the smaller graph's peak, against limits of 2.1
+    # and 2.3. The types grow 1.48 times, so a power of 2.254 holds 2.42 times as much and one of 2.408 holds 2.57
+    # times; with the stand-in's own 11 MB the peaks are about 2.3 and 2.5 times apart. Both still fail with one arena.
+    expect_growth("growth-of-memory-as-the-defect-tc-catches", tool("memory-grows-2.42-times", 0.0, allocates=128 * 1024, grows={"memory": 2.254}), 1, "**memory over the limit**", row_limits={"memory": 2.1, "time": 100.0})
+    expect_growth("growth-of-memory-as-the-defect-tw-catches", tool("memory-grows-2.57-times", 0.0, allocates=64 * 1024, grows={"memory": 2.408}), 1, "**memory over the limit**", row_limits={"memory": 2.3, "time": 100.0})
     expect_growth("growth-of-size-with-the-types", tool("linear-size", 0.0, module_info_size=1000, grows={"size": 1}), 0, "within the limits")
     expect_growth("growth-of-size-with-their-cube", tool("cubic-size", 0.0, module_info_size=1, grows={"size": 3}), 1, "**size over the limit**")
     # Under the floor: files of 629 and 1,373 bytes are 2.18 times apart and 744 bytes apart, and the floor is 4 KB.

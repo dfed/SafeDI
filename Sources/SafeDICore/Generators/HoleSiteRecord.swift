@@ -182,5 +182,5 @@ public struct HoleSiteRecordObservation: Sendable {
 	public let boundNames: [String]
 
 	/// Called with each hole's site as it is recorded, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (HoleSiteRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void>?
 }

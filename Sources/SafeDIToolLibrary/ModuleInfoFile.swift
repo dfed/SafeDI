@@ -557,7 +557,7 @@ public enum StoredBlockDecodeObservation {
 	}
 
 	/// Called once for each stored block whose decoding threw, when set: by the tests, never by the tool.
-	@TaskLocal public static var failureObserver: (@Sendable (Block) -> Void)?
+	@TaskLocal public static var failureObserver: TaskLocalFunction<@Sendable (Block) -> Void>?
 
 	/// Returns what `read` decodes of a stored `block`, and tells `failureObserver` when it throws.
 	static func reading<Value>(_ block: Block, _ read: () throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {

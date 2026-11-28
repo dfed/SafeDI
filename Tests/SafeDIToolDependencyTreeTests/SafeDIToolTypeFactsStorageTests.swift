@@ -57,7 +57,7 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 			}
 			types.append(seamFixtureType(named: "Session", isFinalClass: true, declarations: []))
 			let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-			_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) { [types] in
+			_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) { [types] in
 				var filesToDelete = [URL]()
 				defer {
 					for file in filesToDelete {
@@ -175,7 +175,7 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func report(ofRoot root: String, in types: [String]) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {
