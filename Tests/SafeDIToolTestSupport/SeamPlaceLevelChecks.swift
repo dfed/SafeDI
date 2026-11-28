@@ -102,8 +102,8 @@ extension SeamPlaceLevels {
 
 	/// An observer that records an issue for each place whose levels do not hold its fields (`pathStructMismatches`), then
 	/// hands the levels to `enclosingObserver`, the observer the caller set, if any.
-	static func checkingPathStructs(handingOn enclosingObserver: (@Sendable (SeamPlaceLevels) -> Void)?) -> @Sendable (SeamPlaceLevels) -> Void {
-		{ placeLevels in
+	static func checkingPathStructs(handingOn enclosingObserver: TaskLocalFunction<@Sendable (SeamPlaceLevels) -> Void>?) -> TaskLocalFunction<@Sendable (SeamPlaceLevels) -> Void> {
+		TaskLocalFunction { placeLevels in
 			// The place graph must answer as the per-site walk (`SeamPlacesOracle`) until places come from facts.
 			let routeAnswerMismatches = SeamPlaceTreeRoutes.areCompared ? placeLevels.placesOracleMismatches + placeLevels.placeVariantMismatches : []
 			for mismatch in placeLevels.pathStructMismatches + routeAnswerMismatches + placeLevels.routeStepMismatches + placeLevels.placeCaseFactMismatches {
@@ -127,7 +127,7 @@ extension SeamPlaceLevels {
 func collectingPlaceLevelDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
 	let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
 	let enclosingObserver = SeamPlaceLevels.observer
-	let result = try await SeamPlaceLevels.$observer.withValue({ placeLevels in
+	let result = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { placeLevels in
 		continuation.yield(placeLevels.levelDisagreements() + placeLevels.routeQueryShadowMismatches + placeLevels.placesOracleMismatches + placeLevels.routeStepMismatches + placeLevels.placeVariantMismatches + placeLevels.placeCaseFactMismatches)
 		enclosingObserver?(placeLevels)
 	}) {
@@ -149,7 +149,7 @@ func collectingPlaceLevelDisagreements<Result>(during operation: () async throws
 func collectingRootFunctionKeyDisagreements<Result>(during operation: () async throws -> Result) async rethrows -> (result: Result, disagreements: [String]) {
 	let (stream, continuation) = AsyncStream.makeStream(of: [RootFunctionHoisting.Occurrence].self)
 	let enclosingObserver = RootFunctionHoisting.observer
-	let result = try await RootFunctionHoisting.$observer.withValue({ occurrences in
+	let result = try await RootFunctionHoisting.$observer.withValue(TaskLocalFunction { occurrences in
 		continuation.yield(occurrences)
 		enclosingObserver?(occurrences)
 	}) {

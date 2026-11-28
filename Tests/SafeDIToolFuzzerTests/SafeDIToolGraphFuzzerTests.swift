@@ -358,7 +358,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func seamSmokeSeeds_judgeLevelFunctionCaptures_withSameCountsWithAndWithoutCompiles() async throws {
 		// The level function capture check reads the generated text, so the call in `GraphFuzzerOracle.results(of:)` puts the
 		// same findings and counts on each accepted graph's result whether or not the run compiles: these literals hold in
-		// both modes.
+		// both modes. The level function counts include the functions a seam's plain initializer and a `{ nil }` fill declare,
+		// one per level each builds from the builder it is handed.
 		let captures = try await seamSmokeResults.value.reduce(into: [UInt64: GraphFuzzerLevelFunctionCaptures]()) { captures, result in
 			captures[result.fixture.seed] = result.levelFunctionCaptures
 		}

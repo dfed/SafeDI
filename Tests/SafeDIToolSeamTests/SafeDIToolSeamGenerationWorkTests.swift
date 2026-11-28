@@ -69,7 +69,11 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 		// facts (`TypeFactsGraph`), which judges fills without the tree, removes both walks.
 		// Finding the value each receive is handed runs for `query graph` alone: `SafeDIToolQueryGraphTests` counts it on
 		// layers of screens that open screens of the next layer.
-		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies])
+		// Resolving what a public mock's module sees runs only for a mock beneath another module's public mock built inline:
+		// `SafeDIToolCallingMockInlineHoleBuilderTests` counts it on a public mock that holds many places.
+		// Finding the facts producers owe each declaration grows with a world's declarations, not with a seam's places:
+		// `SafeDIToolTypeFactsStorageTests` counts it on a chain of declarations.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews, .findingRootFunctions, .checkingReadsAtEveryMember, .askingMemoCandidates, .filingMemoEntryReads, .collectingTypesOfATree, .collectingDeclarationsOfACycle, .findingCarrierASiblingRequires, .findingSeamTierOmissions, .findingReceivedValueSupplies, .resolvingWhatAPublicMocksModuleSees, .findingOwedFacts])
 		var countedSteps = Set<GenerationWork.Step>()
 		for shape in Shape.allCases {
 			var measures = [Measure]()
@@ -118,7 +122,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				fixture.append(seamFixtureType(named: "Child\(child)", declarations: ["@Received let service: Service", "@Instantiated let gizmo: any Gizmo"]))
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
 					integration: .moduleInfo,
@@ -169,7 +173,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				],
 			)
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: modules,
 					integration: .moduleInfo,
@@ -310,7 +314,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				}
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: [ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [fixture.joined(separator: "\n\n")], dependencies: [])],
 					integration: .moduleInfo,
@@ -366,7 +370,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				dependencies: libraryModule.map { [$0.name] } ?? [],
 			)
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: (libraryModule.map { [$0] } ?? []) + [feature],
 					integration: .moduleInfo,
@@ -455,7 +459,7 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func measure(screenCount: Int, shape: Shape) async throws -> Measure {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-		try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+		try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: shape.modules(screenCount: screenCount),
 				integration: .moduleInfo,

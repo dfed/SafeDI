@@ -918,7 +918,7 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
 			seamFixtureType(named: "H", isFinalClass: true, declarations: []),
 		]
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()
@@ -941,7 +941,7 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 		]
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		_ = try await ConstructionMemo.$sharingBetweenMockRoots.withValue(sharing) {
-			try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+			try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
 		}
@@ -975,7 +975,7 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
 		]
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue({ concreteType, isFirstPass in
+		_ = try await ConstructionMemoOracle.$reusedPlaceObserver.withValue(TaskLocalFunction { concreteType, isFirstPass in
 			guard !isFirstPass else { return }
 			continuation.yield(concreteType)
 		}) { [fixture] in

@@ -66,10 +66,6 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -78,10 +74,6 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 
 		        public init(k: @escaping @Sendable () -> __safeDI_ApiCarrier_K<__safeDI_Built>) {
 		            self.k = k
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		            self.init(k: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 

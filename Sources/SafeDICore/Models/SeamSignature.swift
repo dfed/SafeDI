@@ -1829,7 +1829,7 @@ public struct SeamSignature: Sendable {
 		/// emitted and not hashed.
 		public let parameterTypeWithoutAny: TypeDescription
 		/// The parameter's type, as the initializer people call spells it, which a diagnostic names: the builder a person
-		/// writes, from which the readable initializer makes the builder struct (`init(__safeDI_noScope:)`).
+		/// writes, from which the readable initializer builds the root level in a local function (`ScopeGenerator.LevelsWithoutScope`).
 		public let readableParameterType: TypeDescription
 		/// Whether the generated-only initializer takes the root enum's builder struct: every builder's does.
 		public let takesBuilderStruct: Bool
@@ -2913,7 +2913,10 @@ public struct SeamResolution: Sendable {
 	public struct ForeignPublicMock: Sendable {
 		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition, storedPlans: StoredPublicMockPlans? = nil) {
 			self.declaringModule = declaringModule
-			self.visibleDeclarations = visibleDeclarations
+			self.visibleDeclarations = {
+				GenerationWork.record(1, by: .resolvingWhatAPublicMocksModuleSees)
+				return try visibleDeclarations()
+			}
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 			self.storedPlans = storedPlans

@@ -71,7 +71,7 @@ struct SafeDIToolSeamRootFunctionWorkTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func rootFunctionWork(layerCount: Int) async throws -> [Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-		_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					ModuleFixture(name: "Seam", packageName: "pkg", swiftFileContentByFilePath: ["Types.swift": Self.seam]),

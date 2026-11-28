@@ -140,6 +140,7 @@ extension ScopeGenerator {
 				typesDeclaredEscaping: signature.typesDeclaredEscaping,
 				unreadTypeComment: publicMockContext.unreadTypeComment,
 				namesForwardedTypes: true,
+				declaresLevelsWithoutScope: true,
 			) {
 				lines.append(declaration)
 				lines.append("")

@@ -111,10 +111,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public init(part: @escaping (Analytics) -> __safeDI_Built) {
 				            self.part = part
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				            self.init(part: { _ in __safeDI_builder() })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -143,10 +139,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				        public init(part: @escaping @Sendable () -> __safeDI_Built) {
 				            self.part = part
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				            self.init(part: { __safeDI_builder() })
 				        }
 				    }
 
@@ -177,10 +169,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public init(part: @escaping (Analytics) -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.part = part
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-				            self.init(part: { _ in __safeDI_builder })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -206,10 +194,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 				            self.part = part
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-				            self.init(part: { __safeDI_builder })
 				        }
 				    }
 
@@ -237,10 +221,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 				        public init(part: @escaping (Analytics) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.part = part
 				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<String, __safeDI_Built>.Builder) {
-				            self.init(part: { _ in __safeDI_builder })
-				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -266,10 +246,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 				        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
 				            self.part = part
-				        }
-
-				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<String, __safeDI_Built>.Builder) {
-				            self.init(part: { __safeDI_builder })
 				        }
 				    }
 
@@ -514,10 +490,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<nonisolated(nonsending) () async -> Void, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -694,10 +666,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(erased: @escaping (Analytics) -> ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
 		            self.erased = erased
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(count: Int, name: String), __safeDI_Built>.Builder) {
-		            self.init(erased: { _ in __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -706,10 +674,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(held: @escaping (Analytics, ErasedInstantiator<(count: Int, name: String), any Gadget>) -> ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.held = held
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<PairPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(held: { _, _ in __safeDI_builder })
 		        }
 		    }
 
@@ -801,10 +765,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<(), __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(part: { _ in { _ in __safeDI_builder() } })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -886,10 +846,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(held: @escaping (Analytics) -> ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.held = held
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<EmptyPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(held: { _ in __safeDI_builder })
 		        }
 		    }
 
@@ -1092,10 +1048,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(held: @escaping () -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.held = held
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(held: { __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1104,10 +1056,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(ownerBuilder: @escaping @Sendable () -> __safeDI_PanelCarrier_Owner<__safeDI_Built>) {
 		            self.ownerBuilder = ownerBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(ownerBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -1203,10 +1151,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(ownerBuilder_Sendable: __safeDI_PanelSendableCarrier_Owner<__safeDI_Built>) {
 		            self.ownerBuilder_Sendable = ownerBuilder_Sendable
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(ownerBuilder_Sendable: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1215,10 +1159,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(held: @escaping @Sendable () -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.held = held
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(held: { __safeDI_builder })
 		        }
 		    }
 
@@ -1324,10 +1264,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping () -> ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(part: { __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1349,10 +1285,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(inner: Inner.__safeDI_PanelCarrier<__safeDI_Built>) {
 		            self.inner = inner
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
@@ -1455,10 +1387,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
 			                    self.gadget = gadget
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(gadget: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 			    }
@@ -1472,10 +1400,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			            public init(inner_widgetSendableBuilder: @escaping @Sendable (inner_widgetSendableBuilder_Values) -> SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.inner_widgetSendableBuilder = inner_widgetSendableBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -1589,10 +1513,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1615,10 +1535,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<Label, __safeDI_Built>.Builder) {
 		            self.part = part
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Label, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
 		        }
 		    }
 
@@ -1759,10 +1675,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(again: __safeDI_GadgetCarrier_Middle<__safeDI_Built>) {
 		            self.again = again
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(again: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1771,10 +1683,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(again: @escaping (Beneath) -> __safeDI_Built) {
 		            self.again = again
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(again: { _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -2079,10 +1987,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2155,10 +2059,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(part: { __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2230,10 +2130,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.part = part
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
 		        }
 		    }
 
@@ -2308,10 +2204,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
 		            self.part = part
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
-		            self.init(part: { __safeDI_builder })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -2382,10 +2274,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(part: @escaping (Analytics) -> ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
 		            self.part = part
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<OnTap, __safeDI_Built>.Builder) {
-		            self.init(part: { _ in __safeDI_builder })
 		        }
 		    }
 
@@ -2460,10 +2348,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 		        public init(part: @escaping @Sendable () -> SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
 		            self.part = part
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<SendableOnTap, __safeDI_Built>.Builder) {
-		            self.init(part: { __safeDI_builder })
 		        }
 		    }
 
@@ -3051,10 +2935,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			        public init(trackerBuilder_: __safeDI_TrackerCarrier_B<__safeDI_Built>) {
 			            self.trackerBuilder_ = trackerBuilder_
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(trackerBuilder_: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3064,10 +2944,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			        public init(cBuilder: __safeDI_TrackerCarrier_C<__safeDI_Built>) {
 			            self.cBuilder = cBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(cBuilder: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -3076,10 +2952,6 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 
 			        public init(trackerBuilder: @escaping (Instantiator<D>) -> __safeDI_Built) {
 			            self.trackerBuilder = trackerBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(trackerBuilder: { _ in __safeDI_builder() })
 			        }
 			    }
 
