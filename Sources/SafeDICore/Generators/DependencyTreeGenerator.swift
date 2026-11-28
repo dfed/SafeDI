@@ -1215,12 +1215,7 @@ public actor DependencyTreeGenerator {
 				)
 			}
 			if let observer = UnpassableCycleLabelObservation.factsObserver, let todaysTree {
-				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-				observer(
-					typeDescription.asSource,
-					Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
-					Set(todaysTree.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
-				)
+				TypeFactsGraph(root: constructionScope, forMockGeneration: false).compareCycleFunctionParameters(of: typeDescription.asSource, with: todaysTree, observer: observer)
 			}
 		}
 		return roots
