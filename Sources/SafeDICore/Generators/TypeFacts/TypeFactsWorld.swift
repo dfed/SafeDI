@@ -101,6 +101,16 @@ enum TypeFactsFunctionOpened: UInt8, Sendable {
 	case sendableInstantiatorBuilder
 	case sendableLazyWrapper
 	case otherSendableFunction
+
+	/// Whether the function is `@Sendable`.
+	var isSendable: Bool {
+		switch self {
+		case .sendableInstantiatorBuilder, .sendableLazyWrapper, .otherSendableFunction:
+			true
+		case .none, .instantiatorBuilder:
+			false
+		}
+	}
 }
 
 /// One edge's facts, parallel to the graph's edge targets.
