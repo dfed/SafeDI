@@ -120,16 +120,32 @@ struct TypeFactsVariants: Sendable {
 			rootKeys.append(key(read, answer?.answer ?? -1, 0))
 			rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
 		}
-		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys)], rootSources: rootSources, binding: binding, family: family, key: key, madeAgain: madeAgain, bucket: bucket)
+		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys, offered: [])], rootSources: rootSources, binding: binding, family: family, key: key, madeAgain: madeAgain, bucket: bucket, offeredClass: nil)
 	}
 
 	/// A body the worklist starts from where no root of the graph is: a call made from outside the graph, of `node` in
 	/// `family`, with one key per read of the node's reads from above, in read order, which the caller interned in the
-	/// graph's answers.
+	/// graph's answers, and one class per read of what the call offers it (`offered`).
 	struct Seed: Hashable, Sendable {
 		let node: Int32
 		let family: VariantFamily
 		let keys: [Int32]
+		/// Per read, in read order, the class of the outcome the caller's graph found for it (`OfferedClass`), which tells
+		/// apart two seeds of one key whose callers' worlds give the read other outcomes.
+		let offered: [UInt8]
+	}
+
+	/// The class of a read's outcome as a variant's calls decide it: nothing (`nil`), a statement of a seed's caller's
+	/// root body (read before a `@Sendable` function or not, which the callee's family decides), or a parameter. A read
+	/// whose channel keys the variant takes none. A seed's read takes the class of the outcome its caller's graph found; a
+	/// read a call passes through takes the caller's, as it takes its key; a read bound inside the graph, which has no
+	/// root body, takes a parameter's, and one nothing answers takes nothing's (`offeredClass`), so that only two calls
+	/// whose outcomes would join to another outcome than either's are told apart: two classes never join to one.
+	enum OfferedClass: UInt8 {
+		case unclassed = 0
+		case nothing
+		case rootStatement
+		case parameter
 	}
 
 	/// The variants of a graph whose bodies are called from outside it, from `seeds` instead of a root: the mock worlds'
@@ -142,8 +158,9 @@ struct TypeFactsVariants: Sendable {
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
+		offeredClass: @escaping (_ read: Int32, _ isBound: Bool) -> OfferedClass,
 	) {
-		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: family, key: key, madeAgain: nil, bucket: TypeFactsVariants.hash)
+		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: family, key: key, madeAgain: nil, bucket: TypeFactsVariants.hash, offeredClass: offeredClass)
 	}
 
 	private init(
@@ -156,12 +173,14 @@ struct TypeFactsVariants: Sendable {
 		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
 		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)?,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int,
+		offeredClass: ((_ read: Int32, _ isBound: Bool) -> OfferedClass)?,
 	) {
-		var columns = Columns()
+		var columns = Columns(tracksOffered: offeredClass != nil)
 		columns.rootSources = rootSources
 		var bucketByHash = [Int: Int32]()
 		var nextInBucket = [Int32]()
 		var scratchKeys = [Int32]()
+		var scratchOffered = [UInt8]()
 		var scratchSources = [AnswerSource]()
 		var work = 0
 
@@ -170,12 +189,12 @@ struct TypeFactsVariants: Sendable {
 			let hash = bucket(node, family, scratchKeys)
 			var candidate = bucketByHash[hash] ?? -1
 			while candidate >= 0 {
-				if columns.matches(Int(candidate), node: node, family: family, keys: scratchKeys) {
+				if columns.matches(Int(candidate), node: node, family: family, keys: scratchKeys, offered: scratchOffered) {
 					return candidate
 				}
 				candidate = nextInBucket[Int(candidate)]
 			}
-			let made = columns.append(node: node, family: family, keys: scratchKeys)
+			let made = columns.append(node: node, family: family, keys: scratchKeys, offered: scratchOffered)
 			nextInBucket.append(bucketByHash[hash] ?? -1)
 			bucketByHash[hash] = made
 			return made
@@ -184,6 +203,7 @@ struct TypeFactsVariants: Sendable {
 		var seedVariants = [Int32]()
 		for seed in seeds {
 			scratchKeys = seed.keys
+			scratchOffered = seed.offered
 			seedVariants.append(variant(of: seed.node, family: seed.family))
 		}
 		var next = 0
@@ -191,20 +211,24 @@ struct TypeFactsVariants: Sendable {
 		/// own passed through for the rest.
 		func appendCall(of target: Int32, from caller: Int, of node: Int, family calleeFamily: () -> VariantFamily, binding: (_ read: Int32) -> VariantBinding?) {
 			scratchKeys.removeAll(keepingCapacity: true)
+			scratchOffered.removeAll(keepingCapacity: true)
 			scratchSources.removeAll(keepingCapacity: true)
 			reads.rows.forEachColumn(inRow: Int(target)) { read, _ in
 				work += 1
 				if let bound = binding(read) {
 					scratchKeys.append(key(read, bound.answer, target))
 					scratchSources.append(.bound(bound.declaration, answer: bound.answer))
+					scratchOffered.append((offeredClass?(read, true) ?? .unclassed).rawValue)
 				} else if let position = reads.rows.rank(of: read, inRow: node) {
 					// The caller's key, as it is: an answer its callers share, which is all a body shared by them can hand
-					// on. It is a key already, so `key` is never applied to it again.
+					// on. It is a key already, so `key` is never applied to it again. So is its offered class.
 					scratchKeys.append(columns.key(ofVariant: caller, at: position))
 					scratchSources.append(.passedThrough(Int32(position)))
+					scratchOffered.append(columns.offered(ofVariant: caller, at: position))
 				} else {
 					scratchKeys.append(key(read, -1, target))
 					scratchSources.append(.none)
+					scratchOffered.append((offeredClass?(read, false) ?? .unclassed).rawValue)
 				}
 			}
 			columns.sourceOffsets.append(Int32(columns.sources.count))
@@ -321,10 +345,15 @@ struct TypeFactsVariants: Sendable {
 	}
 
 	private struct Columns {
+		/// Whether variants are told apart by the classes seeds offer (`OfferedClass`): only in a graph built from seeds,
+		/// so that a graph built from its root holds no column of them.
+		let tracksOffered: Bool
 		var nodes = [Int32]()
 		var families = [VariantFamily]()
 		var keyOffsets: [Int32] = [0]
 		var keys = [Int32]()
+		/// One class per key where `tracksOffered`, otherwise empty.
+		var offered = [UInt8]()
 		var callOffsets = [Int32]()
 		/// Per variant, where its made-again calls begin among `callees`, after its edges' calls; empty in a world with no
 		/// loop of builders.
@@ -338,7 +367,11 @@ struct TypeFactsVariants: Sendable {
 			keys[Int(keyOffsets[variant]) + position]
 		}
 
-		func matches(_ variant: Int, node: Int32, family: VariantFamily, keys candidateKeys: [Int32]) -> Bool {
+		func offered(ofVariant variant: Int, at position: Int) -> UInt8 {
+			tracksOffered ? offered[Int(keyOffsets[variant]) + position] : OfferedClass.unclassed.rawValue
+		}
+
+		func matches(_ variant: Int, node: Int32, family: VariantFamily, keys candidateKeys: [Int32], offered candidateOffered: [UInt8]) -> Bool {
 			guard nodes[variant] == node, families[variant] == family else {
 				return false
 			}
@@ -347,13 +380,19 @@ struct TypeFactsVariants: Sendable {
 			for offset in 0..<candidateKeys.count where keys[start + offset] != candidateKeys[offset] {
 				return false
 			}
+			for offset in candidateOffered.indices where tracksOffered && offered[start + offset] != candidateOffered[offset] {
+				return false
+			}
 			return true
 		}
 
-		mutating func append(node: Int32, family: VariantFamily, keys newKeys: [Int32]) -> Int32 {
+		mutating func append(node: Int32, family: VariantFamily, keys newKeys: [Int32], offered newOffered: [UInt8]) -> Int32 {
 			nodes.append(node)
 			families.append(family)
 			keys.append(contentsOf: newKeys)
+			if tracksOffered {
+				offered.append(contentsOf: newOffered)
+			}
 			keyOffsets.append(Int32(keys.count))
 			return Int32(nodes.count - 1)
 		}

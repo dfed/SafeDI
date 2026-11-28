@@ -57,15 +57,25 @@ extension TypeFactsGraph {
 			let key: Key
 		}
 
-		/// The outcome the caller's graph found for one read of the variant it calls (`TypeFactsOutcomes`), by value: a
-		/// statement of a world's root body is that world's, which no other world's statement equals.
+		/// The outcome the caller's graph found for one read of the variant it calls (`TypeFactsOutcomes`), by its form
+		/// alone: a statement of the caller's root body is the statement that binds the read's label in the answer its key
+		/// names, whichever world's root it is, so two worlds whose roots each bind it offer one statement.
 		struct Outcome: Hashable, Sendable {
 			let form: TypeFactsOutcome
-			/// The world whose graph found the outcome, by the table's order of worlds.
-			let world: Int
-			/// The statement's declaration and the edge it is read before, in the world's graph, or -1.
-			let declaration: Int32
-			let boundBefore: Int32
+
+			/// The class the shared graph's variants are told apart by (`TypeFactsVariants.OfferedClass`).
+			var offeredClass: TypeFactsVariants.OfferedClass {
+				switch form {
+				case .none:
+					.nothing
+				case .captured, .readBeforeSendableFunction:
+					.rootStatement
+				case .parameter:
+					.parameter
+				case .keysVariant:
+					.unclassed
+				}
+			}
 		}
 
 		let declaration: TypeFactsDeclaration
@@ -78,15 +88,11 @@ extension TypeFactsGraph {
 	}
 
 	/// What a call of `variant` hands it, by value: the seed the shared graph starts the variant's body from where this
-	/// world's own graph, the world at `world` in the table's order, makes the call.
-	func seed(of variant: Int, world: Int = 0) -> Seed {
+	/// world's own graph makes the call.
+	func seed(of variant: Int) -> Seed {
 		let node = Int(variants.node(of: variant))
 		var entries = [Seed.Entry]()
-		let outcomeDeclarations = outcomes.declarations(of: Int32(variant))
-		let outcomeBoundBefore = outcomes.boundBefore(of: Int32(variant))
-		let seedOutcomes = zip(outcomes.forms(of: Int32(variant)), zip(outcomeDeclarations, outcomeBoundBefore)).map { form, statement in
-			Seed.Outcome(form: form, world: world, declaration: statement.0, boundBefore: statement.1)
-		}
+		let seedOutcomes = outcomes.forms(of: Int32(variant)).map(Seed.Outcome.init(form:))
 		for (position, key) in variants.keys(of: variant).enumerated() {
 			let read = readTable[Int(readColumn[Int(readOffsets[node]) + position])]
 			let seedRead = Seed.Read(channel: read.channel, label: read.label >= 0 ? labelTexts[Int(read.label)] : nil)
@@ -108,18 +114,19 @@ extension TypeFactsGraph {
 	}
 
 	/// The outcomes each seed offers the variant it is, in that variant's read order, matched to the seed's entries by
-	/// read: each statement of a world is one statement of the shared graph's, apart from every other world's.
+	/// read: a statement is the one that binds the read's label in the answer its key names (`Seed.Outcome`), one
+	/// statement of the shared graph's for every world that offers it.
 	static func seedOutcomes(of seeds: [Seed], variants: TypeFactsVariants, readTable: [Read], labels: [String], readColumn: [Int32], readOffsets: [Int32]) -> [(variant: Int32, outcomes: [TypeFactsOutcomes.Outcome])] {
-		var statements = TypeFactsInterner<Seed.Outcome>()
+		var statements = TypeFactsInterner<Seed.Entry>()
 		return zip(seeds, variants.seedVariants).map { seed, variant in
-			var outcomeByRead = [Seed.Read: Seed.Outcome]()
+			var offeredByRead = [Seed.Read: (entry: Seed.Entry, outcome: Seed.Outcome)]()
 			for (entry, outcome) in zip(seed.keys, seed.outcomes) {
-				outcomeByRead[entry.read] = outcome
+				offeredByRead[entry.read] = (entry, outcome)
 			}
 			let node = Int(variants.node(of: Int(variant)))
 			let offered = readColumn[Int(readOffsets[node])..<Int(readOffsets[node + 1])].map { readID -> TypeFactsOutcomes.Outcome in
 				let read = readTable[Int(readID)]
-				guard let outcome = outcomeByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels[Int(read.label)] : nil)] else { return .none }
+				guard let (entry, outcome) = offeredByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels[Int(read.label)] : nil)] else { return .none }
 				return switch outcome.form {
 				case .none:
 					.none
@@ -130,7 +137,7 @@ extension TypeFactsGraph {
 				// A statement of the caller's world, read before a `@Sendable` function or not: whether the variant reads it
 				// before one is the shared graph's to decide, from the variant's family, as for any statement it is offered.
 				case .captured, .readBeforeSendableFunction:
-					.statement(statements.id(of: outcome))
+					.statement(statements.id(of: entry))
 				}
 			}
 			return (variant, offered)
@@ -250,13 +257,13 @@ struct MockWorldsSharedGraph: Sendable {
 		}
 		var seeds = [TypeFactsGraph.Seed]()
 		var callsByWorld = [[(caller: Int32, edgeIndex: Int, callee: Int32, seed: Int)]]()
-		for (worldIndex, (topGraph, isFrontier)) in zip(topGraphs, isFrontierByWorld).enumerated() {
+		for (topGraph, isFrontier) in zip(topGraphs, isFrontierByWorld) {
 			var calls = [(caller: Int32, edgeIndex: Int, callee: Int32, seed: Int)]()
 			for variant in 0..<topGraph.variants.count {
 				let node = Int(topGraph.variants.node(of: variant))
 				for (edgeIndex, callee) in topGraph.variants.callees(of: variant).enumerated() where isFrontier[Int(topGraph.graph.edgeTargets[topGraph.graph.edgeOffset(of: node) + edgeIndex])] {
 					calls.append((Int32(variant), edgeIndex, callee, seeds.count))
-					seeds.append(topGraph.seed(of: Int(callee), world: worldIndex))
+					seeds.append(topGraph.seed(of: Int(callee)))
 				}
 			}
 			callsByWorld.append(calls)
@@ -362,14 +369,14 @@ extension MockWorldsSharedGraph {
 	/// variant, and every variant of a shared declaration the world builds is reached. What depends on the world's paths
 	/// is left out: the parents, routes and cycles of a declaration, and whether a variant is called once.
 	///
-	/// A variant's outcomes (`TypeFactsOutcomes`) are folded over every call into it, and a shared variant's calls are
-	/// those of every world that reaches it: each is compared with the join of the outcomes of the worlds built whole,
-	/// in which two worlds' statements are two statements, as two parents' are in one world (`outcomeDifferences`).
+	/// A shared variant's outcomes (`TypeFactsOutcomes`) and the parameters that follow from them equal, in every world
+	/// that calls it, those of the world's variant built whole, a statement compared by the label it binds and its form
+	/// (`outcomeCells(of:)`): the seeds tell variants apart by what each read is offered (`TypeFactsVariants.Seed`), so
+	/// no join across worlds changes an outcome.
 	///
 	/// - Parameter worldsBuiltWhole: Each world's graph built from its root, in the table's order of worlds.
 	func differences(fromWorldsBuiltWhole worldsBuiltWhole: [TypeFactsGraph]) -> [String] {
 		var differences = [String]()
-		var wholeOutcomesByShared = [Int32: [(cells: [TypeFactsGraph.OutcomeCell], parameters: String)]]()
 		for (index, (world, whole)) in zip(worlds, worldsBuiltWhole).enumerated() {
 			var isShared = [Bool](repeating: false, count: whole.graph.nodes.count)
 			for (declaration, _) in world.parentsByDeclaration {
@@ -407,7 +414,12 @@ extension MockWorldsSharedGraph {
 				let shared = graph.variantFacts(of: Int(sharedVariant))
 				let built = whole.variantFacts(of: Int(wholeVariant))
 				differences += Self.difference(if: shared != built, "world \(index): shared v\(sharedVariant) \(shared) ≠ built whole v\(wholeVariant) \(built)")
-				wholeOutcomesByShared[sharedVariant, default: []].append((whole.outcomeCells(of: Int(wholeVariant), world: index), whole.parameterFacts(of: Int(wholeVariant))))
+				let sharedOutcomes = graph.outcomeCells(of: Int(sharedVariant))
+				let builtOutcomes = whole.outcomeCells(of: Int(wholeVariant))
+				differences += Self.difference(if: sharedOutcomes != builtOutcomes, "world \(index): shared v\(sharedVariant) outcomes \(sharedOutcomes) ≠ built whole v\(wholeVariant) \(builtOutcomes)")
+				let sharedParameters = graph.parameterFacts(of: Int(sharedVariant))
+				let builtParameters = whole.parameterFacts(of: Int(wholeVariant))
+				differences += Self.difference(if: sharedParameters != builtParameters, "world \(index): shared v\(sharedVariant) parameters \(sharedParameters) ≠ built whole v\(wholeVariant) \(builtParameters)")
 				for (sharedCallee, wholeCallee) in zip(graph.variants.callees(of: Int(sharedVariant)), whole.variants.callees(of: Int(wholeVariant))) {
 					pending.append((sharedCallee, wholeCallee))
 				}
@@ -418,17 +430,7 @@ extension MockWorldsSharedGraph {
 				}
 			}
 		}
-		for (sharedVariant, wholeOutcomes) in wholeOutcomesByShared {
-			let shared = graph.outcomeCells(of: Int(sharedVariant), world: -1).map(\.form)
-			let joined = TypeFactsGraph.OutcomeCell.join(wholeOutcomes.map(\.cells))
-			differences += Self.difference(if: shared != joined, "shared v\(sharedVariant) outcomes \(shared) ≠ joined over the worlds built whole \(joined)")
-			// Where the worlds' outcomes agree, the join is each world's, and so are the parameters that follow from it.
-			let sharedParameters = graph.parameterFacts(of: Int(sharedVariant))
-			for whole in wholeOutcomes where Set(wholeOutcomes.map(\.cells)).count == 1 && whole.parameters != sharedParameters {
-				differences.append("shared v\(sharedVariant) parameters \(sharedParameters) ≠ built whole \(whole.parameters)")
-			}
-		}
-		// The unpaired variants and the outcomes were met in dictionary order: sorted, they are reported alike on every run.
+		// The unpaired variants were met in dictionary order: sorted, they are reported alike on every run.
 		return differences.sorted()
 	}
 
@@ -440,36 +442,17 @@ extension MockWorldsSharedGraph {
 }
 
 extension TypeFactsGraph {
-	/// One read's outcome, by value, in the order of the read's text: its form and, for a statement of a world's root
-	/// body, the world and the statement, which two worlds never share.
+	/// One read's outcome, by value: the read's text, which names the label a statement binds, and the outcome's form.
 	struct OutcomeCell: Hashable, Sendable {
 		let read: String
 		let form: TypeFactsOutcome
-		let world: Int
-		let declaration: Int32
-		let boundBefore: Int32
-
-		/// The forms the outcomes of every world's calls join to, read by read: one outcome where every world gives it,
-		/// otherwise a parameter, as `TypeFactsOutcomes` joins two calls' (a read that keys the variant keeps its form).
-		static func join(_ worlds: [[OutcomeCell]]) -> [TypeFactsOutcome] {
-			guard let first = worlds.first else { return [] }
-			return first.indices.map { read in
-				let cells = Set(worlds.map { $0[read] })
-				return cells.count == 1 || first[read].form == .keysVariant ? first[read].form : .parameter
-			}
-		}
 	}
 
-	/// The outcome of each read of `variant`, in the order of the reads' texts, a statement tagged with `world`.
-	func outcomeCells(of variant: Int, world: Int) -> [OutcomeCell] {
+	/// The outcome of each read of `variant`, in the order of the reads' texts.
+	func outcomeCells(of variant: Int) -> [OutcomeCell] {
 		let node = Int(variants.node(of: variant))
 		let readTexts = reads(of: DeclarationID(node)).map { readTable[Int($0)].description(labels: labelTexts) }
-		let cells = zip(readTexts, zip(outcomes.forms(of: Int32(variant)), zip(outcomes.declarations(of: Int32(variant)), outcomes.boundBefore(of: Int32(variant))))).map { read, outcome in
-			let (form, statement) = outcome
-			let isStatement = form == .captured || form == .readBeforeSendableFunction
-			return OutcomeCell(read: read, form: form, world: isStatement ? world : -1, declaration: statement.0, boundBefore: statement.1)
-		}
-		return cells.sorted { $0.read < $1.read }
+		return zip(readTexts, outcomes.forms(of: Int32(variant))).map(OutcomeCell.init(read:form:)).sorted { $0.read < $1.read }
 	}
 
 	/// The parameters `variant`'s function takes, as text, in their order (`TypeFactsWorld.parameters(of:)`).
@@ -516,7 +499,7 @@ extension TypeFactsGraph {
 
 	/// A variant's facts as text, by value: its family, its keys, its `@Sendable` mark, and each call's sources by the read
 	/// they answer; what a mock passes `nil` is a fact of a place, not of a variant. Its outcomes are folded over the calls into it, which are
-	/// compared apart (`outcomeCells(of:world:)`), and its parameters follow from its keys and its outcomes.
+	/// compared apart (`outcomeCells(of:)`), and its parameters follow from its keys and its outcomes.
 	func variantFacts(of variant: Int) -> String {
 		var parts = ["\(variants.family(of: variant)) sendable \(variantBuildsInSendableFunction[variant])"]
 		parts.append("keys \(seed(of: variant).keys.map { "\($0)" }.sorted())")

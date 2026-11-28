@@ -344,6 +344,9 @@ struct MockWorldsTable: Sendable {
 			declarationCount: interning.declarationCount,
 			sharedDeclarationCount: shared.graph.graph.nodes.count,
 			sharedVariantCount: shared.graph.variants.count,
+			sharedVariantCounts: (0..<shared.graph.variants.count).reduce(into: [Int](repeating: 0, count: shared.graph.graph.nodes.count)) { counts, variant in
+				counts[Int(shared.graph.variants.node(of: variant))] += 1
+			},
 			shareableDeclarations: shareableByDeclaration.indices.filter { shareableByDeclaration[$0] }.map { id in
 				let declaration = declaration(ofID: Int32(id))
 				return "\(id): \(declaration.property?.asSource ?? declaration.scope.instantiable.concreteInstantiable.asSource)"
@@ -464,10 +467,11 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		public let sharedDeclarationParents: [String]
 	}
 
-	public init(declarationCount: Int, sharedDeclarationCount: Int, sharedVariantCount: Int, shareableDeclarations: [String], differences: [String], worlds: [World]) {
+	public init(declarationCount: Int, sharedDeclarationCount: Int, sharedVariantCount: Int, sharedVariantCounts: [Int], shareableDeclarations: [String], differences: [String], worlds: [World]) {
 		self.declarationCount = declarationCount
 		self.sharedDeclarationCount = sharedDeclarationCount
 		self.sharedVariantCount = sharedVariantCount
+		self.sharedVariantCounts = sharedVariantCounts
 		self.shareableDeclarations = shareableDeclarations
 		self.differences = differences
 		self.worlds = worlds
@@ -479,6 +483,8 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 	public let sharedDeclarationCount: Int
 	/// How many variants the shared graph holds: one per body the worlds' calls reach with one key.
 	public let sharedVariantCount: Int
+	/// How many of those variants each declaration of the shared graph has, in the shared graph's order.
+	public let sharedVariantCounts: [Int]
 	/// Each shareable declaration, in ID order: its ID and its property (the type, for a declaration with none).
 	public let shareableDeclarations: [String]
 	/// Each way a world's facts taken from the shared graph differ from those of the world built whole, which a test fails

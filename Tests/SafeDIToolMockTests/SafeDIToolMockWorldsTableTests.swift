@@ -67,6 +67,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 6,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["1: panel: Panel", "2: store: SessionStore", "3: clock: Clock"],
 				differences: [],
 				worlds: [
@@ -103,6 +104,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 7,
 				sharedDeclarationCount: 1,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [2],
 				shareableDeclarations: ["1: theme: Theme", "2: panel: Panel", "3: store: Store", "5: theme: LazilyInstantiated<Theme>"],
 				differences: [],
 				worlds: [
@@ -137,6 +139,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 5,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["1: panel: Panel", "2: store: SessionStore", "3: clock: Clock"],
 				differences: [],
 				worlds: [
@@ -174,6 +177,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 9,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["6: banner: Banner", "7: icon: Icon", "8: badge: Badge"],
 				differences: [],
 				worlds: [
@@ -220,6 +224,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 5,
 				sharedDeclarationCount: 0,
 				sharedVariantCount: 0,
+				sharedVariantCounts: [],
 				shareableDeclarations: [],
 				differences: [],
 				worlds: [
@@ -255,6 +260,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 7,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["1: panel: Panel", "2: helper: Helper", "3: clock: Clock"],
 				differences: [],
 				worlds: [
@@ -322,6 +328,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 2,
 				sharedDeclarationCount: 0,
 				sharedVariantCount: 0,
+				sharedVariantCounts: [],
 				shareableDeclarations: [],
 				differences: [],
 				worlds: [
@@ -332,6 +339,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 5,
 				sharedDeclarationCount: 1,
 				sharedVariantCount: 1,
+				sharedVariantCounts: [1],
 				shareableDeclarations: ["4: clock: Clock"],
 				differences: [],
 				worlds: [
@@ -366,6 +374,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 6,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["3: session: Session", "5: feed: Feed"],
 				differences: [],
 				worlds: [
@@ -399,6 +408,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 5,
 				sharedDeclarationCount: 1,
 				sharedVariantCount: 1,
+				sharedVariantCounts: [1],
 				shareableDeclarations: ["3: session: LazilyInstantiated<Session>"],
 				differences: [],
 				worlds: [
@@ -412,13 +422,14 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsSharedDeclarationsAndVariantsOnceHoweverManyWorldsCallThem_whenMockRootsShareSubtree(rootCount: Int) async throws {
 		var declarations = (0..<rootCount).map { index in
-			Self.type("Screen\(index)", mocked: true, instantiating: [("page", "Page")])
+			Self.type("Screen\(index)", mocked: true, instantiating: [("theme", "Theme"), ("page", "Page")])
 		}
 		declarations.append(Self.type("Page", instantiating: [("shared", "Shared")]))
 		declarations.append(Self.type("Shared", instantiating: [("first", "First")]))
 		declarations.append(Self.type("First", instantiating: [("second", "Second")]))
 		declarations.append(Self.type("Second", instantiating: [("third", "Third")]))
-		declarations.append(Self.type("Third"))
+		declarations.append(Self.type("Third", receiving: [("theme", "Theme")]))
+		declarations.append(Self.type("Theme"))
 		let source = declarations.joined(separator: "\n\n")
 		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
@@ -428,20 +439,75 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		// Each world builds its root and `page`, and calls the shared `shared` from `page`. The shared graph holds `shared`,
-		// `first`, `second` and `third` once, a variant each, whatever the number of worlds, and each world's facts of them
-		// equal its own built whole. The first world meets the subtree, every later one only its root.
+		// Each world builds its root, `theme` and `page`, and calls the shared `shared` from `page`. The shared graph holds
+		// `shared`, `first`, `second` and `third` once, a variant each, whatever the number of worlds: every world offers
+		// `third`'s read of `theme` its own root's statement, one statement however many roots bind it, so each world's
+		// facts of them, `third` capturing `theme`, equal its own built whole. The first world meets the subtree, every
+		// later one only its root.
 		let worlds = (0..<rootCount).map { index in
-			MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: index == 0 ? 0 : 5 + index, declarationCount: 6, shareableDeclarationCount: 5, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0", "2 ← shared 1", "3 ← shared 2"])
+			MockWorldsTableReport.World(mockedType: "Screen\(index)", rootDeclaration: index == 0 ? 0 : 6 + index, declarationCount: 7, shareableDeclarationCount: 6, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 1", "3 ← shared 2"])
 		}
 		#expect(reports == [
 			MockWorldsTableReport(
-				declarationCount: 5 + rootCount,
+				declarationCount: 6 + rootCount,
 				sharedDeclarationCount: 4,
 				sharedVariantCount: 4,
-				shareableDeclarations: ["1: page: Page", "2: shared: Shared", "3: first: First", "4: second: Second", "5: third: Third"],
+				sharedVariantCounts: [1, 1, 1, 1],
+				shareableDeclarations: ["1: theme: Theme", "2: page: Page", "3: shared: Shared", "4: first: First", "5: second: Second", "6: third: Third"],
 				differences: [],
 				worlds: worlds,
+			),
+		])
+	}
+
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_tellsWorldsVariantsApartOnlyByEachWorldsClasses_whenTwoRootsOfferEveryLabelInOtherClasses(labelCount: Int) async throws {
+		let labels = (0..<labelCount).map { (label: "value\($0)", type: "Value\($0)") }
+		var declarations = [
+			Self.type("Screen0", mocked: true, instantiating: labels + [("page", "Page")]),
+			Self.type("Screen1", mocked: true, instantiating: [("holder", "Holder")]),
+			Self.type("Holder", instantiating: labels + [("page", "Page")]),
+			Self.type("Page", instantiating: [("shared", "Shared")]),
+			Self.type("Shared", instantiating: labels.indices.map { (label: "reader\($0)", type: "Reader\($0)") }),
+		]
+		for (index, label) in labels.enumerated() {
+			declarations.append(Self.type("Reader\(index)", receiving: [label]))
+			declarations.append(Self.type(label.type))
+		}
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Screen0`'s root binds every label and builds `page` itself, so it calls the shared `shared`, whose reads its
+		// root's statements answer. `Screen1`'s `holder` binds every label, outside its root's body, and calls the shared
+		// `page`, whose reads take parameters. Built whole, `Screen0`'s `shared` and readers capture the root's statements
+		// and `Screen1`'s take parameters, so each of `shared` and the readers has two variants, one per world, and every
+		// other shared declaration one: three per label and three more, never a variant per mix of the labels' classes.
+		var screen1Parents = (0...labelCount).map { "\(labelCount + 1 + $0) ← top \(2 * labelCount + 4)" }
+		screen1Parents.append("0 ← shared \(2 * labelCount + 1)")
+		screen1Parents += (1...labelCount).map { "\($0) ← shared 0" }
+		var shareableDeclarations = labels.enumerated().map { "\($0.offset + 1): \($0.element.label): \($0.element.type)" }
+		shareableDeclarations += ["\(labelCount + 1): page: Page", "\(labelCount + 2): shared: Shared"]
+		shareableDeclarations += labels.indices.map { "\(labelCount + 3 + $0): reader\($0): Reader\($0)" }
+		shareableDeclarations.append("\(2 * labelCount + 4): holder: Holder")
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 2 * labelCount + 5,
+				sharedDeclarationCount: 2 * labelCount + 2,
+				sharedVariantCount: 3 * labelCount + 3,
+				sharedVariantCounts: Array(repeating: 2, count: labelCount + 1) + Array(repeating: 1, count: labelCount + 1),
+				shareableDeclarations: shareableDeclarations,
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 2 * labelCount + 3, shareableDeclarationCount: 2 * labelCount + 2, topDeclarationCount: labelCount + 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top \(labelCount + 1)"] + (1...labelCount).map { "\($0) ← shared 0" }),
+					.init(mockedType: "Screen1", rootDeclaration: 2 * labelCount + 3, declarationCount: 2 * labelCount + 4, shareableDeclarationCount: 2 * labelCount + 3, topDeclarationCount: 2, frontierDeclarationCount: labelCount + 1, sharedVariantsCalled: Array(1...(labelCount + 1)), sharedDeclarationParents: screen1Parents),
+				],
 			),
 		])
 	}
@@ -469,6 +535,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 4,
 				sharedDeclarationCount: 0,
 				sharedVariantCount: 0,
+				sharedVariantCounts: [],
 				shareableDeclarations: ["2: clock: Clock", "3: session: LazilyInstantiated<Session>"],
 				differences: [],
 				worlds: [
@@ -518,6 +585,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			declarationCount: 27,
 			sharedDeclarationCount: 3,
 			sharedVariantCount: 3,
+			sharedVariantCounts: [1, 1, 1],
 			shareableDeclarations: ["1: storePage: StorePage", "2: store: Store", "3: clock: Clock", "5: feedPage: FeedPage", "6: feed: Feed"],
 			differences: [],
 			worlds: worlds,
@@ -561,19 +629,21 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			)
 		}
 		// Nothing requires `theme`, so no mock root pins it, and nothing declares it lazily: `page` and everything beneath it
-		// are shareable. `Screen0` hands `shared` its `theme` and `Screen1` hands it `nil`, which one optional parameter
-		// carries, so both worlds call one variant of `shared`, which holds the alias `style` and `first` beneath it, and
-		// each world's facts of them equal its own built whole.
+		// are shareable. `Screen0` hands `shared` its root's `theme` and `Screen1` hands it `nil`, one key, since one optional
+		// parameter carries both; but built whole, `Screen0`'s `shared`, `style` and `first` capture its root's statement
+		// where `Screen1`'s are passed `nil`. So the class each call offers `theme` tells the worlds' variants apart, three
+		// each, and each world's facts of them equal its own built whole.
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 7,
 				sharedDeclarationCount: 3,
-				sharedVariantCount: 3,
+				sharedVariantCount: 6,
+				sharedVariantCounts: [2, 2, 2],
 				shareableDeclarations: ["1: theme: Theme", "2: page: Page", "3: shared: Shared", "4: style: Theme?", "5: first: First"],
 				differences: [],
 				worlds: [
 					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 5, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 0"]),
-					.init(mockedType: "Screen1", rootDeclaration: 6, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 0"]),
+					.init(mockedType: "Screen1", rootDeclaration: 6, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [1], sharedDeclarationParents: ["0 ← top 2", "1 ← shared 0", "2 ← shared 0"]),
 				],
 			),
 		])
@@ -613,6 +683,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 6,
 				sharedDeclarationCount: 2,
 				sharedVariantCount: 2,
+				sharedVariantCounts: [1, 1],
 				shareableDeclarations: ["1: theme: Theme", "2: page: Page", "3: sharedBuilder: SendableInstantiator<Shared>", "4: first: First"],
 				differences: [],
 				worlds: [
@@ -655,6 +726,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				declarationCount: 5,
 				sharedDeclarationCount: 1,
 				sharedVariantCount: 1,
+				sharedVariantCounts: [1],
 				shareableDeclarations: ["1: theme: Theme", "2: pageBuilder: SendableInstantiator<Page>", "3: shared: Shared"],
 				differences: [],
 				worlds: [

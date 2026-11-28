@@ -1381,27 +1381,33 @@ struct TypeFactsGraph: Sendable {
 				reads: reads,
 				seeds: seeds.compactMap { seed in
 					guard let node = graph.index(of: seed.declaration) else { return nil }
-					var keyByRead = [Seed.Read: Seed.Key]()
-					for entry in seed.keys {
-						keyByRead[entry.read] = entry.key
+					var offeredByRead = [Seed.Read: (key: Seed.Key, outcome: Seed.Outcome)]()
+					for (entry, outcome) in zip(seed.keys, seed.outcomes) {
+						offeredByRead[entry.read] = (entry.key, outcome)
 					}
 					var keys = [Int32]()
+					var offered = [UInt8]()
 					reads.rows.forEachColumn(inRow: node) { readID, _ in
 						let read = readTable[Int(readID)]
-						// A seed carries a key for every read of its declaration from above, since its frontier's reads are this
-						// graph's; a read it carried none for would take none.
-						switch keyByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels.values[Int(read.label)] : nil)] ?? .parameter(-1) {
+						// A seed carries a key and an outcome for every read of its declaration from above, since its frontier's
+						// reads are this graph's; a read it carried none for would take none, and no class.
+						let seedRead = Seed.Read(channel: read.channel, label: read.label >= 0 ? labels.values[Int(read.label)] : nil)
+						offered.append((offeredByRead[seedRead]?.outcome.offeredClass ?? .unclassed).rawValue)
+						switch offeredByRead[seedRead]?.key ?? .parameter(-1) {
 						case let .parameter(key):
 							keys.append(key)
 						case let .answer(seedAnswer):
 							keys.append(answer(text: seedAnswer.text, beingBuilt: seedAnswer.isBeingBuilt, madeAgain: seedAnswer.isMadeAgain, keyText: seedAnswer.text, kind: seedAnswer.kind, property: seedAnswer.property.flatMap(properties.existingID(of:)) ?? -1, inReadForm: seedAnswer.isInReadForm))
 						}
 					}
-					return TypeFactsVariants.Seed(node: Int32(node), family: seed.family, keys: keys)
+					return TypeFactsVariants.Seed(node: Int32(node), family: seed.family, keys: keys, offered: offered)
 				},
 				binding: { edge, readID in binding(at: edge, of: readID) },
 				family: family,
 				key: key,
+				offeredClass: { readID, isBound in
+					readTable[Int(readID)].channel.carriesValue ? (isBound ? .parameter : .nothing) : .unclassed
+				},
 			)
 			return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, kinds.map(OnlyIfAvailableForm.position(of:)), isInReadForm)
 		}
