@@ -195,7 +195,7 @@ struct SafeDIToolTypeFactsStorageTests: ~Copyable {
 	/// Every column the graph holds is an array whose elements hold no array, set, dictionary or class: only the node
 	/// records, their lookup and the spellings, which text alone reads, hold more.
 	private static func expectFlatColumns(of graph: TypeFactsGraph) throws {
-		let spellings: Set = ["graph.nodes", "graph.indexByNode", "readTable", "labelTexts", "propertyTable", "typeTable", "moduleNames", "declarationLocations"]
+		let spellings: Set = ["graph.nodes", "graph.indexByNode", "readTable", "labelTexts", "fillKeyTexts", "propertyTable", "typeTable", "moduleNames", "declarationLocations"]
 		var columnCount = 0
 		var stack: [(path: String, value: Any)] = Mirror(reflecting: graph).children.map { ($0.label ?? "", $0.value) }
 		while let (path, value) = stack.popLast() {

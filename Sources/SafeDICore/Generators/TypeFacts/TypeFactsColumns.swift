@@ -60,6 +60,16 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// The run of `TypeFactsGraph.fillPathEntries` the fill is built beneath, root first.
 	let stackStart: Int32
 	let stackCount: Int32
+	/// Whether the seam the fill is passed to takes it `@Sendable`: one input of `buildsInSendableFunction`.
+	let holeIsSendable: Bool
+	/// Whether the fill builds its tree in a `@Sendable` function of its own, the tree's mark
+	/// (`ScopeGenerator.buildsInSendableFunction(ofFill:)`): where the seam takes it `@Sendable`, a `@Sendable`-family
+	/// dispatcher of its call reaches it, or a `@Sendable` function inside the call's fills refers to it, found by one fold
+	/// up the call nesting (`TypeFactsFillSendability`).
+	let buildsInSendableFunction: Bool
+	/// The fill's key (`ScopeGenerator.fillKey(of:)`), which names its place, by its position in
+	/// `TypeFactsGraph.fillKeyTexts`.
+	let key: Int32
 }
 
 /// One entry of a fill's path: the property built and the concrete type built for it, by the world's IDs.

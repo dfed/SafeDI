@@ -138,7 +138,14 @@ struct TypeFactsGraph: Sendable {
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
 		// Each call that passes fills, with what the memos it hands them read (`FillsOfCall`).
 		var fillsOfCalls = [FillsOfCall]()
+		// Each call that passes fills, with the fills and dispatchers that decide which are `@Sendable`
+		// (`TypeFactsFillSendability`), their keys by dense IDs.
+		var sendabilityCalls = [TypeFactsFillSendability.Call]()
+		var fillKeys = TypeFactsInterner<String>()
+		// The walk asks for a node's edges once, in node order, so this counts the nodes.
+		var nodeIndex: Int32 = -1
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
+			nodeIndex += 1
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
 			for (index, propertyToGenerate) in declaration.scope.propertiesToGenerate.enumerated() {
@@ -163,6 +170,7 @@ struct TypeFactsGraph: Sendable {
 			if !fillEdges.isEmpty {
 				fillHoles += fillEdges
 				fillsOfCalls.append(FillsOfCall(scope: declaration.scope, fillEdges: fillEdges))
+				sendabilityCalls.append(Self.sendabilityCall(of: declaration.scope, at: nodeIndex, fillEdges: fillEdges, keys: &fillKeys))
 			}
 			return targets
 		}
@@ -681,7 +689,21 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
-		// The fills each call passes, with their fill paths.
+		// The fills each call passes, with their fill paths and whether each builds in a `@Sendable` function.
+		let fillBuildsInSendableFunction = TypeFactsFillSendability.buildsInSendableFunction(
+			in: graph,
+			edgeIsFill: edgeIsFill,
+			opensSendableFunction: nodes.map { node in
+				switch Self.opens(node) {
+				case .sendableInstantiatorBuilder, .sendableLazyWrapper:
+					true
+				case .none, .instantiatorBuilder, .otherSendableFunction:
+					false
+				}
+			},
+			calls: sendabilityCalls,
+			keyCount: fillKeys.values.count,
+		)
 		var fills = [TypeFactsFill]()
 		var fillPathEntries = [TypeFactsFillPathEntry]()
 		for (edge, hole) in fillHoles {
@@ -698,6 +720,9 @@ struct TypeFactsGraph: Sendable {
 				filledHoleOwnerType: types.id(of: hole.ownerType),
 				stackStart: stackStart,
 				stackCount: Int32(fillPathEntries.count) - stackStart,
+				holeIsSendable: hole.isSendable,
+				buildsInSendableFunction: fillBuildsInSendableFunction[Int(edge)],
+				key: fillKeys.id(of: ScopeGenerator.fillKey(of: hole)),
 			))
 		}
 
@@ -825,6 +850,7 @@ struct TypeFactsGraph: Sendable {
 		)
 		readTable = readInterner.values
 		labelTexts = labels.values
+		fillKeyTexts = fillKeys.values
 		var readColumn = [Int32]()
 		var readOffsets = [Int32]()
 		var labelColumn = [Int32]()
@@ -986,6 +1012,35 @@ struct TypeFactsGraph: Sendable {
 	static let optionalSendableLazilyInstantiatedParameterKey: Int32 = -4
 
 	/// The key rule 1 gives an answer declared with `kind`.
+	/// The fills and dispatchers of a call that decide which of its fills are `@Sendable` (`TypeFactsFillSendability.Call`):
+	/// each fill edge's place, and the dispatchers the tree declares for the call where no enclosing call declares one of
+	/// their enums (`ScopeGenerator.FillDispatcher.dispatchers(of:filledSites:enclosingDispatchers:fillNames:names:innerScopeNameByKey:carriedInnerScopesByKey:enclosingCarriedInnerScopes:decidesPerRoute:)`),
+	/// as `FillsOfCall` declares them: their names, which decide nothing here, from an allocator of their own.
+	private static func sendabilityCall(of scope: ConstructionScope, at node: Int32, fillEdges: [(edge: Int32, hole: SeamSignature.Hole)], keys: inout TypeFactsInterner<String>) -> TypeFactsFillSendability.Call {
+		let fills = fillEdges.map { edge, hole in
+			TypeFactsFillSendability.Fill(edge: edge, key: keys.id(of: ScopeGenerator.fillKey(of: hole)), holeIsSendable: hole.isSendable)
+		}
+		var dispatchers = [TypeFactsFillSendability.Dispatcher]()
+		if let calledBuilders = scope.calledBuilders {
+			var names = GeneratedNameAllocator(reserving: [])
+			for dispatcher in ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Set(fillEdges.map(\.hole.site)),
+				enclosingDispatchers: [:],
+				fillNames: [:],
+				names: &names,
+				decidesPerRoute: scope.publicMockCall != nil,
+			) {
+				dispatchers.append(TypeFactsFillSendability.Dispatcher(
+					key: keys.id(of: dispatcher.key),
+					isSendableFamily: dispatcher.isSendableFamily,
+					targets: dispatcher.cases.compactMap { $0.target.map { keys.id(of: $0.key) } },
+				))
+			}
+		}
+		return TypeFactsFillSendability.Call(node: node, fills: fills, dispatchers: dispatchers)
+	}
+
 	static func optionalParameterKey(of kind: Property.PropertyType?) -> Int32 {
 		switch kind {
 		case .lazilyInstantiated:
@@ -1375,6 +1430,9 @@ struct TypeFactsGraph: Sendable {
 	let readTable: [Read]
 	/// Each label ID's text, which only text reads.
 	let labelTexts: [String]
+	/// The keys of the calls' fills and dispatchers (`ScopeGenerator.fillKey(of:)`, `ScopeGenerator.FillDispatcher.key(of:returnsBuilderStruct:)`),
+	/// by their IDs, which only text reads.
+	let fillKeyTexts: [String]
 	/// Each property ID's property, which only text and a spelling lookup read.
 	let propertyTable: [Property]
 	/// Each type ID's type, which only text and a spelling lookup read.
