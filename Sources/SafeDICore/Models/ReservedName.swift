@@ -191,6 +191,12 @@ public enum ReservedName: Hashable, Sendable {
 	static let mockEnteringNearestFunctionName = "enteringNearest"
 	/// The function a call of a function that only hands the places on hands the function its value with.
 	static let mockPassingFunctionName = "passing"
+	/// The member of that struct that says whether its place was entered along an edge the configurations leave out, or
+	/// from a place entered so, which `mock()` declares where some place may be.
+	static let mockEnteredIsLeftOutMemberName = "isLeftOut"
+	/// The member of that struct a call along an edge the configurations leave out reads the value it enters a place
+	/// with from: the same configuration and places, entered left out.
+	static let mockEnteredLeavingOutMemberName = "leavingOut"
 
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.

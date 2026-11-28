@@ -24,7 +24,7 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// What a mock root declares once for the functions on its tree's cycles
-/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`): the list of the places entered
+/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:)`): the list of the places entered
 /// along a path, and the struct a function is handed. The text tests compare the whole declaration; the others compile it
 /// into a program of hand-made functions that are handed the struct as a function of a mock is, walk a route through
 /// them, and print the configuration each function reads.
@@ -45,7 +45,7 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 
 	@Test
 	func mockEnteredPlacesDeclaration_declaresOnlyTheFunctionThatEntersASlot_whenNoCallEntersTheNearestOrPasses() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: false, passes: false).joined(separator: "\n") == """
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: false, passes: false, leavesOut: false).joined(separator: "\n") == """
 		indirect enum __safeDI_Places {
 		    case none
 		    case entered(slot: String?, entered: Any, above: __safeDI_Places)
@@ -73,7 +73,7 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 
 	@Test
 	func mockEnteredPlacesDeclaration_declaresAFunctionForEachWayACallHandsThePlaces_whenCallsEnterTheNearestAndPass() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true).joined(separator: "\n") == """
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true, leavesOut: false).joined(separator: "\n") == """
 		indirect enum __safeDI_Places {
 		    case none
 		    case entered(slot: String?, entered: Any, above: __safeDI_Places)
@@ -106,8 +106,44 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 	}
 
 	@Test
+	func mockEnteredPlacesDeclaration_declaresWhetherAPlaceWasEnteredLeftOut_whenSomePlaceMayBe() {
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true, leavesOut: true).joined(separator: "\n") == """
+		indirect enum __safeDI_Places {
+		    case none
+		    case entered(slot: String?, entered: Any, above: __safeDI_Places)
+		}
+		struct __safeDI_Entered<Configuration> {
+		    let configuration: Configuration
+		    var places = __safeDI_Places.none
+		    var isLeftOut = false
+		    var leavingOut: __safeDI_Entered<Configuration> { .init(configuration: configuration, places: places, isLeftOut: true) }
+		    func entering<Handed>(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		        var nearest: __safeDI_Entered<Handed>?
+		        var above = places
+		        while case let .entered(enteredSlot, entered, next) = above {
+		            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {
+		                if enteredSlot == slot { return .init(configuration: entered.isLeftOut ? handed : entered.configuration, places: above, isLeftOut: entered.isLeftOut) }
+		                nearest = entered
+		            }
+		            above = next
+		        }
+		        let entered = if let nearest, !nearest.isLeftOut { nearest } else { __safeDI_Entered<Handed>(configuration: handed, isLeftOut: isLeftOut) }
+		        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places), isLeftOut: entered.isLeftOut)
+		    }
+		    func enteringNearest<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
+		        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed, isLeftOut: isLeftOut), above: places), isLeftOut: isLeftOut)
+		    }
+		    func passing<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
+		        .init(configuration: handed, places: places, isLeftOut: isLeftOut)
+		    }
+		}
+		let __safeDI_entered = __safeDI_Entered(configuration: ())
+		""")
+	}
+
+	@Test
 	func mockEnteredPlacesDeclaration_declaresBothTypesSendableAndNonisolated_whenAFunctionHandedThePlacesIsSendable() {
-		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: true, entersNearest: true, passes: true).joined(separator: "\n") == """
+		#expect(MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: true, entersNearest: true, passes: true, leavesOut: false).joined(separator: "\n") == """
 		nonisolated indirect enum __safeDI_Places: Sendable {
 		    case none
 		    case entered(slot: String?, entered: any Sendable, above: __safeDI_Places)
@@ -252,7 +288,7 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 		// `Int?`, passes it and reads the place of `Int?` above, and every `Parent` reads the root's configuration past the
 		// places of other types. The root's configuration holds a marker, which is released with the tree: a place points
 		// only at the places above it.
-		let declaration = MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true).map { "    " + $0 }.joined(separator: "\n")
+		let declaration = MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: false, entersNearest: true, passes: true, leavesOut: false).map { "    " + $0 }.joined(separator: "\n")
 		let printed = try await DifferentialValueOracle.output(
 			of: DifferentialValuePath(fixtureFiles: ["Program.swift": """
 			final class Marker {}
@@ -461,6 +497,7 @@ struct SafeDIToolMockEnteredDeclarationTests: ~Copyable {
 					false
 				}
 			},
+			leavesOut: false,
 		).map { "        " + $0 }
 		for function in functions {
 			lines += [

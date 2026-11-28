@@ -262,16 +262,16 @@ struct SafeDIToolTypeFactsMockRootPinsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mockRootPins_leaveTheRingToTheWalk_whenRequiredReceiveOnLazyCycleIsAboveTheReceiveOnlyOnTheSecondLap() async throws {
-		// The ring's `token: Token?` override is named apart from `B`'s `token: Instantiator<Token>` (`token_Token`), which the
-		// node records do not lay out yet, so the mock keeps the walk's code: lap two's `Leaf` reads lap one's override, as
-		// production reads the one declaration above both.
+		// The ring's `token: Token?` override is named apart from `B`'s `token: Instantiator<Token>` (`token_Token`). The node
+		// records take the name apart as a parameter, but the cycle's variants partition apart, which they do not lay out yet, so
+		// the mock keeps the walk's code: lap two's `Leaf` reads lap one's override, as production reads the one declaration above both.
 		let fixture = Self.secondLapRingFixture
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["cycleVariantsPartitionApart"])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
