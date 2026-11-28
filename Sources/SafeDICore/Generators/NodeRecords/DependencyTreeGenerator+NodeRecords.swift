@@ -77,8 +77,10 @@ extension DependencyTreeGenerator {
 	/// `SeamCallCheck` order: a call that passes a fill, whose fills `validateFills` judges, a call that omits a parameter
 	/// or takes one on no tier, whose omission of a value the tree
 	/// provides `validateNoSeamTierOmitsProvidedValue` reports, and a call that defers a parameter `@Sendable`, whose
-	/// capture of a wrapper that is not `Sendable` `NonSendableWrapperCapture.capturingSeamType` reports. Each is named
-	/// where any call of the world could make its check fire, whether or not it does.
+	/// capture of a wrapper that is not `Sendable` `NonSendableWrapperCapture.capturingSeamType` reports. The walk visits
+	/// every declaration's scope of the world: each scope's fill fact (`fillsAHole`, the fact node records refuse a fill
+	/// on), and, for a scope that holds a seam call, its omitted and no-tier parameters and `@Sendable` deferrals. Each
+	/// check is named where any scope of the world could make it fire, whether or not it does.
 	static func seamCallChecks(in world: some NodeRecordSources) -> [TreeForcer] {
 		var passesFill = false
 		var omitsParameter = false
