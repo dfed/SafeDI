@@ -19,15 +19,14 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// The names the mock root binds apart from their labels, by label and then type, read from its world: `renamesAbove`,
-	/// what `mock()`'s signature names apart, with each node of the root's level the level names apart
-	/// (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`) in the order the root builds them, as the walk names
-	/// the level when it reaches it.
-	static func mockRootNamesApart(
+	/// The names the mock root's level binds, read from its world: `renamesAbove`, what `mock()`'s signature names apart,
+	/// with each node of the level the level names apart (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`) in
+	/// the order the root builds them, as the walk names the level when it reaches it.
+	static func mockRootLevelNames(
 		in world: some NodeRecordSources,
 		besideNamesTaken namesTaken: MockLowering.RootLevelNamesTaken,
 		renamesAbove: [String: [TypeDescription: String]],
-	) -> [String: [TypeDescription: String]] {
+	) -> MockLowering.RootLevelNames {
 		let edges = world.edges(from: 0)
 		let edgeFacts = world.edgeFacts(from: 0)
 		let edgeIndices = edges.indices.sorted { (edgeFacts[$0].buildPosition, $0) < (edgeFacts[$1].buildPosition, $1) }
@@ -46,18 +45,22 @@ extension NodeRecords {
 				return .property(property, isUnavailableDependency: world.scope(of: child).isUnavailableDependency)
 			}
 		}
-		var namesApart = renamesAbove
+		var names = MockLowering.RootLevelNames(namesApart: renamesAbove, propertyNodeBindingNames: [], aliasBindingNamesApart: [])
 		for (node, bindingName) in zip(nodes, MockLowering.rootLevelBindingNames(of: nodes, besideNamesTaken: namesTaken)) {
-			let property: Property
-			switch node {
-			case let .property(nodeProperty, _), let .alias(nodeProperty):
-				property = nodeProperty
-			case .other:
-				continue
+			switch (node, bindingName) {
+			case let (.property(property, _), bindingName?):
+				names.propertyNodeBindingNames.insert(bindingName)
+				if bindingName != property.label {
+					names.namesApart[property.label, default: [:]][property.typeDescription] = bindingName
+				}
+			case let (.alias(property), bindingName?) where bindingName != property.label:
+				names.namesApart[property.label, default: [:]][property.typeDescription] = bindingName
+				names.aliasBindingNamesApart.insert(bindingName)
+			case (.property, nil), (.alias, _), (.other, _):
+				// An alias that keeps its label and a node that binds no property name nothing apart.
+				break
 			}
-			guard let bindingName, bindingName != property.label else { continue }
-			namesApart[property.label, default: [:]][property.typeDescription] = bindingName
 		}
-		return namesApart
+		return names
 	}
 }

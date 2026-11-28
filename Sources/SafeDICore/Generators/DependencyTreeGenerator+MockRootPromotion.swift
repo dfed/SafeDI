@@ -484,7 +484,7 @@ extension DependencyTreeGenerator {
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
 		// The root of the mock root's world, which node records are made of
-		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodesBesideNames:rootBindings:sendableConfigurationTypeNames:rootNames:outerDeclarations:levelNamesTaken:renamesAbove:handWrittenMockDefaultParameters:)`), where a test observes them.
 		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
