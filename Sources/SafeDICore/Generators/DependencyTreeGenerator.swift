@@ -689,7 +689,7 @@ public actor DependencyTreeGenerator {
 		/// them (`TypeFactsReceivedValueSupplies.whereRead(root:)`).
 		let receivedValueSupplies: ReceivedValueSupplies?
 		/// The root's scope, frozen, from which node records are made beside its tree after it is built: kept only where
-		/// a test observes node records or the run names what they refuse (`kept(_:)`), and `nil` otherwise, so that its
+		/// a test observes node records, roots are laid out from them, or the run names what they refuse (`kept(_:)`), and `nil` otherwise, so that its
 		/// table is freed with the build. A production root, of a module with seams or without, or a seam's own root,
 		/// whose records a test only compares.
 		let rootScope: ConstructionScope?
@@ -700,10 +700,10 @@ public actor DependencyTreeGenerator {
 		/// refuse (`GenerationRequest.namesNodeRecordRefusals`).
 		@TaskLocal static var keepsRootScopes = false
 
-		/// `rootScope`, where a test observes node records or the run names what they refuse, which read it once the root's
-		/// tree is built; `nil` otherwise.
+		/// `rootScope`, where a test observes node records, roots are laid out from them (`NodeRecordsObservation.laysOutRoots`),
+		/// or the run names what they refuse, which read it once the root's tree is built; `nil` otherwise.
 		static func kept(_ rootScope: ConstructionScope) -> ConstructionScope? {
-			NodeRecordsObservation.observer == nil && !keepsRootScopes ? nil : rootScope
+			NodeRecordsObservation.observer == nil && !NodeRecordsObservation.laysOutRoots && !keepsRootScopes ? nil : rootScope
 		}
 
 		/// What node records read of a seam's own tree beside its world.
