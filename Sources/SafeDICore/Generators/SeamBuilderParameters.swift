@@ -779,12 +779,8 @@ extension DependencyTreeGenerator {
 		var candidateByCaseKey = [String: Int]()
 		var candidateByHole = [Int]()
 		for (index, hole) in passedUpHoles.enumerated() {
-			guard hole.enumPlace != nil else {
-				candidateByHole.append(candidates.count)
-				candidates.append(index)
-				continue
-			}
-			let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+			// A hole with no enum place is a case of its own, as `caseJudgement` keys it: a case key holds spaces.
+			let caseKey = hole.enumPlace != nil ? ScopeGenerator.fillCaseKey(of: hole) : "#\(index)"
 			if let candidate = candidateByCaseKey[caseKey] {
 				candidateByHole.append(candidate)
 			} else {
@@ -2818,8 +2814,7 @@ extension DependencyTreeGenerator {
 			}
 			// The open scopes some route of the case closes a cycle at, whose subtrees those routes never build.
 			var closingAtSomeRoute = Set<SeamSignature.Places.StackEntry>()
-			for read in reads.reads {
-				guard case let .openScope(scope) = read else { continue }
+			for scope in reads.openScopes {
 				for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where caseIndices.contains(where: { !query.depthsBelowOwner(ofProperty: entry.property, builtAs: entry.concreteType, at: $0).isEmpty }) {
 					closingAtSomeRoute.insert(entry)
 				}
@@ -2838,8 +2833,7 @@ extension DependencyTreeGenerator {
 				queriesByExclusion[excluded] = made
 				return made
 			}
-			for read in reads.reads {
-				guard case let .openScope(scope) = read else { continue }
+			for scope in reads.openScopes {
 				let scopeQuery = excludingQuery(closingEntriesAbove(scope.fillAncestors))
 				for caseIndex in caseIndices {
 					for entry in closedOnEntries(of: scope.property, builtAs: scope.builtType) where closingAtSomeRoute.contains(entry) {
@@ -2896,14 +2890,8 @@ extension DependencyTreeGenerator {
 			}
 			// A declaration the caller could build above the seam stays so only where the fill of each case its tree holds
 			// receives only what the caller would hold there (`resolvingBuildabilityAboveSeam(fillsOfCall:)`, by case).
-			func resolvingBuildability(_ declaration: SeamSignature.Hole.UncarriedDeclaration, _ answer: SeamSignature.Places.Answer) -> SeamSignature.Hole.UncarriedDeclaration {
-				let graphDeclaration: SeamSignature.Places.Declaration? = switch answer {
-				case let .uncarried(level, index), let .boundOutsideSendableFunction(level, index, _):
-					query.places.declaration(level: level, declaration: index)
-				case .field, .callersOwn:
-					nil
-				}
-				guard declaration.isBuildableAboveSeam, let buildability = graphDeclaration?.buildability, !buildability.placesInTree.isEmpty else { return declaration }
+			func resolvingBuildability(_ declaration: SeamSignature.Hole.UncarriedDeclaration, _ graphDeclaration: SeamSignature.Places.Declaration) -> SeamSignature.Hole.UncarriedDeclaration {
+				guard declaration.isBuildableAboveSeam, let buildability = graphDeclaration.buildability, !buildability.placesInTree.isEmpty else { return declaration }
 				var resolved = declaration
 				// The cases' fills, each judged at the case's first place the call holds.
 				let fulfillingScopes = buildability.placesInTree.map { caseIndex in site(ofCase: .init(query: query, caseIndex: caseIndex)).flatMap { call.fill(judgingPlaceAt: $0)?.children.first } }
@@ -2953,7 +2941,7 @@ extension DependencyTreeGenerator {
 	/// EXPERIMENT: `hole`, a case's emitting place, as the place on `variant`'s least route reads `label`: that label's field,
 	/// uncarried declaration and declaration hidden by a field are the variant's, its cycle re-entry is `reentry` (the
 	/// variant's, or one a cycle around a call that presents the place hands it), and the place is named by the route.
-	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, reentry: SeamSignature.Hole.CycleReentryDeclaration?, at caseIndex: Int, in query: SeamSignature.Places.Query, callerBindsArgument: [Property: Bool], resolvingBuildability: (SeamSignature.Hole.UncarriedDeclaration, SeamSignature.Places.Answer) -> SeamSignature.Hole.UncarriedDeclaration) -> SeamSignature.Hole {
+	private static func judgedHole(_ hole: SeamSignature.Hole, ofLabel label: String, as variant: SeamSignature.Places.Query.LabelVariant, reentry: SeamSignature.Hole.CycleReentryDeclaration?, at caseIndex: Int, in query: SeamSignature.Places.Query, callerBindsArgument: [Property: Bool], resolvingBuildability: (SeamSignature.Hole.UncarriedDeclaration, SeamSignature.Places.Declaration) -> SeamSignature.Hole.UncarriedDeclaration) -> SeamSignature.Hole {
 		var fields = hole.fields.filter { $0.property.label != label }
 		if case let .field(level, declaration) = variant.answer {
 			fields.append(query.places.declaration(level: level, declaration: declaration).field)
@@ -2968,8 +2956,8 @@ extension DependencyTreeGenerator {
 		// presented as that call's (`Places.Case.uncarriedReplacedOnPathsToCalls`).
 		let replacements = query.places.cases[caseIndex].uncarriedReplacedOnPathsToCalls.filter { $0.property.label == label }
 		let graphDeclarations = query.answers(ofLabel: label, at: caseIndex).compactMap { query.uncarriedDeclaration(of: $0, at: caseIndex) } + replacements
-		let variantDeclaration = query.uncarriedDeclaration(of: variant.answer, at: caseIndex).map { graphDeclaration in
-			graphDeclaration.isBoundFromCallersArgument ? replacements.first ?? graphDeclaration : resolvingBuildability(graphDeclaration, variant.answer)
+		let variantDeclaration = query.uncarriedDeclarationAndGraphDeclaration(of: variant.answer, at: caseIndex).map { uncarried, graphDeclaration in
+			uncarried.isBoundFromCallersArgument ? replacements.first ?? uncarried : resolvingBuildability(uncarried, graphDeclaration)
 		}.flatMap { declaration -> SeamSignature.Hole.UncarriedDeclaration? in
 			// The fill reads the caller's own where the caller binds the form the called mock binds from its argument
 			// (`Scope.fillUnderConstruction`).
@@ -3076,8 +3064,6 @@ extension DependencyTreeGenerator {
 						receivesByLabel[receive.property.label, default: []].append(read)
 					case .closer:
 						closers.append(read)
-					case .openScope:
-						break
 					}
 				}
 				findings += findingsOfFill(of: entry.hole, fill: entry.fill, reads: reads.with(closers), call: call, hidden: entry.hidden, requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: entry.hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks, seamTreeReceives: &seamTreeReceives)
@@ -3314,32 +3300,36 @@ extension DependencyTreeGenerator {
 		enum Read {
 			case receive(Receive)
 			case closer(Closer)
-			case openScope(OpenScope)
 		}
 
 		/// The reads, in walk order: each type before the types beneath it, siblings in declaration order.
 		let reads: [Read]
+		/// The open scopes, in walk order, where the walk records them (`init(walking:recordsOpenScopes:)`): no judge of a
+		/// fill's reads asks for them, so they are no read.
+		let openScopes: [OpenScope]
 		/// The root of the tree, which `firstReader(of:)` walks again only where a finding names a reader.
 		private let root: ScopeGenerator
 
 		/// EXPERIMENT: the reads of this tree that `isKept` keeps, in walk order.
 		func keeping(_ isKept: (Read) -> Bool) -> FillTreeReads {
-			FillTreeReads(reads: reads.filter(isKept), root: root)
+			FillTreeReads(reads: reads.filter(isKept), openScopes: openScopes, root: root)
 		}
 
 		/// EXPERIMENT: this tree with `reads`, some of its reads in walk order, as its reads.
 		func with(_ reads: [Read]) -> FillTreeReads {
-			FillTreeReads(reads: reads, root: root)
+			FillTreeReads(reads: reads, openScopes: openScopes, root: root)
 		}
 
-		private init(reads: [Read], root: ScopeGenerator) {
+		private init(reads: [Read], openScopes: [OpenScope], root: ScopeGenerator) {
 			self.reads = reads
+			self.openScopes = openScopes
 			self.root = root
 		}
 
 		init(walking root: ScopeGenerator, recordsOpenScopes: Bool = false) {
 			self.root = root
 			var reads = [Read]()
+			var openScopes = [OpenScope]()
 			typealias Frame = (generator: ScopeGenerator, parent: Instantiable, providedProperties: Set<Property>, fillAncestors: [DependencyTreeGeneratorError.FillFinding.FillAncestor], judgesClosers: Bool)
 			var framesToVisit = [Frame]()
 			var work = 0
@@ -3395,18 +3385,19 @@ extension DependencyTreeGenerator {
 					}
 				} else {
 					if recordsOpenScopes, judgesClosers, let property = generator.property, let instantiable = generator.builtInstantiable {
-						reads.append(.openScope(.init(
+						openScopes.append(.init(
 							property: property,
 							builtType: instantiable.concreteInstantiable,
 							closingType: parent.concreteInstantiable,
 							declarationLocation: parent.dependencies.first { $0.property == property }?.declarationLocation,
 							fillAncestors: fillAncestors,
-						)))
+						))
 					}
 					visit(generator, parent: parent, providedProperties: providedProperties, fillAncestors: fillAncestors, judgesClosers: judgesClosers)
 				}
 			}
 			self.reads = reads
+			self.openScopes = openScopes
 		}
 
 		/// The receive of `instance`, or of its optional form, in the tree declared first in source order, by the type
@@ -3759,8 +3750,6 @@ extension DependencyTreeGenerator {
 						declarationsBeneath: declarationsBeneath,
 					)))
 				}
-			case .openScope:
-				break
 			}
 		}
 		return findings

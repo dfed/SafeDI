@@ -112,6 +112,11 @@ extension SeamSignature.Places {
 		/// The uncarried declaration `answer` is for a place of the case at `caseIndex`, or `nil` for a field or the caller's own.
 		/// Its `placesInTree` is left empty: the cases are in the declaration's `buildability`.
 		public func uncarriedDeclaration(of answer: SeamSignature.Places.Answer, at caseIndex: Int) -> SeamSignature.Hole.UncarriedDeclaration? {
+			uncarriedDeclarationAndGraphDeclaration(of: answer, at: caseIndex)?.uncarried
+		}
+
+		/// The same, with the graph's declaration it is made from.
+		func uncarriedDeclarationAndGraphDeclaration(of answer: SeamSignature.Places.Answer, at caseIndex: Int) -> (uncarried: SeamSignature.Hole.UncarriedDeclaration, graphDeclaration: SeamSignature.Places.Declaration)? {
 			let reason: SeamSignature.Hole.UncarriedDeclaration.Reason
 			let builtAfter: Property?
 			let declaration: SeamSignature.Places.Declaration
@@ -141,7 +146,7 @@ extension SeamSignature.Places {
 				uncarried.isBuildableAboveSeam = true
 				uncarried.labelsHeldAboveSeam = Set(buildability.labelsHeldAboveSeam)
 			}
-			return uncarried
+			return (uncarried, declaration)
 		}
 
 		/// The `@Sendable` function opened at `functionLevel` on a route to the case at `caseIndex`.
