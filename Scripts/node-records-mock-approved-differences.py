@@ -33,6 +33,9 @@ WALK_PARAMETERS={}
 WALK_PLAIN=set()
 HANDED='\x01'
 HANDS=[]
+# entry 24 in a mock (lead, 11-28 08:00Z): only where the enclosing function is nonisolated; a function marked
+# @Sendable @MainActor is not one
+NONISOLATED_MARKS=('@Sendable nonisolated func ','@Sendable func ')
 NEAREST='\x00nearest'
 CONFIG='\x00configuration'
 # A fresh configuration and every member path of one hold nil, by the configurations' defaulted initializers.
@@ -126,7 +129,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             # walk nests them, and not before it
             end=block_end(lines,i)
             scope=dict(entered)
-            scope[('sendable above',)]=entered.get(('sendable above',),False) or own.group(2).startswith('@Sendable')
+            scope[('sendable above',)]=entered.get(('sendable above',),False) or own.group(2) in NONISOLATED_MARKS
             out.append(line)
             out+=expand(lines[i+1:end],hoisted,base_indent+4,scope,nearest,visible|level,referenced)
             out.append(lines[end])
@@ -202,6 +205,12 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             below=dict(nearest,**{key:expr})
             body=body[1:]
         m=FUNC.match(sig)
+        if not how and PLACES_SEEN[0] and any(HANDED in x or '__safeDI_entered' in x for x in body) and (
+                any(isinstance(k,tuple) and k[0]=='slot' for k in entered) or any(isinstance(k,tuple) and k[0]=='type' for k in nearest)):
+            # a function handed no places reads mock()'s own, which holds none, while its copy, nested in a
+            # function that entered a place, would be placed by that function's places. Declared at mock()'s
+            # own level, where no place is entered, the two are one
+            raise SystemExit('a function handed no places reads the places')
         if how:
             # entry 20, the places enum: a place is entered with the configuration handed, or, where the call
             # asks for the nearest of its type, with the configuration the nearest place of that type above
@@ -295,7 +304,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             inside[('left',('slot',how[1]))]=left_out
             inside[('expr',('slot',how[1]))]=expr
         inside[('left out',)]=left_out
-        inside[('sendable above',)]=entered.get(('sendable above',),False) or marker.startswith('@Sendable')
+        inside[('sendable above',)]=entered.get(('sendable above',),False) or marker in NONISOLATED_MARKS
         sub=expand(sub,hoisted,base_indent+4,inside,below,visible|level,referenced)
         inst+=sub+[ind+'}']
         # find statement start in out
@@ -350,6 +359,9 @@ def choose_left_out(line,left_out):
             elif depth==0 and colon is None and line.startswith(' : ',k): colon=k
             k+=1
         if colon is None: raise SystemExit('a choice by whether a place is left out has no second value')
+        values=line[start+len(LEFT_OUT_CHOICE):k]
+        # the split at the first " : " is the choice's own only where no value holds a choice or a string
+        if ' ? ' in values or '"' in values: raise SystemExit('a choice by whether a place is left out holds a choice or a string')
         line=line[:start]+(line[start+len(LEFT_OUT_CHOICE):colon] if left_out else line[colon+3:k])+line[k:]
     return line
 def three_lines(taking):
@@ -440,6 +452,7 @@ def e4(text,walk=None):
 def e20(text,walk=None):
     # entry 20, cycle kind form c: the places list's declaration and the calls that hand it on are removed.
     # What a function then reads of its configuration, and every other line, stays in the byte comparison.
+    PLACES_SEEN[0]=False
     if 'let __safeDI_entered = __safeDI_Entered(configuration: ())' in text: return e20_places(text)
     if 'struct __safeDI_EnteredPlaces {' not in text: return text
     lines=text.split('\n');out=[];i=0
@@ -611,6 +624,9 @@ HANDS_ON=re.compile(r'__safeDI_entered: __safeDI_entered\.(leavingOut\.)?(enteri
 # a slot is a string in the enum's text and a number in the classes'
 SLOT=re.compile(r'^(?:"((?:[^"\\])*)"|(\d+))$')
 PLACES_FORM=['enum']
+# the classes' declaration answers has() for slots below 64 per word it declares; a slot beyond is never found again
+PLACES_SLOT_LIMIT=[0]
+PLACES_SEEN=[False]
 PLACES_FIRST_LINES={
     'indirect enum __safeDI_Places {':'enum',
     'nonisolated indirect enum __safeDI_Places: Sendable {':'enum',
@@ -624,6 +640,8 @@ def e20_places(text):
     # alone, and how it handed it stays beside the argument for the function's copy to be placed by: a place
     # entered again under its slot is the enclosing function's, and a place that asks for the nearest of its
     # type takes that place's configuration. Every other line stays in the byte comparison.
+    # the older text (a struct of places, read through marker lines that know no left-out place) never meets this one
+    if 'struct __safeDI_EnteredPlaces {' in text: return text
     lines=text.split('\n');out=[];i=0;inside=None
     while i<len(lines):
         line=lines[i]
@@ -640,9 +658,11 @@ def e20_places(text):
                             if form=='enum': candidate=places_declaration(sendable,enters_nearest,passes,leaves_out)
                             else: candidate=places_declaration_classes(sendable,enters_nearest,passes,leaves_out,64*words)
                             candidate=[indent+d if d else d for d in candidate]
-                            if lines[i:i+len(candidate)]==candidate: found=candidate
+                            if lines[i:i+len(candidate)]==candidate: found=candidate;limit=64*words
             if found is None: return text
             PLACES_FORM[0]=form
+            PLACES_SLOT_LIMIT[0]=limit
+            PLACES_SEEN[0]=True
             i+=len(found); continue
         f=FUNC.match(line)
         if f:
@@ -667,6 +687,9 @@ def e20_places(text):
                 slot=SLOT.match(parts[0]) if parts else None
                 asks=len(parts)==3 and parts[2]=='nearestOfType: true'
                 if not slot or not (len(parts)==2 or asks): return text
+                # a slot is a string in the enum's text, and in the classes' a number the declaration's words hold
+                if not PLACES_SEEN[0] or (slot.group(2) is None)!=(PLACES_FORM[0]=='enum'): return text
+                if slot.group(2) is not None and int(slot.group(2))>=PLACES_SLOT_LIMIT[0]: return text
                 how=(kind,slot.group(1) if slot.group(1) is not None else slot.group(2),asks,leaving);handed=parts[1]
             else:
                 if len(parts)!=1: return text
@@ -1244,6 +1267,8 @@ used_none = []
 # every pair the entry is used on, which then prints "held" and not the words a gate reads as equal.
 AWAITING_CELLS = {
     # in a mock; the test is on claude/mock-cycle-twin-parameters a2858a1a4 (merge request 1128-0436)
+    # in a mock (lead, 11-28 08:00Z): counts once the kinds integrator names the value cell
+    '24': [],
     '18': ['SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenEveryCallPassesNilForLabelBuiltAfterTheCycle'],
     '26': ['SafeDIToolMockKindsLazyCycleValueTests/mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel'],
     '21 per function': [
