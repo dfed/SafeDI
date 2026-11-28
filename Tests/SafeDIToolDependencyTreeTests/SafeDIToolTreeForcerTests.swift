@@ -151,14 +151,14 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTree_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
+	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
 		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
 		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
-		// (`NodeRecordsChecks`). The engine does not lay a root out from an erased rename that keeps its label yet.
+		// (`NodeRecordsChecks`), and the engine lays the root out, the rename read before its binding as one from outside.
 		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
 		#expect(forcers == """
-		Root\tkind notLaidOut
-		roots that built a tree: 1 of 1
+		Root\tnone
+		roots that built a tree: 0 of 1
 
 		""")
 	}
