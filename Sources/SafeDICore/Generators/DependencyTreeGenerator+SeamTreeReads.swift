@@ -313,10 +313,21 @@ extension DependencyTreeGenerator {
 						nil
 					}
 				}.makeIterator()
+				var fillEdges = [FillEdge]()
+				for edge in graph.graph.edgeIndices(from: frame.node) where graph.edgeFacts[edge].isFill {
+					if let hole = fillHoles.next() {
+						fillEdges.append(FillEdge(edge: edge, fulfiller: Int(graph.graph.edgeTargets[edge]), hole: hole))
+					}
+				}
+				var holeByFillEdge = [Int: SeamSignature.Hole]()
+				for fillEdge in fillEdges {
+					holeByFillEdge[fillEdge.edge] = fillEdge.hole
+				}
+				let handedMemoByLabelByEdge = Self.handedMemos(ofFillsAlong: fillEdges, of: scope, reading: readsFromAbove)
 				let firstFrameIndex = framesToVisit.endIndex
 				for edge in graph.graph.edgeIndices(from: frame.node) {
 					let child = Int(graph.graph.edgeTargets[edge])
-					if graph.edgeFacts[edge].isFill, let hole = fillHoles.next() {
+					if let hole = holeByFillEdge[edge] {
 						// A fill's tree is a function of its own, whose stack starts at its root, and its child receives what the fill
 						// binds from the site's struct beside what encloses the call.
 						let fillProvidedProperties = graph.receives.hiddenFromCaller(atEdge: edge).map { graph.propertyTable[Int($0)] }
@@ -325,24 +336,22 @@ extension DependencyTreeGenerator {
 						for property in fillProvidedProperties {
 							fillMemos[property.label] = nil
 						}
+						// A memo some route hands the fill through the levels on a carried route is bound in place of the place's field
+						// (`Scope.Fill.labelsHandedAsMemo`): the facts' row holds the memo's value forms, but not its deferral, which the
+						// walk finds as the tree does (`handedMemos(ofFillsAlong:of:reading:)`).
+						let handedMemoByLabel = handedMemoByLabelByEdge[edge] ?? [:]
+						let fields = hole.fields.map { field in
+							handedMemoByLabel[field.property.label].map { field.handedAsMemo($0) } ?? field
+						}
 						// A `LazilyInstantiated` memo whose label the fill's tree reads inside a `@Sendable` function is bound by value
 						// (`ScopeGenerator.fillDeferredLabelsReadInsideSendableFunction`), so it serves no wrapper's read.
 						let labelsBoundByValue = Self.labels(
-							among: Set(hole.fields.filter { $0.deferral == .deferred(isSendable: false) && boundLabels.contains($0.property.label) }.map(\.property.label)),
+							among: Set(fields.filter { $0.deferral == .deferred(isSendable: false) && boundLabels.contains($0.property.label) }.map(\.property.label)),
 							readInsideSendableFunctionBeneath: edge,
 							of: graph,
 						)
-						for field in hole.fields where boundLabels.contains(field.property.label) && (field.bindsMemo || (field.isDeferredParameter && hole.innerSeamType != nil)) && !(labelsBoundByValue.contains(field.property.label) && field.deferral != .deferred(isSendable: true)) {
+						for field in fields where boundLabels.contains(field.property.label) && (field.bindsMemo || handedMemoByLabel[field.property.label] != nil || (field.isDeferredParameter && hole.innerSeamType != nil)) && !(labelsBoundByValue.contains(field.property.label) && field.deferral != .deferred(isSendable: true)) {
 							fillMemos[field.property.label, default: FillMemo(edge: edge, fulfiller: child, fields: [])].fields.append(field)
-						}
-						// A memo some route hands the fill through the levels on a carried route (`Scope.Fill.labelsHandedAsMemo`) is bound
-						// in place of the place's field, so the facts' row holds the memo's value forms, and not the place's field, of a
-						// label the hole carries in a field no deferred parameter's.
-						let fillProvidedSet = Set(fillProvidedProperties)
-						for field in hole.fields where !field.isDeferredParameter && !fillProvidedSet.contains(field.property) {
-							for value in fillProvidedProperties where value.label == field.property.label && !value.typeDescription.isOptional {
-								fillMemos[value.label, default: FillMemo(edge: edge, fulfiller: child, fields: [])].handedMemoValues.append(value)
-							}
 						}
 						framesToVisit.append(Frame(node: child, providedProperties: childProvidedProperties.union(fillProvidedProperties), fillMemos: fillMemos, cycleIdentitiesAbove: [], closesCycle: false))
 					} else {
@@ -382,20 +391,15 @@ extension DependencyTreeGenerator {
 			let property: Property
 		}
 
-		/// The fields of one label a fill binds from its site's struct as the memo of a deferred parameter, along the fill's
-		/// edge, whose child is the fill's built type. The facts hold no row of what else makes a fill bind a memo, so the
-		/// fields are the hole's, not a case's (`ScopeGenerator.caseFields(of:)`), and none is bound for a label hidden by a
-		/// call that re-enters the seam (`fillDeferredLabelsHiddenByReenteringCalls`); no seam test tells those apart yet. A
-		/// memo handed on a carried route is read from the fill edge's row (`handedMemoValues`).
+		/// The fields of one label a fill binds from its site's struct as the memo of a deferred parameter, or as the memo
+		/// some route hands it on a carried route, along the fill's edge, whose child is the fill's built type. The facts hold
+		/// no row of what else makes a fill bind a memo, so the fields are the hole's, not a case's
+		/// (`ScopeGenerator.caseFields(of:)`), and none is bound for a label hidden by a call that re-enters the seam
+		/// (`fillDeferredLabelsHiddenByReenteringCalls`); no seam test tells those apart yet.
 		private struct FillMemo {
 			let edge: Int
 			let fulfiller: Int
 			var fields: [SeamSignature.Hole.Field]
-			/// The values of the memos the fill is handed on a carried route, of the label. The facts hold no memo's deferral,
-			/// which the tree decides from what the fill's tree reads (`ScopeGenerator.fillSendableWrapperReads`), so a handed
-			/// memo serves a read of either wrapper kind; a fill reading the other kind than its memo is rejected
-			/// (`sendableWrapperReadBesidePlainMemo`).
-			var handedMemoValues = [Property]()
 
 			/// Whether one of the memos serves a read of `property`, a `LazilyInstantiated` or `SendableLazilyInstantiated`,
 			/// as `ScopeGenerator.fillBoundMemo(servingWrapperRead:)` decides: a memo of the read's own kind, of its instance,
@@ -407,10 +411,80 @@ extension DependencyTreeGenerator {
 					field.deferral == deferral
 						&& field.property.asUnwrappedProperty == instance.asUnwrappedProperty
 						&& readsFromAbove.reads(field.property, beneath: fulfiller)
-				} || handedMemoValues.contains { value in
-					value.asUnwrappedProperty == instance.asUnwrappedProperty && readsFromAbove.reads(value, beneath: fulfiller)
 				}
 			}
+		}
+
+		/// A fill edge of a call's node: the edge, its target, which the fill builds, and the place it fills.
+		private struct FillEdge {
+			let edge: Int
+			let fulfiller: Int
+			let hole: SeamSignature.Hole
+		}
+
+		/// The memo each fill along `fillEdges`, the fill edges of `scope`'s node, takes of each label some route hands it on a
+		/// carried route, by edge, as the tree decides it for the call (`Scope`'s use of
+		/// `ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`):
+		/// over the call's dispatchers, for the first place of each case nested by type, leaving out a label the fill's tree
+		/// reads only as the place's field (`ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`),
+		/// and taking a `SendableLazilyInstantiated` where the fill's tree also reads that wrapper by itself, as
+		/// `ScopeGenerator.fillSendableWrapperReads` finds it. The tree finds those two on the pass before; here the fill's
+		/// target's reads answer them, and a second round of the rule applies them. The memo's deferral decides which
+		/// wrapper's read it serves (`FillMemo.serves(_:reading:)`). Empty for nearly every call.
+		private static func handedMemos(ofFillsAlong fillEdges: [FillEdge], of scope: ConstructionScope, reading readsFromAbove: ReadsOfSubtrees) -> [Int: [String: ScopeGenerator.FillDispatcher.HandedMemo]] {
+			// A public mock's caller hands values.
+			guard !fillEdges.isEmpty, let calledBuilders = scope.calledBuilders, scope.publicMockCall == nil else { return [:] }
+			var placesByCaseKey = [String: [SeamSignature.Hole]]()
+			for fillEdge in fillEdges where fillEdge.hole.enumPlace != nil {
+				placesByCaseKey[ScopeGenerator.fillCaseKey(of: fillEdge.hole), default: []].append(fillEdge.hole)
+			}
+			var emittedFills = [(fill: ScopeGenerator.FillDispatcher.EmittedFill, fillEdge: FillEdge, placeFields: [SeamSignature.Hole.Field])]()
+			var emittedCaseKeys = Set<String>()
+			for fillEdge in fillEdges {
+				let hole = fillEdge.hole
+				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
+				guard hole.enumPlace == nil || emittedCaseKeys.insert(caseKey).inserted else { continue }
+				let places = placesByCaseKey[caseKey] ?? [hole]
+				let fields = hole.enumPlace == nil ? hole.fields : ScopeGenerator.caseFields(of: places).fields
+				emittedFills.append((ScopeGenerator.FillDispatcher.EmittedFill(key: ScopeGenerator.fillKey(of: hole), hole: hole, fields: fields), fillEdge, places.flatMap(\.fields)))
+			}
+			// Only the dispatchers' keys and cases decide a memo, never their names, which come from an allocator of their own.
+			var names = GeneratedNameAllocator(reserving: [])
+			let dispatchers = ScopeGenerator.FillDispatcher.dispatchers(
+				of: calledBuilders,
+				filledSites: Set(fillEdges.map(\.hole.site)),
+				enclosingDispatchers: [:],
+				fillNames: [:],
+				names: &names,
+			)
+			let fills = emittedFills.map(\.fill)
+			let firstRound = ScopeGenerator.FillDispatcher.memosHanded(toFills: fills, ofPublicMockCall: false, labelsReadOnlyAsPlaceField: [:], readingSendableWrapper: [:], among: dispatchers)
+			var labelsReadOnlyAsPlaceField = [String: Set<String>]()
+			var readingSendableWrapper = [String: [String: Property]]()
+			for (fill, fillEdge, placeFields) in emittedFills {
+				guard let memoByLabel = firstRound[fill.key]?.memoByLabel, !memoByLabel.isEmpty else { continue }
+				let received = readsFromAbove.receivedProperties(beneath: fillEdge.fulfiller)
+				for field in fill.fields {
+					guard let memo = memoByLabel[field.property.label],
+					      ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(field.handedAsMemo(memo), placeFields: placeFields, reads: { ScopeGenerator.reads($0, among: received) }, carriedBySites: [])
+					else { continue }
+					labelsReadOnlyAsPlaceField[fill.key, default: []].insert(field.property.label)
+				}
+				let readOnlyAsPlaceField = labelsReadOnlyAsPlaceField[fill.key] ?? []
+				var instancePropertyByLabel = [String: Property]()
+				for property in received.sorted() where memoByLabel[property.label] != nil && !readOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+					instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
+				}
+				if !instancePropertyByLabel.isEmpty {
+					readingSendableWrapper[fill.key] = instancePropertyByLabel
+				}
+			}
+			let handedMemosByKey = ScopeGenerator.FillDispatcher.memosHanded(toFills: fills, ofPublicMockCall: false, labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField, readingSendableWrapper: readingSendableWrapper, among: dispatchers)
+			var memoByLabelByEdge = [Int: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
+			for (fill, fillEdge, _) in emittedFills {
+				memoByLabelByEdge[fillEdge.edge] = handedMemosByKey[fill.key]?.memoByLabel
+			}
+			return memoByLabelByEdge
 		}
 
 		/// What each node's subtree receives from above it, along every edge, fills' included: the received properties and
@@ -434,6 +508,11 @@ extension DependencyTreeGenerator {
 					}
 				}
 				return (labels, forms)
+			}
+
+			/// What the subtree of `node` receives from above it.
+			func receivedProperties(beneath node: Int) -> Set<Property> {
+				Set(rows.columns(inRow: node).map { requests[Int($0)] })
 			}
 
 			/// Whether the subtree of `node` receives `field` from above it, its optional form, or its instance.
