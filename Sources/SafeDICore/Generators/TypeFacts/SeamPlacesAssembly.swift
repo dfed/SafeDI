@@ -72,11 +72,16 @@ extension SeamPlacesDrafts {
 				return .init(property: property, function: .other)
 			}
 		}
+		let cycleParameters = SeamPlacesCycleParameters(world: world)
 		// The declarations a variant's scope binds: the seam's root, its parameters, then its children; any other scope, its
-		// bindings.
+		// bindings, with the members of loops its function makes again and the parameters of the function a lazy cycle closes on
+		// after the properties its type forwards.
 		func declarations(of variant: VariantID) -> [SeamSignature.Places.Declaration] {
 			let parameterDeclarations = variant == rootVariant ? parameters.map(drafter.parameterDeclaration(of:)) : []
-			return parameterDeclarations + world.worldBindings(of: Int(world.declaration(of: variant))).filter { variant != rootVariant || !$0.isForwarded }.map { drafter.declaration(of: $0, atVariant: variant).declaration }
+			let bindings = world.worldBindings(of: Int(world.declaration(of: variant))).filter { variant != rootVariant || !$0.isForwarded }
+			let forwardedCount = bindings.prefix { $0.isForwarded }.count
+			let bindingDeclarations = bindings.map { drafter.declaration(of: $0, atVariant: variant).declaration }
+			return parameterDeclarations + Array(bindingDeclarations.prefix(forwardedCount)) + cycleParameters.reboundDeclarations(atVariant: variant, drafter: drafter) + cycleParameters.declarations(atVariant: variant, drafter: drafter) + Array(bindingDeclarations.dropFirst(forwardedCount))
 		}
 		// What a parent declares on the way to a level: the level's property, declared by the parent's type.
 		func declaredSegment(of draft: SeamPlacesLevelDraft, from parent: SeamPlacesLevelID) -> [SeamSignature.Hole.DeclaredProperty] {
