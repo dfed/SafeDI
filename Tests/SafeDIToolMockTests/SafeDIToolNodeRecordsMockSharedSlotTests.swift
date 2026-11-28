@@ -569,15 +569,11 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 				+ Self.probes(from: "Bravo", path: ["Alpha", "Bravo", "Alpha", "Bravo", "Alpha"]),
 			filesToDelete: &filesToDelete,
 		)
-		// Node records refuse both mocks today, so the walk writes them.
-		let walkOutput = try await NodeRecordsObservation.$laysOutMockRoots.withValue(false) {
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 		}
-		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
-		}
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["sendable"], ["sendable"]])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[], []])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true])
 	}
 
 	// MARK: Private

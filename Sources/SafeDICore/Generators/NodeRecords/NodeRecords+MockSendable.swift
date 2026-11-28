@@ -30,6 +30,11 @@
 /// actor builds) reads its override so too (`isWrapperSentToActor(_:in:)`): its closure is sent with it, so it captures
 /// the local, and hands it to the wrapper's function.
 ///
+/// A node on a cycle reads no local: its function takes the places the mock's cycles enter, and is handed its
+/// configuration with them (`NodeRecords+MockCycle.swift`). The closure that calls it is `@Sendable` too, so a body that
+/// takes no places, whose own overrides that closure could not capture, binds the configuration it hands to the same
+/// local before the node's place (`mockEnteredConfigurationLocal(of:labeled:handedBy:in:slots:)`).
+///
 /// The node's record is `mockConstruction`'s, marked `@Sendable` as the production kind's is
 /// (`NodeRecords+Sendable.swift`); the local is a place of its parent's body, built in place before the node's
 /// (`mockOverridesBindingPlace(of:record:in:)`).
@@ -43,13 +48,23 @@ extension NodeRecords {
 	/// with more than one parent, or a child with more than one, whose override is read from more than one place; a child
 	/// built in a function of its own, which would be handed the local's field across the `@Sendable` function; and a
 	/// local whose name a node's label or function takes, which the walk names apart.
+	///
+	/// A node on a cycle reads no local of its own: its function is handed its configuration with the places entered
+	/// (`NodeRecords+MockCycle.swift`), which each parent's call hands it and which `mock()` declares in their `Sendable`
+	/// form (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`). So it may have several parents,
+	/// and each child is handed its override of that configuration, in each body that builds it
+	/// (`mockPlace(_:record:of:builtBy:in:slots:)`), so only the local's name is refused of such a node: a body that takes
+	/// no places binds the configuration it hands the node to that local
+	/// (`mockEnteredConfigurationLocal(of:labeled:handedBy:in:slots:)`). A child on a cycle of a node on none is handed
+	/// the places too, where the node's function hands it a field of the node's local.
 	static func mockSendableRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
 		guard isBuiltInSendableFunction(declaration, in: world), let label = world.property(of: declaration)?.label else { return [] }
+		guard !overridesLocalNameIsTaken(ofNodeLabeled: label, in: world) else { return [.sendable] }
+		guard !world.isOnCycle(declaration) else { return [] }
 		guard world.parents(of: declaration).count == 1 else { return [.sendable] }
-		for child in world.edges(from: declaration) {
+		for child in world.edges(from: declaration) where !world.isOnCycle(child) {
 			guard world.parents(of: child).count == 1, !isBuiltInFunctionOfItsOwn(child, in: world) else { return [.sendable] }
 		}
-		guard !overridesLocalNameIsTaken(ofNodeLabeled: label, in: world) else { return [.sendable] }
 		return []
 	}
 
@@ -102,19 +117,19 @@ extension NodeRecords {
 		!isWrapperSentToActor(declaration, in: world) && world.parents(of: declaration).allSatisfy { $0.parent == 0 }
 	}
 
-	/// Where the children of `parent`, a node of a mock root's world, read their overrides: the local a node built in a
-	/// `@Sendable` function captures; the configuration a function that takes the places `slots` enter was handed with
-	/// them (`mockEnteredConfiguration`); and otherwise the overrides `parent`'s body was handed, which the root's body
+	/// Where the children of `parent`, a node of a mock root's world, read their overrides: the configuration a function
+	/// that takes the places `slots` enter was handed with them (`mockEnteredConfiguration`), which reads no local; the
+	/// local a node built in a `@Sendable` function captures; and otherwise the overrides `parent`'s body was handed, which the root's body
 	/// reads of `mock()`'s own.
 	static func mockOverridesOfChildren(of parent: DeclarationID, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> ValuePath {
-		if parent != 0, isBuiltInSendableFunction(parent, in: world), capturesOverridesLocal(parent, in: world), let property = world.property(of: parent) {
+		if let slots, takesMockEnteredPlaces(parent, in: slots) {
+			mockEnteredConfiguration
+		} else if parent != 0, isBuiltInSendableFunction(parent, in: world), capturesOverridesLocal(parent, in: world), let property = world.property(of: parent) {
 			.read(mockOverridesLocal(
 				ofNodeLabeled: property.label,
 				typed: mockConfigurationType(of: world.scope(of: parent).instantiable),
 				isConfigured: true,
 			))
-		} else if let slots, takesMockEnteredPlaces(parent, in: slots) {
-			mockEnteredConfiguration
 		} else {
 			.passedArgument(ReservedName.mockOverridesParameterName)
 		}
@@ -138,6 +153,13 @@ extension NodeRecords {
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
 		let type = mockOverrideType(of: built, usesHandWrittenMock: usesHandWrittenMock, isConfigured: isConfigured, instantiable: instantiable)
 		let local = mockOverridesLocal(ofNodeLabeled: built.property.label, typed: type, isConfigured: isConfigured)
+		return mockOverridesBinding(of: local, to: mockConfigurationField(of: declaration, named: built.property.label, in: world, slots: slots))
+	}
+
+	/// The place that binds `local`, a local a mock's `@Sendable` function reads its override of, to `value`, built in
+	/// place in the body that reads `value`.
+	static func mockOverridesBinding(of local: PlaceRead, to value: ValuePath) -> BuiltPlaceRecord {
+		let type = local.property.typeDescription
 		var binding = BuiltPlaceRecord(
 			property: local.property,
 			isErased: false,
@@ -156,7 +178,7 @@ extension NodeRecords {
 			children: [],
 			node: PlanNode(),
 		)
-		binding.constructionValue = ConstructionValue(value: mockConfigurationField(of: declaration, named: built.property.label, in: world, slots: slots), resultWrapper: nil)
+		binding.constructionValue = ConstructionValue(value: value, resultWrapper: nil)
 		return binding
 	}
 
@@ -179,7 +201,7 @@ extension NodeRecords {
 	}
 
 	/// Whether a node of a mock root's world is built in a `@Sendable` function of its own.
-	private static func isBuiltInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+	static func isBuiltInSendableFunction(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
 		switch world.kind(of: declaration) {
 		case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazy:
 			true

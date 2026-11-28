@@ -270,6 +270,7 @@ struct NodeRecords: Sendable {
 			receivesPassedNil: mockNamesReadApart.receivesPassedNil,
 		)
 		mockNamesReadApart.removeReceivesBoundAgain(passedNilBy: onlyIfAvailableAnswers)
+		try mockNamesReadApart.bindNamesToNil(beneathPinsFoundBy: onlyIfAvailableAnswers, in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
@@ -405,6 +406,7 @@ struct NodeRecords: Sendable {
 		var isOnPath = [Bool](repeating: false, count: world.variantCount)
 		var labelsDeclaredBetween = [Set<String>](repeating: [], count: world.variantCount)
 		var variantsBetween = [Set<VariantID>](repeating: [], count: world.variantCount)
+		var twinsClosedOn = [[VariantID]](repeating: [], count: world.variantCount)
 		var twins = TwinsOnPath(world: world, holdsCycle: holdsCycle)
 		var stack = [PlaceFrame(variant: 0, edgeIndices: edgeIndices(of: 0))]
 		isOnPath[0] = true
@@ -416,9 +418,18 @@ struct NodeRecords: Sendable {
 				// In a mock's world, a call of a declaration whose twin's place is on the path closes the cycle on that place, as
 				// today's tree closes it (`ScopeGenerator.closedOnDeclaration`): a mock's function on a cycle reads its
 				// configuration from the place it is handed, whatever form built it (`mockPlace`).
+				// So does a call of a declaration whose own place is on the path in the other family: the facts key a mock's body
+				// by whether a `@Sendable` function encloses it, for the local the walk reads its overrides into there, and a
+				// function on a cycle reads no local.
 				let calleeDeclaration = world.declaration(of: callee)
-				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { twins.isTwin(world.declaration(of: $0.variant), of: calleeDeclaration) })?.variant
+				let closedOnTwin = enteredSlots == nil || isOnPath[Int(callee)] ? nil : stack.last(where: { frame in
+					let declaration = world.declaration(of: frame.variant)
+					return twins.isTwin(declaration, of: calleeDeclaration) || declaration == calleeDeclaration && world.keys(of: frame.variant) == world.keys(of: callee)
+				})?.variant
 				if let closedOnVariant = isOnPath[Int(callee)] ? callee : closedOnTwin {
+					if closedOnVariant != callee, !twinsClosedOn[Int(closedOnVariant)].contains(callee) {
+						twinsClosedOn[Int(closedOnVariant)].append(callee)
+					}
 					let callee = closedOnVariant
 					// The places between the place the call closes on and the call: what they declare, and the parameters of
 					// their own functions, are what the closed-on function takes as parameters rather than capturing.
@@ -494,10 +505,21 @@ struct NodeRecords: Sendable {
 			// takes a label as a parameter only where a place between it and a call that closes on it declares that label,
 			// or takes it as a parameter of its own function (`CycleParameter`).
 			cycleParametersByVariant[Int(variant)] = []
-			let parameters = world.parameters(of: variant).filter { parameter in
+			func isTaken(_ parameter: TypeFactsParameter) -> Bool {
 				let label = parameter.property.label
 				return labelsDeclaredBetween[Int(variant)].contains(label)
 					|| variantsBetween[Int(variant)].contains { $0 != variant && cycleParameters(of: $0).contains { $0.property.label == label } }
+			}
+			var parameters = world.parameters(of: variant).filter(isTaken)
+			// A call that closes the cycle on its twin's place, in a mock's world, calls this variant's function, which the
+			// facts fold no parameter for where only the twin's own place is closed on: the function takes the twin's too.
+			// Its body and its calls read each from this variant's view, which finds what the twin's does: a label only
+			// one of the two has available is refused before this (`onlyIfAvailableAnsweredApart`), and one some
+			// declaration holds lazily below.
+			for twin in twinsClosedOn[Int(variant)] {
+				for parameter in world.parameters(of: twin) where isTaken(parameter) && !parameters.contains(where: { $0.property.label == parameter.property.label }) {
+					parameters.append(parameter)
+				}
 			}
 			cycleParametersByVariant[Int(variant)] = parameters
 			return parameters
@@ -567,6 +589,11 @@ struct NodeRecords: Sendable {
 				}
 			}
 			if let loopBindingsIndex {
+				// After the locals, the struct a loop of `@Sendable` members is handed is made of them (`NodeRecords+Loops.swift`).
+				let declaration = world.declaration(of: variant)
+				loopBindings += Self.mockLoopSendableStructBindings(atLevel: declaration, in: world, levels: mockLoopLevels).map { binding in
+					.indented(.place(PlacePlan(code: .empty, record: .built(binding))), by: indentation)
+				}
 				children.insert(contentsOf: loopBindings, at: loopBindingsIndex)
 			}
 			return (children, escaping, fromSendableFunction, closedOn)
@@ -607,6 +634,7 @@ struct NodeRecords: Sendable {
 		}
 		self.rootBody = rootBody
 		self.records = records
+		mockLoopSendableStructDeclarations = mockLoopLevels.sendableStructByLevel.sorted(by: { $0.key < $1.key }).flatMap(\.value.declaration)
 		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
 		mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in: world, slots: $0) }
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
@@ -620,6 +648,10 @@ struct NodeRecords: Sendable {
 	/// The root's body: a place for each of the root's children, in the order the root builds them, indented as a root's
 	/// statements are.
 	let rootBody: [GeneratedCode]
+
+	/// The declarations of the `Sendable` structs a mock root's loops of `@Sendable` members are handed their level's
+	/// overrides in, which `mock()` declares before its body, their lines unindented (`NodeRecords.SendableLoopStruct`).
+	let mockLoopSendableStructDeclarations: [String]
 
 	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
 	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no

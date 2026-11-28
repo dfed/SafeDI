@@ -606,62 +606,344 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenRequiredReceiveAbovePlacePinsLabelNamedApart() async throws {
+	mutating func mock_passesNilInPlace_whenRequiredReceiveAboveEveryPlacePinsLabelNamedApart() async throws {
 		// `Lower` receives `thing` only if available as an `Instantiator`, and `Upper`, which builds it, requires the
-		// value: the label is pinned at that place, not for the type, so whether `Lower` reads the name or `nil` is its
-		// place’s. One function serves every place, so the world is refused, and the walk writes it.
-		let fixture = Self.fixture.merging([
-			"Root.swift": """
-			@Instantiable(generateMock: true)
-			public final class Root: Instantiable, Marked {
-			    public init(leaf: Leaf, upper: Upper) {
-			        self.leaf = leaf
-			        self.upper = upper
-			    }
+		// value: the label is pinned at that place, not for the type, and it is `Lower`’s only place, so it is passed `nil`.
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.fixtureOfReceivePinnedFromAbove, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
 
-			    @Instantiated let leaf: Leaf
-			    @Instantiated let upper: Upper
-			    public var marker = "built"
-			}
-			""",
-			"Upper.swift": """
-			@Instantiable
-			public final class Upper: Instantiable, Marked {
-			    public init(thing: Thing, lower: Lower) {
-			        self.thing = thing
-			        self.lower = lower
-			    }
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            thing_Thing: (() -> Thing)? = nil,
+		            thing_Instantiator__Thing: (() -> Thing)? = nil,
+		            leaf: Leaf.SafeDIMockConfiguration = .init(),
+		            upper: Upper.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                thing_Thing: thing_Thing,
+		                thing_Instantiator__Thing: thing_Instantiator__Thing,
+		                leaf: leaf,
+		                upper: upper
+		            )
+		        }
 
-			    @Received let thing: Thing
-			    @Instantiated let lower: Lower
-			    public var marker = "built"
-			}
-			""",
-			"Lower.swift": """
-			@Instantiable
-			public final class Lower: Instantiable, Marked {
-			    public init(thing: Instantiator<Thing>?) {
-			        self.thing = thing
-			    }
+		        var thing_Thing: (() -> Thing)? { __safeDI_storage.thing_Thing }
+		        var thing_Instantiator__Thing: (() -> Thing)? { __safeDI_storage.thing_Instantiator__Thing }
+		        var leaf: Leaf.SafeDIMockConfiguration { __safeDI_storage.leaf }
+		        var upper: Upper.SafeDIMockConfiguration { __safeDI_storage.upper }
 
-			    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
-			    public var marker = "built"
-			}
-			""",
-		]) { $1 }
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                thing_Thing: (() -> Thing)?,
+		                thing_Instantiator__Thing: (() -> Thing)?,
+		                leaf: Leaf.SafeDIMockConfiguration,
+		                upper: Upper.SafeDIMockConfiguration
+		            ) {
+		                self.thing_Thing = thing_Thing
+		                self.thing_Instantiator__Thing = thing_Instantiator__Thing
+		                self.leaf = leaf
+		                self.upper = upper
+		            }
+
+		            let thing_Thing: (() -> Thing)?
+		            let thing_Instantiator__Thing: (() -> Thing)?
+		            let leaf: Leaf.SafeDIMockConfiguration
+		            let upper: Upper.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let thing_Thing = if let safeDIBuilder = safeDIOverrides.thing_Thing { safeDIBuilder() } else { Thing() }
+		        func __safeDI_thing_Instantiator__Thing() -> Thing {
+		            if let safeDIBuilder = safeDIOverrides.thing_Instantiator__Thing { safeDIBuilder() } else { Thing() }
+		        }
+		        let thing_Instantiator__Thing = Instantiator<Thing>(__safeDI_thing_Instantiator__Thing)
+		        func __safeDI_first(safeDIOverrides: ((Thing) -> First)?) -> First {
+		            let thing: Thing = thing_Thing
+		            return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(thing) } else { First(thing: thing) }
+		        }
+		        func __safeDI_second(safeDIOverrides: ((Instantiator<Thing>) -> Second)?) -> Second {
+		            let thing: Instantiator<Thing> = thing_Instantiator__Thing
+		            return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(thing) } else { Second(thing: thing) }
+		        }
+		        func __safeDI_leaf(safeDIOverrides: Leaf.SafeDIMockConfiguration) -> Leaf {
+		            let first: First = __safeDI_first(safeDIOverrides: safeDIOverrides.first)
+		            let second: Second = __safeDI_second(safeDIOverrides: safeDIOverrides.second)
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(first, second) } else { Leaf(first: first, second: second) }
+		        }
+		        let leaf: Leaf = __safeDI_leaf(safeDIOverrides: safeDIOverrides.leaf)
+		        func __safeDI_upper(safeDIOverrides: Upper.SafeDIMockConfiguration) -> Upper {
+		            let thing: Thing = thing_Thing
+		            let lower = if let safeDIBuilder = safeDIOverrides.lower { safeDIBuilder(nil) } else { Lower(thing: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(thing, lower) } else { Upper(thing: thing, lower: lower) }
+		        }
+		        let upper: Upper = __safeDI_upper(safeDIOverrides: safeDIOverrides.upper)
+		        return Root(leaf: leaf, upper: upper)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesNameApartAsParameter_whenRequiredReceiveAbovePinsOnePlaceOfTwo() async throws {
+		// The root builds `Lower` too, where nothing pins the label. One function builds both places, so it takes the
+		// name apart as an optional parameter: `Upper`’s function binds the name to `nil` for what it builds, and the
+		// root’s call passes the value `mock()` binds under it.
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.fixtureOfReceivePinnedFromAboveInOnePlace, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            thing_Thing: (() -> Thing)? = nil,
+		            thing_Instantiator__Thing: (() -> Thing)? = nil,
+		            leaf: Leaf.SafeDIMockConfiguration = .init(),
+		            upper: Upper.SafeDIMockConfiguration = .init(),
+		            lower: Lower.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                thing_Thing: thing_Thing,
+		                thing_Instantiator__Thing: thing_Instantiator__Thing,
+		                leaf: leaf,
+		                upper: upper,
+		                lower: lower
+		            )
+		        }
+
+		        var thing_Thing: (() -> Thing)? { __safeDI_storage.thing_Thing }
+		        var thing_Instantiator__Thing: (() -> Thing)? { __safeDI_storage.thing_Instantiator__Thing }
+		        var leaf: Leaf.SafeDIMockConfiguration { __safeDI_storage.leaf }
+		        var upper: Upper.SafeDIMockConfiguration { __safeDI_storage.upper }
+		        var lower: Lower.SafeDIMockConfiguration { __safeDI_storage.lower }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                thing_Thing: (() -> Thing)?,
+		                thing_Instantiator__Thing: (() -> Thing)?,
+		                leaf: Leaf.SafeDIMockConfiguration,
+		                upper: Upper.SafeDIMockConfiguration,
+		                lower: Lower.SafeDIMockConfiguration
+		            ) {
+		                self.thing_Thing = thing_Thing
+		                self.thing_Instantiator__Thing = thing_Instantiator__Thing
+		                self.leaf = leaf
+		                self.upper = upper
+		                self.lower = lower
+		            }
+
+		            let thing_Thing: (() -> Thing)?
+		            let thing_Instantiator__Thing: (() -> Thing)?
+		            let leaf: Leaf.SafeDIMockConfiguration
+		            let upper: Upper.SafeDIMockConfiguration
+		            let lower: Lower.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let thing_Thing = if let safeDIBuilder = safeDIOverrides.thing_Thing { safeDIBuilder() } else { Thing() }
+		        func __safeDI_thing_Instantiator__Thing() -> Thing {
+		            if let safeDIBuilder = safeDIOverrides.thing_Instantiator__Thing { safeDIBuilder() } else { Thing() }
+		        }
+		        let thing_Instantiator__Thing = Instantiator<Thing>(__safeDI_thing_Instantiator__Thing)
+		        func __safeDI_first(safeDIOverrides: ((Thing) -> First)?) -> First {
+		            let thing: Thing = thing_Thing
+		            return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(thing) } else { First(thing: thing) }
+		        }
+		        func __safeDI_second(safeDIOverrides: ((Instantiator<Thing>) -> Second)?) -> Second {
+		            let thing: Instantiator<Thing> = thing_Instantiator__Thing
+		            return if let safeDIBuilder = safeDIOverrides { safeDIBuilder(thing) } else { Second(thing: thing) }
+		        }
+		        func __safeDI_leaf(safeDIOverrides: Leaf.SafeDIMockConfiguration) -> Leaf {
+		            let first: First = __safeDI_first(safeDIOverrides: safeDIOverrides.first)
+		            let second: Second = __safeDI_second(safeDIOverrides: safeDIOverrides.second)
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(first, second) } else { Leaf(first: first, second: second) }
+		        }
+		        let leaf: Leaf = __safeDI_leaf(safeDIOverrides: safeDIOverrides.leaf)
+		        func __safeDI_lower(thing_Instantiator__Thing: Instantiator<Thing>?, safeDIOverrides: Lower.SafeDIMockConfiguration) -> Lower {
+		            let tail = if let safeDIBuilder = safeDIOverrides.tail { safeDIBuilder() } else { Tail() }
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(thing_Instantiator__Thing, tail) } else { Lower(thing: thing_Instantiator__Thing, tail: tail) }
+		        }
+		        func __safeDI_upper(safeDIOverrides: Upper.SafeDIMockConfiguration) -> Upper {
+		            let thing_Instantiator__Thing: Instantiator<Thing>? = nil
+		            let thing: Thing = thing_Thing
+		            let lower: Lower = __safeDI_lower(thing_Instantiator__Thing: thing_Instantiator__Thing, safeDIOverrides: safeDIOverrides.lower)
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(thing, lower) } else { Upper(thing: thing, lower: lower) }
+		        }
+		        let upper: Upper = __safeDI_upper(safeDIOverrides: safeDIOverrides.upper)
+		        let lower: Lower = __safeDI_lower(thing_Instantiator__Thing: thing_Instantiator__Thing, safeDIOverrides: safeDIOverrides.lower)
+		        return Root(leaf: leaf, upper: upper, lower: lower)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+	}
+
+	/// Which places of a type that receives a label named apart only if available a required receive above pins.
+	enum PinnedPlace: CaseIterable {
+		/// Its only place.
+		case everyPlace
+		/// One of its two places, which one function builds.
+		case onePlaceOfTwo
+		/// One of its two places, each built where it is read, by no function of its own.
+		case onePlaceOfTwoBuiltInPlace
+	}
+
+	@Test(arguments: PinnedPlace.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenRequiredReceiveAbovePlacePinsLabelNamedApart(place: PinnedPlace) async throws {
+		let fixture = switch place {
+		case .everyPlace: Self.fixtureOfReceivePinnedFromAbove
+		case .onePlaceOfTwo: Self.fixtureOfReceivePinnedFromAboveInOnePlace
+		case .onePlaceOfTwoBuiltInPlace: Self.fixtureOfReceivePinnedFromAboveInOnePlace.merging(Self.fixtureOfReceivePinnedFromAbove.filter { $0.key == "Lower.swift" }) { $1 }
+		}
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["mockOverrideNotParentField"]])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(\
+		thing_Thing: { marked(Thing(), "thing_Thing") }, \
+		thing_Instantiator__Thing: { marked(Thing(), "thing_Instantiator__Thing") }))
+		"""
+		var probes = [
+			DifferentialValueProbe("Root.mock()"),
+			DifferentialValueProbe(name: "overridden root", expression: overridden),
+			DifferentialValueProbe(name: "overridden value of the constant’s instantiator", expression: "\(overridden).leaf.second.thing.instantiate()"),
+			DifferentialValueProbe(name: "what the pinned place holds", expression: "\(overridden).upper.lower.thing as Any"),
+		]
+		switch place {
+		case .everyPlace:
+			break
+		case .onePlaceOfTwo, .onePlaceOfTwoBuiltInPlace:
+			probes.append(DifferentialValueProbe(name: "what the other place’s instantiator builds", expression: "\(overridden).lower.thing?.instantiate() as Any"))
+		}
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: probes,
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Every override was read: each marks a value its closure built.
+		for marker in ["thing_Thing", "thing_Instantiator__Thing"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
 	}
 
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `fixture` with a root that builds `Upper` in the second child’s place: `Upper` requires `thing` as the value and
+	/// builds `Lower`, which receives `thing` only if available as an `Instantiator`.
+	private static let fixtureOfReceivePinnedFromAbove: [String: String] = fixture.merging([
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable, Marked {
+		    public init(leaf: Leaf, upper: Upper) {
+		        self.leaf = leaf
+		        self.upper = upper
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let upper: Upper
+		    public var marker = "built"
+		}
+		""",
+		"Upper.swift": """
+		@Instantiable
+		public final class Upper: Instantiable, Marked {
+		    public init(thing: Thing, lower: Lower) {
+		        self.thing = thing
+		        self.lower = lower
+		    }
+
+		    @Received let thing: Thing
+		    @Instantiated let lower: Lower
+		    public var marker = "built"
+		}
+		""",
+		"Lower.swift": """
+		@Instantiable
+		public final class Lower: Instantiable, Marked {
+		    public init(thing: Instantiator<Thing>?) {
+		        self.thing = thing
+		    }
+
+		    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
+		    public var marker = "built"
+		}
+		""",
+	]) { $1 }
+
+	/// `fixtureOfReceivePinnedFromAbove` with a root that builds `Lower` itself too, beneath no required receive of the
+	/// label, and a `Lower` that builds a child, so that one function builds it in both places.
+	private static let fixtureOfReceivePinnedFromAboveInOnePlace: [String: String] = fixtureOfReceivePinnedFromAbove.merging([
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable, Marked {
+		    public init(leaf: Leaf, upper: Upper, lower: Lower) {
+		        self.leaf = leaf
+		        self.upper = upper
+		        self.lower = lower
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let upper: Upper
+		    @Instantiated let lower: Lower
+		    public var marker = "built"
+		}
+		""",
+		"Lower.swift": """
+		@Instantiable
+		public final class Lower: Instantiable, Marked {
+		    public init(thing: Instantiator<Thing>?, tail: Tail) {
+		        self.thing = thing
+		        self.tail = tail
+		    }
+
+		    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
+		    @Instantiated let tail: Tail
+		    public var marker = "built"
+		}
+		""",
+		"Tail.swift": """
+		@Instantiable
+		public final class Tail: Instantiable, Marked {
+		    public init() {}
+
+		    public var marker = "built"
+		}
+		""",
+	]) { $1 }
 
 	/// `fixture` with a root that builds `Third` in the second child’s place: `Third` receives `thing` only if available
 	/// as the value and builds `First`, which requires the value.
@@ -859,6 +1141,104 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 
 	/// What `body` returns with every internal mock root node records accept laid out from them, and the report of each
 	/// mock root of the run, in the order of the roots' names.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsNameAgainInReceiversFunction_whenRootInstantiatesLabelAsTypeNothingBuilds() async throws {
+		// The root instantiates `thing` as a type nothing builds, so `mock()` takes it as a parameter, and `Lower`, which the
+		// builder the root receives builds, receives `thing` only if available as another type, whose override `mock()`
+		// binds apart. The parameter hides no other value `mock()` binds of the label: `Lower` reads the name, as the walk
+		// writes it.
+		let fixture = [
+			"""
+			public final class Part: Instantiable {
+			    public init() {}
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(thing: Part, lowerBuilder: Instantiator<Lower>) {
+			        self.thing = thing
+			        self.lowerBuilder = lowerBuilder
+			    }
+
+			    @Instantiated let thing: Part
+			    @Received let lowerBuilder: Instantiator<Lower>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Lower: Instantiable {
+			    public init(thing: Thing?) {
+			        self.thing = thing
+			    }
+
+			    @Received(onlyIfAvailable: true) let thing: Thing?
+			}
+			""",
+			"""
+			public final class Thing: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            lowerBuilder: ((Thing?) -> Lower)? = nil,
+		            thing_Thing: Thing? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                lowerBuilder: lowerBuilder
+		            )
+		            self.thing_Thing = thing_Thing
+		        }
+
+		        var lowerBuilder: ((Thing?) -> Lower)? { __safeDI_storage.lowerBuilder }
+		        let thing_Thing: Thing?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                lowerBuilder: ((Thing?) -> Lower)?
+		            ) {
+		                self.lowerBuilder = lowerBuilder
+		            }
+
+		            let lowerBuilder: ((Thing?) -> Lower)?
+		        }
+		    }
+
+		    static func mock(
+		        thing: Part,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let thing_Thing: Thing? = safeDIOverrides.thing_Thing
+		        func __safeDI_lowerBuilder() -> Lower {
+		            let thing: Thing? = thing_Thing
+		            return if let safeDIBuilder = safeDIOverrides.lowerBuilder { safeDIBuilder(thing) } else { Lower(thing: thing) }
+		        }
+		        let lowerBuilder = Instantiator<Lower>(__safeDI_lowerBuilder)
+		        return Root(thing: thing, lowerBuilder: lowerBuilder)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	private static func layingOutMockRoots<Output>(
 		filesToDelete: inout [URL],
 		_ body: (inout [URL]) async throws -> Output,
