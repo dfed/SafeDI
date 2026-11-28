@@ -30,6 +30,7 @@ import sys
 import threading
 MEMBERS='\x00members'
 WALK_PARAMETERS={}
+WALK_PLAIN=set()
 HANDED='\x01'
 HANDS=[]
 NEAREST='\x00nearest'
@@ -118,6 +119,18 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
     members=[]
     while i<len(lines):
         line=lines[i]
+        own=FUNC.match(line)
+        if own and len(own.group(1))==base_indent and any(name in body_line for body_line in lines[i+1:block_end(lines,i)] for name in hoisted):
+            # a function declared here that is handed no configuration (only this level calls it, entry 1's
+            # exception) is a scope of its own: the functions its body calls are declared inside it, as the
+            # walk nests them, and not before it
+            end=block_end(lines,i)
+            scope=dict(entered)
+            scope[('sendable above',)]=entered.get(('sendable above',),False) or own.group(2).startswith('@Sendable')
+            out.append(line)
+            out+=expand(lines[i+1:end],hoisted,base_indent+4,scope,nearest,visible|level,referenced)
+            out.append(lines[end])
+            i=end+1; continue
         if line.strip().startswith(NEAREST):
             # entry 20: the configuration the nearest place of a type was entered with, for the functions below
             _,key,value=line.strip().split(' ',2)
@@ -261,7 +274,14 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             newname='__safeDI_'+bm.group(1)
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
         if guard and base_indent>8: ALSO_USED.append('10')
-        inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
+        marker=m.group(2)
+        if marker=='@Sendable nonisolated func ' and entered.get(('sendable above',)) and (base_indent,newname) in WALK_PLAIN:
+            # entry 24's rule in a mock: a function the records declare in mock()'s body, out of a @Sendable
+            # function that calls it, is marked @Sendable nonisolated; nested in that function, where the
+            # walk declares it, it is plain. Dropped only inside a function that is marked, and only where the
+            # walk's function of this name at this depth is plain.
+            marker='func ';ALSO_USED.append('24')
+        inst=([ind+guard.strip()] if guard else [])+[ind+marker+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]
         if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
         if how: sub=[choose_left_out(x,left_out) for x in sub]
@@ -275,6 +295,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             inside[('left',('slot',how[1]))]=left_out
             inside[('expr',('slot',how[1]))]=expr
         inside[('left out',)]=left_out
+        inside[('sendable above',)]=entered.get(('sendable above',),False) or marker.startswith('@Sendable')
         sub=expand(sub,hoisted,base_indent+4,inside,below,visible|level,referenced)
         inst+=sub+[ind+'}']
         # find statement start in out
@@ -355,10 +376,12 @@ def unhoist(text,walk=None):
             number+=1
             # entry 20, the places enum: the parameters the walk's functions declare in this mock, by indentation
             # and name, which decide only whether a parameter the records declare too is left declared
-            WALK_PARAMETERS.clear()
+            WALK_PARAMETERS.clear();WALK_PLAIN.clear()
             for walk_line in (walk_mocks[number].split('\n') if number<len(walk_mocks) else []):
                 declared=FUNC.match(walk_line)
-                if declared: WALK_PARAMETERS.setdefault((len(declared.group(1)),declared.group(3)),set()).update(split_top(declared.group(4)))
+                if declared:
+                    WALK_PARAMETERS.setdefault((len(declared.group(1)),declared.group(3)),set()).update(split_top(declared.group(4)))
+                    if declared.group(2)=='func ': WALK_PLAIN.add((len(declared.group(1)),declared.group(3)))
             j=i
             while not lines[j].endswith('{'): j+=1
             end=j+1
@@ -1257,7 +1280,7 @@ def main():
                 failures += 1
                 held += failure.startswith('held: ')
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '21 two variants', '23']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '21 two variants', '23', '24']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('held for a value cell: %d pairs' % held)
         print('%d of %d pairs equal after rewrite' % (total - failures, total))

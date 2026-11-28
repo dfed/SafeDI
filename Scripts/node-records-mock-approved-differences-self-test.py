@@ -84,6 +84,14 @@ CASES = [
     ('20-places', 'an override read of a configuration that is not fresh is dropped',
      once('return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(shedBuilder) } else { Porch(shedBuilder: shedBuilder) }',
           'return Porch(shedBuilder: shedBuilder)')),
+    ('20-left-out', 'the call along the edge the configurations leave out no longer enters its place left out',
+     once('__safeDI_entered.leavingOut.entering("alphaBuilder", Alpha.SafeDIMockConfiguration())',
+          '__safeDI_entered.entering("alphaBuilder", Alpha.SafeDIMockConfiguration())')),
+    ('20-left-out', 'a function left out hands the configuration it would hand where it is not',
+     once('__safeDI_entered.passing(__safeDI_entered.isLeftOut ? Gamma.SafeDIMockConfiguration() : __safeDI_entered.configuration.gamma)',
+          '__safeDI_entered.passing(__safeDI_entered.configuration.gamma)')),
+    ('20-left-out', 'a line of the places’ declaration is changed',
+     once('entered.isLeftOut ? handed : entered.configuration', 'entered.isLeftOut ? entered.configuration : handed')),
     ('20-parameter', 'the closing call hands another value',
      once('__safeDI_screenBuilder(session: session, __safeDI_entered: __safeDI_entered.entering("screenBuilder", Screen.SafeDIMockConfiguration()))',
           '__safeDI_screenBuilder(session: Session(), __safeDI_entered: __safeDI_entered.entering("screenBuilder", Screen.SafeDIMockConfiguration()))')),
@@ -165,6 +173,12 @@ CASES = [
     ('26', 'the root’s call enters the place with another configuration',
      once('__safeDI_entered.entering("screenBuilder", safeDIOverrides.screenBuilder)',
           '__safeDI_entered.entering("screenBuilder", safeDIOverrides.hubBuilder)')),
+    ('24', 'the function that calls the marked one is no longer marked',
+     once('@Sendable nonisolated func __safeDI_aBuilder(', 'func __safeDI_aBuilder(')),
+    ('24', 'the moved function is marked @Sendable only',
+     once('@Sendable nonisolated func __safeDI_bBuilder(', '@Sendable func __safeDI_bBuilder(')),
+    ('24', 'the moved function is isolated to the main actor',
+     once('@Sendable nonisolated func __safeDI_bBuilder(', '@MainActor func __safeDI_bBuilder(')),
 ]
 
 
