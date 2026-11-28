@@ -602,11 +602,16 @@ struct TypeFactsGraph: Sendable {
 		// The fills each call passes, with their fill paths.
 		var fills = [TypeFactsFill]()
 		var fillPathEntries = [TypeFactsFillPathEntry]()
+		var fillSitePathLabels = [Int32]()
 		for (edge, hole) in fillHoles {
 			let source = Self.source(ofEdge: Int(edge), in: graph)
 			let stackStart = Int32(fillPathEntries.count)
 			for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) {
 				fillPathEntries.append(TypeFactsFillPathEntry(property: properties.id(of: property), concreteType: types.id(of: concreteType)))
+			}
+			let sitePathStart = Int32(fillSitePathLabels.count)
+			for property in hole.pathBeforePropertyInItsFill {
+				fillSitePathLabels.append(labels.id(of: property.label))
 			}
 			fills.append(TypeFactsFill(
 				edge: edge,
@@ -616,6 +621,8 @@ struct TypeFactsGraph: Sendable {
 				filledHoleOwnerType: types.id(of: hole.ownerType),
 				stackStart: stackStart,
 				stackCount: Int32(fillPathEntries.count) - stackStart,
+				sitePathStart: sitePathStart,
+				sitePathCount: Int32(fillSitePathLabels.count) - sitePathStart,
 			))
 		}
 
@@ -658,6 +665,7 @@ struct TypeFactsGraph: Sendable {
 		self.parents = parents
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
+		self.fillSitePathLabels = fillSitePathLabels
 		// The holes each call passes up, which the caller's declarations hold no type to fill, each with the case of the
 		// called signature that holds it.
 		var passUpOffsets: [Int32] = [0]
@@ -967,6 +975,8 @@ struct TypeFactsGraph: Sendable {
 	let fills: [TypeFactsFill]
 	/// Every fill's path, each fill's in a run.
 	let fillPathEntries: [TypeFactsFillPathEntry]
+	/// The labels of every fill's site path before the hole's property, by label ID, each fill's in a run.
+	let fillSitePathLabels: [Int32]
 	/// Every call's passed-up holes, each node's in a run starting at its offset; the last offset is the count.
 	let passUpOffsets: [Int32]
 	let passUps: [TypeFactsPassUp]
@@ -1053,7 +1063,7 @@ struct TypeFactsGraph: Sendable {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
 		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
-		count += 7 * fills.count + 2 * fillPathEntries.count + propertyFacts.columnElementCount + readTable.count
+		count += 9 * fills.count + 2 * fillPathEntries.count + fillSitePathLabels.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		return count
