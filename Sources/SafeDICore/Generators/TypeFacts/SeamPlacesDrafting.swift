@@ -155,7 +155,7 @@ struct SeamPlacesDrafts: Sendable {
 			}
 		}
 		let rootVariant = world.rootVariant(0)
-		let (buildsInLine, closesCycle) = Self.routeFold(of: world)
+		let (buildsInLine, closesCycle, arrivals) = Self.routeFold(of: world)
 		// Which variants hold a place beneath them on a route, and which a call that closes a cycle: a fold up the calls
 		// that build in line, from the variants whose own edges hold one.
 		var holdsPlace = [Bool](repeating: false, count: variantCount)
@@ -367,6 +367,7 @@ struct SeamPlacesDrafts: Sendable {
 		namingWork = naming.work
 		self.buildsInLine = buildsInLine
 		self.closesCycle = closesCycle
+		self.arrivals = arrivals
 		self.holdsPlace = holdsPlace
 		self.levels = levels.map(withParents)
 		self.closingLevels = closingLevels.map(withParents)
@@ -396,6 +397,9 @@ struct SeamPlacesDrafts: Sendable {
 	/// A call can do both, where routes with and without the callee's cycle identity above reach it.
 	let buildsInLine: [Bool]
 	let closesCycle: [Bool]
+	/// For each call that builds its callee in line, by the same position, the identities the routes through it have above
+	/// the callee (`routeFold(of:)`); `nil` for a call that builds nothing in line.
+	let arrivals: [SeamPlacesRouteArrival?]
 	/// Whether each variant holds a place beneath it on a route: a hole, or a call that passes places up.
 	let holdsPlace: [Bool]
 
@@ -406,6 +410,23 @@ struct SeamPlacesDrafts: Sendable {
 
 	func closesCycle(_ level: SeamPlacesLevelID) -> Bool {
 		closesCycle[world.variants.callOffset(of: Int(level.variant)) + Int(level.edge)]
+	}
+
+	/// Whether the routes through `parent`, the call that builds `level`'s variant in line, build the level's edge in line,
+	/// and whether they close a cycle at it: what `buildsInLine(_:)` and `closesCycle(_:)` say over every route, said over
+	/// those through one parent, so that a level a cycle splits keeps the parents of each way it is entered.
+	func entries(of level: SeamPlacesLevelID, through parent: SeamPlacesLevelID) -> (buildsInLine: Bool, closesCycle: Bool) {
+		guard let arrival = arrivals[world.variants.callOffset(of: Int(parent.variant)) + Int(parent.edge)] else {
+			return (buildsInLine(level), closesCycle(level))
+		}
+		let declaration = world.declaration(of: level.variant)
+		let edges = world.edgeFacts(from: declaration)
+		let calls = world.calls(of: level.variant)
+		let edge = edges[edges.startIndex + Int(level.edge)]
+		let identity = world.cycle(of: world.declaration(of: calls[calls.startIndex + Int(level.edge)]))
+		let own = world.cycle(of: declaration)
+		let (some, every) = edge.isFill ? (arrival.someFills, arrival.everyFill) : (arrival.some.union([own]), arrival.every.union([own]))
+		return (!edge.isCallEdge || !every.contains(identity), edge.isCallEdge && some.contains(identity))
 	}
 
 	/// The labels a step of a route adds to a site's path: its property's, or, for a fill, the way from the seam it fills
@@ -644,7 +665,7 @@ struct SeamPlacesDrafts: Sendable {
 	/// beneath a fill starting again from the fills above it. An edge off every cycle (`isCallEdge` false) only builds in
 	/// line. Routes are folded down the calls that build in line, keeping for each variant the identities some route has
 	/// above it and those every route has, so the fold grows with the variants and identities, never with the routes.
-	static func routeFold(of world: TypeFactsGraph) -> (buildsInLine: [Bool], closesCycle: [Bool]) {
+	static func routeFold(of world: TypeFactsGraph) -> (buildsInLine: [Bool], closesCycle: [Bool], arrivals: [SeamPlacesRouteArrival?]) {
 		struct Above: Equatable {
 			/// The identities on some route above, and on every route above (`nil` before any route arrives).
 			var some = Set<CycleID>()
@@ -670,6 +691,7 @@ struct SeamPlacesDrafts: Sendable {
 		let callCount = world.variants.callOffset(of: world.variantCount)
 		var buildsInLine = [Bool](repeating: false, count: callCount)
 		var closesCycle = [Bool](repeating: false, count: callCount)
+		var arrivals = [SeamPlacesRouteArrival?](repeating: nil, count: callCount)
 		var above = [Above](repeating: Above(), count: world.variantCount)
 		let rootVariant = world.rootVariant(0)
 		_ = above[Int(rootVariant)].meet(some: [], every: [], someFills: [], everyFill: [], fillsTakenAbove: [])
@@ -704,13 +726,15 @@ struct SeamPlacesDrafts: Sendable {
 				}
 				guard inLine else { continue }
 				buildsInLine[callOffset + index] = true
+				// A variant is folded again whenever what is above it changes, so the last arrival a call writes is its final one.
+				arrivals[callOffset + index] = SeamPlacesRouteArrival(some: some, every: every, someFills: someFills, everyFill: everyFill)
 				if above[Int(callee)].meet(some: some, every: every, someFills: someFills, everyFill: everyFill, fillsTakenAbove: edge.isFill ? fillsTakenBeneathFills : fillsTakenAbove), !isPending[Int(callee)] {
 					isPending[Int(callee)] = true
 					pending.append(callee)
 				}
 			}
 		}
-		return (buildsInLine, closesCycle)
+		return (buildsInLine, closesCycle, arrivals)
 	}
 
 	/// Test only, deleted before merge: how the drafts' levels and own cases differ from `places`, the stored place graph
@@ -805,4 +829,13 @@ struct SeamPlacesDrafts: Sendable {
 		differences.append("report: naming: \(namingWork) work, \(cases.count) cases, \(cases.reduce(0) { $0 + $1.namingRoute.count }) route steps, \(world.variantCount) variants, \(callCount) calls")
 		return differences
 	}
+}
+
+/// The identities of cycles the routes through one call have above its callee, and those of the fills above alone, on
+/// some route and on every route (`SeamPlacesDrafts.routeFold(of:)`).
+struct SeamPlacesRouteArrival: Equatable, Sendable {
+	let some: Set<CycleID>
+	let every: Set<CycleID>
+	let someFills: Set<CycleID>
+	let everyFill: Set<CycleID>
 }

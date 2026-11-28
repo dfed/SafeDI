@@ -401,7 +401,11 @@ extension SeamPlacesDrafts {
 				}
 			} else {
 				for index in levelsByDraft[draft.id] ?? [] {
+					// A level a cycle splits keeps, for each way it is entered, the parents whose routes enter it so.
+					let isInLine = inLineLevelByDraft[draft.id] == index
 					for parent in draft.parents where buildsInLine(parent) {
+						let entries = self.entries(of: draft.id, through: parent)
+						guard isInLine ? entries.buildsInLine || !entries.closesCycle : entries.closesCycle else { continue }
 						guard let parentIndex = inLineLevelByDraft[parent], !assembled[index].parents.contains(parentIndex) else { continue }
 						assembled[index].parents.append(parentIndex)
 						assembled[index].declaredSegmentByParent.append(declaredSegment(of: draft, from: parent))
