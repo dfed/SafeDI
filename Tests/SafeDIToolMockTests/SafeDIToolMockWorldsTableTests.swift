@@ -1289,337 +1289,337 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		switch shape {
 		case .whollyInsidePane:
 			[
-			"""
-			@Instantiable(generateMock: true)
-			public struct NorthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				"""
+				@Instantiable(generateMock: true)
+				public struct NorthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct SouthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct SouthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Alpha: Instantiable {
-			    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
-			        self.betaBuilder = betaBuilder
-			        self.clock = clock
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Alpha: Instantiable {
+				    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
+				        self.betaBuilder = betaBuilder
+				        self.clock = clock
+				    }
 
-			    @Received let betaBuilder: Instantiator<Beta>
-			    @Instantiated let clock: Clock
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Beta: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>, ticker: Ticker) {
-			        self.alphaBuilder = alphaBuilder
-			        self.ticker = ticker
-			    }
+				    @Received let betaBuilder: Instantiator<Beta>
+				    @Instantiated let clock: Clock
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, ticker: Ticker) {
+				        self.alphaBuilder = alphaBuilder
+				        self.ticker = ticker
+				    }
 
-			    @Received let alphaBuilder: Instantiator<Alpha>
-			    @Instantiated let ticker: Ticker
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Ticker: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>) {
-			        self.alphaBuilder = alphaBuilder
-			    }
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let ticker: Ticker
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Ticker: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
 
-			    @Received let alphaBuilder: Instantiator<Alpha>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Clock: Instantiable {
-			    public init() {}
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Pane: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
-			        self.alphaBuilder = alphaBuilder
-			        self.betaBuilder = betaBuilder
-			    }
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Clock: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Pane: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+				        self.alphaBuilder = alphaBuilder
+				        self.betaBuilder = betaBuilder
+				    }
 
-			    @Instantiated let alphaBuilder: Instantiator<Alpha>
-			    @Instantiated let betaBuilder: Instantiator<Beta>
-			}
-			""",
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let betaBuilder: Instantiator<Beta>
+				}
+				""",
 			]
 		case .paneOnCycle:
 			[
-			"""
-			@Instantiable(generateMock: true)
-			public struct NorthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				"""
+				@Instantiable(generateMock: true)
+				public struct NorthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct SouthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct SouthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Alpha: Instantiable {
-			    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
-			        self.betaBuilder = betaBuilder
-			        self.clock = clock
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Alpha: Instantiable {
+				    public init(betaBuilder: Instantiator<Beta>, clock: Clock) {
+				        self.betaBuilder = betaBuilder
+				        self.clock = clock
+				    }
 
-			    @Received let betaBuilder: Instantiator<Beta>
-			    @Instantiated let clock: Clock
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Beta: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>) {
-			        self.alphaBuilder = alphaBuilder
-			    }
+				    @Received let betaBuilder: Instantiator<Beta>
+				    @Instantiated let clock: Clock
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
 
-			    @Received let alphaBuilder: Instantiator<Alpha>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Clock: Instantiable {
-			    public init() {}
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Pane: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>, gizmoBuilder: Instantiator<Gizmo>) {
-			        self.alphaBuilder = alphaBuilder
-			        self.betaBuilder = betaBuilder
-			        self.gizmoBuilder = gizmoBuilder
-			    }
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Clock: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Pane: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>, gizmoBuilder: Instantiator<Gizmo>) {
+				        self.alphaBuilder = alphaBuilder
+				        self.betaBuilder = betaBuilder
+				        self.gizmoBuilder = gizmoBuilder
+				    }
 
-			    @Instantiated let alphaBuilder: Instantiator<Alpha>
-			    @Instantiated let betaBuilder: Instantiator<Beta>
-			    @Instantiated let gizmoBuilder: Instantiator<Gizmo>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Gizmo: Instantiable {
-			    public init(paneBuilder: Instantiator<Pane>) {
-			        self.paneBuilder = paneBuilder
-			    }
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let betaBuilder: Instantiator<Beta>
+				    @Instantiated let gizmoBuilder: Instantiator<Gizmo>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Gizmo: Instantiable {
+				    public init(paneBuilder: Instantiator<Pane>) {
+				        self.paneBuilder = paneBuilder
+				    }
 
-			    @Instantiated let paneBuilder: Instantiator<Pane>
-			}
-			""",
+				    @Instantiated let paneBuilder: Instantiator<Pane>
+				}
+				""",
 			]
 		case .memberBuiltWithoutLoopToo:
 			[
-			"""
-			@Instantiable(generateMock: true)
-			public struct NorthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				"""
+				@Instantiable(generateMock: true)
+				public struct NorthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct SouthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct SouthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Alpha: Instantiable {
-			    public init(betaBuilder: Instantiator<Beta>?, clock: Clock) {
-			        self.betaBuilder = betaBuilder
-			        self.clock = clock
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Alpha: Instantiable {
+				    public init(betaBuilder: Instantiator<Beta>?, clock: Clock) {
+				        self.betaBuilder = betaBuilder
+				        self.clock = clock
+				    }
 
-			    @Received(onlyIfAvailable: true) let betaBuilder: Instantiator<Beta>?
-			    @Instantiated let clock: Clock
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Beta: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>) {
-			        self.alphaBuilder = alphaBuilder
-			    }
+				    @Received(onlyIfAvailable: true) let betaBuilder: Instantiator<Beta>?
+				    @Instantiated let clock: Clock
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
 
-			    @Received let alphaBuilder: Instantiator<Alpha>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Clock: Instantiable {
-			    public init() {}
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Pane: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
-			        self.alphaBuilder = alphaBuilder
-			        self.betaBuilder = betaBuilder
-			    }
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Clock: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Pane: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+				        self.alphaBuilder = alphaBuilder
+				        self.betaBuilder = betaBuilder
+				    }
 
-			    @Instantiated let alphaBuilder: Instantiator<Alpha>
-			    @Instantiated let betaBuilder: Instantiator<Beta>
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct WestShell: Instantiable {
-			    public init(dock: Dock) {
-			        self.dock = dock
-			    }
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let betaBuilder: Instantiator<Beta>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct WestShell: Instantiable {
+				    public init(dock: Dock) {
+				        self.dock = dock
+				    }
 
-			    @Instantiated let dock: Dock
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Dock: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>) {
-			        self.alphaBuilder = alphaBuilder
-			    }
+				    @Instantiated let dock: Dock
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Dock: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
 
-			    @Instantiated let alphaBuilder: Instantiator<Alpha>
-			}
-			""",
-		]
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+			]
 		case .innerLoopMemberBuiltByMockRootToo:
 			[
-			"""
-			@Instantiable(generateMock: true)
-			public struct NorthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				"""
+				@Instantiable(generateMock: true)
+				public struct NorthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct SouthShell: Instantiable {
-			    public init(pane: Pane) {
-			        self.pane = pane
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct SouthShell: Instantiable {
+				    public init(pane: Pane) {
+				        self.pane = pane
+				    }
 
-			    @Instantiated let pane: Pane
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Alpha: Instantiable {
-			    public init(betaBuilder: Instantiator<Beta>, hub: Hub) {
-			        self.betaBuilder = betaBuilder
-			        self.hub = hub
-			    }
+				    @Instantiated let pane: Pane
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Alpha: Instantiable {
+				    public init(betaBuilder: Instantiator<Beta>, hub: Hub) {
+				        self.betaBuilder = betaBuilder
+				        self.hub = hub
+				    }
 
-			    @Received let betaBuilder: Instantiator<Beta>
-			    @Instantiated let hub: Hub
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Beta: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>) {
-			        self.alphaBuilder = alphaBuilder
-			    }
+				    @Received let betaBuilder: Instantiator<Beta>
+				    @Instantiated let hub: Hub
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Beta: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>) {
+				        self.alphaBuilder = alphaBuilder
+				    }
 
-			    @Received let alphaBuilder: Instantiator<Alpha>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Pane: Instantiable {
-			    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
-			        self.alphaBuilder = alphaBuilder
-			        self.betaBuilder = betaBuilder
-			    }
+				    @Received let alphaBuilder: Instantiator<Alpha>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Pane: Instantiable {
+				    public init(alphaBuilder: Instantiator<Alpha>, betaBuilder: Instantiator<Beta>) {
+				        self.alphaBuilder = alphaBuilder
+				        self.betaBuilder = betaBuilder
+				    }
 
-			    @Instantiated let alphaBuilder: Instantiator<Alpha>
-			    @Instantiated let betaBuilder: Instantiator<Beta>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Hub: Instantiable {
-			    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
-			        self.deltaBuilder = deltaBuilder
-			        self.epsilonBuilder = epsilonBuilder
-			    }
+				    @Instantiated let alphaBuilder: Instantiator<Alpha>
+				    @Instantiated let betaBuilder: Instantiator<Beta>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Hub: Instantiable {
+				    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
+				        self.deltaBuilder = deltaBuilder
+				        self.epsilonBuilder = epsilonBuilder
+				    }
 
-			    @Instantiated let deltaBuilder: Instantiator<Delta>
-			    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Delta: Instantiable {
-			    public init(epsilonBuilder: Instantiator<Epsilon>) {
-			        self.epsilonBuilder = epsilonBuilder
-			    }
+				    @Instantiated let deltaBuilder: Instantiator<Delta>
+				    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Delta: Instantiable {
+				    public init(epsilonBuilder: Instantiator<Epsilon>) {
+				        self.epsilonBuilder = epsilonBuilder
+				    }
 
-			    @Received let epsilonBuilder: Instantiator<Epsilon>
-			}
-			""",
-			"""
-			@Instantiable
-			public struct Epsilon: Instantiable {
-			    public init(deltaBuilder: Instantiator<Delta>) {
-			        self.deltaBuilder = deltaBuilder
-			    }
+				    @Received let epsilonBuilder: Instantiator<Epsilon>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Epsilon: Instantiable {
+				    public init(deltaBuilder: Instantiator<Delta>) {
+				        self.deltaBuilder = deltaBuilder
+				    }
 
-			    @Received let deltaBuilder: Instantiator<Delta>
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public struct WestShell: Instantiable {
-			    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
-			        self.deltaBuilder = deltaBuilder
-			        self.epsilonBuilder = epsilonBuilder
-			    }
+				    @Received let deltaBuilder: Instantiator<Delta>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct WestShell: Instantiable {
+				    public init(deltaBuilder: Instantiator<Delta>, epsilonBuilder: Instantiator<Epsilon>) {
+				        self.deltaBuilder = deltaBuilder
+				        self.epsilonBuilder = epsilonBuilder
+				    }
 
-			    @Instantiated let deltaBuilder: Instantiator<Delta>
-			    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
-			}
-			""",
+				    @Instantiated let deltaBuilder: Instantiator<Delta>
+				    @Instantiated let epsilonBuilder: Instantiator<Epsilon>
+				}
+				""",
 			]
 		}
 	}
