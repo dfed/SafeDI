@@ -38,7 +38,14 @@ extension MockLowering {
 		/// Whether an edge in `cycleEdges` is above the node, which then reads no override from its configuration.
 		let isBeneathCycleEdge: Bool
 		/// The order in which the walk entered the node's children: a node before the nodes beneath it, in declaration order.
-		let walkOrder: Int
+		private(set) var walkOrder: Int
+
+		/// The construction with `walkOrder` in place of its own.
+		func entered(at walkOrder: Int) -> OneWayConstruction {
+			var construction = self
+			construction.walkOrder = walkOrder
+			return construction
+		}
 
 		/// What a construction reads from its type's configuration: the child properties, the default-valued parameters by
 		/// label and type, the types the builder takes, and the labels of the values it is handed, in order, so that two
@@ -58,12 +65,32 @@ extension MockLowering {
 			isBeneathCycleEdge: Bool,
 			walkOrder: Int,
 		) {
-			property = node.property
+			self.init(
+				property: node.property,
+				construction: construction,
+				childProperties: children.filter(\.isPropertyNode).map(\.property),
+				parentConcreteType: parentConcreteType,
+				isBeneathCycleEdge: isBeneathCycleEdge,
+				walkOrder: walkOrder,
+			)
+		}
+
+		/// The construction of a node built as `property` whose children build `childProperties`, in order, each but an
+		/// alias.
+		init(
+			property: Property,
+			construction: ScopeGenerator.MockConstruction,
+			childProperties: [Property],
+			parentConcreteType: String?,
+			isBeneathCycleEdge: Bool,
+			walkOrder: Int,
+		) {
+			self.property = property
 			self.parentConcreteType = parentConcreteType
 			customMockName = construction.customMockName
 			isExtensionBased = construction.isExtensionBased
 			requirements = Requirements(
-				childProperties: children.filter(\.isPropertyNode).map(\.property),
+				childProperties: childProperties,
 				defaultParameters: construction.defaultParameters.map { Property(label: $0.label, typeDescription: $0.typeDescription) },
 				builderParameterTypes: construction.builderParameterTypes,
 				builderArgumentLabels: construction.callSiteArguments.map(\.innerLabel),

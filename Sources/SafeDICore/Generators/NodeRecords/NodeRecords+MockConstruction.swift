@@ -53,6 +53,15 @@ extension NodeRecords {
 		world.edges(from: declaration).contains { world.kind(of: $0) != .alias && !world.scope(of: $0).isUnavailableDependency }
 	}
 
+	/// Whether `declaration`, a node of a mock root's world, is overridden by its configuration rather than by a closure:
+	/// it builds a child with an override of its own (`buildsMockChildWithOverride(_:in:)`), or its construction takes a
+	/// field of its configuration (`mockConfigurationFieldArguments(of:in:)`). A property nothing fulfills is a child with
+	/// no override of its own, as a rename is, so neither makes its type a configuration; its function is still handed the
+	/// overrides. The record of the node and the field of its parent's configuration both ask here, so that they agree.
+	static func isOverriddenByConfiguration(_ declaration: DeclarationID, in world: some NodeRecordSources) -> Bool {
+		buildsMockChildWithOverride(declaration, in: world) || !mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
+	}
+
 	/// The record of `declaration`'s place in a mock root's world, before an erased node's decoration
 	/// (`mockDecoratedRecord`): the record `builtByInitializer` makes of it, built with its type's hand-written mock where
 	/// the world says so (`TypeFactsConstruction.handWrittenMock`), which first tries
@@ -118,10 +127,8 @@ extension NodeRecords {
 		// A constant built in a function for its configuration's fields writes `return`, as the walk writes it.
 		record.functionAlwaysWritesReturn = !fieldArguments.isEmpty && record.property.propertyType.isConstant
 		let isConfiguredForChildren = isConfiguredMockNode(declaration, in: world)
-		// A property nothing fulfills is a child with no override of its own, as a rename is, so neither makes its type a
-		// configuration; its function is still handed the overrides.
-		let isConfigured = buildsMockChildWithOverride(declaration, in: world) || !fieldArguments.isEmpty
-		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, instantiable: instantiable)
+		let isConfigured = isOverriddenByConfiguration(declaration, in: world)
+		let slotType = mockOverrideType(of: record, usesHandWrittenMock: handWrittenMock != nil, isConfigured: isConfigured, isSendable: record.isSendable, instantiable: instantiable)
 		// A function that takes the places its world's cycles enter is handed its overrides beside them by every call, a
 		// call that closes a cycle on it included, and begins by entering its place where it has one
 		// (`NodeRecords+MockCycle.swift`).
@@ -159,12 +166,12 @@ extension NodeRecords {
 
 	/// The type of the override of `record`'s node, of `instantiable`'s type: its configuration where `isConfigured`, and
 	/// otherwise its override closure, as the configuration that holds it spells it
-	/// (`MockLowering.ConstantNode.builderClosureType`), `@Sendable` where a `@Sendable` function captures it.
-	static func mockOverrideType(of record: BuiltPlaceRecord, usesHandWrittenMock: Bool, isConfigured: Bool, instantiable: Instantiable) -> TypeDescription {
+	/// (`MockLowering.ConstantNode.builderClosureType`), `@Sendable` where `isSendable`: a `@Sendable` function captures it.
+	static func mockOverrideType(of record: BuiltPlaceRecord, usesHandWrittenMock: Bool, isConfigured: Bool, isSendable: Bool, instantiable: Instantiable) -> TypeDescription {
 		if isConfigured {
 			mockConfigurationType(of: instantiable)
 		} else {
-			.unknown(text: "(\(record.isSendable ? "@Sendable " : "")(\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			.unknown(text: "(\(isSendable ? "@Sendable " : "")(\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(record.property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 		}
 	}
 

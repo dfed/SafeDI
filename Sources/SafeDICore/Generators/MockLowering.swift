@@ -33,6 +33,17 @@ public enum MockLowering {
 		}
 	}
 
+	/// What a mock root declares of its nodes beside the statements that build them: whether it has any, whether one builds
+	/// a property, the members of its `SafeDIOverrides` that configure them, in inline order, and the configuration records
+	/// of its tree. The walk makes it, and the node records of a root they lay out
+	/// (`ScopeGenerator.nodeRecordsMockStatements`).
+	struct RootSurface: Sendable {
+		let hasNodes: Bool
+		let buildsPropertyNode: Bool
+		let overridesFields: [OverridesField]
+		let configurations: [ConfigurationRecord]
+	}
+
 	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,
 	/// generated from that node, holds. Recorded per node and construction in the order the walk finishes the nodes,
 	/// children first, never keyed by a generator, since one generator can build a type at two places.

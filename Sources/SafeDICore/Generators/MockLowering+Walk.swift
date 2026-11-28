@@ -211,8 +211,15 @@ extension ScopeGenerator {
 			rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
 		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
+		// What the mock declares of its nodes beside their statements, which the records give a root they lay out.
+		var surface = MockLowering.RootSurface(
+			hasNodes: !nodes.isEmpty,
+			buildsPropertyNode: nodes.contains(where: \.isPropertyNode),
+			overridesFields: inlineOrdered(nodes, property: \.property).compactMap(\.overridesField),
+			configurations: walk.configurationRecords,
+		)
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:walkSurface:handWrittenMockDefaultParameters:)`).
 		if let worldRoot {
 			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
@@ -288,7 +295,7 @@ extension ScopeGenerator {
 			outerDeclarations += rootReceivesBoundAgain
 			// Each lazy wrapper `mock()` makes of an instance it takes, under the name it binds it by.
 			outerDeclarations += signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.boundType) }
-			if let statements = Self.nodeRecordsMockStatements(
+			if let layout = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot,
 				bindsOnlyNodes: bindsOnlyNodes,
@@ -306,7 +313,11 @@ extension ScopeGenerator {
 					wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
 				),
 				outerDeclarations: outerDeclarations,
+				walkSurface: surface,
+				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			) {
+				surface = layout.surface
+				let statements = layout.statements
 				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes
 				// that read them.
 				let unavailableDependencyOverrideLines = unavailableDependencyOverrides.map { override in
@@ -320,29 +331,29 @@ extension ScopeGenerator {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
 		} else {
-			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, inlineOrderedNodes: inlineOrdered(nodes, property: \.property), bindingLines: bindingLines, builders: builders, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, surface: surface, bindingLines: bindingLines, builders: builders, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: surface.configurations)
 		}
 	}
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
 	/// its `SafeDIOverrides` where a node has an override, its members in the inline order of `inlineOrderedNodes`, and `mock()`, which takes `signature`'s parameters, the builders
 	/// `builders` (each label and declaration, in label order, listed among the flat received parameters) and the overrides, binds each node and returns the type built from them.
-	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, nodes: [MockLowering.TreeNode], inlineOrderedNodes: [MockLowering.TreeNode], bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, instancesReadByValue: Set<Property>, context: MockContext) -> String {
+	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, surface: MockLowering.RootSurface, bindingLines: [String], builders: [(label: String, declaration: String)], rootRenames: [String: [TypeDescription: String]], unavailableProperties: Set<Property>, instancesReadByValue: Set<Property>, context: MockContext) -> String {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		// A mock that takes nothing and binds nothing is one call of the type's construction.
-		guard !nodes.isEmpty || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty || !builders.isEmpty else { return mockWithoutTree(of: instantiable, context: context, passingNilTo: unavailableProperties) }
+		guard surface.hasNodes || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty || !builders.isEmpty else { return mockWithoutTree(of: instantiable, context: context, passingNilTo: unavailableProperties) }
 		var lines = ["extension \(typeName) {"]
-		let overridesFields = inlineOrderedNodes.compactMap(\.overridesField)
+		let overridesFields = surface.overridesFields
 		// The builders `mock()` takes, listed among the flat received parameters by label.
 		var parameterLines = signature.parameterLines(indent: bodyIndent, builders: builders)
 		if !overridesFields.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty {
 			lines.append(contentsOf: overridesStruct(of: overridesFields, onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
 			lines.append("")
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
-		} else if nodes.contains(where: \.isPropertyNode) {
+		} else if surface.buildsPropertyNode {
 			// A tree whose nodes have no override, such as a call of a mock that takes no overrides and
 			// offers no override closure, still declares its `SafeDIOverrides`, empty.
 			lines.append("\(indent)/// Overrides for the mock dependency tree.")
@@ -1848,6 +1859,16 @@ extension MockLowering {
 			case never
 			/// The configuration of the named type, `Sendable` where it is `@Sendable`-typed.
 			case whenConfigurationIsTypedSendable(String)
+		}
+
+		/// The member as generated code spells it, which two members of one meaning share.
+		var comparedSpelling: [String] {
+			let sendabilitySpelling = switch sendability {
+			case .always: "always"
+			case .never: "never"
+			case let .whenConfigurationIsTypedSendable(typeName): "when \(typeName)"
+			}
+			return [name, typeSource, defaultValue, sendabilitySpelling]
 		}
 
 		/// Whether SafeDI proves the member `Sendable`, given the types whose configurations are `@Sendable`-typed.

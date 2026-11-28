@@ -116,6 +116,8 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
+	/// A mock root's records say members of its `SafeDIOverrides` other than those its walk lists, or say none yet.
+	case mockSurfaceDiffers
 	/// A member of a loop of builders under two parents whose loops make different members of it again.
 	case builderLoopSharedApart
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
@@ -534,6 +536,8 @@ struct NodeRecords: Sendable {
 		}
 		self.rootBody = rootBody
 		self.records = records
+		self.kinds = kinds
+		bodyEntries = world.isMockWorld ? entries : []
 		mockEnteredSlots = enteredSlots?.slots ?? []
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
@@ -558,10 +562,17 @@ struct NodeRecords: Sendable {
 	}
 
 	/// Each variant's declaration.
-	private let declarationByVariant: [DeclarationID]
+	let declarationByVariant: [DeclarationID]
 
 	/// By variant.
-	private let records: [PlaceRecord?]
+	let records: [PlaceRecord?]
+
+	/// Each declaration's kind.
+	let kinds: [NodeRecordKind]
+
+	/// What each variant's body holds, in the order it builds it, by variant, in a mock root's world; empty in a production
+	/// root's.
+	let bodyEntries: [[BodyEntry]]
 
 	/// A place `init(world:seamTree:seamHoles:declaredTypeNames:)`'s walk is making: its variant, its node's edges in build
 	/// order and the next to walk, what its body holds so far, and what the places walked beneath it hand it.

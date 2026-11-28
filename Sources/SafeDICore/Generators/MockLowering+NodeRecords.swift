@@ -34,7 +34,7 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property]) -> String? {
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property], walkSurface: MockLowering.RootSurface, handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]]) -> (statements: String, surface: MockLowering.RootSurface)? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
@@ -84,8 +84,40 @@ extension ScopeGenerator {
 			MockEnteredSlot.mockEnteredPlacesDeclaration(slots: enteredSlots, isSendable: false)
 				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
 		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
+		// What the records say the mock declares of its nodes, which must be what its walk says while both are made.
+		guard let surface = nodeRecords.mockRootSurface(in: world, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters), surface.comparedMeaning == walkSurface.comparedMeaning else {
+			report(refusal: .mockSurfaceDiffers, everyRefusal: [.mockSurfaceDiffers], isLaidOut: false, recordCount: 0)
+			return nil
+		}
 		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
 		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
-		return statements.map { GeneratedCode.lines(enteredPlaces + $0).spelled() }
+		return statements.map { (statements: GeneratedCode.lines(enteredPlaces + $0).spelled(), surface: surface) }
+	}
+}
+
+extension MockLowering.RootSurface {
+	/// The surface as generated code and the module's checks read it, which two surfaces of one meaning share: each one-way
+	/// construction's walk order is its rank among the records', which two walks that enter one tree's nodes in one order
+	/// share however they count.
+	var comparedMeaning: ComparedMeaning {
+		let ranks = Dictionary(uniqueKeysWithValues: configurations.indices.filter { configurations[$0].oneWayConstruction != nil }.sorted { configurations[$0].oneWayConstruction?.walkOrder ?? 0 < configurations[$1].oneWayConstruction?.walkOrder ?? 0 }.enumerated().map { ($1, $0) })
+		return ComparedMeaning(
+			hasNodes: hasNodes,
+			buildsPropertyNode: buildsPropertyNode,
+			overridesFields: overridesFields.map(\.comparedSpelling),
+			configurations: configurations.indices.map { index in
+				var record = configurations[index]
+				record.oneWayConstruction = record.oneWayConstruction.map { $0.entered(at: ranks[index] ?? 0) }
+				return record
+			},
+		)
+	}
+
+	/// What `comparedMeaning` compares.
+	struct ComparedMeaning: Equatable {
+		let hasNodes: Bool
+		let buildsPropertyNode: Bool
+		let overridesFields: [[String]]
+		let configurations: [MockLowering.ConfigurationRecord]
 	}
 }
