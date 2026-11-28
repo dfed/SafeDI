@@ -108,8 +108,8 @@ struct TypeFactsOutcomes: Sendable {
 
 		// A call from outside the graph offers each read of the variant it reaches the outcome its caller's graph found.
 		// Two worlds' statements of their own root bodies are two statements here, so a shared variant the worlds call
-		// with each its own takes a parameter where each world built whole captures its statement: whether that join is
-		// the shared variant's outcome is a ruling the records track waits on (`MockWorldsSharedGraph.differences`).
+		// with each its own takes a parameter where each world built whole captures its statement, as two parents' join in
+		// one world; `MockWorldsSharedGraph.differences` compares the result with that join.
 		for (variant, offered) in input.seedOutcomes {
 			for (read, outcome) in offered.enumerated() {
 				cells.join(outcome, into: Int(readOffsets[Int(variant)]) + read, through: -1)
