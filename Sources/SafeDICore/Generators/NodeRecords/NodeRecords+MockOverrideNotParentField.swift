@@ -142,7 +142,7 @@ struct MockRootNames: Sendable {
 	}
 
 	/// The name the root gives each value of its level it names apart, by label and then type.
-	let namesApart: [String: [TypeDescription: String]]
+	var namesApart: [String: [TypeDescription: String]]
 
 	/// The name of the parameter `mock()` takes as a plain value for `property`, a dependency a type of the tree instantiates
 	/// that the mock cannot build, and `nil` where it takes none so.
@@ -207,7 +207,7 @@ extension NodeRecords {
 			// Both children of the label are named apart, or neither is.
 			guard declaration == 0, mockRootNames.namesApart(label: property.label) else { return .mockOverrideNotParentField }
 		}
-		guard declaration != 0 else { return nil }
+		guard declaration != 0 else { return refusalOfOrderingRootChildren(in: world) }
 		for dependency in world.scope(of: declaration).instantiable.dependencies {
 			switch dependency.source {
 			case .received:
@@ -222,6 +222,48 @@ extension NodeRecords {
 			}
 		}
 		return nil
+	}
+
+	/// The refusal a mock root's world holds where its children's order, and with it the order of `mock()`'s overrides,
+	/// may not be the walk's, or none. The walk orders the root's children by what their trees read, and a receive the mock
+	/// passes `nil` reads nothing, while the world orders them by every receive. So where a child the root names apart under
+	/// a label pinned from above is built before an earlier child, and neither that child's tree nor an earlier one's
+	/// requires it, the world may have moved it ahead for a receive of the label only if available, which the walk passes
+	/// `nil`.
+	private static func refusalOfOrderingRootChildren(in world: some NodeRecordSources) -> NodeRecordRefusal? {
+		let mockRootNames = world.mockRootNames
+		let children = Array(world.edges(from: 0))
+		let edgeFacts = world.edgeFacts(from: 0)
+		var requiredReceivesByChild = [Set<Property>?](repeating: nil, count: children.count)
+		for (laterIndex, later) in children.enumerated() {
+			guard let property = world.property(of: later), mockRootNames.nameApart(of: property) != nil, mockRootNames.pinsFromAbove(label: property.label) else { continue }
+			var isRequiredAbove = false
+			for earlierIndex in 0..<laterIndex {
+				let required = requiredReceivesByChild[earlierIndex] ?? requiredReceives(beneath: children[earlierIndex], in: world)
+				requiredReceivesByChild[earlierIndex] = required
+				isRequiredAbove = isRequiredAbove || required.contains(property)
+				guard isRequiredAbove || edgeFacts[edgeFacts.startIndex + laterIndex].buildPosition > edgeFacts[edgeFacts.startIndex + earlierIndex].buildPosition else {
+					return .mockOverrideNotParentField
+				}
+			}
+		}
+		return nil
+	}
+
+	/// The properties the types of `declaration`'s tree, its own included, receive and require.
+	private static func requiredReceives(beneath declaration: DeclarationID, in world: some NodeRecordSources) -> Set<Property> {
+		var received = Set<Property>()
+		var visited: Set<DeclarationID> = [declaration]
+		var declarationsToVisit = [declaration]
+		while let next = declarationsToVisit.popLast() {
+			for dependency in world.scope(of: next).instantiable.dependencies where dependency.source == .received(onlyIfAvailable: false) {
+				received.insert(dependency.property)
+			}
+			for child in world.edges(from: next) where visited.insert(child).inserted {
+				declarationsToVisit.append(child)
+			}
+		}
+		return received
 	}
 
 	/// Whether `declaration`, a call of another module's public mock, takes a parameter under a label the mock root names

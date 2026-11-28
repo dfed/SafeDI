@@ -94,8 +94,10 @@ extension NodeRecords {
 				if top.recordsConfiguration {
 					configurationRecord.oneWayConstruction = mockOneWayConstruction(of: declaration, children: entries, parentConcreteType: top.parentConcreteType, isBeneathCycleEdge: !top.isReachable, walkOrder: top.walkOrder, in: world)
 				} else {
-					let readsConfiguration = !ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: configurationRecord.usesMockInitializer, builderTypesDeclaredEscaping: []).defaultParameters.isEmpty
-						|| !Self.mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
+					// As the walk reads it (`MockLowering.Walk.readsConfigurationBuiltAfresh(of:usesMockInitializer:)`): whether the
+					// construction, which no override reaches beneath a repeated ancestor, reads a default from a configuration it
+					// builds afresh.
+					let readsConfiguration = !Self.mockFieldArgumentsReadAfresh(of: declaration, among: Self.mockConfigurationFieldArguments(of: declaration, in: world), in: world).isEmpty
 					configurationRecord.beneathRepeatedAncestor = MockLowering.ConfigurationRecord.BeneathRepeatedAncestor(
 						readsConfiguration: readsConfiguration,
 						isPublicMock: false,

@@ -1434,8 +1434,9 @@ struct TypeFactsGraph: Sendable {
 	/// Whether the world's holes are places: a seam's own tree, or a public mock's.
 	let holesArePlaces: Bool
 
-	/// What a mock root's lowering names that the node records of its world read (`NodeRecordSources`).
-	let mockRootNames: MockRootNames
+	/// What a mock root’s lowering names that the node records of its world read (`NodeRecordSources`). Its names apart
+	/// are set once the world is made, from the world’s edges from the root (`NodeRecords.mockRootNamesApart(in:besideNamesTaken:renamesAbove:)`).
+	var mockRootNames: MockRootNames
 
 	/// What each node's subtree reads from above it, by read ID.
 	let reads: ReadsFromAbove

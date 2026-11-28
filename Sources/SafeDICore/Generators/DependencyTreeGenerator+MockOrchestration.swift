@@ -30,7 +30,10 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
-		guard NodeRecordsObservation.observer != nil || MockWorldsTableObservation.observer != nil else {
+		// The roots of the mock roots' worlds are recorded where a test observes node records or the mock worlds' sharing, or
+		// mocks are laid out from them (`NodeRecordsObservation.laysOutMockRoots`), which a run lays out alike whether or not a
+		// test observes it.
+		guard NodeRecordsObservation.observer != nil || MockWorldsTableObservation.observer != nil || NodeRecordsObservation.laysOutMockRoots else {
 			return try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
 				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
@@ -40,9 +43,9 @@ extension DependencyTreeGenerator {
 				worldRootRecording: nil,
 			)
 		}
-		// The root of each mock root's world, by mocked type, where a test observes node records or the mock worlds' sharing:
-		// handed on through a task local, so that a run no test observes threads nothing through the mock roots'
-		// construction.
+		// The root of each mock root's world, by mocked type: handed on through a task local, so that a run that neither
+		// observes node records or the mock worlds' sharing nor lays mocks out from them threads nothing through the mock
+		// roots' construction.
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await generateMockCode(

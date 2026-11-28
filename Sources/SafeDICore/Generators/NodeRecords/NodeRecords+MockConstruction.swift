@@ -99,9 +99,10 @@ extension NodeRecords {
 		}
 		let fieldArguments = mockConfigurationFieldArguments(of: declaration, in: world)
 		// A node reached only beneath an edge the configurations leave out has no configuration: the walk builds it with
-		// no override, its default-valued parameters left to their defaults.
+		// no override, and passes only the defaults it reads from a configuration built afresh
+		// (`mockFieldArgumentsReadAfresh(of:among:in:)`); the others it leaves to the initializer's own.
 		let hasConfiguration = enteredSlots.map { $0.hasConfigurationByDeclaration[Int(declaration)] } ?? true
-		let fieldArgumentsPassed = hasConfiguration ? fieldArguments : []
+		let fieldArgumentsPassed = hasConfiguration ? fieldArguments : mockFieldArgumentsReadAfresh(of: declaration, among: fieldArguments, in: world)
 		// A node the mock builds for an optional property it promotes, a constant or an instantiator, is bound as the unwrapped
 		// type it makes, as every node the mock builds is bound non-optional; the optional receiver takes it through optional
 		// promotion.
@@ -158,7 +159,13 @@ extension NodeRecords {
 		// A wrapper around a call that hands the places entered spells its closure on one line, so a function on a cycle
 		// is no longer than the walk's, whose wrapper is handed the function itself.
 		record.wrapsCallOnOneLine = enteredSlots.map { takesMockEnteredPlaces(declaration, in: $0) } ?? false
-		guard hasConfiguration, let slot else { return record }
+		guard hasConfiguration, let slot else {
+			let configuredAfresh = ValuePath.emptyInitialization(mockConfigurationType(of: instantiable))
+			for (position, argument) in fieldArgumentsPassed {
+				record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: configuredAfresh)
+			}
+			return record
+		}
 		for (position, argument) in fieldArguments {
 			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
 		}
@@ -170,6 +177,24 @@ extension NodeRecords {
 			resultWrapper: nil,
 		)]
 		return record
+	}
+
+	/// The default-valued arguments among `fieldArguments` that the construction of `declaration`, which has no
+	/// configuration, reads from a configuration of its type built afresh, as the walk reads them where no override
+	/// reaches a node (`MockLowering.Walk.constructionArguments`): where the node is built with `init`, each default its
+	/// type's hand-written mock declares too, under the same label and type, whose default the configuration holds. A node
+	/// built with its hand-written mock leaves every default to the mock's own.
+	static func mockFieldArgumentsReadAfresh(
+		of declaration: DeclarationID,
+		among fieldArguments: [(position: Int, argument: Initializer.Argument)],
+		in world: some NodeRecordSources,
+	) -> [(position: Int, argument: Initializer.Argument)] {
+		let instantiable = world.scope(of: declaration).instantiable
+		guard world.construction(of: declaration) != .handWrittenMock, let mockInitializer = instantiable.mockInitializer else { return [] }
+		let handWrittenDefaults = ScopeGenerator.DefaultParameter.defaultParameters(of: mockInitializer, dependencies: instantiable.dependencies)
+		return fieldArguments.filter { _, argument in
+			handWrittenDefaults.contains { $0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping) }
+		}
 	}
 
 	/// The type of the override of `record`'s node, of `instantiable`'s type: its configuration where `isConfigured`, and

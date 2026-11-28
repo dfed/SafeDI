@@ -83,7 +83,10 @@ extension NodeRecords {
 		let property = world.mockRootNames.nameApart(of: declaredProperty).map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A rename of a wrapper a mock binds around an instance it takes reads the wrapper by name, as the walk reads it
 		// (`mockNamesReadApart(in:)`).
-		let fulfillingProperty = wrapperName.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
+		// A rename of the root's level reads a fulfilling label the root names apart by its name apart, as the walk reads it
+		// (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`).
+		let fulfillingNameApart = world.edges(from: 0).contains(declaration) ? world.mockRootNames.nameApart(of: renamedProperty) : nil
+		let fulfillingProperty = (wrapperName ?? fulfillingNameApart).map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
 		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance. A rename that
 		// keeps its label reads the label past its own declaration, so its key names what it renames, as any rename's does.
 		guard let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }

@@ -51,7 +51,10 @@ import SwiftSyntax
 ///   the places entered, so no node’s place in the tree shows there: the one read of a dropped field is the field of the
 ///   handed configuration a function hands on as it enters a child’s place (`__safeDI_entered.configuration.<label>`,
 ///   handed to `__safeDI_entered.entering`), where the outcome that lacks the field hands a new configuration of the
-///   field’s type (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`), and it reads as that. A dropped field
+///   field’s type (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`), and it reads as that. In a mock that
+///   may leave a place out, that call enters the place left out (`__safeDI_entered.leavingOut.entering`), where the
+///   outcome with the field hands it only where the places are not left out, or hands the field of the overrides a
+///   function without places entered takes, and that call reads as the other's (`leftOutEntryOfDroppedField(_:)`). A dropped field
 ///   is the field of an edge that closes a cycle, so the child it configures is on that cycle and its place is entered
 ///   by name: a call that enters the nearest place of a type, or only hands the places on, hands no dropped field, and
 ///   such a read there is not forgiven.
@@ -92,7 +95,8 @@ struct GraphFuzzerMockDifference: Sendable {
 		func form(of file: SourceFileSyntax, in fields: Fields, dropping droppedFields: Set<ConfigurationField>, sorted: Bool, recordingTo movableLists: MovableLists = MovableLists()) -> [UInt8] {
 			let collector = MockMethodCollector(viewMode: .sourceAccurate)
 			collector.walk(file)
-			let rendering = Rendering(fields: fields, droppedFields: droppedFields, mockMethods: collector, sortsParametersAndFields: sorted, breaksLabelTiesByText: renaming?.changesOrderOfTypeNames == true, movableLists: movableLists)
+			var rendering = Rendering(fields: fields, droppedFields: droppedFields, mockMethods: collector, sortsParametersAndFields: sorted, breaksLabelTiesByText: renaming?.changesOrderOfTypeNames == true, movableLists: movableLists)
+			rendering.functionsEnteredOnlyWithNewConfigurations = rendering.functionsEnteredOnlyWithNewConfigurations(in: file)
 			return GraphFuzzerExtensionOrder.sortingExtensionsWithinTheirPlaces(in: rendering.text(of: Syntax(file), in: Rendering.Scope()))
 		}
 		let sortsParametersAndFields = renaming.map { $0.reversesLabels || $0.changesOrderOfTypeNames } ?? false
@@ -384,6 +388,40 @@ private final class MockMethodCollector: SyntaxVisitor {
 	}
 }
 
+/// The functions of a file that take the places entered, with the configurations they are handed, and every call of a
+/// function by name, which a mock laid out from node records calls its functions by.
+private final class EnteredFunctionCollector: SyntaxVisitor {
+	var configurationsByFunction = [String: Set<String>]()
+	var calls = [FunctionCallExprSyntax]()
+	/// The names referred to other than as what a call calls, as a function is when handed on to be called later.
+	var namesReferredToUncalled = Set<String>()
+
+	override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		if let parameter = node.signature.parameterClause.parameters.first(where: { ($0.secondName ?? $0.firstName).text == "__safeDI_entered" }) {
+			let type = parameter.type.trimmedDescription
+			let opening = "__safeDI_Entered<"
+			// A configuration no field can spell is no configuration to compare.
+			let configuration = type.hasPrefix(opening) && type.hasSuffix(">") ? String(type.dropFirst(opening.count).dropLast()) : type
+			configurationsByFunction[node.name.text, default: []].insert(configuration)
+		}
+		return .visitChildren
+	}
+
+	override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+		if node.calledExpression.is(DeclReferenceExprSyntax.self) {
+			calls.append(node)
+		}
+		return .visitChildren
+	}
+
+	override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+		if node.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.id != node.id {
+			namesReferredToUncalled.insert(node.baseName.text)
+		}
+		return .visitChildren
+	}
+}
+
 /// The names of each list's movable elements, in the order a file holds them, by what the list is.
 private final class MovableLists {
 	struct List: Hashable {
@@ -432,6 +470,10 @@ private struct Rendering {
 	/// order of type names reorders.
 	let breaksLabelTiesByText: Bool
 	let movableLists: MovableLists
+	/// The functions of a mock laid out from node records that no configuration able to set an override reaches once
+	/// each dropped field reads as a new configuration, and that a dropped field reaches
+	/// (`functionsEnteredOnlyWithNewConfigurations(in:)`).
+	var functionsEnteredOnlyWithNewConfigurations = Set<String>()
 
 	func text(of node: Syntax, in outerScope: Scope) -> String {
 		let scope = innerScope(of: node, in: outerScope)
@@ -443,9 +485,14 @@ private struct Rendering {
 			return membersText(of: list, in: scope)
 		} else if let list = node.as(CodeBlockItemListSyntax.self), scope.isInFunctionBody {
 			return statementsText(of: list, in: scope)
+		} else if let call = node.as(FunctionCallExprSyntax.self), scope.isInFunctionBody, let entry = leftOutEntryOfDroppedField(call) {
+			// The other outcome has no field to hand, so its call enters the place left out with a new configuration of the
+			// field's type.
+			let enteredPlaces = Self.mayLeavePlacesOut(around: Syntax(call)) ? "\(Self.enteredPlacesParameterName).\(Self.leavingOutMemberName)" : Self.enteredPlacesParameterName
+			return "\(call.leadingTrivia)\(enteredPlaces).\(Self.enteringFunctionName)(\(entry.slot), \(entry.field.type)()\(entry.entersNearestOfType ? ", \(Self.nearestOfTypeArgumentLabel): true" : ""))\(call.trailingTrivia)"
 		} else if let list = node.as(LabeledExprListSyntax.self), scope.isInFunctionBody {
 			return argumentsText(of: list, in: scope)
-		} else if let expression = node.as(IfExprSyntax.self), let elseStatements = elseStatementsOfDroppedOverride(expression, in: scope) {
+		} else if let expression = node.as(IfExprSyntax.self), let elseStatements = elseStatementsOfDroppedOverride(expression, in: scope) ?? elseStatementsOfOverrideNoConfigurationReaches(expression) {
 			return expression.leadingTrivia.description + statementsText(of: elseStatements, in: scope) + expression.trailingTrivia.description
 		} else {
 			return node.children(viewMode: .sourceAccurate).map { text(of: $0, in: scope) }.joined()
@@ -665,6 +712,97 @@ private struct Rendering {
 		return field
 	}
 
+	/// The slot and the dropped field of `call`, when it enters a place by name with a dropped field
+	/// (`__safeDI_entered.entering(<slot>, <read>[, nearestOfType: true])`): the field the handed configuration holds
+	/// (`__safeDI_entered.configuration.<label>`), in a mock that may leave a place out read only where the places entered
+	/// are not left out (`__safeDI_entered.isLeftOut ? C() : __safeDI_entered.configuration.<label>`), or a field of the
+	/// configuration a function that takes no places entered is handed as its overrides (`safeDIOverrides.<label>`). The
+	/// other outcome, whose configuration has no such field, hands a new configuration of the field's type, and in a mock
+	/// that may leave a place out enters the place left out (`__safeDI_entered.leavingOut.entering(<slot>, C())`), as its
+	/// edge is one the configurations leave out.
+	func leftOutEntryOfDroppedField(_ call: FunctionCallExprSyntax) -> (slot: String, field: GraphFuzzerMockDifference.ConfigurationField, entersNearestOfType: Bool)? {
+		let arguments = Array(call.arguments)
+		// A call may also enter the nearest place of its type, `nearestOfType: true`, which both outcomes pass.
+		let entersNearestOfType = arguments.count == 3 && arguments[2].label?.text == Self.nearestOfTypeArgumentLabel && arguments[2].expression.trimmedDescription == "true"
+		guard let callee = call.calledExpression.as(MemberAccessExprSyntax.self),
+		      callee.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+		      callee.declName.baseName.text == Self.enteringFunctionName,
+		      call.trailingClosure == nil,
+		      arguments.count == 2 || entersNearestOfType,
+		      arguments[0].label == nil,
+		      arguments[1].label == nil,
+		      let field = droppedFieldHandedWhereNotLeftOut(by: arguments[1].expression)
+		else { return nil }
+		return (arguments[0].expression.trimmedDescription, field, entersNearestOfType)
+	}
+
+	/// Whether the mock method around `position` may leave a place out: its places entered declare `leavingOut`
+	/// (`MockEnteredPlacesDeclaration`). A mock that leaves none out enters every place with `entering`.
+	private static func mayLeavePlacesOut(around position: Syntax) -> Bool {
+		var outermostFunction: FunctionDeclSyntax?
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self) {
+				outermostFunction = function
+			}
+			ancestor = current.parent
+		}
+		return outermostFunction?.body?.statements.contains { item in
+			item.item.as(StructDeclSyntax.self).map { declaration in
+				declaration.name.text == enteredTypeName && declaration.memberBlock.members.contains { member in
+					member.decl.as(VariableDeclSyntax.self)?.bindings.contains { $0.pattern.trimmedDescription == leavingOutMemberName } ?? false
+				}
+			} ?? false
+		} ?? false
+	}
+
+	/// The dropped field `expression` hands a place entered by name, as `leftOutEntryOfDroppedField(_:)` describes.
+	private func droppedFieldHandedWhereNotLeftOut(by expression: ExprSyntax) -> GraphFuzzerMockDifference.ConfigurationField? {
+		// The parser leaves a ternary unfolded: its condition, the `? then :`, and its else expression in sequence.
+		if let sequence = expression.as(SequenceExprSyntax.self) {
+			let elements = Array(sequence.elements)
+			guard elements.count == 3,
+			      let condition = elements[0].as(MemberAccessExprSyntax.self),
+			      let choice = elements[1].as(UnresolvedTernaryExprSyntax.self),
+			      condition.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+			      condition.declName.baseName.text == Self.isLeftOutMemberName,
+			      let new = choice.thenExpression.as(FunctionCallExprSyntax.self), new.arguments.isEmpty, new.trailingClosure == nil,
+			      let field = droppedFieldOfHandedConfiguration(readBy: elements[2]),
+			      new.calledExpression.trimmedDescription == field.type
+			else { return nil }
+			return field
+		} else if let field = droppedFieldOfHandedConfiguration(readBy: expression) {
+			// Where the places entered are never left out, the field itself.
+			return field
+		} else if let read = expression.as(MemberAccessExprSyntax.self),
+		          read.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == mockOverridesParameterName,
+		          let owner = overridesParameterType(ofFunctionAround: Syntax(expression)),
+		          let field = fields[owner]?[read.declName.baseName.text],
+		          droppedFields.contains(field)
+		{
+			return field
+		} else {
+			return nil
+		}
+	}
+
+	/// The type of the overrides the nearest function around `position` takes, when it takes them as `safeDIOverrides`
+	/// and no places entered.
+	private func overridesParameterType(ofFunctionAround position: Syntax) -> String? {
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self) {
+				let parameters = function.signature.parameterClause.parameters
+				guard !parameters.contains(where: { ($0.secondName ?? $0.firstName).text == Self.enteredPlacesParameterName }),
+				      let overrides = parameters.first(where: { ($0.secondName ?? $0.firstName).text == mockOverridesParameterName })
+				else { return nil }
+				return overrides.type.trimmedDescription
+			}
+			ancestor = current.parent
+		}
+		return nil
+	}
+
 	/// The configuration the nearest function around `position` that takes the places entered is handed with them, as a
 	/// field's type spells it: the generic argument of its `__safeDI_entered` parameter's type.
 	private func configurationHandedToFunction(around position: Syntax) -> String? {
@@ -725,6 +863,136 @@ private struct Rendering {
 		      callsBuilderAs(call, construction: construction, namedByAStructNode: read.endsIn(Self.overrideBuilderName))
 		else { return nil }
 		return elseBody.statements
+	}
+
+	/// The statements of the `else` of `if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { … } else { … }`
+	/// when the `if` is what a function of a mock laid out from node records returns, no configuration that could set an
+	/// override reaches that function once each dropped field reads as a new configuration, a dropped field does
+	/// (`functionsEnteredOnlyWithNewConfigurations(in:)`), and the `if` hands the builder what the `else` constructs with. The other outcome has no field through which any
+	/// configuration reaches that function's node, so its function builds the node with no override to read
+	/// (`MockEnteredSlots.hasConfigurationByDeclaration`); here every configuration it is handed is a new one, whose
+	/// builder is `nil`, so what the `if` discards is only an override that is never set, and both build the same value.
+	/// This goes, with the rest of a dropped field's forgiveness, once `computeCycleEdges` no longer follows names.
+	private func elseStatementsOfOverrideNoConfigurationReaches(_ expression: IfExprSyntax) -> CodeBlockItemListSyntax? {
+		guard expression.conditions.count == 1,
+		      case let .optionalBinding(condition) = expression.conditions.first?.condition,
+		      condition.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == Self.overrideBuilderName,
+		      let read = condition.initializer?.value.as(MemberAccessExprSyntax.self),
+		      read.declName.baseName.text == Self.overrideBuilderName,
+		      Self.isHandedConfiguration(read.base),
+		      case let .codeBlock(elseBody) = expression.elseBody,
+		      let function = Self.functionReturning(expression),
+		      functionsEnteredOnlyWithNewConfigurations.contains(function.name.text),
+		      let call = onlyCall(in: expression.body.statements),
+		      let construction = onlyCall(in: elseBody.statements),
+		      callsBuilderAs(call, construction: construction, namedByAStructNode: true)
+		else { return nil }
+		return elseBody.statements
+	}
+
+	/// Whether `expression` is `__safeDI_entered.configuration`, the configuration a function is handed with the places
+	/// entered.
+	/// Whether `expression` is the places entered, or the places entered left out: `__safeDI_entered` or
+	/// `__safeDI_entered.leavingOut`.
+	private static func isEnteredPlaces(_ expression: ExprSyntax?) -> Bool {
+		if let leavingOut = expression?.as(MemberAccessExprSyntax.self) {
+			leavingOut.declName.baseName.text == leavingOutMemberName && leavingOut.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
+		} else {
+			expression?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
+		}
+	}
+
+	private static func isHandedConfiguration(_ expression: ExprSyntax?) -> Bool {
+		guard let configuration = expression?.as(MemberAccessExprSyntax.self) else { return false }
+		return configuration.declName.baseName.text == enteredConfigurationMemberName && configuration.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
+	}
+
+	/// The function whose last statement returns `expression`, directly.
+	private static func functionReturning(_ expression: IfExprSyntax) -> FunctionDeclSyntax? {
+		let statement = expression.parent?.as(ReturnStmtSyntax.self).map(Syntax.init) ?? expression.parent?.as(ExpressionStmtSyntax.self).map(Syntax.init) ?? Syntax(expression)
+		guard let item = statement.parent?.as(CodeBlockItemSyntax.self),
+		      let statements = item.parent?.as(CodeBlockItemListSyntax.self),
+		      statements.last?.id == item.id,
+		      let function = statements.parent?.as(CodeBlockSyntax.self)?.parent?.as(FunctionDeclSyntax.self)
+		else { return nil }
+		return function
+	}
+
+	/// The functions of `file` that take the places entered with a configuration and are handed no configuration that
+	/// could set an override, once each dropped field reads as a new configuration: every call hands
+	/// `__safeDI_entered.entering` a new configuration of the function's type, a dropped field of that type, or a field
+	/// of the configuration handed to a function that is itself one of these; and a dropped field reaches the function,
+	/// directly or through such a function. In the other outcome no field reaches its node, and so no configuration.
+	/// A function declared twice with different configurations, called any other way, or referred to uncalled is not one.
+	func functionsEnteredOnlyWithNewConfigurations(in file: SourceFileSyntax) -> Set<String> {
+		let collector = EnteredFunctionCollector(viewMode: .sourceAccurate)
+		collector.walk(file)
+		var candidates = Set(collector.configurationsByFunction.keys)
+		candidates.subtract(collector.namesReferredToUncalled)
+		for (name, configurations) in collector.configurationsByFunction where configurations.count > 1 {
+			candidates.remove(name)
+		}
+		var handsDroppedField = Set<String>()
+		// The functions whose handed configuration each candidate is handed a field of.
+		var handedFieldsOfFunctions = [String: Set<String>]()
+		for call in collector.calls {
+			guard let name = call.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text,
+			      let configuration = collector.configurationsByFunction[name]?.first
+			else { continue }
+			guard let handed = call.arguments.first(where: { $0.label?.text == Self.enteredPlacesParameterName })?.expression.as(FunctionCallExprSyntax.self),
+			      let callee = handed.calledExpression.as(MemberAccessExprSyntax.self),
+			      Self.isEnteredPlaces(callee.base),
+			      callee.declName.baseName.text == Self.enteringFunctionName,
+			      // A call that enters the nearest place of its type takes that place's configuration where there is one,
+			      // which may set an override, whatever configuration it hands.
+			      handed.arguments.count == 2,
+			      let handedConfiguration = handed.arguments.dropFirst().first, handedConfiguration.label == nil
+			else {
+				candidates.remove(name)
+				continue
+			}
+			if let field = droppedFieldOfHandedConfiguration(readBy: handedConfiguration.expression) ?? leftOutEntryOfDroppedField(handed)?.field, field.type == configuration {
+				handsDroppedField.insert(name)
+			} else if let new = handedConfiguration.expression.as(FunctionCallExprSyntax.self), new.arguments.isEmpty, new.trailingClosure == nil, new.calledExpression.trimmedDescription == configuration {
+				// A new configuration, as the other outcome hands.
+			} else if let read = handedConfiguration.expression.as(MemberAccessExprSyntax.self), Self.isHandedConfiguration(read.base), let caller = Self.functionTakingEnteredPlaces(around: Syntax(call)) {
+				handedFieldsOfFunctions[name, default: []].insert(caller)
+			} else {
+				candidates.remove(name)
+			}
+		}
+		// A candidate handed a field of a function that is not one is not one either.
+		var changed = true
+		while changed {
+			changed = false
+			for name in candidates where !(handedFieldsOfFunctions[name] ?? []).isSubset(of: candidates) {
+				candidates.remove(name)
+				changed = true
+			}
+		}
+		// Of those, the ones a dropped field reaches.
+		var reached = handsDroppedField.intersection(candidates)
+		changed = true
+		while changed {
+			changed = false
+			for name in candidates.subtracting(reached) where !(handedFieldsOfFunctions[name] ?? []).isDisjoint(with: reached) {
+				reached.insert(name)
+				changed = true
+			}
+		}
+		return reached
+	}
+
+	/// The name of the nearest function around `position` that takes the places entered.
+	private static func functionTakingEnteredPlaces(around position: Syntax) -> String? {
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self), function.signature.parameterClause.parameters.contains(where: { ($0.secondName ?? $0.firstName).text == enteredPlacesParameterName }) {
+				return function.name.text
+			}
+			ancestor = current.parent
+		}
+		return nil
 	}
 
 	/// The one call `statements` hold, or `nil` when they hold anything else.
@@ -931,4 +1199,7 @@ private struct Rendering {
 	private static let enteredTypeName = "__safeDI_Entered"
 	private static let enteredConfigurationMemberName = "configuration"
 	private static let enteringFunctionName = "entering"
+	private static let leavingOutMemberName = "leavingOut"
+	private static let nearestOfTypeArgumentLabel = "nearestOfType"
+	private static let isLeftOutMemberName = "isLeftOut"
 }

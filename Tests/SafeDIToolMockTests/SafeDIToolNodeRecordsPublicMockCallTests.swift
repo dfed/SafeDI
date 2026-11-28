@@ -117,6 +117,116 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsPromotedCallUnwrapped_whenCalledMocksTakeItAsOptionalParameter() async throws {
+		// `Service`’s and `Vault`’s public mocks take `analytics` as an optional parameter, which `Root` promotes and builds
+		// once by `Analytics`’s public mock: bound as the type the call returns, as the walk binds it.
+		let (output, reports) = try await mockOfRoot(
+			feed: """
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public final class Analytics: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Vault: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+			""",
+			app: """
+			@Instantiable(generateMock: true)
+			public struct Root: Instantiable {
+			    public init(service: Service, vault: Vault) {
+			        self.service = service
+			        self.vault = vault
+			    }
+
+			    @Received let service: Service
+			    @Received let vault: Vault
+			}
+			""",
+		)
+		#expect(output == generatedFileHeader + """
+		#if canImport(Feed)
+		import Feed
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            vault: Vault.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                service: service,
+		                vault: vault
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        var vault: Vault.SafeDIOverrides { __safeDI_storage.vault }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                service: Service.SafeDIOverrides,
+		                vault: Vault.SafeDIOverrides
+		            ) {
+		                self.analytics = analytics
+		                self.service = service
+		                self.vault = vault
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let service: Service.SafeDIOverrides
+		            let vault: Vault.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        _ = Analytics.__safeDI_Analytics_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics.__safeDI_mock() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        _ = Vault.__safeDI_Vault_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let vault = Vault.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides.vault)
+		        return Root(service: service, vault: vault)
+		    }
+		}
+		#endif
+		""")
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_laysOutCallFromNodeRecords_whenConstantCallIsErasedToPropertysType() async throws {
 		// Two terms claim `service`: the call, and production's erasure, which wraps the call in `AnyServicing`.
 		let (output, reports) = try await mockOfRoot(
@@ -348,8 +458,8 @@ struct SafeDIToolNodeRecordsPublicMockCallTests: ~Copyable {
 
 	/// The bytes pinned here are the engine's, which lifts every function into the root's body, and differ from the walk's;
 	/// the values equal the walk's (`mock_buildsTheWalksValues_whenEveryPlaceOfCallsBeneathRootAndAnotherNodeIsOverridden`).
-	/// Only a test lays a mock root out from records (`NodeRecordsObservation.laysOutMockRoots`, with an observer set), so
-	/// no run without one writes these bytes.
+	/// Only a test lays a mock root out from records (`NodeRecordsObservation.laysOutMockRoots`, observed or not), so no
+	/// run of `generate` writes these bytes.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_laysOutCallFromNodeRecords_whenInstantiatorCallIsBuiltBeneathAnotherNode() async throws {

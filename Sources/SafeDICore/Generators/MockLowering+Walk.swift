@@ -180,36 +180,54 @@ extension ScopeGenerator {
 		// The mocked type's own receive of a flat received parameter or override named apart is bound
 		// again under its label before the tree, unless the root's level binds that label (`generateMockRootCode`'s
 		// `rootDependenciesToRebind`), when the mocked type is passed the name.
-		let rootLevelBindingNames = walk.rootPropertyNodeBindingNames.union(signature.onlyIfAvailableOverrides.map(\.name))
-		var rootRenames = walk.rootRenames
-		// The mocked type's own receive of a wrapper `mock()` binds is passed its binding by name.
-		for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
-			rootRenames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
+		// What the root binds beside its nodes and passes the mocked type, read from the names its level binds: the walk's,
+		// or, where node records lay the root out, its world's.
+		func rootBindings(of levelNames: MockLowering.RootLevelNames) -> MockLowering.RootBindings {
+			let rootLevelBindingNames = levelNames.propertyNodeBindingNames.union(signature.onlyIfAvailableOverrides.map(\.name))
+			var rootRenames = levelNames.namesApart
+			// The mocked type's own receive of a wrapper `mock()` binds is passed its binding by name.
+			for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
+				rootRenames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
+			}
+			var rootReceiverBindingLines = [String]()
+			var rootReceivesBoundAgain = [Property]()
+			for dependency in instantiable.dependencies where dependency.source.isReceived {
+				guard let names = signature.renamesByLabelAndType[dependency.property.label],
+				      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription],
+				      !rootLevelBindingNames.contains(dependency.property.label)
+				else { continue }
+				rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
+				rootReceivesBoundAgain.append(dependency.property)
+				rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
+			}
+			// The mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
+			// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
+			// that binding, as `generateReturnArgumentList` passes them.
+			// A public mock's root passes them alike, as `generateReturnArgumentList` does for every root.
+			let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
+			// Each such receive of a node named apart is passed the node's name.
+			for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
+				rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
+			}
+			// A node or an alias the root's level names apart is bound under that name by its record, and a parameter or override
+			// under the name `mock()` gives it, an uncovered dependency's included; any other name is neither's.
+			let namesAreBindings = rootRenames.allSatisfy { label, names in
+				names.allSatisfy { type, name in
+					levelNames.propertyNodeBindingNames.contains(name)
+						|| levelNames.aliasBindingNamesApart.contains(name)
+						|| signature.renamesByLabelAndType[label]?[type] == name
+						|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
+						|| signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name
+				}
+			}
+			return MockLowering.RootBindings(renames: rootRenames, receiverBindingLines: rootReceiverBindingLines, receivesBoundAgain: rootReceivesBoundAgain, namesAreBindings: namesAreBindings)
 		}
-		var rootReceiverBindingLines = [String]()
-		var rootReceivesBoundAgain = [Property]()
-		for dependency in instantiable.dependencies where dependency.source.isReceived {
-			guard let names = signature.renamesByLabelAndType[dependency.property.label],
-			      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription],
-			      !rootLevelBindingNames.contains(dependency.property.label)
-			else { continue }
-			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
-			rootReceivesBoundAgain.append(dependency.property)
-			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
-		}
-		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + rootReceiverBindingLines
+		let walkBindings = rootBindings(of: MockLowering.RootLevelNames(namesApart: walk.rootRenames, propertyNodeBindingNames: walk.rootPropertyNodeBindingNames, aliasBindingNamesApart: walk.rootAliasBindingNamesApart))
+		var rootRenames = walkBindings.renames
+		let linesBoundBesideNodes = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + walkBindings.receiverBindingLines
 		bindingLines.insert(contentsOf: linesBoundBesideNodes, at: rootReceiverBindingIndex)
-		// The mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
-		// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
-		// that binding, as `generateReturnArgumentList` passes them.
 		// A public mock's root passes its instances alike (`publicMockWithTree`).
 		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
-		// A public mock's root passes them alike, as `generateReturnArgumentList` does for every root.
-		let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
-		// Each such receive of a node named apart is passed the node's name.
-		for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
-			rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
-		}
 		let builders = (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }
 		// What the mock declares of its nodes beside their statements, which the records give a root they lay out.
 		var surface = MockLowering.RootSurface(
@@ -219,7 +237,7 @@ extension ScopeGenerator {
 			configurations: walk.configurationRecords,
 		)
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:handWrittenMockDefaultParameters:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodesBesideNames:rootBindings:sendableConfigurationTypeNames:rootNames:outerDeclarations:levelNamesTaken:renamesAbove:handWrittenMockDefaultParameters:)`).
 		if let worldRoot {
 			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
@@ -242,20 +260,9 @@ extension ScopeGenerator {
 			// name; one taken as a `@Sendable` autoclosure is read into a local before the nodes and bound again by that type.
 			// A lazy wrapper `mock()` makes of an instance it takes is bound before the nodes, which are passed it by name
 			// (`NodeRecords.mockNamesReadApart(in:)`).
-			let bindsOnlyNodes = rootReceiverBindingIndex == bindingsBeforeNodes
+			let bindsOnlyNodesBesideNames = rootReceiverBindingIndex == bindingsBeforeNodes
 				&& !signature.uncoveredRootParameters.contains(where: \.isSendableAutoclosure)
 				&& bindsOnlyPassedUpBuilders
-				// A node or an alias the root's level names apart is bound under that name by its record, and a parameter or override
-				// under the name `mock()` gives it, an uncovered dependency's included; any other name is neither's.
-				&& rootRenames.allSatisfy { label, names in
-					names.allSatisfy { type, name in
-						walk.rootPropertyNodeBindingNames.contains(name)
-							|| walk.rootAliasBindingNamesApart.contains(name)
-							|| signature.renamesByLabelAndType[label]?[type] == name
-							|| signature.uncoveredParameterNamesByLabelAndType[label]?[type] == name
-							|| signature.lazilyInstantiatedBindingNamesByLabelAndType[label]?[type] == name
-					}
-				}
 			var outerDeclarations = signature.parameters.map { Property(label: $0.name, typeDescription: $0.property.typeDescription) }
 			for builder in signature.passedUpBuilders {
 				for property in builder.properties.prefix(1) {
@@ -293,16 +300,16 @@ extension ScopeGenerator {
 			// property read `mock()`'s overrides. A public mock takes no override of one: it takes a builder.
 			let unavailableDependencyOverrides = signature.onlyIfAvailableOverrides.filter { signature.unavailableDependencyOverrideNames[$0.receivedProperty] != nil }
 			outerDeclarations += unavailableDependencyOverrides.map { Property(label: $0.name, typeDescription: $0.typeDescription) }
-			outerDeclarations += rootReceivesBoundAgain
-			// Each lazy wrapper `mock()` makes of an instance it takes, under the name it binds it by.
-			outerDeclarations += signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.boundType) }
+			// The mocked type's own receives bound again follow, then each lazy wrapper `mock()` makes of an instance it takes,
+			// under the name it binds it by.
+			let declarationsAfterReceivesBoundAgain = signature.lazilyInstantiatedBindings.map { Property(label: $0.name, typeDescription: $0.boundType) }
 			if let layout = Self.nodeRecordsMockStatements(
 				of: instantiable,
 				worldRoot: worldRoot.scope,
-				bindsOnlyNodes: bindsOnlyNodes,
+				bindsOnlyNodesBesideNames: bindsOnlyNodesBesideNames,
+				rootBindings: rootBindings(of:),
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 				rootNames: MockRootNames(
-					namesApart: walk.rootRenames,
 					unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } },
 					passedUpBuilderNames: signature.passedUpBuilderNames,
 					uncoveredParameterNames: Dictionary(
@@ -315,17 +322,22 @@ extension ScopeGenerator {
 					loopMembersBoundNowhere: Set(mockLoweringLoopMembersReadOnlyInsideTheirLoop.compactMap { propertiesToGenerate[$0].property }),
 					receivesPassedNil: worldRoot.receivesPassedNil,
 				),
-				outerDeclarations: outerDeclarations,
+				outerDeclarations: (beforeReceivesBoundAgain: outerDeclarations, afterReceivesBoundAgain: declarationsAfterReceivesBoundAgain),
+				levelNamesTaken: walk.rootLevelNamesTaken,
+				renamesAbove: walk.renames,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			) {
 				surface = layout.surface
+				rootRenames = layout.bindings.renames
 				let statements = layout.statements
 				// The builders' and the overrides' bindings, and the mocked type's own receives bound again, stay before the nodes
 				// that read them.
 				let unavailableDependencyOverrideLines = unavailableDependencyOverrides.map { override in
 					"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 				}
-				bindingLines = bindingLines.prefix(bindingsBeforeNodes) + unavailableDependencyOverrideLines + bindingLines.dropFirst(bindingsBeforeNodes).prefix(linesBoundBesideNodes.count) + (statements.isEmpty ? [] : [statements])
+				let linesBoundBesideLaidOutNodes: [String] = signature.lazilyInstantiatedBindingLines(indent: bodyIndent) + layout.bindings.receiverBindingLines
+				let laidOutLines: [String] = statements.isEmpty ? [] : [statements]
+				bindingLines = Array(bindingLines.prefix(bindingsBeforeNodes)) + unavailableDependencyOverrideLines + linesBoundBesideLaidOutNodes + laidOutLines
 			}
 		}
 		// A public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).

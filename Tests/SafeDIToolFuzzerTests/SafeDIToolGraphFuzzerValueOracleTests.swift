@@ -484,6 +484,13 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	}
 
 	@Test
+	func builtTypeNames_nameTheLeaf_whenBuilderClosureReturnsTheActorClassLeafErased() {
+		// Seeds 600 and 768: the actor and the class build the same `ErasedInstantiator` of `ActorClassLeaf`, whose override
+		// returns `AnyActorClassLeaf`, and the model names the leaf.
+		#expect(GraphFuzzerMockOverrides.builtTypeNames(of: [(label: "actorClassLeafBuilder", type: "(@Sendable () -> S1_AnyActorClassLeaf)?")], typeNamePrefix: "S1_") == ["S1_ActorClassLeaf"])
+	}
+
+	@Test
 	func disagreement_reportsBothMultisets_whenMockBuildsADependencyTwice() {
 		let expectation = Self.expectation(of: "S1_Screen", in: Self.sharedStoreFixture)
 		let mockFile = Self.sharedStoreMockFile(overrideFields: Self.sharedStoreOverrideFields + [

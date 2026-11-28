@@ -958,6 +958,52 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// `A` is built in a plain function beneath `Root` and again, on its cycle, in a `@Sendable` one, and each `A` builds
+	/// `Leaf`, on a cycle of its own: the mock's body holds a function of `Leaf` for the plain `A` and one for the
+	/// `@Sendable` `A`, which calls it, so that one is `@Sendable nonisolated` (approved difference 24) and named apart from
+	/// the other (approved difference 11), both on one function, as in the graph fuzzer's seed 78 beneath layers.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeOnCycleIsBuiltBeneathPlainFunctionAndBeneathSendableFunction() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public var marker = ""
+				}
+				""",
+				"A.swift": """
+				@Instantiable
+				public final class A: Instantiable, Marked, @unchecked Sendable {
+				    public init(aBuilder: SendableInstantiator<A>, leafBuilder: Instantiator<Leaf>) {
+				        self.aBuilder = aBuilder
+				        self.leafBuilder = leafBuilder
+				    }
+				    @Instantiated let aBuilder: SendableInstantiator<A>
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    public var marker = ""
+				}
+				""",
+				"Leaf.swift": """
+				@Instantiable
+				public final class Leaf: Instantiable, Marked, @unchecked Sendable {
+				    public init(leafBuilder: SendableInstantiator<Leaf>) { self.leafBuilder = leafBuilder }
+				    @Instantiated let leafBuilder: SendableInstantiator<Leaf>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().leafBuilder.instantiate().leafBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().aBuilder.instantiate().leafBuilder.instantiate().leafBuilder.instantiate()"),
+			],
+			markers: [],
+		)
+	}
+
 	/// `First`'s `A` is on no cycle and is built in a `@Sendable` function, which enters the nearest place of its type for
 	/// the `A` the cycle beneath it builds: it takes the places, so it reads its configuration of them and no local.
 	@Test
