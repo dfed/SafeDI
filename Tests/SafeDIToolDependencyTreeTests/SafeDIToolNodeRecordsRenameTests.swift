@@ -208,6 +208,31 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesSeamsOwnRootAsLazy_whenTwoPathsHandARenamesLabelOneAsAnOptionalDeferredParametersInstance() async throws {
+		// `Reader` keeps `authToken`'s label under a rename and is built under `Screen` directly, where `authToken` is the
+		// instance of the memo of the seam's optional deferred parameter, and beneath `Detail`'s rename, whose value is no
+		// wrapper's: the tree binds `Reader`'s rename two ways. The seam's root's keys are seeded from its parameters, so the
+		// two calls key `Reader` apart, a variant each, and the rename's own check refuses the one that reads the memo's
+		// instance through an optional binding, which its record does not write, before any record is laid out.
+		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let authToken: Secret", "@Instantiated let screen: Screen"]),
+				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let reader: Reader", "@Instantiated let left: Left"]),
+				seamFixtureType(named: "Left", isFinalClass: true, declarations: ["@Instantiated let detail: Detail"]),
+				seamFixtureType(named: "Detail", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "token", ofType: Secret.self, onlyIfAvailable: true) let authToken: Secret?"#, "@Instantiated let reader: Reader"]),
+				seamFixtureType(named: "Reader", isFinalClass: true, declarations: [#"@Received(fulfilledByDependencyNamed: "authToken", ofType: Secret?.self, onlyIfAvailable: true) let authToken: (any Auth)?"#]),
+				seamFixtureType(named: "Secret", isFinalClass: true, declarations: [], conformances: ", Auth"),
+				"public protocol Auth {}",
+			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		let screenReports = reports.filter { $0.root == "Screen" }
+		#expect(screenReports.map(\.refusal) == ["lazy"])
+		#expect(screenReports.map(\.everyRefusal) == [[]])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -220,7 +245,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

@@ -115,13 +115,9 @@ struct FillSignature: Sendable {
 	let returnsBoundValue: Bool
 
 	/// The fill's function's first line, named `functionName`, then each line binding a value of its case, indented by
-	/// `indent`: what precedes the fill's tree.
-	func spelledSignature(functionName: String, indent: String, typesDeclaredEscaping: Set<TypeDescription>) -> [String] {
-		// The parameter is named apart from what the tree reads by name, which it would hide.
-		var scopeParameterName = "scope"
-		while labelsReadOrDeclared.contains(scopeParameterName) {
-			scopeParameterName += "_"
-		}
+	/// `indent`: what precedes the fill's tree. The function takes its case's values under `scopeParameterName`
+	/// (`FillNames.scopeParameterName(ofFill:)`).
+	func spelledSignature(functionName: String, scopeParameterName: String, indent: String, typesDeclaredEscaping: Set<TypeDescription>) -> [String] {
 		let prefix = ScopeGenerator.localFunctionPrefix(isSendable: isSendable)
 		let caseValues = hole.enumPlace?.values ?? hole.fields
 		var parameterList: [String]
@@ -167,9 +163,12 @@ struct FillSignature: Sendable {
 public struct FillSignatureObservation: Sendable {
 	public let written: [String]
 	public let spelledFromRecord: [String]
+	/// The parameter the tree names the fill's case's values, beside the one `FillNames` names from the fill's record.
+	public let writtenScopeParameterName: String
+	public let scopeParameterNameFromRecord: String
 
 	/// Called with each fill as its function is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillSignatureObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void>?
 }
 
 /// What a call that fills a builder hands its dispatchers of the caller's scope, shared by every builder it fills.
@@ -221,5 +220,31 @@ public struct DispatcherRecordObservation: Sendable {
 	public let spelledFromRecord: String
 
 	/// Called with each dispatcher as its declaration is written, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (DispatcherRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void>?
+}
+
+/// What the tree a fill builds reads from above it, which decides the values the fill binds and takes
+/// (`ScopeGenerator.FillFieldSelection`, `ScopeGeneratorUnderConstruction.callerReads(of:child:labelsHandedToReenteredFunctions:log:)`):
+/// the tree's from its generator, node records' from the world's facts.
+struct FillTreeReadFacts: Sendable {
+	/// The properties the tree receives from above it.
+	let received: Set<Property>
+	/// Those of `received` some receive requires.
+	let required: Set<Property>
+	/// Whether the tree reads the scope values the fill is handed (`ScopeGenerator.readsFillInnerScopes`).
+	let readsInnerScopes: Bool
+	/// The fields a site inside the fill carries (`ScopeGenerator.fieldsCarriedBySites`).
+	let fieldsCarriedBySites: Set<Property>
+
+	/// Whether the tree reads `field`: its form, its optional, or the instance of the wrapper it declares.
+	func reads(_ field: Property) -> Bool {
+		Self.reads(field, among: received)
+	}
+
+	/// Whether `received` holds a read of `field` (`reads(_:)`).
+	static func reads(_ field: Property, among received: Set<Property>) -> Bool {
+		received.contains(field)
+			|| received.contains(field.asOptionalProperty)
+			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { received.contains($0) || received.contains($0.asOptionalProperty) } == true
+	}
 }

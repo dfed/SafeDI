@@ -18,34 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// The parameter a variant's builder function takes for one read from above.
-///
-/// Stands in for the cycles integrator's cycle parameter type fact (`lanes/cycles-once-per-type/parameter-type-interface.md`),
-/// with its signatures, until that fact lands and replaces this file's declarations.
-struct TypeFactsParameter: Hashable, Sendable {
-	/// The parameter as the function declares it: the read's label, and its type.
-	let property: Property
-	/// Whether the body reads the value through the wrapper's `instance`.
-	let readsInstanceOfWrapper: Bool
-}
-
-/// The parameters a test hands the stand-in for the cycle parameter type fact, by the name of the type a variant's
-/// declaration builds. Only a test sets it, until the fact lands.
-public enum CycleParametersForTesting {
-	@TaskLocal public static var byTypeName = [String: [Property]]()
-}
-
-extension TypeFactsWorld {
-	/// Every parameter `variant`'s function takes, in the order of `parameterOrder(of:)` for its declaration: exactly
-	/// today's `CycleParameterPlan` parameters of the function a cycle closes on. The stand-in answers what a test hands it
-	/// (`CycleParametersForTesting`), and no parameter for any other variant.
-	func parameters(of variant: VariantID) -> [TypeFactsParameter] {
-		guard let records = self as? any NodeRecordSources else { return [] }
-		let typeName = records.scope(of: declaration(of: variant)).instantiable.concreteInstantiable.asSource
-		return CycleParametersForTesting.byTypeName[typeName, default: []].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
-	}
-}
-
 extension NodeRecords {
 	/// What every call of `variant`'s function passes its parameters, a call that closes a cycle on it included: by
 	/// parameter, `nil` where the label is unavailable to the variant, a lazily instantiated wrapper's instance where the

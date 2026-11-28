@@ -38,7 +38,7 @@ extension NodeRecords {
 		// A configuration's builder returns the concrete type, whether the node is configured for its children or for a
 		// field its own construction reads; a closure that overrides the node itself returns the property's.
 		record.alternatives = record.alternatives.map { alternative in
-			guard case .member(ReservedName.configurationBuilderPropertyName, _) = alternative.closure else { return alternative }
+			guard case .memberRead(ReservedName.configurationBuilderPropertyName, _) = alternative.closure else { return alternative }
 			return ConstructionAlternative(
 				closure: alternative.closure,
 				bindingName: alternative.bindingName,

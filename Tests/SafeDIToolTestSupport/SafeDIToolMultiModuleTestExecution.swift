@@ -615,9 +615,36 @@ func executeSafeDIToolMultiModuleTest(
 													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 													// (`TypeFactsReceivedValueSuppliesChecks`).
 													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-															try await tool.generate()
+														try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+															try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+																try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+																	try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																		try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																			try await MockVariantBodyChecks.comparing {
+																				try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																					try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																						try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																							try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																								// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+																								try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+																									// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
+																									try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
+																										// Every mock root’s `Sendable` configurations from its world’s fold must equal the walk of its generator tree’s
+																										// (`TypeFactsSendableConfigurationsChecks`).
+																										try await TypeFactsSendableConfigurationsChecks.comparing(handingOn: TypeFactsSendableConfigurationsObservation.comparesWalk) {
+																											try await tool.generate()
+																										}
+																									}
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
 														}
 													}
 												}
@@ -926,23 +953,16 @@ enum SplitPositionsRun {
 		}
 		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
 		// step of one run. Whether node records lay a root out is no count but the mode the whole run generated in, a
-		// test's or the sweep's switch's (`NodeRecordsChecks.laysOutMockRoots`), so the split run takes it again; a mock
-		// root has records only where an observer is set, so it is handed one that keeps nothing, and the test sees the
-		// whole run's reports alone.
+		// test's or the sweep's switch's (`NodeRecordsChecks.laysOutMockRoots`), so the split run takes it again, with no
+		// observer: an observer only records, so the split run, which nothing observes, must generate what the whole run
+		// generated, and the test sees the whole run's reports alone.
 		let laysOutRoots = NodeRecordsChecks.laysOutRoots
 		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
-		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
-		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
-			nodeRecordsObserver = { _ in }
-		}
-		let splitObserver = nodeRecordsObserver
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
 			do {
 				let output: Generate.Output = try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 					try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
-						try await NodeRecordsObservation.$observer.withValue(splitObserver) {
-							try await Generate.parse(splitArguments).generate()
-						}
+						try await Generate.parse(splitArguments).generate()
 					}
 				}
 				return .success(output)

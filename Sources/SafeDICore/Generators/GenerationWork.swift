@@ -136,7 +136,7 @@ public struct GenerationWork: Sendable {
 	public let elementCount: Int
 
 	/// Called with the work of a counted step each time the step runs, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (GenerationWork) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (GenerationWork) -> Void>?
 
 	/// Hands `observer`, when set, the work `step` did, when `step` is not `nil`.
 	static func record(_ elementCount: Int, by step: Step?) {

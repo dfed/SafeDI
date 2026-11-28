@@ -100,7 +100,7 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 			],
 		)
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

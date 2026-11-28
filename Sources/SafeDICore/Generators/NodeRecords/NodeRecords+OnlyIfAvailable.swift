@@ -76,18 +76,20 @@ extension NodeRecords {
 /// `propertiesGeneratedLater` a scope's children are generated with find them for today's tree.
 ///
 /// Rule 1 of the per-type facts keys a read only if available alike whether it is `nil` or a value, so one variant can be
-/// called where the read is `nil` and where it is a value. Off every cycle, such a variant reads the value: its function
-/// takes the label as one optional parameter, and the call that finds no declaration passes `nil`
-/// (`context(merging:with:)`). A world in which two calls of one variant see different declarations of one label, or in
-/// which a member of a cycle is called both ways, is refused (`onlyIfAvailableAnsweredApart`). Only the labels some receive
-/// only if available reads are followed, so a world without one costs nothing.
+/// called where the read is `nil` and where it is a value. Such a variant reads the value: its function takes the label
+/// as one optional parameter, and the call that finds no declaration passes `nil` (`context(merging:with:)`), a member
+/// of a cycle like any other, whose calls around the cycle hand the parameter on. So does a variant one call of which
+/// sees a declaration and another that declaration's optional form, as beneath a mock root's override of a receive only
+/// if available and beneath a type that instantiates the label. A world in which two calls of one variant see
+/// declarations of one label that differ otherwise is refused (`onlyIfAvailableAnsweredApart`). Only the labels some
+/// receive only if available reads are followed, so a world without one costs nothing.
 ///
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 ///
 /// A bridge: a private copy of the facts' rule of which declaration answers a read (the nearest above, bound before the
 /// edge). Rule 1 keys a read only if available alike whether it is `nil` or a value, but the facts hand each call
 /// whether it finds a value there: the call's source of the read (`TypeFactsWorld.sources(ofCall:of:)`) is none exactly
-/// where this finds the receive unavailable (type facts check 34). It goes in the change that has records read those
+/// where this finds the receive unavailable (type facts check 37). It goes in the change that has records read those
 /// sources instead.
 struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
@@ -95,7 +97,11 @@ struct OnlyIfAvailableAnswers: Sendable {
 	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
-	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
+	///   - receivesPassedNil: By variant, the receives only if available a mock root's variant is passed `nil` for whatever
+	///     the declarations above it bind (`NodeRecords.MockNamesReadApart.receivesPassedNil`), unless a sibling built
+	///     before it declares the property or its unwrapped form, which it then reads, as the walk does
+	///     (`ScopeGenerator.unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`); empty for any other root.
+	init(world: some NodeRecordSources, rootParameters: [Property] = [], receivesPassedNil: [Set<Property>] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		// The labels a rename only if available is fulfilled by.
 		var renamedLabels = Set<String>()
@@ -120,6 +126,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 		guard !labels.isEmpty else {
 			self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
 			self.renameBindingByVariant = renameBindingByVariant
+			variantsPinningReceiveByVariant = []
 			return
 		}
 		// What each variant's construction sees of each followed label: what the call that reaches it sees, with the
@@ -132,6 +139,23 @@ struct OnlyIfAvailableAnswers: Sendable {
 			rootContext[parameter.label, default: []].append(Binding(property: parameter, state: .available))
 		}
 		contextByVariant[0] = rootContext
+		// By variant, whether a sibling built before each call of it declares each receive it is otherwise passed `nil` for.
+		var siblingDeclaresReceivePassedNilByVariant = [[Property: Bool]](repeating: [:], count: receivesPassedNil.count)
+		// By variant, for each label a required receive pins from above in some place of the mock
+		// (`MockRootNames.pinsFromAbove(label:)`), what the required receives above each call of the variant read while the
+		// mock root's binding is the label's nearest declaration, one entry per set of calls that read alike: each pins that
+		// binding to its form for the receives only if available beneath it
+		// (`NearestDeclarations.recordRequiredReceives(of:reading:)`). A label a node between declares on the way to every
+		// call has no entry. Each label is kept on its own, so a variant holds as many entries as its calls read one label
+		// in different ways, never one per combination of labels, and an entry keeps only the nearest variant whose
+		// receive reads each set of properties.
+		var pinsByVariant = [[String: Set<Set<Pin>>]](repeating: [:], count: world.variantCount)
+		// By variant, the receives only if available that only some calls of it are beneath a pin of, each with those pins.
+		var pinsOfReceiveByVariant = [[Property: Set<Pin>]](repeating: [:], count: world.variantCount)
+		let pinnedLabels = world.isMockWorld ? labels.filter { world.mockRootNames.pinsFromAbove(label: $0) } : []
+		for label in pinnedLabels {
+			pinsByVariant[0][label] = [[]]
+		}
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
@@ -139,7 +163,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 			guard let callContext = contextByVariant[Int(variant)], world.kind(of: declaration) != .alias, world.kind(of: declaration) != .hole else { continue }
 			let scope = world.scope(of: declaration)
 			// A member of a loop of builders begins its builder function by binding each member it makes again
-			// (`NodeRecords.loopRebindings(of:in:mockLoopLevels:)`), so its construction and everything inside it read those bindings.
+			// (`NodeRecords.loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`), so its construction and everything inside it read those bindings.
 			var context = callContext
 			for member in world.madeAgain(from: declaration) {
 				if let property = world.property(of: member), labels.contains(property.label) {
@@ -147,17 +171,30 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
+			// A mock root binds its children on one level with what `mock()` takes and binds before them, each form of a label
+			// under a name of its own, so no child of the root hides another declaration of its label there.
+			let bindsLevelBesideParameters = variant == 0 && world.isMockWorld
 			var contextInside = context
-			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
+			// A mock root's forwarded properties are parameters of `mock()`, which `rootParameters` hold beside every other
+			// value `mock()` binds under the label or apart from it.
+			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) && !bindsLevelBesideParameters {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
 			// So is each dependency its type instantiates that its scope does not build, which a mock is passed as a parameter
-			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none.
+			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none. A
+			// mock root's own is one more value `mock()` binds beside the others of its label, each under a name of its own,
+			// so it hides none of them: an override of another form of the label is still read beneath it.
 			for dependency in scope.instantiatedDependenciesNotGenerated where labels.contains(dependency.property.label) {
-				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
+				let binding = Binding(property: dependency.property, state: .available)
+				if bindsLevelBesideParameters {
+					contextInside[dependency.property.label] = (contextInside[dependency.property.label] ?? []).filter { $0 != binding } + [binding]
+				} else {
+					contextInside[dependency.property.label] = [binding]
+				}
 			}
 			// A variant is read again where a later call answers a label its first call did not.
 			unavailablePropertiesByVariant[Int(variant)] = []
+			pinsOfReceiveByVariant[Int(variant)] = [:]
 			let calls = world.calls(of: variant)
 			let edges = world.edges(from: declaration)
 			let positionByEdgeIndex = world.edgeFacts(from: declaration).map(\.buildPosition)
@@ -178,22 +215,74 @@ struct OnlyIfAvailableAnswers: Sendable {
 					childBindingsByLabel[property.label, default: []].append(Binding(property: property, state: state))
 				}
 				for (label, bindings) in childBindingsByLabel {
-					calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
+					if bindsLevelBesideParameters {
+						let besideParameters = bindings.filter { $0.state == .available || $0.property.propertyType.isInstantiator } + (contextInside[label] ?? [])
+						calleeContext[label] = besideParameters.isEmpty ? nil : besideParameters
+					} else {
+						calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
+					}
+				}
+				if receivesPassedNil.indices.contains(Int(callee)) {
+					for property in receivesPassedNil[Int(callee)] {
+						let siblingDeclaresIt = childBindingsByLabel[property.label, default: []].contains {
+							$0.state == .available && ($0.property == property || $0.property == property.asUnwrappedProperty)
+						}
+						// One function serves every call of the variant, so its calls read the receive alike or the world is refused.
+						guard siblingDeclaresReceivePassedNilByVariant[Int(callee)].updateValue(siblingDeclaresIt, forKey: property) ?? siblingDeclaresIt == siblingDeclaresIt else {
+							throw .onlyIfAvailableAnsweredApart
+						}
+					}
+				}
+				var calleeIsReadAgain = false
+				if !pinnedLabels.isEmpty {
+					// The node's own declarations of a label hide the mock root's binding from everything it builds, and its
+					// required receives pin that binding for them; a mock root's own pin nothing in the children it promotes.
+					// The mock root's children are its bindings.
+					let declaredLabels = bindsLevelBesideParameters ? [] : Set(edges.compactMap { world.property(of: $0)?.label })
+						.union(scope.instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label))
+						.union(scope.instantiatedDependenciesNotGenerated.map(\.property.label))
+					let pinsNothing = variant == 0 && (world.property(of: world.declaration(of: callee)).map { world.mockRootNames.promotes($0) } ?? false)
+					let requiredReceives = pinsNothing ? [] : DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall)
+					for (label, pinsOfCalls) in pinsByVariant[Int(variant)] where !declaredLabels.contains(label) {
+						for var pinsAbove in pinsOfCalls {
+							for requiredReceive in requiredReceives where requiredReceive.label == label {
+								pinsAbove = pinsAbove.filter { $0.propertiesRead != requiredReceive.propertiesRead }
+								pinsAbove.insert(Pin(propertiesRead: requiredReceive.propertiesRead, variant: variant, isMockRootsOwn: variant == 0))
+							}
+							if pinsByVariant[Int(callee)][label, default: []].insert(pinsAbove).inserted {
+								calleeIsReadAgain = true
+							}
+						}
+					}
+				}
+				// A fill's body is a function of its own, which declares what the fill binds, takes and captures around it
+				// (`FilledCallRecords.Fill.outerDeclarations`).
+				if NodeRecordsObservation.recordsFilledCalls, world.construction(of: world.declaration(of: callee)) == .fill, case let .success(records) = world.filledCallRecords(of: declaration),
+				   let fill = records.fills.first(where: { $0.facts.declaration == world.declaration(of: callee) })
+				{
+					for property in fill.outerDeclarations where labels.contains(property.label) {
+						calleeContext[property.label] = [Binding(property: property, state: .available)]
+					}
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
 					// The layout engine passes a read only if available `nil` per view, as the tree does
 					// (`TypeKeyBody.passesNil`), so calls that answer a label apart share the variant. That holds for a
-					// member of a cycle too, whose calls each read through the view of the call (the `typeIsOnCycle` shape of
-					// `SafeDIToolNodeRecordsOptionalParameterTests`); where the member itself reads the label, its variant
-					// holds an optional parameter's key, which `checkVariantsPartitionAlike` refuses (that suite's
-					// `cycleMemberReadsTheLabel` test). A rename only if available is bound where its
-					// scope is built, to the declaration or to `nil`, by one statement for every call, so a label one fulfills
-					// is not taken as a parameter.
+					// member of a cycle too, whose calls each read through the view of the call
+					// (`SafeDIToolNodeRecordsOptionalParameterTests`'s `…whenTypeOnCycleIsBuiltWhereOnlyOneCallerDeclaresLabel`);
+					// where the member itself reads the label, its variant holds an optional parameter's key, which
+					// `checkVariantsPartitionAlike` refuses (`…whenCycleMemberReceivesLabelOnlyOneCallerAnswers`). A rename only
+					// if available is bound where its scope is built, to the declaration or to `nil`, by one statement for every
+					// call, so a label one fulfills is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
-					// A lazy wrapper one call answers and another does not is refused still: judging its capture in a
-					// `@Sendable` function per call is not done yet, and one variant would capture it beneath both calls.
+					// A lazy wrapper one call answers and another does not is refused still. The facts key `nil` with a lazy
+					// wrapper where no answer in the declared form reaches the read (rule A's second stage), so one variant
+					// holds a call that passes the wrapper's instance and a call that passes `nil`, which records read from the
+					// variant's key alone (`lazilyInstantiatedInstanceProperties(of:variant:in:)`) cannot tell apart, until lane
+					// 2's emitted half of rule 3's second stage keys `nil` with the wrapper parameter in the code too; and one
+					// variant would capture the wrapper inside a `@Sendable` function beneath both calls, which no check judges
+					// per call yet.
 					let answersLazyWrapperApart = labelsOneCallAnswers.contains { label in
 						(existingContext[label] ?? calleeContext[label] ?? []).contains { $0.property.propertyType.isLazilyInstantiated }
 					}
@@ -202,12 +291,29 @@ struct OnlyIfAvailableAnswers: Sendable {
 					}
 					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
 					// A call that answers a label another call does not: the variant, and everything it calls, is read again.
-					guard mergedContext != existingContext else { continue }
+					guard mergedContext != existingContext || calleeIsReadAgain else { continue }
 					contextByVariant[Int(callee)] = mergedContext
 					variantsToVisit.append(callee)
 				} else {
 					contextByVariant[Int(callee)] = calleeContext
 					variantsToVisit.append(callee)
+				}
+			}
+			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+				if receivesPassedNil.indices.contains(Int(variant)),
+				   receivesPassedNil[Int(variant)].contains(dependency.property),
+				   siblingDeclaresReceivePassedNilByVariant[Int(variant)][dependency.property] != true
+				{
+					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+				} else {
+					let pinning = try Self.pins(of: dependency, among: pinsByVariant[Int(variant)][dependency.property.label] ?? [])
+					if pinning.isPinnedAtEveryCall {
+						unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+					} else if try Self.binding(reading: dependency.property, in: context) == nil {
+						unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+					} else if !pinning.pins.isEmpty {
+						pinsOfReceiveByVariant[Int(variant)][dependency.property] = pinning.pins
+					}
 				}
 			}
 			// A rename only if available is bound from a property its scope creates, whatever order it is built in, else from
@@ -243,6 +349,19 @@ struct OnlyIfAvailableAnswers: Sendable {
 		}
 		self.unavailablePropertiesByVariant = unavailablePropertiesByVariant
 		self.renameBindingByVariant = renameBindingByVariant
+		variantsPinningReceiveByVariant = pinsOfReceiveByVariant.map { $0.mapValues { Set($0.map(\.variant)) } }
+	}
+
+	/// What a required receive above a call reads of the mock root's binding of a label, which pins that binding to its
+	/// form for the receives only if available beneath it.
+	private struct Pin: Hashable {
+		/// What the required receive reads.
+		let propertiesRead: Set<Property>
+		/// The variant whose type declares the receive, the nearest one above the call that reads these properties.
+		let variant: VariantID
+		/// Whether the mock root's own type declares the receive: the mock root's level holds the binding itself, so no
+		/// function of its own binds `nil` for only what it builds.
+		let isMockRootsOwn: Bool
 	}
 
 	/// How a rename only if available is bound where its scope is built.
@@ -274,14 +393,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 	/// What a variant sees of each followed label, where one call of it sees `existing` and another `other`. A label one
 	/// call sees no declaration of takes what the other call sees: the variant's function takes the label as one optional
 	/// parameter, which the call that sees nothing passes `nil` (the engine's `TypeKeyBody.spelledArgument`), so one
-	/// variant serves a call that answers a read only if available and a call that does not. Each merge only adds a
-	/// label, so the result does not depend on the order the calls are met in.
-	/// - Throws: `onlyIfAvailableAnsweredApart` where the two calls see different declarations of one label.
+	/// variant serves a call that answers a read only if available and a call that does not. Where the calls see
+	/// declarations that differ only in that one's is the optional form of the other's, the variant sees the optional
+	/// ones, which the same parameter carries. Each merge only adds a label or makes a declaration optional, so the
+	/// result does not depend on the order the calls are met in.
+	/// - Throws: `onlyIfAvailableAnsweredApart` where the two calls see declarations of one label that differ otherwise.
 	private static func context(merging existing: [String: [Binding]], with other: [String: [Binding]]) throws(NodeRecordRefusal) -> [String: [Binding]] {
 		var merged = existing
 		for (label, bindings) in other {
 			if let existingBindings = existing[label] {
-				guard existingBindings == bindings else { throw .onlyIfAvailableAnsweredApart }
+				guard existingBindings.map(\.unwrapped) == bindings.map(\.unwrapped) else { throw .onlyIfAvailableAnsweredApart }
+				merged[label] = zip(existingBindings, bindings).map { $0.property.typeDescription.isOptional ? $0 : $1 }
 			} else {
 				merged[label] = bindings
 			}
@@ -303,15 +425,46 @@ struct OnlyIfAvailableAnswers: Sendable {
 		return nil
 	}
 
-	/// The properties `variant`'s construction is passed `nil` for: the declarations a rename only if available is bound
-	/// to `nil` in place of. A receive only if available is passed `nil` per view by the layout engine
-	/// (`TypeKeyBody.passesNil`), which every reader of this set leaves to it: a construction reads through
-	/// `PlaceRead(argument:passing:)`, which marks the read (`builtByInitializerRecord`, and through it
-	/// `mockDecoratedRecord`). A cycle's arguments (`cycleArguments`) carry no mark, and need none: a variant on a cycle
-	/// that calls answer a label apart holds an optional parameter's key, and its world is refused
-	/// (`checkVariantsPartitionAlike`), so every call of a laid out cycle variant passes the same.
+	/// The pins of the mock root's binding of the label of `dependency`, which a variant's type receives only if
+	/// available, that required receives above some call of the variant make to a form it cannot read, so that the mock
+	/// passes it `nil` beneath them as production does (`NearestDeclarations.resolvingPassesNil(to:receivedBy:on:)`), and
+	/// whether every call that reads the mock root's binding of the label is beneath one; none, at no call, where
+	/// `pinsOfCalls` is empty: no call reads that binding of a label pinned from above.
+	/// - Throws: `onlyIfAvailableAnsweredApart` where only some calls are beneath such a receive and two receives above
+	///   one call make the pin, or the mock root's own receive makes it, so that no one variant's function binds `nil`
+	///   for what is beneath it.
+	private static func pins(of dependency: Dependency, among pinsOfCalls: Set<Set<Pin>>) throws(NodeRecordRefusal) -> (pins: Set<Pin>, isPinnedAtEveryCall: Bool) {
+		var pins = Set<Pin>()
+		var isPinnedAtEveryCall = !pinsOfCalls.isEmpty
+		var pinsOnlyOncePerCall = true
+		for pinsAbove in pinsOfCalls {
+			let pinning = pinsAbove.filter { DependencyTreeGenerator.requiredReceive(reading: $0.propertiesRead, pinsReceiveOf: dependency) }
+			pins.formUnion(pinning)
+			isPinnedAtEveryCall = isPinnedAtEveryCall && !pinning.isEmpty
+			pinsOnlyOncePerCall = pinsOnlyOncePerCall && pinning.count <= 1 && !pinning.contains(where: \.isMockRootsOwn)
+		}
+		guard isPinnedAtEveryCall || pinsOnlyOncePerCall else { throw .onlyIfAvailableAnsweredApart }
+		return (pins, isPinnedAtEveryCall)
+	}
+
+	/// The properties `variant`'s construction is passed `nil` for: a receive only if available no call of the variant
+	/// finds a declaration of, or that the mock root's pins pass `nil` at every call, and the declarations a rename only if
+	/// available is bound to `nil` in place of. A receive only if available that calls answer apart is passed `nil` per
+	/// view by the layout engine (`TypeKeyBody.passesNil`): a construction reads through `PlaceRead(argument:passing:)`,
+	/// which marks the read (`builtByInitializerRecord`, and through it `mockDecoratedRecord`). A cycle's arguments
+	/// (`cycleArguments`) carry no mark, and need none: a variant on a cycle that calls answer a label apart holds an
+	/// optional parameter's key, and its world is refused (`checkVariantsPartitionAlike`), so every call of a laid out
+	/// cycle variant passes the same.
 	func unavailableProperties(of variant: VariantID) -> Set<Property> {
 		unavailablePropertiesByVariant[Int(variant)]
+	}
+
+	/// The receives only if available of `variant` that only some of its calls are beneath a required receive that pins
+	/// them (`MockRootNames.pinsFromAbove(label:)`), each with the variants whose types declare those receives: the one
+	/// function that serves every call reads the mock root's binding as a parameter, which each of those variants binds
+	/// to `nil` for everything it builds (`NodeRecords.MockNamesReadApart.bindNamesToNil(beneathPinsFoundBy:)`).
+	func variantsPinningReceives(of variant: VariantID) -> [Property: Set<VariantID>] {
+		variantsPinningReceiveByVariant.indices.contains(Int(variant)) ? variantsPinningReceiveByVariant[Int(variant)] : [:]
 	}
 
 	/// A declaration of a followed label that a call sees, and whether it is built where the call reads it.
@@ -329,10 +482,18 @@ struct OnlyIfAvailableAnswers: Sendable {
 
 		let property: Property
 		let state: State
+
+		/// The declaration of the unwrapped form of the property, built as this one is.
+		var unwrapped: Binding {
+			Binding(property: property.asUnwrappedProperty, state: state)
+		}
 	}
 
 	/// By variant.
 	private let unavailablePropertiesByVariant: [Set<Property>]
 	/// By variant: set for a rename only if available.
 	private let renameBindingByVariant: [RenameBinding?]
+	/// By variant, the receives only if available that only some calls of it are beneath a pin of, with the variants whose
+	/// required receives pin them; empty where the world follows no label.
+	private let variantsPinningReceiveByVariant: [[Property: Set<VariantID>]]
 }

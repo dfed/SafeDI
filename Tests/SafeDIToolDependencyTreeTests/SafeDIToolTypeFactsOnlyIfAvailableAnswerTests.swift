@@ -26,7 +26,7 @@ import Testing
 
 /// The facts' answer to a read only if available (`TypeFactsGraph`'s `binding` of the `optional` and `optionalValue`
 /// channels): none wherever the tree passes the receive `nil` (`NearestDeclarations.resolvingBinding(of:)` and the
-/// `propertiesGeneratedLater` a scope's children are generated with), as type facts check 34 compares at every place.
+/// `propertiesGeneratedLater` a scope's children are generated with), as type facts check 37 compares at every place.
 struct SafeDIToolTypeFactsOnlyIfAvailableAnswerTests: ~Copyable {
 	// MARK: Initialization
 
@@ -108,7 +108,7 @@ struct SafeDIToolTypeFactsOnlyIfAvailableAnswerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private func rootReport(of types: [String]) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
 			defer {
 				for file in filesToDelete {

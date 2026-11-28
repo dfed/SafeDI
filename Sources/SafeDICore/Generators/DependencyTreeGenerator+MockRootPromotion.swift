@@ -56,7 +56,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
-	) async throws -> ScopeGenerator {
+	) async throws -> MockRootTree {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
@@ -281,6 +281,8 @@ extension DependencyTreeGenerator {
 			walkingFrom: scope,
 			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
 		)
+		// Which of the checks of the mock root's tree can find anything in it, read from its scopes, which are complete.
+		let scopeTreeChecks = MockRootTreeChecks(mockRootScope: mockRootScope, isPublicMock: instantiable.generateMock == .public)
 
 		// The mock's tree builds the type of each scope the mock root's scope reaches. Each constant or lazily instantiated
 		// `@Instantiated` dependency it builds, at any depth – beneath the mocked type's own children, beneath a promoted
@@ -485,7 +487,8 @@ extension DependencyTreeGenerator {
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
 		// The root of the mock root's world, which node records are made of
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
-		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
+		let worldRoot = ConstructionScope(table: mockRootTable, record: mockRootRecord)
+		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, MockWorldRoot(scope: worldRoot, receivesPassedNil: receivesPassedNil))
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
@@ -529,7 +532,45 @@ extension DependencyTreeGenerator {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
-		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		// The world's capture check answers the tree's where the root's scopes ask it (`MockRootTreeChecks`), and is compared
+		// with the tree's on every root where a test asks. It reads what the mock root binds once the tree is final: what it
+		// binds once the values only calls of public mocks receive inside `@Sendable` functions are left out, and the
+		// wrappers a public mock takes whose instances its tree reads, which the tree declares above its root.
+		let worldFindsSendableCapture: Bool? = if scopeTreeChecks.asksWorldForSendableCaptures || MockRootTreeChecksObservation.comparesTree != nil {
+			DeclarationsAnsweringReads(
+				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
+				mockRoot: DeclarationsAnsweringReads.MockRoot(
+					boundLabels: Set(allReceived.map(\.label)),
+					wrapperParameters: instancesReadThroughWrapperParameters.sorted().flatMap { instanceProperty in
+						allReceived.filter { property in
+							property.label == instanceProperty.label
+								&& property.propertyType.isLazilyInstantiated
+								&& property.asValidatedForDependencyCycles.asUnwrappedProperty == instanceProperty.asUnwrappedProperty
+						}.map { DeclarationsAnsweringReads.Declaration(property: $0.asUnwrappedProperty, instanceProperty: instanceProperty) }.sorted { $0.property < $1.property }
+					},
+				),
+			).sendableFunctionCapturesWrapper
+		} else {
+			nil
+		}
+		let treeChecks = worldFindsSendableCapture.map { scopeTreeChecks.answeringSendableCaptures(fromWorld: $0) } ?? scopeTreeChecks
+		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
+		if treeChecks.needsTree(.cycleLabels) {
+			try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
+		}
+		// Each place of the tree against the body the plan of a tree by declaration builds for it, built only where a test
+		// compares the two.
+		try Self.compareMockBodies(
+			ofMockOf: instantiable,
+			mockRootScope: mockRootScope,
+			todaysTree: generator,
+			boundProperties: allReceived,
+			receivesPassedNil: receivesPassedNil,
+			lazilyInstantiatedInstanceProperties: instancesReadThroughWrapperParameters,
+			frozenScopeMap: frozenScopeMap,
+			declaredTypeNames: declaredTypeNames,
+			cache: &cache,
+		)
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must
 		// forward one value, as that initializer's places must.
@@ -554,7 +595,9 @@ extension DependencyTreeGenerator {
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
 		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
 		// again so that each site calls its builder, and each call hands its builders up.
-		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
+		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else {
+			return MockRootTree(generator: generator, worldRoot: worldRoot, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
+		}
 		// The root level holds what `mock()` binds under its bare label before its tree, as a seam's holds its parameters; the
 		// builders do not change what it binds, so the generator built without them gives it.
 		let rootLevel = await Self.publicMockRootLevel(
@@ -614,8 +657,28 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
+		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else {
+			return MockRootTree(generator: builtGenerator, worldRoot: worldRoot, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
+		}
+		return try MockRootTree(generator: mockRootGeneratorWithHoles(builders: buildersNamedApart), worldRoot: worldRoot, treeChecks: treeChecks, worldFindsSendableCapture: worldFindsSendableCapture)
+	}
+
+	/// A mock root's generator tree and the root of its world, which every build of the generator is made from: the world
+	/// holds the declarations of the mock's tree, which its file's imports are folded over (`TypeFactsImports`). It holds
+	/// the generator and the world's frozen table, which shares its storage with the other mock roots' tables, for as long
+	/// as its owner keeps it: `generateMockCode` folds the imports as soon as the mock root is accepted and keeps only the
+	/// generator.
+	struct MockRootTree: Sendable {
+		/// The mock root's generator, from which its code is lowered.
+		let generator: ScopeGenerator
+		/// The root of the mock root's world.
+		let worldRoot: ConstructionScope
+		/// Which checks of the mock root's tree can find anything in it (`MockRootTreeChecks`).
+		let treeChecks: MockRootTreeChecks
+		/// Where the root's scopes ask its world (`MockRootTreeChecks.asksWorldForSendableCaptures`), or a test compares the
+		/// tree's checks (`MockRootTreeChecksObservation`): whether the per-type facts of the root's world find a `Sendable`
+		/// capture (`DeclarationsAnsweringReads`), resolving what `mock()` takes by label and type. `nil` otherwise.
+		var worldFindsSendableCapture: Bool?
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
@@ -1188,13 +1251,28 @@ extension DependencyTreeGenerator {
 		return receivesPassedNil
 	}
 
-	/// The properties each required receive of the type of `scope` reads from above it, by label, as
+	/// The properties each required receive of `instantiable`, built as `publicMockCall` where it is one, reads from above
+	/// it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: ConstructionScope) -> [(label: String, propertiesRead: Set<Property>)] {
-		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
+	static func propertiesReadByRequiredReceivesFromAbove(of instantiable: Instantiable, publicMockCall: PublicMockCall?) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: instantiable, publicMockCall: publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
+	}
+
+	/// The receives only if available of the type of `scope` that read from above it, as `receivesPassedNilInMockTree`
+	/// walks them: each with the property it receives (an alias's fulfilling property) and its dependency.
+	static func onlyIfAvailableReceivesFromAbove(of scope: ConstructionScope) -> [(property: Property, dependency: Dependency)] {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
+			receive.isRequired ? nil : (receive.property, receive.dependency)
+		}
+	}
+
+	/// The labels the type of `scope` declares, as `receivesPassedNilInMockTree` walks them: the types it builds receive
+	/// those from it, so no receive of one beneath it reads the declaration above it.
+	static func labelsDeclared(by scope: ConstructionScope) -> Set<String> {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).declaredLabels
 	}
 
 	/// Whether a required receive that reads `requiredReceivePropertiesRead` pins the declaration a receive only if

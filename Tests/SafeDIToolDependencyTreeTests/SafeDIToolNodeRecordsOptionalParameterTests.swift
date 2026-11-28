@@ -92,6 +92,155 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
 	}
 
+	@Test(arguments: ShapeLaidOut.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysRootOutFromRecordsAsTheTreeWritesIt_whenSeamInModuleAndOnlyOneCallerAnswersReadOnlyIfAvailable(shape: ShapeLaidOut) async throws {
+		// A root of a module that holds a seam is laid out from its records where nothing in its world forces its tree
+		// (`seamWorldRootLayout`): this root calls no seam, so its records lay it out, and the comparison approves the
+		// optional parameter's difference only where the two texts are equal.
+		let seam = """
+		@Instantiable(generateDependencyTree: true)
+		public struct Harbor: Instantiable {
+		    public init(dock: Dock) {
+		        self.dock = dock
+		    }
+
+		    @Instantiated let dock: Dock
+		}
+
+		@Instantiable
+		public struct Dock: Instantiable {
+		    public init() {}
+		}
+		"""
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
+			try await executeSafeDIToolTest(swiftFileContent: [shape.fixture, seam], buildSwiftOutputDirectory: true, filesToDelete: &filesMade)
+		}
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream where report.root == "Root" {
+			reports.append(report)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.map(\.differences.isEmpty) == [false])
+		#expect(reports.map { $0.comparedTexts.map { $0.tree == $0.nodeRecords } } == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsWorldAsRefused_whenRootThatCannotBeLaidOutDiffersOnlyByOptionalParametersArguments() async throws {
+		// `Leaf` is built by `A`, which builds a `mark` first, and by `B` and `Flow`, which build none, so one function with
+		// an optional parameter serves its `widget`. `A`, `B` and `C` are a loop of builders, which keeps the root's tree
+		// in a plain run, and the engine lays out no text of it to approve the difference against.
+		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(flow: Flow) {
+					        self.flow = flow
+					    }
+
+					    @Instantiated let flow: Flow
+					}
+
+					@Instantiable
+					public struct Flow: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, cBuilder: Instantiator<C>, leaf: Leaf) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					        self.cBuilder = cBuilder
+					        self.leaf = leaf
+					    }
+
+					    @Instantiated let aBuilder: Instantiator<A>
+					    @Instantiated let bBuilder: Instantiator<B>
+					    @Instantiated let cBuilder: Instantiator<C>
+					    @Instantiated let leaf: Leaf
+					}
+
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(mark: Mark, leaf: Leaf) {
+					        self.mark = mark
+					        self.leaf = leaf
+					    }
+
+					    @Instantiated let mark: Mark
+					    @Instantiated let leaf: Leaf
+					}
+
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>, leaf: Leaf) {
+					        self.aBuilder = aBuilder
+					        self.leaf = leaf
+					    }
+
+					    @Received let aBuilder: Instantiator<A>
+					    @Instantiated let leaf: Leaf
+					}
+
+					@Instantiable
+					public struct C: Instantiable {
+					    public init(bBuilder: Instantiator<B>, id: Int) {
+					        self.bBuilder = bBuilder
+					        self.id = id
+					    }
+
+					    @Received let bBuilder: Instantiator<B>
+					    @Forwarded let id: Int
+					}
+
+					@Instantiable
+					public struct Leaf: Instantiable {
+					    public init(cBuilder: Instantiator<C>, widget: Widget) {
+					        self.cBuilder = cBuilder
+					        self.widget = widget
+					    }
+
+					    @Received let cBuilder: Instantiator<C>
+					    @Instantiated let widget: Widget
+					}
+
+					@Instantiable
+					public struct Widget: Instantiable {
+					    public init(mark: Mark?) {
+					        self.mark = mark
+					    }
+
+					    @Received(onlyIfAvailable: true) let mark: Mark?
+					}
+
+					@Instantiable
+					public final class Mark: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesMade,
+			)
+		}
+		continuation.finish()
+		var reports = [NodeRecordsReport]()
+		for await report in stream {
+			reports.append(report)
+		}
+		#expect(reports.map(\.root) == ["Root"])
+		#expect(reports.map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
+		#expect(reports.map(\.everyRefusal) == [["onlyIfAvailableAnsweredApart"]])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
 	@Test(arguments: 0..<6)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysOutRootAsTheTreeWritesIt_whateverOrderCallersThatAnswerAndDoNotAreMetIn(rotation: Int) async throws {
@@ -173,6 +322,48 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		#expect(NodeRecordsObservation.differOnlyWhereTreeReadsNilOfLabel(tree, nodeRecords) == recordsArguments.isOfAnOptionalParameter)
 	}
 
+	/// `Leaf` builds itself again through `leafBuilder`, which `A` builds where nothing declares `session` and `B` where it
+	/// does, and reads none of it: a type on a cycle merges what its calls see as any other type does.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootAsTheTreeWritesIt_whenTypeOnCycleIsBuiltWhereOnlyOneCallerDeclaresLabel() async throws {
+		let fixture = """
+		@Instantiable(isRoot: true) public final class Root: Instantiable {
+		    @Instantiated let a: A
+		    @Instantiated let b: B
+		    @Instantiated let reader: Reader
+		    public init(a: A, b: B, reader: Reader) { self.a = a; self.b = b; self.reader = reader }
+		}
+		@Instantiable public final class A: Instantiable {
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class B: Instantiable {
+		    @Instantiated let session: Session
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Leaf: Instantiable {
+		    @Instantiated let leafBuilder: Instantiator<Leaf>
+		    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
+		}
+		@Instantiable public final class Session: Instantiable {
+		    public init() {}
+		}
+		@Instantiable public final class Reader: Instantiable {
+		    @Received(onlyIfAvailable: true) let session: Session?
+		    public init(session: Session?) { self.session = session }
+		}
+		"""
+		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.refusal) == [nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.dependencyTreeFiles == treeOutput.dependencyTreeFiles)
+	}
+
 	@Test(arguments: ShapeRefused.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesWorldAsOnlyIfAvailableAnsweredApart_whenOneOptionalParameterCannotServeEveryCall(shape: ShapeRefused) async throws {
@@ -251,40 +442,9 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		case answerIsForwardedOptional
 		/// `A` and `B` each build two types that read `session`, which only `B` declares.
 		case twoTypesInOneBody
-		/// `Leaf` builds itself again through `leafBuilder`, which `A` builds where nothing declares `session` and `B` where it does.
-		case typeIsOnCycle
 
 		var fixture: String {
 			switch self {
-			case .typeIsOnCycle:
-				"""
-				@Instantiable(isRoot: true) public final class Root: Instantiable {
-				    @Instantiated let a: A
-				    @Instantiated let b: B
-				    @Instantiated let reader: Reader
-				    public init(a: A, b: B, reader: Reader) { self.a = a; self.b = b; self.reader = reader }
-				}
-				@Instantiable public final class A: Instantiable {
-				    @Instantiated let leafBuilder: Instantiator<Leaf>
-				    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
-				}
-				@Instantiable public final class B: Instantiable {
-				    @Instantiated let session: Session
-				    @Instantiated let leafBuilder: Instantiator<Leaf>
-				    public init(session: Session, leafBuilder: Instantiator<Leaf>) { self.session = session; self.leafBuilder = leafBuilder }
-				}
-				@Instantiable public final class Leaf: Instantiable {
-				    @Instantiated let leafBuilder: Instantiator<Leaf>
-				    public init(leafBuilder: Instantiator<Leaf>) { self.leafBuilder = leafBuilder }
-				}
-				@Instantiable public final class Session: Instantiable {
-				    public init() {}
-				}
-				@Instantiable public final class Reader: Instantiable {
-				    @Received(onlyIfAvailable: true) let session: Session?
-				    public init(session: Session?) { self.session = session }
-				}
-				"""
 			case .callerDeclaresNothing:
 				"""
 				@Instantiable(isRoot: true) public final class Root: Instantiable {
@@ -731,7 +891,7 @@ struct SafeDIToolNodeRecordsOptionalParameterTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

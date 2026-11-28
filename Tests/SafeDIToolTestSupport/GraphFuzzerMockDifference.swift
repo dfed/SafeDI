@@ -47,7 +47,14 @@ import SwiftSyntax
 ///   every type no generated configuration names, since one of those can reach them unseen. A reversal renames only
 ///   `<prefix>Root|AnyT|T|Missing|Cycle<digit>`, and a move gives each of a graph's names one of two letters, so two names of
 ///   one letter keep their order. The reads of a dropped field go with it, each only as the path of the node at its place
-///   in the tree.
+///   in the tree. A mock laid out from node records writes one function per node, which is handed its configuration with
+///   the places entered, so no node’s place in the tree shows there: the one read of a dropped field is the field of the
+///   handed configuration a function hands on as it enters a child’s place (`__safeDI_entered.configuration.<label>`,
+///   handed to `__safeDI_entered.entering`), where the outcome that lacks the field hands a new configuration of the
+///   field’s type (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`), and it reads as that. A dropped field
+///   is the field of an edge that closes a cycle, so the child it configures is on that cycle and its place is entered
+///   by name: a call that enters the nearest place of a type, or only hands the places on, hands no dropped field, and
+///   such a read there is not forgiven.
 struct GraphFuzzerMockDifference: Sendable {
 	enum Reason: Equatable, Sendable {
 		case orderOfParametersAndFields
@@ -608,6 +615,10 @@ private struct Rendering {
 			          read.endsIn(label == mockOverridesParameterName ? nil : label)
 			{
 				label == Self.overrideBuilderName ? Place(text: "\(label): nil", sortedAs: nil) : nil
+			} else if argument.label == nil, handsConfigurationToEnteredPlaces(list), let field = droppedFieldOfHandedConfiguration(readBy: argument.expression) {
+				// The other outcome's configuration has no such field, so its function hands the places a new configuration
+				// of the field's type.
+				Place(text: "\(field.type)()", sortedAs: nil)
 			} else {
 				Place(text: elementText(of: argument, in: scope, omittingTrailingComma: argument.trailingComma), sortedAs: nameSortedBy(argument: argument, of: list, in: scope).map { ($0, .argumentsOfNarrowerTier) })
 			}
@@ -630,6 +641,46 @@ private struct Rendering {
 	/// Whether `list` is the arguments of the call that creates a configuration's storage, one for each of its fields.
 	private func isStorageInitialization(_ list: LabeledExprListSyntax) -> Bool {
 		list.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.text == configurationStorageTypeName
+	}
+
+	/// Whether `list` is the arguments of a call that enters a place by name with the configuration it hands on, in a
+	/// mock laid out from node records: `__safeDI_entered.entering(…)`.
+	private func handsConfigurationToEnteredPlaces(_ list: LabeledExprListSyntax) -> Bool {
+		guard let callee = list.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.as(MemberAccessExprSyntax.self) else { return false }
+		return callee.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName && callee.declName.baseName.text == Self.enteringFunctionName
+	}
+
+	/// The dropped field `expression` reads, when it is `__safeDI_entered.configuration.<label>` in a function that is
+	/// handed the places entered with the configuration that holds the field: a function of a mock laid out from node
+	/// records is handed its configuration so, and reads a child's as a field of it.
+	private func droppedFieldOfHandedConfiguration(readBy expression: ExprSyntax) -> GraphFuzzerMockDifference.ConfigurationField? {
+		guard let read = expression.as(MemberAccessExprSyntax.self),
+		      let configuration = read.base?.as(MemberAccessExprSyntax.self),
+		      configuration.declName.baseName.text == Self.enteredConfigurationMemberName,
+		      configuration.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+		      let owner = configurationHandedToFunction(around: Syntax(expression)),
+		      let field = fields[owner]?[read.declName.baseName.text],
+		      droppedFields.contains(field)
+		else { return nil }
+		return field
+	}
+
+	/// The configuration the nearest function around `position` that takes the places entered is handed with them, as a
+	/// field's type spells it: the generic argument of its `__safeDI_entered` parameter's type.
+	private func configurationHandedToFunction(around position: Syntax) -> String? {
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self),
+			   let parameter = function.signature.parameterClause.parameters.first(where: { ($0.secondName ?? $0.firstName).text == Self.enteredPlacesParameterName })
+			{
+				let type = parameter.type.trimmedDescription
+				let opening = "\(Self.enteredTypeName)<"
+				guard type.hasPrefix(opening), type.hasSuffix(">") else { return nil }
+				return String(type.dropFirst(opening.count).dropLast())
+			}
+			ancestor = current.parent
+		}
+		return nil
 	}
 
 	private func isDroppedField(labeled label: String, in scope: Scope) -> Bool {
@@ -876,4 +927,8 @@ private struct Rendering {
 	private static let lazilyInstantiatedWrapperSuffix = "_lazilyInstantiated"
 	private static let sendableLazilyInstantiatedWrapperSuffix = "_sendableLazilyInstantiated"
 	private static let overrideBuilderName = "safeDIBuilder"
+	private static let enteredPlacesParameterName = "__safeDI_entered"
+	private static let enteredTypeName = "__safeDI_Entered"
+	private static let enteredConfigurationMemberName = "configuration"
+	private static let enteringFunctionName = "entering"
 }

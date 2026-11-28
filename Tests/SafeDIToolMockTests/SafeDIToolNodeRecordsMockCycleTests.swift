@@ -25,9 +25,10 @@ import Testing
 @testable import SafeDIToolTestSupport
 
 /// An internal mock root whose tree holds a cycle of builders, laid out from the node records of its world
-/// (`NodeRecords+MockCycle.swift`): each function on the cycle is handed the places entered above it, finds the place
-/// it builds among them or enters a new one, and hands the places on, so that a builder called again around the cycle
-/// reads the configuration its place was entered with, as the mock’s walk reads it of the nearest place on the path.
+/// (`NodeRecords+MockCycle.swift`): each function on the cycle is handed, in one argument, its configuration with the
+/// places entered above it, and each call of one looks its place up among them or enters a new one, so that a builder
+/// called again around the cycle reads the configuration its place was entered with, as the mock’s walk reads it of the
+/// nearest place on the path.
 struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 	// MARK: Initialization
 
@@ -85,50 +86,90 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        struct __safeDI_EnteredPlaces {
-		            final class Place<Configuration> {
-		                let configuration: Configuration
-		                let enteredAbove: __safeDI_EnteredPlaces
-		                init(_ configuration: Configuration, above enteredAbove: __safeDI_EnteredPlaces) {
-		                    self.configuration = configuration
-		                    self.enteredAbove = enteredAbove
+		        struct __safeDI_Configured<Configuration> {
+		            let configuration: Configuration
+		        }
+		        final class __safeDI_Place {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: Any
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
 		                }
 		            }
-		            var parentBuilder: Place<Parent.SafeDIMockConfiguration>?
-		            var childBuilder: Place<Child.SafeDIMockConfiguration>?
-		            func entering(parentBuilder place: Place<Parent.SafeDIMockConfiguration>) -> Self {
-		                var entered = self
-		                entered.parentBuilder = place
-		                return entered
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            func nearest<Handed>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
 		            }
-		            func entering(childBuilder place: Place<Child.SafeDIMockConfiguration>) -> Self {
-		                var entered = self
-		                entered.childBuilder = place
-		                return entered
+		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		            }
 		        }
-		        let __safeDI_entered = __safeDI_EnteredPlaces()
-		        func __safeDI_parentBuilder(safeDIOverrides: Parent.SafeDIMockConfiguration, __safeDI_entered: __safeDI_EnteredPlaces) -> Parent {
-		            let __safeDI_place = __safeDI_entered.parentBuilder ?? .init(safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(parentBuilder: __safeDI_place)
-		            let childBuilder = Instantiator<Child> {
-		                __safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration(), __safeDI_entered: __safeDI_entered)
-		            }
-		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<Parent.SafeDIMockConfiguration>) -> Parent {
+		            let childBuilder = Instantiator<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.entering(1, Child.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
 		        }
-		        func __safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration, __safeDI_entered: __safeDI_EnteredPlaces) -> Child {
-		            let __safeDI_place = __safeDI_entered.childBuilder ?? .init(safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(childBuilder: __safeDI_place)
-		            let parentBuilder = Instantiator<Parent> {
-		                __safeDI_parentBuilder(safeDIOverrides: safeDIOverrides.parentBuilder, __safeDI_entered: __safeDI_entered)
-		            }
-		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
+		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
+		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.parentBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
 		        }
-		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(safeDIOverrides: safeDIOverrides.parentBuilder, __safeDI_entered: __safeDI_entered)
-		        }
+		        let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.parentBuilder)) }
 		        return Root(parentBuilder: parentBuilder)
 		    }
 		}
@@ -175,6 +216,40 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 		// The override was read: it marks the value its closure built.
 		#expect(comparison.featureDescription.contains("\"parent\""), "No value is marked parent:\n\(comparison.featureDescription)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenConfiguredTypeIsBuiltBeneathItsTypeBuiltAgain() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.alphaAgainFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.alphaAgainFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// The two write other text, so the comparison is of two programs.
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
+		// The `Gamma` and `Delta` each `Alpha` built again builds are beneath a repeated ancestor, so they record no
+		// configuration of their own: every lap reads the root's `alpha.gamma` configuration, as the walk's does.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(alpha: .init(gamma: .init(delta: .init({ marked(Delta(epsilon: $0), "delta") })))))
+		"""
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.alphaAgainFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.alphaAgainFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [".alpha", ".alpha.alphaBuilder.instantiate()", ".alpha.alphaBuilder.instantiate().alphaBuilder.instantiate()"].enumerated().flatMap { lap, path in
+				[
+					DifferentialValueProbe(name: "lap \(lap)", expression: "Root.mock()\(path).gamma.delta"),
+					DifferentialValueProbe(name: "overridden lap \(lap)", expression: "\(overridden)\(path).gamma.delta"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// The override was read: it marks the value its closure built.
+		#expect(comparison.featureDescription.contains("\"delta\""), "No value is marked delta:\n\(comparison.featureDescription)")
 	}
 
 	@Test
@@ -256,6 +331,185 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_onlyHandsThePlacesOn_whenTypeOnNoCycleIsBuiltBetweenAnEnteredPlaceAndACycleBeneathIt() async throws {
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.porchFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.porchFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(mock == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            homeBuilder: Home.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                homeBuilder: homeBuilder
+		            )
+		        }
+
+		        var homeBuilder: Home.SafeDIMockConfiguration { __safeDI_storage.homeBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                homeBuilder: Home.SafeDIMockConfiguration
+		            ) {
+		                self.homeBuilder = homeBuilder
+		            }
+
+		            let homeBuilder: Home.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        struct __safeDI_Configured<Configuration> {
+		            let configuration: Configuration
+		        }
+		        final class __safeDI_Place {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: Any
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            func nearest<Handed>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
+		            }
+		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
+		            }
+		            func enteringNearest<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
+		                .init(configuration: handed, top: __safeDI_Place(slot: nil, isNearestOfType: true, configured: __safeDI_Configured(configuration: handed), above: top))
+		            }
+		            func passing<Handed>(_ handed: Handed) -> __safeDI_Entered<Handed> {
+		                .init(configuration: handed, top: top)
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_homeBuilder(__safeDI_entered: __safeDI_Entered<Home.SafeDIMockConfiguration>) -> Home {
+		            let roomBuilder = Instantiator<Room> { __safeDI_roomBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.roomBuilder)) }
+		            let porch: Porch = __safeDI_porch(__safeDI_entered: __safeDI_entered.passing(__safeDI_entered.configuration.porch))
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(roomBuilder, porch) } else { Home(roomBuilder: roomBuilder, porch: porch) }
+		        }
+		        func __safeDI_roomBuilder(__safeDI_entered: __safeDI_Entered<Room.SafeDIMockConfiguration>) -> Room {
+		            let otherHomeBuilder = Instantiator<Home> { __safeDI_homeBuilder(__safeDI_entered: __safeDI_entered.entering(1, Home.SafeDIMockConfiguration(), nearestOfType: true)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(otherHomeBuilder) } else { Room(otherHomeBuilder: otherHomeBuilder) }
+		        }
+		        func __safeDI_porch(__safeDI_entered: __safeDI_Entered<Porch.SafeDIMockConfiguration>) -> Porch {
+		            let shedBuilder = Instantiator<Shed> { __safeDI_shedBuilder(__safeDI_entered: __safeDI_entered.enteringNearest(__safeDI_entered.configuration.shedBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(shedBuilder) } else { Porch(shedBuilder: shedBuilder) }
+		        }
+		        func __safeDI_shedBuilder(__safeDI_entered: __safeDI_Entered<Shed.SafeDIMockConfiguration>) -> Shed {
+		            let otherShedBuilder = Instantiator<Shed> { __safeDI_shedBuilder(__safeDI_entered: __safeDI_entered.entering(2, Shed.SafeDIMockConfiguration(), nearestOfType: true)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(otherShedBuilder) } else { Shed(otherShedBuilder: otherShedBuilder) }
+		        }
+		        let homeBuilder = Instantiator<Home> { __safeDI_homeBuilder(__safeDI_entered: __safeDI_entered.enteringNearest(safeDIOverrides.homeBuilder)) }
+		        return Root(homeBuilder: homeBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(mock)")
+		// A home the cycle builds reads the configuration of the nearest home on its path, the root’s, and so does its
+		// porch, which hands the sheds beneath it the places entered above it.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(homeBuilder: .init(\
+		roomBuilder: .init({ marked(Room(otherHomeBuilder: $0), "home.room") }), \
+		porch: .init(shedBuilder: .init({ marked(Shed(otherShedBuilder: $0), "home.porch.shed") }), { marked(Porch(shedBuilder: $0), "home.porch") }), \
+		{ marked(Home(roomBuilder: $0, porch: $1), "home") })))
+		"""
+		let sheds = [".porch", ".porch.shedBuilder.instantiate()", ".porch.shedBuilder.instantiate().otherShedBuilder.instantiate()", ".porch.shedBuilder.instantiate().otherShedBuilder.instantiate().otherShedBuilder.instantiate()"]
+		let homes = [".homeBuilder.instantiate()", ".homeBuilder.instantiate().roomBuilder.instantiate().otherHomeBuilder.instantiate()", ".homeBuilder.instantiate().roomBuilder.instantiate().otherHomeBuilder.instantiate().roomBuilder.instantiate().otherHomeBuilder.instantiate()"]
+		let paths = homes.flatMap { home in [home] + sheds.map { "\(home)\($0)" } }
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.porchFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.porchFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: paths.enumerated().flatMap { index, path in
+				[
+					DifferentialValueProbe(name: "path \(index)", expression: "Root.mock()\(path)"),
+					DifferentialValueProbe(name: "overridden path \(index)", expression: "\(overridden)\(path)"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each override was read: it marks the value its closure built.
+		for marker in ["home", "home.room", "home.porch", "home.porch.shed"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenMockedTypeIsItselfOnTheCycle() async throws {
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.mockedParentFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
@@ -298,9 +552,351 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		}
 	}
 
+	/// `A` builds `B` in a `@Sendable` function, which builds `A` again: both functions take the places, declared in
+	/// their `Sendable` form, and the closure that calls `B`'s function captures the places `A`'s was handed.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenBuilderOnCycleBuildsSendableLazilyInstantiatedType() async throws {
+	mutating func mock_handsSendableFunctionOnCycleThePlacesInTheirSendableForm_whenCycleClosesInsideSendableFunction() async throws {
+		let fixture = [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: SendableInstantiator<B>) {
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Instantiated let bBuilder: SendableInstantiator<B>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { [fixture] filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(mock == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
+		        }
+
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        nonisolated struct __safeDI_Configured<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		        }
+		        nonisolated final class __safeDI_Place: Sendable {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: any Sendable
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: any Sendable, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
+		        }
+		        nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            func nearest<Handed: Sendable>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
+		            }
+		            func entering<Handed: Sendable>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        @Sendable nonisolated func __safeDI_aBuilder(__safeDI_entered: __safeDI_Entered<A.SafeDIMockConfiguration>) -> A {
+		            let bBuilder = SendableInstantiator<B> { __safeDI_bBuilder(__safeDI_entered: __safeDI_entered.entering(1, __safeDI_entered.configuration.bBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+		        }
+		        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_entered: __safeDI_Entered<B.SafeDIMockConfiguration>) -> B {
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(__safeDI_entered: __safeDI_entered.entering(0, A.SafeDIMockConfiguration()))
+		            }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.aBuilder))
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	/// The root's body takes no places and enters the cycle at `A`, which a `@Sendable` function builds: it binds `A`'s
+	/// configuration to a local before the functions, which the closure that calls `A`'s function captures in place of
+	/// the overrides.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsConfigurationHandedToSendableFunctionOnCycleToLocal_whenRootEntersCycleAtSendableFunction() async throws {
+		let fixture = [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(aBuilder: SendableInstantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: SendableInstantiator<A>
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>) {
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: SendableInstantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: SendableInstantiator<A>
+			}
+			""",
+		]
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { [fixture] filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(mock == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                aBuilder: aBuilder
+		            )
+		        }
+
+		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                aBuilder: A.SafeDIMockConfiguration
+		            ) {
+		                self.aBuilder = aBuilder
+		            }
+
+		            let aBuilder: A.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        nonisolated struct __safeDI_Configured<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		        }
+		        nonisolated final class __safeDI_Place: Sendable {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: any Sendable
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: any Sendable, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
+		        }
+		        nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            func nearest<Handed: Sendable>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
+		            }
+		            func entering<Handed: Sendable>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        let __safeDI_aBuilder__overrides = safeDIOverrides.aBuilder
+		        @Sendable nonisolated func __safeDI_aBuilder(__safeDI_entered: __safeDI_Entered<A.SafeDIMockConfiguration>) -> A {
+		            let bBuilder = Instantiator<B> { __safeDI_bBuilder(__safeDI_entered: __safeDI_entered.entering(1, __safeDI_entered.configuration.bBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+		        }
+		        @Sendable nonisolated func __safeDI_bBuilder(__safeDI_entered: __safeDI_Entered<B.SafeDIMockConfiguration>) -> B {
+		            let aBuilder = SendableInstantiator<A> { __safeDI_aBuilder(__safeDI_entered: __safeDI_entered.entering(0, A.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+		        }
+		        let aBuilder = SendableInstantiator<A> { __safeDI_aBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_aBuilder__overrides)) }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenBuilderOnCycleBuildsSendableLazilyInstantiatedType() async throws {
 		let fixture = Self.ringFixture.merging([
 			"Parent.swift": """
 			@Instantiable
@@ -329,11 +925,32 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		// The child is built in the wrapper's `@Sendable` function, and its parent, which takes the places entered, in a
-		// function of its own: the `Sendable` kind's refusal holds the root before any cycle's is asked.
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["sendable"]])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		// The child is built in the wrapper's `@Sendable` function, which takes the places entered and hands them to its
+		// parent's function, so the places are declared in their `Sendable` form.
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let overridden = #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(child: $0), "parent") })))"#
+		let laps = [
+			".parentBuilder.instantiate()",
+			".parentBuilder.instantiate().child.instance.parentBuilder.instantiate()",
+			".parentBuilder.instantiate().child.instance.parentBuilder.instantiate().child.instance.parentBuilder.instantiate()",
+		]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: laps.enumerated().flatMap { lap, path in
+				[
+					DifferentialValueProbe(name: "lap \(lap)", expression: "Root.mock()\(path)"),
+					DifferentialValueProbe(name: "overridden lap \(lap)", expression: "\(overridden)\(path)"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// The override was read: it marks the value its closure built.
+		#expect(comparison.featureDescription.contains("\"parent\""), "No value is marked parent:\n\(comparison.featureDescription)")
 	}
 
 	@Test
@@ -469,6 +1086,94 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsEachParentsOwnField_whenTypeOnCycleAndTypeOffEveryCycleBuildOneProperty() async throws {
+		let fixture = Self.homeFixture.merging([
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(homeBuilder: Instantiator<Home>, shed: Shed) {
+			        self.homeBuilder = homeBuilder
+			        self.shed = shed
+			    }
+
+			    @Instantiated let homeBuilder: Instantiator<Home>
+			    @Instantiated let shed: Shed
+			}
+			""",
+			"Home.swift": """
+			@Instantiable
+			public final class Home: Instantiable, Marked {
+			    public init(roomBuilder: Instantiator<Room>, lamp: Lamp, lampBuilder: Instantiator<Lamp>) {
+			        self.roomBuilder = roomBuilder
+			        self.lamp = lamp
+			        self.lampBuilder = lampBuilder
+			    }
+
+			    @Instantiated let roomBuilder: Instantiator<Room>
+			    @Instantiated let lamp: Lamp
+			    @Instantiated let lampBuilder: Instantiator<Lamp>
+			    public var marker = ""
+			}
+			""",
+			"Shed.swift": """
+			@Instantiable
+			public final class Shed: Instantiable {
+			    public init(lamp: Lamp, lampBuilder: Instantiator<Lamp>) {
+			        self.lamp = lamp
+			        self.lampBuilder = lampBuilder
+			    }
+
+			    @Instantiated let lamp: Lamp
+			    @Instantiated let lampBuilder: Instantiator<Lamp>
+			}
+			""",
+			"Lamp.swift": """
+			@Instantiable
+			public final class Lamp: Instantiable, Marked {
+			    public init() {}
+			    public var marker = ""
+			}
+			""",
+		]) { _, replacement in replacement }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// One place stands for a lamp, and one for a lamp’s builder, in the body of a home’s function, which takes the
+		// places entered, and in the body of the shed’s, which takes its overrides: each body reads the field of the
+		// configuration its own function was handed.
+		let overridden = """
+		Root.mock(safeDIOverrides: .init(\
+		homeBuilder: .init(lamp: { marked(Lamp(), "home.lamp") }, lampBuilder: { marked(Lamp(), "home.lampBuilder") }), \
+		shed: .init(lamp: { marked(Lamp(), "shed.lamp") }, lampBuilder: { marked(Lamp(), "shed.lampBuilder") })))
+		"""
+		// Every other lap is a home, which holds a lamp and a lamp’s builder.
+		let paths = Self.laps(from: ".homeBuilder.instantiate()").enumerated().flatMap { index, path in
+			index.isMultiple(of: 2) ? [path, "\(path).lampBuilder.instantiate()"] : [path]
+		} + [".shed", ".shed.lampBuilder.instantiate()"]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: paths.enumerated().flatMap { index, path in
+				[
+					DifferentialValueProbe(name: "path \(index)", expression: "Root.mock()\(path)"),
+					DifferentialValueProbe(name: "overridden path \(index)", expression: "\(overridden)\(path)"),
+				]
+			},
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each override was read: it marks the value its closure built.
+		for marker in ["home.lamp", "home.lampBuilder", "shed.lamp", "shed.lampBuilder"] {
+			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenTypeOnCycleDeclaresPropertyNothingFulfills() async throws {
 		let fixture = Self.ringFixture.merging([
 			"Child.swift": """
@@ -531,10 +1236,11 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenTypeBuiltAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
+	mutating func mock_entersPlaceLeftOutAndHandsItNewConfigurationAtEachCall_whenTypeBuiltAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
 		// A parent’s configuration has no field for its child, so the walk builds each child of the ring with its
-		// initializer’s own default, a new `State` each time. An empty configuration would hold one `State`, which every
-		// child built of the place that keeps it would share.
+		// initializer’s own default, a new `State` each time. An empty configuration kept with the child’s place would
+		// hold one `State`, which every child built of that place would share: the child’s place is entered left out,
+		// and each call that returns to it hands a new configuration.
 		let fixture = Self.ringFixture.merging([
 			"Child.swift": """
 			public final class State {
@@ -554,13 +1260,140 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 			}
 			""",
 		]) { _, replacement in replacement }
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["mockDefaultValuedParameter"])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		let mock = try #require(output.mockFiles["Root+SafeDIMock.swift"])
+		#expect(mock == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            parentBuilder: Parent.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                parentBuilder: parentBuilder
+		            )
+		        }
+
+		        var parentBuilder: Parent.SafeDIMockConfiguration { __safeDI_storage.parentBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                parentBuilder: Parent.SafeDIMockConfiguration
+		            ) {
+		                self.parentBuilder = parentBuilder
+		            }
+
+		            let parentBuilder: Parent.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        struct __safeDI_Configured<Configuration> {
+		            let configuration: Configuration
+		        }
+		        final class __safeDI_Place {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: Any
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let isLeftOut: Bool
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: Any, isLeftOut: Bool, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                self.isLeftOut = isLeftOut
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            var isLeftOut = false
+		            var leavingOut: __safeDI_Entered<Configuration> { .init(configuration: configuration, top: top, isLeftOut: true) }
+		            func nearest<Handed>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed>, !place.isLeftOut else { return nil }
+		                return found.configuration
+		            }
+		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: place.isLeftOut ? handed() : found.configuration, top: place, isLeftOut: place.isLeftOut)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), isLeftOut: false, above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), isLeftOut: isLeftOut, above: top), isLeftOut: isLeftOut)
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<Parent.SafeDIMockConfiguration>) -> Parent {
+		            let childBuilder = Instantiator<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.leavingOut.entering(1, Child.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
+		        }
+		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
+		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.isLeftOut ? Parent.SafeDIMockConfiguration() : __safeDI_entered.configuration.parentBuilder)) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder, __safeDI_entered.configuration.state) } else { Child(parentBuilder: parentBuilder, state: __safeDI_entered.configuration.state) }
+		        }
+		        let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.parentBuilder)) }
+		        return Root(parentBuilder: parentBuilder)
+		    }
+		}
+		#endif
+		""")
 	}
 
 	@Test
@@ -719,6 +1552,103 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		""",
 	]
 
+	/// A root's `Alpha` builds `Alpha` again, beneath which each `Alpha` builds a `Gamma` that builds a `Delta`, which builds
+	/// an `Epsilon`, and a `SettingsFlow` whose `LoggedInFlow`’s settings build a `SettingsFlow` again. `Aardvark` builds
+	/// the `LoggedInFlow` first in name order, so the cycle edge configurations leave out is not the one that closes it here.
+	private static let alphaAgainFixture: [String: String] = [
+		"Marked.swift": markedFile,
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable {
+		    public init(alpha: Alpha) {
+		        self.alpha = alpha
+		    }
+
+		    @Instantiated let alpha: Alpha
+		}
+		""",
+		"Alpha.swift": """
+		@Instantiable
+		public final class Alpha: Instantiable {
+		    public init(alphaBuilder: Instantiator<Alpha>, gamma: Gamma) {
+		        self.alphaBuilder = alphaBuilder
+		        self.gamma = gamma
+		    }
+
+		    @Instantiated let alphaBuilder: Instantiator<Alpha>
+		    @Instantiated let gamma: Gamma
+		}
+		""",
+		"Gamma.swift": """
+		@Instantiable
+		public final class Gamma: Instantiable {
+		    public init(delta: Delta, flow: Flow) {
+		        self.delta = delta
+		        self.flow = flow
+		    }
+
+		    @Instantiated let delta: Delta
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
+		}
+		""",
+		"Delta.swift": """
+		@Instantiable
+		public final class Delta: Instantiable, Marked {
+		    public init(epsilon: Epsilon) {
+		        self.epsilon = epsilon
+		    }
+
+		    @Instantiated let epsilon: Epsilon
+		    public var marker = ""
+		}
+		""",
+		"Epsilon.swift": """
+		@Instantiable
+		public final class Epsilon: Instantiable {
+		    public init() {}
+		}
+		""",
+		"Flow.swift": """
+		public protocol Flow: AnyObject {}
+
+		@Instantiable
+		public final class Aardvark: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
+		}
+
+		@Instantiable
+		public final class LoggedInFlow: Instantiable, Flow {
+		    public init(settingsBuilder: Instantiator<Settings>) {
+		        self.settingsBuilder = settingsBuilder
+		    }
+
+		    @Instantiated let settingsBuilder: Instantiator<Settings>
+		}
+
+		@Instantiable
+		public final class Settings: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
+		}
+
+		@Instantiable
+		public final class SettingsFlow: Instantiable, Flow {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
+		}
+		""",
+	]
+
 	/// `homeFixture` whose root also builds a wing, which builds a home of its own a level deeper than the root's.
 	private static let twoHomesFixture: [String: String] = homeFixture.merging([
 		"Root.swift": """
@@ -741,6 +1671,46 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		    }
 
 		    @Instantiated let annexHomeBuilder: Instantiator<Home>
+		}
+		""",
+	]) { _, replacement in replacement }
+
+	/// `homeFixture` whose homes each build a porch by value, which builds a shed, which builds another shed: the porch
+	/// is on no cycle, beneath the root's home, which enters a place, and above the sheds' cycle.
+	private static let porchFixture: [String: String] = homeFixture.merging([
+		"Home.swift": """
+		@Instantiable
+		public final class Home: Instantiable, Marked {
+		    public init(roomBuilder: Instantiator<Room>, porch: Porch) {
+		        self.roomBuilder = roomBuilder
+		        self.porch = porch
+		    }
+
+		    @Instantiated let roomBuilder: Instantiator<Room>
+		    @Instantiated let porch: Porch
+		    public var marker = ""
+		}
+		""",
+		"Porch.swift": """
+		@Instantiable
+		public final class Porch: Instantiable, Marked {
+		    public init(shedBuilder: Instantiator<Shed>) {
+		        self.shedBuilder = shedBuilder
+		    }
+
+		    @Instantiated let shedBuilder: Instantiator<Shed>
+		    public var marker = ""
+		}
+		""",
+		"Shed.swift": """
+		@Instantiable
+		public final class Shed: Instantiable, Marked {
+		    public init(otherShedBuilder: Instantiator<Shed>) {
+		        self.otherShedBuilder = otherShedBuilder
+		    }
+
+		    @Instantiated let otherShedBuilder: Instantiator<Shed>
+		    public var marker = ""
 		}
 		""",
 	]) { _, replacement in replacement }
@@ -820,7 +1790,7 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

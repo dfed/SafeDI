@@ -54,6 +54,14 @@ struct ConstructionScope: Sendable {
 		record.isUnavailableDependency
 	}
 
+	var isCallPlace: Bool {
+		record.isCallPlace
+	}
+
+	var callPlaceRequiredAliasFulfillingProperties: Set<Property> {
+		record.callPlaceRequiredAliasFulfillingProperties
+	}
+
 	var seamCall: SeamCall? {
 		record.seamCall
 	}
@@ -146,7 +154,19 @@ struct ConstructionScope: Sendable {
 		}
 	}
 
-	fileprivate let table: ScopeTable
+	/// Whether a call of this scope fills a hole (`HoleArgument.fill`), read from the record without making the fill's scope.
+	var fillsAHole: Bool {
+		record.holeArguments.contains { argument in
+			switch argument {
+			case .fill:
+				true
+			case .passUp:
+				false
+			}
+		}
+	}
+
+	let table: ScopeTable
 	fileprivate let record: ScopeRecord
 }
 

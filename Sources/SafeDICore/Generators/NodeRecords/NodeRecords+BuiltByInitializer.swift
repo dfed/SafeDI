@@ -100,8 +100,6 @@ extension NodeRecords {
 	///   that its scope does not build, whose parameter of `mock()` is named apart, or a receive of a lazy wrapper `mock()`
 	///   makes of an instance it takes.
 	/// - Parameter alwaysDeclaresFunction: Whether a kind builds the node in a function of its own whatever its body holds.
-	/// - Parameter declaresFunction: Whether the caller's kind begins the builder function with a statement of its own, so
-	///   that a constant declares it too.
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
@@ -117,7 +115,6 @@ extension NodeRecords {
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 		lineEnd: String = "",
-		declaresFunction: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let instantiable = world.scope(of: declaration).instantiable
 		// Every node but the root is built as a property, and has an initializer (`refusalsOfBuiltByInitializer(_:in:)`)
@@ -149,8 +146,8 @@ extension NodeRecords {
 			reads.insert(PlaceRead(argumentLabel: argument.label, label: argument.innerLabel, property: argument.asProperty, source: .binding(label: argument.innerLabel)), at: min(position, reads.count))
 		}
 		// A wrapper always declares its builder function; a constant only where its body has a statement, where a kind says
-		// so, or where the caller's kind begins it with one (`declaresFunction`).
-		let hasFunction = declaresFunction || isWrapper || alwaysDeclaresFunction || !children.isEmpty
+		// so (`alwaysDeclaresFunction`).
+		let hasFunction = isWrapper || alwaysDeclaresFunction || !children.isEmpty
 		return BuiltPlaceRecord(
 			property: property,
 			isErased: world.isErased(declaration),

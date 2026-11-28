@@ -67,9 +67,32 @@ extension NodeRecords {
 		return NodeRecordClaim(kind: .publicMockCall, discharges: fills ? [.construction, .onlyIfAvailable] : [.construction, .onlyIfAvailable, .fill], refusals: refusals)
 	}
 
+	/// The type of the member of the enclosing configuration that configures `call`, of `calledType`'s public mock, called
+	/// through `calledFunction` for a node built as `property`: the called mock's own overrides where it takes them, else the
+	/// closure that builds the called type, handed what the call passes the called mock (`MockLowering.PublicMockCallNode`'s
+	/// `overrideClosureType`). The call's record and the member of its parent's configuration both ask here.
+	static func publicMockCallOverrideType(of call: PublicMockCall, calledType: TypeDescription, calledFunction: Initializer, builtAs property: Property) -> TypeDescription {
+		if call.takesOverrides {
+			.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
+		} else {
+			.unknown(text: "(\(publicMockCallOverrideClosureType(of: call, calledFunction: calledFunction, builtAs: property)))?")
+		}
+	}
+
+	/// The closure that builds the type of a call of a public mock that takes no overrides, handed what the call passes
+	/// `calledFunction`, for a node built as `property`.
+	static func publicMockCallOverrideClosureType(of call: PublicMockCall, calledFunction: Initializer, builtAs property: Property) -> String {
+		let parameterTypes = calledFunction.arguments.map { argument in
+			(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+				.asFunctionParameter(amongTypesDeclaredEscaping: call.typesDeclaredEscaping)
+				.asSource
+		}
+		return "(\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
+	}
+
 	/// The function of the called tier the call passes its arguments to: the leaf's mock, which takes the tier's
 	/// parameters (`publicMockLeafInstantiable`), where it returns the property's type, as the walk chooses it.
-	private static func calledMockFunction(of instantiable: Instantiable, builtAs property: Property?) -> Initializer? {
+	static func calledMockFunction(of instantiable: Instantiable, builtAs property: Property?) -> Initializer? {
 		guard let property else { return nil }
 		return instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType) ? instantiable.mockInitializer : instantiable.initializer
 	}
@@ -120,6 +143,7 @@ extension NodeRecords {
 		variant: VariantID,
 		in world: some NodeRecordSources,
 		receivesBoundAgain: [MockReceiveBoundAgain],
+		enteredSlots: MockEnteredSlots?,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {
@@ -174,13 +198,14 @@ extension NodeRecords {
 		let argumentValues: [Int: ValuePath]
 		let alternatives: [ConstructionAlternative]
 		let passedArguments: [PassedArgument]
+		let overrideType = publicMockCallOverrideType(of: call, calledType: calledType, calledFunction: initializer, builtAs: property)
 		if call.takesOverrides {
 			// The called mock's own overrides: the enclosing configuration's field under the node's label, which the record
 			// never spells (`mockConfigurationField(named:)`).
-			let overridesType = TypeDescription.nested(name: ReservedName.mockOverridesTypeName, parentType: calledType, generics: [])
+			let overridesType = overrideType
 			let overridesProperty = Property(label: ReservedName.mockOverridesParameterName, typeDescription: overridesType)
 			// The called mock's overrides are its own: the node hands no configuration to children, since it has none.
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: overridesType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			var values = builderStructValues
 			values[arguments.count] = slot.value
 			argumentValues = values
@@ -191,13 +216,8 @@ extension NodeRecords {
 			// A mock that takes no overrides is configured by an override closure, which the enclosing configuration holds
 			// under the node's label, called with what the call passes the called mock (`MockLowering.PublicMockCallNode`'s
 			// `overrideClosureType`). A call that fills or passes up a builder, whose closure is handed builders, is refused.
-			let parameterTypes = initializer.arguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
-					.asFunctionParameter(amongTypesDeclaredEscaping: call.typesDeclaredEscaping)
-					.asSource
-			}
-			let closureType = TypeDescription.unknown(text: "((\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
-			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false)
+			let closureType = overrideType
+			let slot = mockOverrideSlot(of: declaration, labeled: property.label, typed: closureType, in: world, hasFunction: hasFunction, handsOverridesToChildren: false, isSendable: false, slots: enteredSlots)
 			argumentValues = builderStructValues
 			alternatives = [ConstructionAlternative(
 				closure: slot.value,
@@ -209,7 +229,10 @@ extension NodeRecords {
 			passedArguments = slot.passedArguments
 		}
 		var record = BuiltPlaceRecord(
-			property: property,
+			// A call the mock makes for an optional property it promotes is bound as the unwrapped type it returns, as every
+			// node the mock builds is bound non-optional (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:enteredSlots:wrapperArgumentNames:typesDeclaredEscaping:children:)`); the optional receiver takes it
+			// through optional promotion.
+			property: property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property,
 			// Production's erasure, which joins the call's claim (`joiningProductionMarks(_:to:of:in:)`), wraps the call in
 			// the property's type where the node is erased.
 			isErased: world.isErased(declaration),
@@ -228,7 +251,7 @@ extension NodeRecords {
 			children: receivesBoundAgain.map(\.place),
 			node: PlanNode(),
 		)
-		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
+		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: nil)
 		// An erased call's function returns the property's type, as an erased construction's does.
 		return isMockErased(declaration, in: world) ? mockErasedDecoration(of: record) : record
 	}

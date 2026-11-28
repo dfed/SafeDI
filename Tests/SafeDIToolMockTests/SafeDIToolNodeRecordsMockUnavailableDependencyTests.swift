@@ -583,13 +583,12 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_keepsTheWalksStatements_whenTypeThatDeclaresUnavailableDependencyIsNamedApartOnLazyCycle() async throws {
+	mutating func mock_laysOutFromNodeRecords_whenTypeThatDeclaresUnavailableDependencyIsNamedApartOnLazyCycle() async throws {
 		// The acceptance case of the kind that lays out a cycle's closer: `Node` declares `token`, which nothing fulfills,
-		// is built again through its own `Instantiator`, and is named apart from the `node` a sibling receives. In this
-		// one position the walk binds `token` to `nil` and `mock()` takes no override of it; the records are to offer the
-		// override there as everywhere else, `nil` by default. The function the cycle closes on would take the `node` a
-		// sibling receives as a parameter, which the walk of the records refuses in every world for now, so the walk
-		// writes it.
+		// is built again through its own `Instantiator`, and is named apart from the `node` a sibling receives. The function
+		// the cycle closes on takes no parameter for `node`, its own label, and the call that closes the cycle names it as
+		// it is named apart, so the records lay the mock out in the slot form; `SafeDIToolNodeRecordsMockCycleWalkTests`
+		// compares its values with the walk's.
 		let fixture = [
 			"""
 			@Instantiable(generateMock: true)
@@ -640,14 +639,12 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 			public final class Token {}
 			""",
 		]
-		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+		let (_, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 
-		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycleTakesParameters"]])
-		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
-		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [[]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	// MARK: Private
@@ -998,7 +995,7 @@ struct SafeDIToolNodeRecordsMockUnavailableDependencyTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutMockRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

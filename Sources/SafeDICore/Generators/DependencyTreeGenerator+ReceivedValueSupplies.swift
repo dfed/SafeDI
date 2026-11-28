@@ -33,10 +33,11 @@ extension DependencyTreeGenerator {
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
 		let proof = ownAccessProof()
 		let roots = try await TypeFactsReceivedValueSupplies.$readsWhereTreesAreBuilt.withValue(unfulfilledReceiveLocations.isEmpty) {
-			try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: proof, readersOfEveryTree: [.reader(.receivedValueSupplies)]).roots
+			try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: proof, plansCyclesPerType: false, readersOfEveryTree: [.reader(.receivedValueSupplies)]).roots
 		}
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
+		// Every root's tree is built per path here (`plansCyclesPerType`).
 		var unfulfilledReceiveLabels = Set<String>()
 		if !unfulfilledReceiveLocations.isEmpty {
 			for instantiable in typeDescriptionToFulfillingInstantiableMap.values {

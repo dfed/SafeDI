@@ -515,6 +515,19 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutViewsThatGrowWithTheRenames_whenEachTypeOfAChainKeepsTheLabelOfTheRenameAboveIt() async throws {
+		// A chain of `n` types, each renaming the `authToken` the type above it renames, keeping its label and retyping it to
+		// a protocol the one above refines. Each rename reads the one above it, so each type is one view whatever the chain's
+		// length: the views grow by one with each rename.
+		var counts = [[Int]]()
+		for renameCount in [2, 4, 8] {
+			try await counts.append(viewCounts(of: Self.typesRenamingTheRenameAboveThem(renameCount: renameCount)))
+		}
+		#expect(counts == [[2], [4], [8]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -691,6 +704,27 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		return files
 	}
 
+	/// A root that declares `token: Secret` above a chain of `renameCount` types, each instantiating the next. The first
+	/// renames `token` to `authToken: (any Auth1)?`, and each after it keeps the label and retypes it to `(any Auth<i>)?`,
+	/// a protocol `Auth<i - 1>` refines.
+	private static func typesRenamingTheRenameAboveThem(renameCount: Int) -> [String] {
+		var files = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let token: Secret", "@Instantiated let link1: Link1"]),
+			seamFixtureType(named: "Secret", isFinalClass: true, declarations: [], conformances: ", Auth1"),
+		]
+		for index in 1...renameCount {
+			files.append("public protocol Auth\(index)\(index < renameCount ? ": Auth\(index + 1)" : "") {}")
+			var declarations = [index == 1
+				? "@Received(fulfilledByDependencyNamed: \"token\", ofType: Secret.self, onlyIfAvailable: true) let authToken: (any Auth1)?"
+				: "@Received(fulfilledByDependencyNamed: \"authToken\", ofType: (any Auth\(index - 1))?.self, onlyIfAvailable: true) let authToken: (any Auth\(index))?"]
+			if index < renameCount {
+				declarations.append("@Instantiated let link\(index + 1): Link\(index + 1)")
+			}
+			files.append(seamFixtureType(named: "Link\(index)", isFinalClass: true, declarations: declarations))
+		}
+		return files
+	}
+
 	/// What a screen of `screensOpeningEachOther` does with the `Context` its root declares.
 	private enum ContextRole: CaseIterable {
 		case declares
@@ -709,7 +743,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func workCounts(of fixture: [String], by step: GenerationWork.Step) async throws -> [Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-		_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: fixture,
 				buildSwiftOutputDirectory: true,

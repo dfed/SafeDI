@@ -24,7 +24,7 @@ extension TypeKeyLayout {
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	/// Declares the root's body, whose first statements are `properties`, the declarations in scope before it.
 	mutating func declareOuter(_ properties: [Property]) {
-		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], outerView: [:], forwardedLabels: [], cycleParameters: []))
 		for property in properties {
 			bodies[0].positionsByLabel[property.label, default: []].append(bodies[0].statements.count)
 			bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "")))
@@ -67,28 +67,31 @@ extension TypeKeyLayout {
 					let isInSendableFamily = built.isSendable || bodies[body].isInSendableFamily
 					// A closer passes the function it calls what that function reads, which the closer's body looks up outside
 					// itself: the labels of the target's domain are this view's too.
-					guard let closed = closedOnFunctions(of: domain, from: body) else { return false }
+					guard let closed = closedOnFunctions(named: domain.closedOnFunctionNames, from: body, closesBeneathItsBody: domain.closesBeneathItsBody) else { return false }
 					let labels = domain.labels.union(closed.labels)
 					// A view whose closers call a function declared outside it keeps the declarations themselves, but for a member of
 					// a loop of builders whose closers call only its siblings (`KeyedDeclaration`).
+					// A view inside a variant's body is keyed by kind too: a variant reads only its cycle parameters, at which
+					// `lookUp` stops, so no look-up from a view inside it resolves past the variant's body to the first call
+					// that gives the body its parent; `variantsReadOnlyTheirCycleParameters` gives up on the layout otherwise.
 					let keysByKind = closed.keysByKind
 					var outerView = [String: KeyedDeclaration]()
-					var outerDeclarations = [String: PathValue]()
+					var resolvedOuterView = [String: PathValue]()
 					for label in labels {
 						// A label of the view's own domain that its own place declares, and that every read of it there takes only if
 						// available, is read beneath that declaration while it is built: each such read reads `nil`, as the tree's
 						// reads do (`NearestDeclarations.resolvingBinding(of:)`).
 						let isReadOnlyIfAvailableWhileBuilt = label == built.property.label && domain.labels.contains(label) && !domain.labelsReadNotOnlyIfAvailable.contains(label)
-						let declaration = isReadOnlyIfAvailableWhileBuilt ? PathValue.none : lookUp(label, inBody: body, before: position)
-						outerDeclarations[label] = declaration
-						outerView[label] = keyed(declaration, byKind: keysByKind)
+						let resolved = isReadOnlyIfAvailableWhileBuilt ? PathValue.none : lookUp(label, inBody: body, before: position)
+						resolvedOuterView[label] = resolved
+						outerView[label] = keyed(resolved, label: label, byKind: keysByKind)
 					}
-					outerDeclarationsByEdge[[body, position]] = outerDeclarations
+					outerDeclarationsByEdge[[body, position]] = resolvedOuterView
 					let key = ViewKey(
 						node: built.node,
 						isInSendableFamily: isInSendableFamily,
 						outerView: outerView,
-						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), byKind: keysByKind) },
+						cycleArguments: built.callCycleArguments.map { keyed(pathValue(of: $0, inBody: body, before: position), label: $0.label, byKind: keysByKind) },
 						closedOnStatements: closed.statementKeys,
 						closedOnResolutions: closed.resolutions,
 					)
@@ -104,9 +107,9 @@ extension TypeKeyLayout {
 							record: built,
 							isInSendableFamily: isInSendableFamily,
 							domainLabels: labels,
+							outerView: resolvedOuterView,
 							forwardedLabels: Set(built.parameterProperties.map(\.label)),
-							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
-							outerDeclarations: outerDeclarations,
+							cycleParameters: built.cycleParameters,
 						))
 						viewsByKey[key] = newBody
 						statement = .built(body: newBody)
@@ -118,38 +121,65 @@ extension TypeKeyLayout {
 					guard built.children.isEmpty, built.cycleParameters.isEmpty else { return false }
 					statement = .inline(built)
 				}
-			case let .closer(closer) where !closer.rebindsLoopMember:
-				// A closer that rebinds no member of a loop of builders calls the function of an enclosing place, the nearest of
-				// its name.
-				let target = enclosingFunction(named: closer.closedOnFunctionName, from: body)
-				guard target != 0 else { return false }
-				statement = .closer(closer, target: target)
-				closersByTarget[target, default: []].append((body: body, index: position))
 			case let .closer(closer):
-				loopRebindingBodies.insert(body)
-				// The function a closing scope calls is the nearest of its name, as Swift resolves it: for a member of a loop of
-				// builders, one a statement of an enclosing body declares, or an enclosing place's.
-				switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
-				case let .enclosing(target):
-					statement = .closer(closer, target: target)
-					closersByTarget[target, default: []].append((body: body, index: position))
-				case let .statement(declaringBody, index, _):
-					if index < bodies[declaringBody].statements.count {
-						guard case let .built(target) = bodies[declaringBody].statements[index] else { return false }
-						statement = .closer(closer, target: target)
-						closersByTarget[target, default: []].append((body: body, index: position))
+				if closer.rebindsLoopMember {
+					loopRebindingBodies.insert(body)
+				}
+				if let index = closer.targetVariant {
+					guard variants.indices.contains(index) else { return false }
+					let variant = variants[index]
+					// A call place of the per-type plan calls its variant's one function, declared in the root's body; the walk
+					// reads the variant's body where it first reaches a call of it, so bodies are numbered as a walk of the
+					// places would number them.
+					let target: Int
+					if let reached = variantBodiesByIndex[index] {
+						target = reached
 					} else {
-						statement = .closer(closer, target: 0)
-						closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index))
+						target = bodies.count
+						bodies.append(Body(
+							parent: body,
+							position: position,
+							record: variant.record,
+							isInSendableFamily: variant.isInSendableFamily,
+							domainLabels: [],
+							outerView: [:],
+							forwardedLabels: Set(variant.record.parameterProperties.map(\.label)),
+							cycleParameters: variant.parameters,
+						))
+						variantBodiesByIndex[index] = target
+						variantBodies.insert(target)
+						let children = Self.statementCodes(of: variant.record.children)
+						declareChildren(children, ofBody: target)
+						frames.append((body: target, children: children, next: 0))
 					}
-				case nil:
-					return false
+					statement = .closer(closer, target: target)
+					recordCloser(closer, at: (body: body, index: position), closing: target)
+				} else {
+					// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
+					// for a member of a loop of builders, one a statement of an enclosing body declares.
+					switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
+					case let .enclosing(target):
+						statement = .closer(closer, target: target)
+						recordCloser(closer, at: (body: body, index: position), closing: target)
+					case let .statement(declaringBody, index, _):
+						if index < bodies[declaringBody].statements.count {
+							guard case let .built(target) = bodies[declaringBody].statements[index] else { return false }
+							statement = .closer(closer, target: target)
+							recordCloser(closer, at: (body: body, index: position), closing: target)
+						} else {
+							statement = .closer(closer, target: 0)
+							closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index))
+						}
+					case nil:
+						return false
+					}
 				}
 			case let .alias(alias):
-				// A place written as text whose reads are not listed, that binds labels besides its own, or that calls or
-				// refers to a function it does not declare, is never laid out by the type key: two such places of one text can
-				// name different functions, which no read tells apart.
-				guard alias.listsItsReads, alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty else { return false }
+				// A place written as text whose reads are not listed is never laid out by the type key, nor one that calls or
+				// refers to a function it does not declare: two such places of one text can name different functions, which
+				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is
+				// (`declareChildren`).
+				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
 				namesInScope.formUnion(alias.declaredFunctionNames)
 				statement = .alias(alias)
 			}
@@ -160,7 +190,7 @@ extension TypeKeyLayout {
 			      case let .closer(record, _) = bodies[closer.body].statements[closer.position]
 			else { return false }
 			bodies[closer.body].statements[closer.position] = .closer(record, target: target)
-			closersByTarget[target, default: []].append((body: closer.body, index: closer.position))
+			recordCloser(record, at: (body: closer.body, index: closer.position), closing: target)
 		}
 		return true
 	}
@@ -168,6 +198,17 @@ extension TypeKeyLayout {
 	/// Declares the statements of `body`, whose children are `children`: the positions of the labels each binds, which a look-up
 	/// before any index of the body reads, so a look-up made from a statement after one the walk has not reached reads what
 	/// it would once the walk reaches it; and the functions they declare, which a closer's function is resolved among.
+	/// Records the closing statement at `site`, whose record is `record`, as a call of `target`'s function, with what it
+	/// passes each label, which `closerValue(of:closing:onPlace:)` reads.
+	private mutating func recordCloser(_ record: ClosingPlaceRecord, at site: (body: Int, index: Int), closing target: Int) {
+		closersByTarget[target, default: []].append(site)
+		var argumentsByLabel = [String: PlaceRead]()
+		for argument in record.cycleArguments where argumentsByLabel[argument.label] == nil {
+			argumentsByLabel[argument.label] = argument
+		}
+		cycleArgumentsByCloser[CallSite(owner: site.body, index: site.index)] = argumentsByLabel
+	}
+
 	mutating func declareChildren(_ children: [GeneratedCode], ofBody body: Int) {
 		let first = bodies[body].statements.count
 		var functions = [String: DeclaredFunction]()
@@ -181,6 +222,12 @@ extension TypeKeyLayout {
 			case let .alias(alias):
 				for name in alias.declaredFunctionNames where functions[name] == nil {
 					functions[name] = .text
+				}
+				for name in alias.declaredFunctionNames {
+					bodies[body].positionsByDeclaredFunction[name, default: []].append(first + offset)
+				}
+				for binding in alias.otherBindings {
+					bodies[body].positionsByLabel[binding.label, default: []].append(first + offset)
 				}
 			case .closer, nil:
 				break
@@ -205,23 +252,13 @@ extension TypeKeyLayout {
 		case statement(body: Int, index: Int, record: BuiltPlaceRecord)
 	}
 
-	/// The body of the nearest enclosing place, from `body` outward, whose function is named `name`, or the root's body
-	/// where none is.
-	func enclosingFunction(named name: String, from body: Int) -> Int {
-		var target = body
-		while target != 0, bodies[target].record?.functionName != name {
-			target = bodies[target].parent
-		}
-		return target
-	}
-
 	/// The function named `name` that code in `body` calls, as Swift resolves the name: from `body` outward, a function a
 	/// statement of the body declares, at any position, since a local function is in scope throughout the body declaring
 	/// it, then the body's own function. `nil` where no place's function has the name, or a place written as text declares
 	/// it.
 	func resolvedFunction(named name: String, from body: Int) -> ResolvedFunction? {
-		var body = body
-		while true {
+		var next: Int? = body
+		while let body = next {
 			switch declaredFunctionsByBody[body]?[name] {
 			case let .statement(index, record):
 				return .statement(body: body, index: index, record: record)
@@ -230,15 +267,15 @@ extension TypeKeyLayout {
 			case nil:
 				break
 			}
-			// The root's body has no function of its own, and every closer closes on an enclosing place's function or a
-			// statement's, so the walk stops there only on a name no place declares, as the walk it replaced did.
-			guard body != 0 else { return nil }
-			if bodies[body].record?.functionName == name {
+			if body == 0 {
+				next = nil
+			} else if bodies[body].record?.functionName == name {
 				return .enclosing(body)
 			} else {
-				body = bodies[body].parent
+				next = bodies[body].parent
 			}
 		}
+		return nil
 	}
 
 	/// The labels the functions named `names` read outside them, which a place whose closers call them, made in `body`,
@@ -249,18 +286,7 @@ extension TypeKeyLayout {
 	/// is resolved from, called only by that statement's siblings' own statements, whose functions take no cycle
 	/// parameters: a member of a loop of builders whose places' calls `checkCall` checks against each place's own body. `nil`
 	/// where a place beneath one of them records nothing.
-	mutating func closedOnFunctions(of placeDomain: Domain, from body: Int) -> (labels: Set<String>, statementKeys: [ClosedOnStatementKey], resolutions: [Int], keysByKind: Bool)? {
-		let names = placeDomain.closedOnFunctionNames
-		guard !placeDomain.loopMemberFunctionNames.isEmpty else {
-			// No closer beneath rebinds a member of a loop of builders, so each name is an enclosing place's function, which
-			// keeps the declarations themselves (`KeyedDeclaration`).
-			var labels = Set<String>()
-			for name in names {
-				labels.formUnion(bodies[enclosingFunction(named: name, from: body)].domainLabels)
-			}
-			return (labels, [], Array(repeating: -1, count: names.count), names.isEmpty && !placeDomain.closesBeneathItsBody)
-		}
-		let closesBeneathItsBody = placeDomain.closesBeneathItsBody
+	mutating func closedOnFunctions(named names: Set<String>, from body: Int, closesBeneathItsBody: Bool) -> (labels: Set<String>, statementKeys: [ClosedOnStatementKey], resolutions: [Int], keysByKind: Bool)? {
 		var labels = Set<String>()
 		var statements = [(body: Int, index: Int, record: BuiltPlaceRecord)]()
 		var positionByStatement = [[Int]: Int]()
@@ -294,13 +320,13 @@ extension TypeKeyLayout {
 		let keys = statements.map { statement in
 			var outerView = [String: KeyedDeclaration]()
 			for label in labels {
-				outerView[label] = keyed(lookUp(label, inBody: statement.body, before: statement.index), byKind: keysByKind)
+				outerView[label] = keyed(lookUp(label, inBody: statement.body, before: statement.index), label: label, byKind: keysByKind)
 			}
 			return ClosedOnStatementKey(
 				node: statement.record.node,
 				isInSendableFamily: statement.record.isSendable || bodies[statement.body].isInSendableFamily,
 				outerView: outerView,
-				cycleArguments: statement.record.callCycleArguments.map { keyed(pathValue(of: $0, inBody: statement.body, before: statement.index), byKind: keysByKind) },
+				cycleArguments: statement.record.callCycleArguments.map { keyed(pathValue(of: $0, inBody: statement.body, before: statement.index), label: $0.label, byKind: keysByKind) },
 			)
 		}
 		return (labels, keys, resolutions, keysByKind)
@@ -349,13 +375,10 @@ extension TypeKeyLayout {
 			for case let .built(childBuilt) in children where childBuilt.hasFunction {
 				declaredNames.insert(childBuilt.functionName)
 			}
-			func close(_ name: String, beneathTheBody: Bool, rebindsLoopMember: Bool) {
+			func close(_ name: String, beneathTheBody: Bool) {
 				if name != current.functionName, !declaredNames.contains(name) {
 					domain.closedOnFunctionNames.insert(name)
 					domain.closesBeneathItsBody = domain.closesBeneathItsBody || beneathTheBody
-					if rebindsLoopMember {
-						domain.loopMemberFunctionNames.insert(name)
-					}
 				}
 			}
 			for child in children {
@@ -370,7 +393,7 @@ extension TypeKeyLayout {
 							}
 						}
 						for name in childDomain.closedOnFunctionNames {
-							close(name, beneathTheBody: true, rebindsLoopMember: childDomain.loopMemberFunctionNames.contains(name))
+							close(name, beneathTheBody: true)
 						}
 					} else {
 						childBuilt.constructionReads.forEach(lookUp)
@@ -378,7 +401,10 @@ extension TypeKeyLayout {
 					boundBefore.insert(childBuilt.property.label)
 				case let .closer(closer):
 					closer.callSiteReads.forEach(lookUp)
-					close(closer.closedOnFunctionName, beneathTheBody: false, rebindsLoopMember: closer.rebindsLoopMember)
+					// A call of a variant passes what the variant reads as its cycle arguments, which the call site's reads hold.
+					if closer.targetVariant == nil {
+						close(closer.closedOnFunctionName, beneathTheBody: false)
+					}
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
@@ -387,6 +413,7 @@ extension TypeKeyLayout {
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
+					boundBefore.formUnion(alias.otherBindings.map(\.label))
 				}
 			}
 			current.constructionReads.forEach(lookUp)
@@ -414,7 +441,7 @@ extension TypeKeyLayout {
 		case .closer:
 			true
 		case let .alias(alias):
-			alias.listsItsReads && alias.otherBindings.isEmpty && alias.calledFunctionNames.isEmpty
+			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
 	}
 
@@ -470,8 +497,21 @@ extension TypeKeyLayout {
 		return plan.record
 	}
 
-	/// The property `statement` declares.
-	func property(of statement: Statement) -> Property? {
+	func label(of statement: Statement) -> String {
+		switch statement {
+		case let .built(body):
+			bodies[body].record?.property.label ?? ""
+		case let .inline(record):
+			record.property.label
+		case let .closer(record, _):
+			record.property.label
+		case let .alias(record):
+			record.property.label
+		}
+	}
+
+	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.
+	func property(of statement: Statement, label: String) -> Property? {
 		switch statement {
 		case let .built(body):
 			bodies[body].record?.property
@@ -480,27 +520,36 @@ extension TypeKeyLayout {
 		case let .closer(record, _):
 			record.property
 		case let .alias(record):
-			record.property
+			record.property.label == label ? record.property : record.otherBindings.first { $0.label == label }
 		}
 	}
 
 	// MARK: The path key's declarations
 
-	/// The nearest declaration of `label` the path key's code sees before the statement at `index` of `body`. A look-up that
-	/// leaves a body reads what the body's first place resolved the label to (`outerDeclarations`), without walking further
-	/// up: every label a look-up from a body asks for is one its function reads and does not bind before the read, so of its
-	/// domain, which `outerDeclarations` holds whole.
+	/// The nearest declaration of `label` the path key's code sees before the statement at `index` of `body`.
 	func lookUp(_ label: String, inBody body: Int, before index: Int) -> PathValue {
+		var body = body
+		var index = index
+		while body != 0,
+		      Self.lastPosition(in: bodies[body].positionsByLabel[label], before: index) == nil,
+		      !bodies[body].forwardedLabels.contains(label),
+		      !bodies[body].cycleParameterLabels.contains(label)
+		{
+			// The body's view resolved its domain's labels outside it when the walk reached it.
+			if let resolved = bodies[body].outerView[label] {
+				return resolved
+			}
+			index = bodies[body].position
+			body = bodies[body].parent
+		}
 		if let position = Self.lastPosition(in: bodies[body].positionsByLabel[label], before: index) {
-			.statement(body: body, index: position)
+			return .statement(body: body, index: position)
 		} else if body == 0 {
-			.none
+			return .none
 		} else if bodies[body].forwardedLabels.contains(label) {
-			.forwarded(body: body, label: label)
-		} else if bodies[body].cycleParameterLabels.contains(label) {
-			.cycleParameter(body: body, label: label)
+			return .forwarded(body: body, label: label)
 		} else {
-			bodies[body].outerDeclarations[label] ?? .none
+			return .cycleParameter(body: body, label: label)
 		}
 	}
 
@@ -548,7 +597,7 @@ extension TypeKeyLayout {
 			return hides(bodies[declaringBody].statements[index], from: read) ? .none : value
 		case .forwarded:
 			// A forwarded property is bound with exactly the type it declares.
-			guard let declaredType = type(of: value) else { return value }
+			guard let declaredType = type(of: value, label: read.label) else { return value }
 			return ScopeGenerator.provides(Property(label: read.label, typeDescription: declaredType), aFormReadBy: read.property) ? value : .none
 		case .none, .cycleParameter:
 			return value
@@ -563,7 +612,7 @@ extension TypeKeyLayout {
 			// The record does not hold the forms the tree bound to the value it wraps: it hides the read only where the
 			// read cannot be spelled from it.
 			Self.spelledRead(read, declaredAs: record.property.typeDescription) == nil
-		} else if let declared = property(of: declaration) {
+		} else if let declared = property(of: declaration, label: read.label) {
 			!ScopeGenerator.provides(declared, aFormReadBy: read.property)
 		} else {
 			false
@@ -588,7 +637,7 @@ extension TypeKeyLayout {
 				// A statement of an enclosing class or the root's body, which every member reads alike (`outerValue(of:_:)`).
 				return hides(statements(ofClass: declaringClass)[declaringIndex], from: read)
 			case .forwarded:
-				return type(of: declaration).map { !ScopeGenerator.provides(Property(label: read.label, typeDescription: $0), aFormReadBy: read.property) } ?? false
+				return type(of: declaration, label: read.label).map { !ScopeGenerator.provides(Property(label: read.label, typeDescription: $0), aFormReadBy: read.property) } ?? false
 			case .none:
 				return false
 			}
@@ -598,9 +647,16 @@ extension TypeKeyLayout {
 	}
 
 	/// The declaration the place whose function is `body` resolves `label` to where its first place is called from its
-	/// parent (`resolution(of:atPlace:edge:)`).
+	/// parent (`resolution(of:atPlace:edge:)`). A variant of the per-type plan has no place of its own, so it resolves a
+	/// label where its first call is made.
 	func resolution(of label: String, atPlace body: Int) -> PathValue {
-		resolution(of: label, atPlace: body, edge: (parent: bodies[body].parent, position: bodies[body].position))
+		// A variant reads only its cycle parameters (`variantsReadOnlyTheirCycleParameters`), and its body is read where its
+		// first call is.
+		if variantBodies.contains(body), bodies[body].cycleParameterLabels.contains(label), let firstCall = closersByTarget[body]?.first {
+			closerValue(of: label, closing: firstCall, onPlace: body)
+		} else {
+			resolution(of: label, atPlace: body, edge: (parent: bodies[body].parent, position: bodies[body].position))
+		}
 	}
 
 	/// The declaration the place of view `body` at `edge`, a statement of its parent that builds it, resolves `label` to:
@@ -621,19 +677,19 @@ extension TypeKeyLayout {
 		}
 	}
 
-	/// What a view's key holds of `value`, a declaration outside it: the declaration itself, or, keyed `byKind`, whether
-	/// there is one, and for one outside the root's body its kind and type.
-	func keyed(_ value: PathValue, byKind: Bool) -> KeyedDeclaration {
+	/// What a view's key holds of `value`, the declaration outside it that `label` resolves to: the declaration itself, or,
+	/// keyed `byKind`, whether there is one, and for one outside the root's body its kind and type.
+	func keyed(_ value: PathValue, label: String, byKind: Bool) -> KeyedDeclaration {
 		guard byKind else { return .absolute(value) }
 		switch value {
 		case .none:
 			return .none
 		case let .statement(body, index):
-			return body == 0 ? .root(index: index) : .outside(kind: .statement, type: type(of: value)?.asSource)
+			return body == 0 ? .root(index: index) : .outside(kind: .statement, type: type(of: value, label: label)?.asSource)
 		case .forwarded:
-			return .outside(kind: .forwarded, type: type(of: value)?.asSource)
+			return .outside(kind: .forwarded, type: type(of: value, label: label)?.asSource)
 		case .cycleParameter:
-			return .outside(kind: .cycleParameter, type: type(of: value)?.asSource)
+			return .outside(kind: .cycleParameter, type: type(of: value, label: label)?.asSource)
 		}
 	}
 }

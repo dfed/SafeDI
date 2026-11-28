@@ -67,14 +67,24 @@ extension NodeRecords {
 	/// binds it (`MockLowering.AliasBinding`), rather than only where the declaration it reads is optional, as a production
 	/// tree binds it: a fact of the world, which no production world answers. A rename reads no override, so a mock root's
 	/// world decorates its record with nothing.
+	/// - Parameter autoclosureCall: Where the rename is a seam's own that keeps a deferred parameter's label, the call of
+	///   the parameter's autoclosure it is bound from (`ScopeGenerator.SeamRoot.autoclosureCallByLabel(of:)`), which reads
+	///   no declaration.
 	static func renameRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
 		in world: some NodeRecordVariantFacts,
 		answers: OnlyIfAvailableAnswers,
+		autoclosureCall: String? = nil,
 		wrapperName: String? = nil,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		guard let (property, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		guard let (declaredProperty, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		// A rename of a mock root's level whose label another value of the level binds is bound under the name the root gives
+		// it apart, which the root's construction reads and each receive of it beneath binds again under its label
+		// (`mockNamesReadApart(in:)`), as the walk binds it (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`).
+		// A rename beneath the root's level of a label the root names apart is refused (`refusalOfNamingApart(_:in:)`), so
+		// every rename with a name apart is of the root's level.
+		let property = world.mockRootNames.nameApart(of: declaredProperty).map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A rename of a wrapper a mock binds around an instance it takes reads the wrapper by name, as the walk reads it
 		// (`mockNamesReadApart(in:)`).
 		let fulfillingProperty = wrapperName.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
@@ -90,10 +100,10 @@ extension NodeRecords {
 		case let .bound(fulfillingBindingIsOptional):
 			// A wrapper's instance is read from a non-optional wrapper, which the tree binds the rename from as itself.
 			guard !(readsWrappersInstance && fulfillingBindingIsOptional) else { throw .lazy }
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || world.isMockWorld, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, autoclosureCall: autoclosureCall, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: fulfillingBindingIsOptional || world.isMockWorld, declarationReference: declarationReference)
 		case nil:
 			// A required rename is bound from its fulfilling property, which its scope requires.
-			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
+			return renameRecord(of: property, fulfilledBy: fulfillingProperty, readsWrappersInstance: readsWrappersInstance, autoclosureCall: autoclosureCall, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingBindingIsOptional: false, declarationReference: declarationReference)
 		}
 	}
 
@@ -116,6 +126,7 @@ extension NodeRecords {
 		of property: Property,
 		fulfilledBy fulfillingProperty: Property,
 		readsWrappersInstance: Bool,
+		autoclosureCall: String?,
 		erasedToConcreteExistential: Bool,
 		fulfillingBindingIsOptional: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
@@ -123,13 +134,18 @@ extension NodeRecords {
 		let text = ScopeGenerator.referencingDeclaration(
 			of: ScopeGenerator.aliasDeclaration(
 				of: property,
-				fulfilledBy: readsWrappersInstance ? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)" : fulfillingProperty.label,
+				fulfilledBy: autoclosureCall ?? (readsWrappersInstance
+					? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					: fulfillingProperty.label),
 				ofType: fulfillingProperty.typeDescription,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
 			),
 			by: declarationReference,
 		)
-		return AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: text)
+		// The autoclosure is the initializer's parameter, which no declaration answers.
+		return autoclosureCall == nil
+			? AliasPlaceRecord(property: property, fulfillingProperty: fulfillingProperty, text: text)
+			: AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])
 	}
 }

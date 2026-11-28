@@ -32,7 +32,7 @@ struct SafeDIToolSeamTreeReuseSmokeTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func generate_reusesTreesOfSeamsWithHoles_whenSeamSmokeSeedsRun() async throws {
 		let (stream, continuation) = AsyncStream.makeStream(of: ReusedSeamTree.self)
-		try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue({ continuation.yield($0) }) {
+		try await SeamTreeReuseObservation.$comparesBuiltTrees.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			for seed in SafeDIToolGraphFuzzerTests.seamSmokeSeeds {
 				let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
 				_ = try await GraphFuzzerOracle.toolOutcome(of: fixture)
