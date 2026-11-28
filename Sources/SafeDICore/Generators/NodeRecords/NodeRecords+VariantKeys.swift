@@ -40,7 +40,8 @@ extension NodeRecords {
 			let keyByChannel = keyByChannelByLabel[dependency.property.label] ?? [:]
 			switch dependency.source {
 			case .received(onlyIfAvailable: true):
-				if let key = keyByChannel[.optionalValue], isLazyWrapperOfAValueRead(key) {
+				// A receive of the wrapper itself is handed the wrapper, never its instance.
+				if let key = keyByChannel[.optionalValue], isLazyWrapperOfAValueRead(key), dependency.property.asUnwrappedProperty.propertyType.isConstant {
 					properties.insert(dependency.property.asUnwrappedProperty)
 				}
 			case .received(onlyIfAvailable: false):
