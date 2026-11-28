@@ -233,7 +233,7 @@ struct OnlyIfAvailableAnswers: Sendable {
 						.union(scope.instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label))
 						.union(scope.instantiatedDependenciesNotGenerated.map(\.property.label))
 					let pinsNothing = variant == 0 && (world.property(of: world.declaration(of: callee)).map { world.mockRootNames.promotes($0) } ?? false)
-					let requiredReceives = pinsNothing ? [] : DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope)
+					let requiredReceives = pinsNothing ? [] : DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall)
 					for (label, pinsOfCalls) in pinsByVariant[Int(variant)] where !declaredLabels.contains(label) {
 						for var pinsAbove in pinsOfCalls {
 							for requiredReceive in requiredReceives where requiredReceive.label == label {
