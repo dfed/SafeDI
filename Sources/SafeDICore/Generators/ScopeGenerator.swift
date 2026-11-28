@@ -1963,7 +1963,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let bound: Set<Property>
 		/// `bound` but for the fields of a label a level of an inner seam's enum holds on some route to the place and not
 		/// on another, which the fill reads of the caller's scope on that other route
-		/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`).
+		/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`), and of a label a level of the calling seam holds on some
+		/// route to the place's case and none holds on another (`CaseFields.callerReadLabels`, as
+		/// `fillLabelsReadOfCallerOnSomeRoute` drops them from the tree's fill).
 		let hiddenFromCaller: Set<Property>
 	}
 
@@ -1974,8 +1976,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// such a memo through the levels on a carried route, by each label of `handedMemoByLabel`
 	/// (`FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`):
 	/// its field is then that memo's, whose forms it binds in place of the place's field of the label, so a read of the
-	/// place's field that the memo does not provide is the caller's, as the tree's fill reads it.
-	static func structBindings(ofFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?, handedMemoByLabel: [String: FillDispatcher.HandedMemo] = [:]) -> FillStructBindings {
+	/// place's field that the memo does not provide is the caller's, as the tree's fill reads it. `callerReadLabels` are
+	/// the labels the one fill of the place's case reads of the caller's scope on some route (`CaseFields.callerReadLabels`),
+	/// which hide nothing from the caller.
+	static func structBindings(
+		ofFillOf hole: SeamSignature.Hole,
+		passedByPublicMockCall: Bool,
+		innerScopeReaders: InnerScopeReaders?,
+		handedMemoByLabel: [String: FillDispatcher.HandedMemo] = [:],
+		callerReadLabels: Set<String> = [],
+	) -> FillStructBindings {
 		let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
 		let readsDeferredFieldsFromStruct = passedByPublicMockCall || hole.innerSeamType != nil
 		let fields = hole.fields.map { field in
@@ -1985,7 +1995,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let beingBuilt = propertiesBeingBuilt(byFillOf: hole)
 		return FillStructBindings(
 			bound: fieldForms(of: fields, boundLabels: boundLabels).union(beingBuilt),
-			hiddenFromCaller: fieldForms(of: fields, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(beingBuilt),
+			hiddenFromCaller: fieldForms(of: fields, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks).subtracting(callerReadLabels)).union(beingBuilt),
 		)
 	}
 
