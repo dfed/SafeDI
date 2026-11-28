@@ -37,12 +37,12 @@ extension NodeRecords {
 		let nodes = edgeIndices.map { edgeIndex -> MockLowering.LevelNode in
 			let child = edges[edgeIndex]
 			guard !edgeFacts[edgeIndex].isFill, listedChildren.insert(child).inserted, let property = world.property(of: child) else { return .other }
-			switch world.kind(of: child) {
-			case .alias:
+			// No node of the level is a hole: only a public mock's tree is built with holes
+			// (`createMockTypeDescriptionToScopeMapping(publicMockCalls:buildsHoles:)`), and a public mock's root is lowered
+			// without node records (`lowerPublicMockRoot(of:publicMockContext:context:)`).
+			if case .alias = world.kind(of: child) {
 				return .alias(property)
-			case .hole:
-				return .other
-			case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy:
+			} else {
 				return .property(property, isUnavailableDependency: world.scope(of: child).isUnavailableDependency)
 			}
 		}
