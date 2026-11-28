@@ -88,10 +88,9 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		])
 
 		#expect(variantCount(ofNodeDeclaring: "Child as child: Child", in: report) == 1, "\(report.world)")
-		// The records read a variant's keys alone, so they cannot tell the call that passes the wrapper's instance from the
-		// call that passes `nil`, and refuse the world. Lane 2's emitted half of rule 3's second stage (due Nov 30), which
-		// keys `nil` with the wrapper parameter in the code too, is the real fix, and lifts this refusal.
-		#expect(refusals == ["onlyIfAvailableAnsweredApart"])
+		// The variant's function takes the optional wrapper, which the call that passes `nil` passes `nil` and its body reads
+		// through (rule 3), so the records accept the world.
+		#expect(refusals == [nil])
 	}
 
 	@Test
@@ -687,10 +686,9 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 		#expect(variantCount(ofNodeDeclaring: "Leaf as leafBuilder: Instantiator<Leaf>", in: report) == 1, "\(report.world)")
 		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []].isEmpty, "\(TypeFactsChecks.findings(of: report).findingsByCheck[10, default: []])")
-		// The records read a variant's keys alone, so they cannot tell the call that passes the wrapper's instance from the
-		// call that passes `nil`, and refuse the world. Lane 2's emitted half of rule 3's second stage (due Nov 30), which
-		// keys `nil` with the wrapper parameter in the code too, is the real fix, and lifts this refusal.
-		#expect(refusals == ["onlyIfAvailableAnsweredApart"])
+		// The variant's function takes the optional wrapper, which the call that passes `nil` passes `nil` and its body reads
+		// through (rule 3), so the records accept the world.
+		#expect(refusals == [nil])
 	}
 
 	@Test

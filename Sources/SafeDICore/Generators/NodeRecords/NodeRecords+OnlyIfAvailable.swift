@@ -269,16 +269,6 @@ struct OnlyIfAvailableAnswers: Sendable {
 					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && cycleMemberTakesLabels && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
-					// The facts key `nil` with a lazy wrapper where no answer in the declared form reaches the read (rule A's
-					// second stage), so one variant holds a call that passes the wrapper's instance and a call that passes `nil`,
-					// which records read from the variant's key alone (`lazilyInstantiatedInstanceProperties(of:variant:in:)`)
-					// cannot tell apart. Refused until lane 2's emitted half of rule 3's second stage (due Nov 30) keys `nil` with
-					// the wrapper parameter in the code too.
-					guard !labelsOneCallAnswers.contains(where: { label in
-						(existingContext[label] ?? calleeContext[label] ?? []).contains { $0.state == .available && $0.property.propertyType.isLazilyInstantiated }
-					}) else {
-						throw .onlyIfAvailableAnsweredApart
-					}
 					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
 					// A call that answers a label another call does not: the variant, and everything it calls, is read again.
 					guard mergedContext != existingContext || calleeIsReadAgain else { continue }

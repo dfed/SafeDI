@@ -633,6 +633,77 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsTheTreesCaptureError_whenRootsAreLaidOutFromNodeRecordsAndOneVariantIsCalledBeforeAndAfterTheLazyWrapperItCaptures() async {
+		// `Root` builds `Screen` twice: through `screenBuilder`, which `Store` receives, so it is built before `store` and
+		// `Detail`'s read only if available is passed `nil` there; and through `otherScreenBuilder`, built after `store`,
+		// whose `Detail` reads the wrapper from inside `detailBuilder`'s `@Sendable` function. Rule 1 keys the read alike
+		// either way, so one variant of `Detail` serves both calls, and the call that answers the read finds the capture
+		// whichever call the walk meets first (`DeclarationsAnsweringReads`): the world is refused, and its root keeps the
+		// tree whose check reports the capture.
+		var filesMade = [URL]()
+		defer { filesToDelete += filesMade }
+		await assertThrowsError(containing: "cannot be received inside a `@Sendable` function in chain: Root -> Screen -> Detail") {
+			try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
+				try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { _ in }) {
+					try await executeSafeDIToolTest(
+						swiftFileContent: [
+							"""
+							@Instantiable(isRoot: true)
+							public final class Root: Instantiable {
+							    public init(store: LazilyInstantiated<Store>, otherScreenBuilder: Instantiator<Screen>, screenBuilder: SendableErasedInstantiator<(), AnyScreen>) {
+							        fatalError("SafeDI doesn't inspect the initializer body")
+							    }
+
+							    @Instantiated let store: LazilyInstantiated<Store>
+							    @Instantiated let otherScreenBuilder: Instantiator<Screen>
+							    @Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let screenBuilder: SendableErasedInstantiator<(), AnyScreen>
+							}
+							""",
+							"""
+							@Instantiable
+							public final class Screen: Instantiable, @unchecked Sendable {
+							    public init(detailBuilder: SendableInstantiator<Detail>) {
+							        fatalError("SafeDI doesn't inspect the initializer body")
+							    }
+
+							    @Instantiated let detailBuilder: SendableInstantiator<Detail>
+							}
+
+							public final class AnyScreen: Sendable {
+							    public init(_ screen: Screen) {}
+							}
+							""",
+							"""
+							@Instantiable
+							public final class Detail: Instantiable, @unchecked Sendable {
+							    public init(store: LazilyInstantiated<Store>?) {
+							        fatalError("SafeDI doesn't inspect the initializer body")
+							    }
+
+							    @Received(onlyIfAvailable: true) let store: LazilyInstantiated<Store>?
+							}
+							""",
+							"""
+							@Instantiable
+							public final class Store: Instantiable, @unchecked Sendable {
+							    public init(screenBuilder: SendableErasedInstantiator<(), AnyScreen>) {
+							        fatalError("SafeDI doesn't inspect the initializer body")
+							    }
+
+							    @Received let screenBuilder: SendableErasedInstantiator<(), AnyScreen>
+							}
+							""",
+						],
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesMade,
+					)
+				}
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsTheTreesFirstError_whenTwoPlacesErrorBesideARootLaidOutFromNodeRecords() async {
 		// `Alpha`'s world is accepted, so the run lays it out from its records and builds no tree for it; each of the other
 		// roots holds a place whose capture the tree reports. The run reports the errors a run that builds every tree

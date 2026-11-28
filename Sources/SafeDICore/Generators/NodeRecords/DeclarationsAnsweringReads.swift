@@ -43,8 +43,13 @@
 /// wrapper is not yet available and again where it is captures it at the second. The check goes when the facts fold
 /// captures per variant (`TypeFactsOutcome`), the per-type facts' form of `nonSendableWrapperCaptures`.
 ///
-/// Memory: the declaration that answers each read, one ID per key of every variant, while the check runs; none in a world
-/// that opens no `@Sendable` function.
+/// It also folds the by-value properties each variant's whole tree reads as the instance of a wrapper declared above it
+/// (`lazilyInstantiatedInstanceProperties(readBy:)`), which a call that closes a cycle passes its function's parameters;
+/// a record reads its own type's from its key instead (`NodeRecords.lazilyInstantiatedInstanceProperties(of:variant:in:)`).
+///
+/// Memory: a set per variant, each empty unless the variant's tree reads a wrapper's instance, for as long as the records
+/// are made, and the declaration that answers each read, one ID per key of every variant, while the walk runs; none in a
+/// world that declares no lazily instantiated property, whose root is handed none, and that opens no `@Sendable` function.
 struct DeclarationsAnsweringReads: Sendable {
 	/// A declaration a receive resolves to, as `ScopeGenerator.nonSendableWrapperCaptures` looks it up: the property, and
 	/// the by-value property with which a receive reads its instance where it is a lazy wrapper that offers one.
@@ -77,11 +82,20 @@ struct DeclarationsAnsweringReads: Sendable {
 	///     then resolve by label and type, as its tree resolves them: each receive beneath a call reads the first
 	///     declaration of its label, in the order the tree looks declarations up, that provides its form, and itself,
 	///     `mock()`'s parameter, where none does (`readsNonSendableWrapper(receiving:among:)`).
-	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = [], mockRoot: MockRoot? = nil) {
-		guard (0..<Int32(world.declarationCount)).contains(where: { world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } }) else {
+	init(world: some NodeRecordSources, rootLazilyInstantiatedInstanceProperties: Set<Property> = [], rootNonSendableWrapperLabels: Set<String> = [], mockRoot: MockRoot? = nil) {
+		// A world that declares no lazily instantiated property, whose root is handed none, and that opens no `@Sendable`
+		// function reads no wrapper's instance and captures nothing.
+		guard !rootLazilyInstantiatedInstanceProperties.isEmpty || (0..<Int32(world.declarationCount)).contains(where: { declaration in
+			!world.scope(of: declaration).declaredLazilyInstantiatedInstanceProperties.isEmpty
+				|| world.edgeFacts(from: declaration).contains { Self.opensSendableFunction($0) }
+		}) else {
 			sendableFunctionCapturesWrapper = false
+			lazilyInstantiatedInstancePropertiesByVariant = []
 			return
 		}
+		var lazilyInstantiatedInstancePropertiesByVariant = [Set<Property>](repeating: [], count: world.variantCount)
+		// The root's own body reads what it is handed.
+		lazilyInstantiatedInstancePropertiesByVariant[0] = rootLazilyInstantiatedInstanceProperties
 		var sendableFunctionCapturesWrapper = false
 		let receiveTypes = mockRoot == nil ? [] : Self.receiveTypesReadFromAbove(in: world)
 		let wrapperParametersByLabel = Dictionary(grouping: mockRoot?.wrapperParameters ?? [], by: \.property.label)
@@ -140,8 +154,17 @@ struct DeclarationsAnsweringReads: Sendable {
 				stack.append(callee)
 				for (answeringDeclaration, readID) in zip(calleeAnswers, calleeReads) {
 					let read = world.read(readID)
-					guard opensSendableFunction, read.channel.asksAboutLabel else { continue }
+					guard read.channel.asksAboutLabel else { continue }
 					let label = world.text(ofLabel: read.label)
+					// A read handed the nearest declaration of its label reads a wrapper's instance where that declaration's
+					// scope declares one, or where what the root is handed offers one.
+					if Self.isHandedNearestDeclaration(read.channel) {
+						let instanceProperties = answeringDeclaration >= 0 ? world.scope(of: answeringDeclaration).declaredLazilyInstantiatedInstanceProperties : rootLazilyInstantiatedInstanceProperties
+						for property in instanceProperties where property.label == label {
+							lazilyInstantiatedInstancePropertiesByVariant[Int(callee)].insert(property)
+						}
+					}
+					guard opensSendableFunction else { continue }
 					let readsNonSendableWrapper: Bool
 					if let mockRoot {
 						// The root's declarations of the label replace what `mock()` declares above the tree, as any scope's
@@ -175,10 +198,22 @@ struct DeclarationsAnsweringReads: Sendable {
 			}
 		}
 		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper
+		self.lazilyInstantiatedInstancePropertiesByVariant = lazilyInstantiatedInstancePropertiesByVariant
+	}
+
+	/// The by-value properties `variant`'s body reads as a wrapper's instance, of the labels its whole tree reads from
+	/// above: what a call that closes a cycle on its function passes as a wrapper's instance (`NodeRecords`' cycle
+	/// arguments), which its key, holding only its own type's reads, does not show.
+	func lazilyInstantiatedInstanceProperties(readBy variant: VariantID) -> Set<Property> {
+		lazilyInstantiatedInstancePropertiesByVariant.isEmpty ? [] : lazilyInstantiatedInstancePropertiesByVariant[Int(variant)]
 	}
 
 	/// Whether a `@Sendable` function of the world reads, from outside it, a wrapper that is not `Sendable`.
 	let sendableFunctionCapturesWrapper: Bool
+
+	/// By variant; empty in a world that declares no lazily instantiated property, whose root is handed none, and that
+	/// opens no `@Sendable` function.
+	private let lazilyInstantiatedInstancePropertiesByVariant: [Set<Property>]
 
 	/// Whether every read of `label` through `channel` that `callee`'s tree makes is passed `nil` where `answeringDeclaration`,
 	/// the scope that declares the label, answers it: a read only if available (`optional`, `optionalValue`) of the
@@ -210,6 +245,17 @@ struct DeclarationsAnsweringReads: Sendable {
 			return parent >= 0 && world.property(of: world.declaration(of: child))?.label == label
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
+		}
+	}
+
+	/// Whether a read of `channel` is handed the nearest declaration of its label, in the form that declaration has: a
+	/// required receive, and a receive only if available where it is handed a value.
+	private static func isHandedNearestDeclaration(_ channel: ReadChannel) -> Bool {
+		switch channel {
+		case .value, .optionalValue:
+			true
+		case .optional, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+			false
 		}
 	}
 

@@ -275,6 +275,7 @@ struct NodeRecords: Sendable {
 		try mockNamesReadApart.bindNamesToNil(beneathPinsFoundBy: onlyIfAvailableAnswers, in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
+			rootLazilyInstantiatedInstanceProperties: seamTree?.rootLazilyInstantiatedInstanceProperties ?? [],
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
 		)
 		// The tree reports the capture as an error, which the records cannot.
@@ -547,8 +548,11 @@ struct NodeRecords: Sendable {
 			return parameters
 		}
 		// What a receive by value reads as a wrapper's instance (`lazilyInstantiatedInstanceProperties`), at each place's
-		// own construction and at the call of its function. The variant's key answers it (`lazilyInstantiatedInstanceProperties(of:variant:in:)`),
-		// but inside a function a lazy cycle closes on, the function's parameter is the nearest declaration of its label, as
+		// own construction and at the call of its function. A place's own type's reads come from its key
+		// (`lazilyInstantiatedInstanceProperties(of:variant:in:)`), and what a call passes its function's parameters from
+		// the declarations above every read its whole tree makes (`DeclarationsAnsweringReads`), since a cycle parameter is
+		// any label the body receives from above, not only its own type's. Inside a function a lazy cycle closes on, though,
+		// the function's parameter is the nearest declaration of its label, as
 		// today's tree has it (`CycleParameter`): a parameter by value hides a wrapper above, and a wrapper parameter offers
 		// its instance, read through the optional where `nil` arrives. Found by a walk from the root with a stack; a place
 		// shared by two bodies must see one set from both, or the world keeps its tree.
@@ -556,6 +560,8 @@ struct NodeRecords: Sendable {
 		var instancePropertiesAtCall = [Set<Property>](repeating: [], count: world.variantCount)
 		var isResolved = [Bool](repeating: false, count: world.variantCount)
 		var instancePropertiesInFunction = [Set<Property>](repeating: [], count: world.variantCount)
+		// The same of the labels the variant's whole tree reads from above, which the calls in its body that close a cycle pass.
+		var instancePropertiesReadInFunction = [Set<Property>](repeating: [], count: world.variantCount)
 		func applying(_ parameters: [String: TypeFactsParameter], to properties: Set<Property>) -> Set<Property> {
 			guard !parameters.isEmpty else { return properties }
 			var applied = properties.filter { parameters[$0.label] == nil }
@@ -571,7 +577,7 @@ struct NodeRecords: Sendable {
 			// Only the labels the variant's own function takes are read at its call (`cycleArguments`), so a parameter of an
 			// enclosing function the variant does not take never sets two places of it apart.
 			let labelsTaken = Set(cycleParameters(of: variant).map(\.property.label))
-			let atCall = applying(parametersInScope, to: Self.lazilyInstantiatedInstanceProperties(of: world.declaration(of: variant), variant: variant, in: world)).filter { labelsTaken.contains($0.label) }
+			let atCall = applying(parametersInScope, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant)).filter { labelsTaken.contains($0.label) }
 			if isResolved[Int(variant)] {
 				guard instancePropertiesAtCall[Int(variant)] == atCall else { throw NodeRecordRefusal.cycleTakesParameters }
 				continue
@@ -592,6 +598,7 @@ struct NodeRecords: Sendable {
 				}
 			}
 			instancePropertiesInFunction[Int(variant)] = applying(parametersOfConstruction, to: Self.lazilyInstantiatedInstanceProperties(of: world.declaration(of: variant), variant: variant, in: world))
+			instancePropertiesReadInFunction[Int(variant)] = applying(parametersOfConstruction, to: answeringDeclarations.lazilyInstantiatedInstanceProperties(readBy: variant))
 			// A label the place declares is its own children's nearest declaration.
 			for label in Self.labelsDeclared(by: world.declaration(of: variant), in: world) {
 				parametersInFunction[label] = nil
@@ -602,8 +609,9 @@ struct NodeRecords: Sendable {
 		}
 		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
 		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings). The facts give a label a
-		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters.
-		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
+		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters. A mock world's
+		// loop members are rebound from the mock's loop levels instead (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`).
+		for variant in postOrder where !world.isMockWorld && !variantsBetween[Int(variant)].isEmpty {
 			let isLoopMember = { (declaration: DeclarationID) in
 				world.parents(of: declaration).contains { parent in
 					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
@@ -626,7 +634,7 @@ struct NodeRecords: Sendable {
 		// the labels it declares itself, whose own declarations are nearer.
 		func instancePropertiesInBody(of variant: VariantID) -> Set<Property> {
 			let scope = world.scope(of: world.declaration(of: variant))
-			return instancePropertiesInFunction[Int(variant)].filter { !scope.declaredLabels.contains($0.label) }.union(scope.declaredLazilyInstantiatedInstanceProperties)
+			return instancePropertiesReadInFunction[Int(variant)].filter { !scope.declaredLabels.contains($0.label) }.union(scope.declaredLazilyInstantiatedInstanceProperties)
 		}
 		// Each call of a function passes each parameter what the nearest declaration of its label at the call is: the place's
 		// own call what the body around it holds, and a call that closes a cycle on it what the body holding that call holds,

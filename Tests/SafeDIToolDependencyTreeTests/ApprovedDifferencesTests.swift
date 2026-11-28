@@ -44,7 +44,7 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	@Test
 	mutating func rewrite_writesTheTreesText_whenNilIsPassedBesideOneWrapper() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture, refusal: Self.wrapperAndNilRefusal)
+		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
 		let nodeRecordsText = Self.generatedFilePreamble + Self.wrapperAndNilUnderRuleA
 		#expect(nodeRecordsText != treeText)
 		// The call that passes `nil` moves to the wrapper's function, whose parameter becomes optional, and the function of
@@ -66,13 +66,13 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	@Test
 	mutating func rewrite_returnsNil_whenNoCallPassesNilBesideWrapper() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture, refusal: Self.wrapperAndNilRefusal)
+		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
 		#expect(OptionalChannelRewrite.rewritten(treeText, treeText: treeText) == nil)
 	}
 
 	@Test
 	mutating func normalized_returnsNil_whenRewrittenTextStillDiffersFromTrees() async throws {
-		let treeText = try await treeText(of: Self.wrapperAndNilFixture, refusal: Self.wrapperAndNilRefusal)
+		let treeText = try await treeText(of: Self.wrapperAndNilFixture)
 		// A second difference, which no entry approves: the root's argument is another value.
 		let nodeRecordsText = (Self.generatedFilePreamble + Self.wrapperAndNilUnderRuleA).replacingOccurrences(of: "self.init(first: first, third: third)", with: "self.init(first: first, third: __safeDI_third())")
 		#expect(OptionalChannelRewrite.rewritten(nodeRecordsText, treeText: treeText) != nil)
@@ -88,19 +88,10 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// The code the tool generates for `Root` of `fixture`, which its tree writes: node records accept its world, keyed by
-	/// rule 1, or refuse it as `refusal` says, and no root is laid out from them where a test does not turn that on.
-	private mutating func treeText(of fixture: String, refusal: String? = nil) async throws -> String {
-		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		let output = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Fixture.swift": fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		continuation.finish()
-		var refusals = [String?]()
-		for await report in stream {
-			refusals.append(report.refusal)
-		}
-		#expect(refusals == [refusal])
+	/// The code the tool generates for `Root` of `fixture`, which its tree writes: node records lay a root out only where
+	/// a test asks, and the check of node records fails the test where their code differs from the tree's.
+	private mutating func treeText(of fixture: String) async throws -> String {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Fixture.swift": fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		return try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
 	}
 
@@ -113,11 +104,6 @@ struct ApprovedDifferencesTests: ~Copyable {
 	"""
 
 	/// `First` answers `Leaf`'s read of `theme` with a lazy wrapper, and `Third` with nothing.
-	/// What node records say of `wrapperAndNilFixture`'s world: one variant of `Leaf`'s builder answers `theme` with the
-	/// lazy wrapper and with `nil`, which records keyed by the variant alone cannot tell apart, until the emitted half of
-	/// rule 3's second stage keys `nil` with the wrapper parameter. The tree's text these tests read is the same either way.
-	private static let wrapperAndNilRefusal = "onlyIfAvailableAnsweredApart"
-
 	private static let wrapperAndNilFixture = """
 	import SafeDI
 	@Instantiable(isRoot: true) public final class Root: Instantiable {
