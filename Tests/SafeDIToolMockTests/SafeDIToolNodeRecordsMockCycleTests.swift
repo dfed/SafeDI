@@ -661,7 +661,8 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 	]
 
 	/// A root's `Alpha` builds `Alpha` again, beneath which each `Alpha` builds a `Gamma` that builds a `Delta`, which builds
-	/// an `Epsilon`, and a `LoggedInFlow` whose settings' flow builds a `LoggedInFlow` again.
+	/// an `Epsilon`, and a `SettingsFlow` whose `LoggedInFlow`’s settings build a `SettingsFlow` again. `Aardvark` builds
+	/// the `LoggedInFlow` first in name order, so the cycle edge configurations leave out is not the one that closes it here.
 	private static let alphaAgainFixture: [String: String] = [
 		"Marked.swift": markedFile,
 		"Root.swift": """
@@ -695,7 +696,7 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		    }
 
 		    @Instantiated let delta: Delta
-		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
 		}
 		""",
 		"Delta.swift": """
@@ -717,6 +718,15 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		""",
 		"Flow.swift": """
 		public protocol Flow: AnyObject {}
+
+		@Instantiable
+		public final class Aardvark: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
+		}
 
 		@Instantiable
 		public final class LoggedInFlow: Instantiable, Flow {

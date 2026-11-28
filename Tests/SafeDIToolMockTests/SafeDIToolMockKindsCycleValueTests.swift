@@ -5039,9 +5039,9 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_compilesAndBuildsWalksValues_whenActorNamedApartSitsOnLazyCycle() async {
+	mutating func mock_compilesAndBuildsWalksValues_whenActorNamedApartSitsOnLazyCycle() async throws {
 		// D1: `Node`, an actor, is on the cycle through `Loop` and is named apart from `Peer`’s `node: Other`. Neither path compiles today (2.4.1 fails the same way): the cycle kind’s cell.
-		await withKnownIssue("D1: the function that closes the lazy cycle captures the actor’s builder, which reads overrides that are not Sendable") {
+		try await withKnownIssue("D1: the function that closes the lazy cycle captures the actor’s builder, which reads overrides that are not Sendable") {
 			try await MockKindsAcceptance.expectLaidOutValuesEqualWalks(fixtureFiles: [
 				"Types.swift": #"""
 				@Instantiable(generateMock: true)
@@ -5156,6 +5156,10 @@ struct SafeDIToolMockKindsCycleValueTests: ~Copyable {
 				DifferentialValueProbe("walkDigest(seeds: 0 ..< 400, depth: 8)"),
 				DifferentialValueProbe("{ let host = Host.mock(); return host.peer.node === host.peer.node }()"),
 			], filesToDelete: &filesToDelete)
+		} when: {
+			// Both paths fail only where generated code is compiled: with `SAFEDI_SKIP_COMPILE_CHECK` set, as
+			// `Scripts/changed-line-coverage.sh` sets it, nothing compiles, so nothing is recorded.
+			compileVerificationIsEnabled
 		}
 	}
 
