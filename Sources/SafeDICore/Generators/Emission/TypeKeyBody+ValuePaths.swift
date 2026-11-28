@@ -21,23 +21,23 @@
 extension BuiltPlaceRecord {
 	/// The reads the place's construction makes where it is built: its arguments, then the reads of each alternative's
 	/// closure and of the values that must be absent, then the reads of its construction value.
-	var constructionReads: [PlaceRead] {
-		guard let sharingFields else { return arguments }
+	static func constructionReads(of fields: Fields) -> [PlaceRead] {
+		guard let sharingFields = fields.sharingFields else { return fields.arguments }
 		var reads = [PlaceRead]()
-		for (position, argument) in arguments.enumerated() {
+		for (position, argument) in fields.arguments.enumerated() {
 			if let value = sharingFields.argumentValues[position] {
 				reads.append(contentsOf: value.reads)
 			} else {
 				reads.append(argument)
 			}
 		}
-		for alternative in alternatives {
+		for alternative in sharingFields.alternatives {
 			reads.append(contentsOf: alternative.closure.reads)
 			for absent in alternative.requiresAbsent {
 				reads.append(contentsOf: absent.reads)
 			}
 		}
-		if let constructionValue {
+		if let constructionValue = sharingFields.constructionValue {
 			reads.append(contentsOf: constructionValue.value.reads)
 		}
 		return reads
@@ -45,16 +45,16 @@ extension BuiltPlaceRecord {
 
 	/// The values the place's function is handed and declares for its body: what its wrapper forwards, then its passed
 	/// arguments, which a read in its body resolves to as it resolves to a forwarded value.
-	var parameterProperties: [Property] {
-		guard let sharingFields else { return forwardedProperties }
-		return forwardedProperties + sharingFields.passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
+	static func parameterProperties(of fields: Fields) -> [Property] {
+		guard let sharingFields = fields.sharingFields else { return fields.forwardedProperties }
+		return fields.forwardedProperties + sharingFields.passedArguments.map { Property(label: $0.parameterName, typeDescription: $0.type) }
 	}
 
 	/// The reads the place's call makes in its parent's body: what it passes its cycle parameters, then the reads of what
 	/// it hands its passed arguments.
-	var callSiteReads: [PlaceRead] {
-		guard let sharingFields else { return callCycleArguments }
-		return callCycleArguments + sharingFields.passedArguments.flatMap(\.value.reads)
+	static func callSiteReads(of fields: Fields) -> [PlaceRead] {
+		guard let sharingFields = fields.sharingFields else { return fields.callCycleArguments }
+		return fields.callCycleArguments + sharingFields.passedArguments.flatMap(\.value.reads)
 	}
 
 	/// The shape of what the place's construction does besides calling its target, for a structural key: never a label a

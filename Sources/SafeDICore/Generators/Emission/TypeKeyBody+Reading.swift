@@ -455,7 +455,7 @@ extension TypeKeyLayout {
 				indentations.append(indentation)
 				inner = wrapped
 			}
-			guard case let .sequence(pieces) = inner.node, pieces.allSatisfy({ record(of: $0) != nil }) else {
+			guard case let .sequence(pieces) = inner.node, pieces.allSatisfy(\.isRecordedPlace) else {
 				statements.append(code)
 				continue
 			}
@@ -473,17 +473,12 @@ extension TypeKeyLayout {
 			inner = wrapped
 		}
 		guard case let .sequence(pieces) = inner.node else { return false }
-		return pieces.allSatisfy { record(of: $0) != nil }
+		return pieces.allSatisfy(\.isRecordedPlace)
 	}
 
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.
 	static func record(of code: GeneratedCode) -> PlaceRecord? {
-		var code = code
-		while case let .indented(inner, _) = code.node {
-			code = inner
-		}
-		guard case let .place(plan) = code.node else { return nil }
-		return plan.record
+		code.placeRecord
 	}
 
 	func label(of statement: Statement) -> String {

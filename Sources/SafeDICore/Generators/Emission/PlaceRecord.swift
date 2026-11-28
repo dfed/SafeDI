@@ -63,55 +63,214 @@ struct PlaceRead: Hashable, Sendable {
 	var staysOutsideSendableFunctions = false
 }
 
-/// A place that builds `property`.
+/// A place that builds `property`. Its fields are held in one immutable box (`Storage`), so a copy of a record, which the
+/// engine makes on each read of a body's statement, retains one reference rather than each of its fields; setting a
+/// field makes a new box.
 struct BuiltPlaceRecord: Sendable {
-	let property: Property
-	let isErased: Bool
-	let concreteType: TypeDescription
-	/// Whether the built type is declared through an extension, which decides how its bindings are annotated.
-	let isExtension: Bool
-	let target: ConstructionTarget
-	/// The construction's arguments, in the initializer's order.
-	let arguments: [PlaceRead]
-	/// The properties the place's wrapper forwards, sorted.
-	let forwardedProperties: [Property]
-	/// The parameters the path key's function takes for a lazy cycle that closes on it.
-	let cycleParameters: [Property]
-	/// What the place's binding passes those parameters.
-	let callCycleArguments: [PlaceRead]
-	/// The path key's name of the place's function.
-	let functionName: String
-	let isSendable: Bool
-	let typesDeclaredEscaping: Set<TypeDescription>
-	/// What ends the line that constructs the type.
-	let lineEnd: String
-	/// Whether the place declares a builder function: `false` only for a constant built in place.
-	let hasFunction: Bool
-	/// The code of the places the function's body builds, in order.
-	let children: [GeneratedCode]
-	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
-	/// shared by every place that reads that code from the generator's cache.
-	let node: PlanNode
-	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
-	/// as small to copy as one that holds none of it.
-	var sharingFields: PlaceSharingFields?
-	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
-	/// that every other place leaves `nil`.
-	var callFields: CallFields?
-	/// Whether the place's function returns the property's type, its construction erased to it where the place is erased,
-	/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
-	/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
-	var returnsPropertyType = false
-	/// Whether the place's function writes `return` before its value though its body holds no statement: a constant a kind
-	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
-	/// function writes it only after statements (`BuilderBody.returnKeyword`).
-	var functionAlwaysWritesReturn = false
-	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
-	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
-	var wrapsCallOnOneLine = false
-	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
-	/// nothing reads the value.
-	var declaresOnlyItsFunction = false
+	init(property: Property, isErased: Bool, concreteType: TypeDescription, isExtension: Bool, target: ConstructionTarget, arguments: [PlaceRead], forwardedProperties: [Property], cycleParameters: [Property], callCycleArguments: [PlaceRead], functionName: String, isSendable: Bool, typesDeclaredEscaping: Set<TypeDescription>, lineEnd: String, hasFunction: Bool, children: [GeneratedCode], node: PlanNode, sharingFields: PlaceSharingFields? = nil, callFields: CallFields? = nil, returnsPropertyType: Bool = false, functionAlwaysWritesReturn: Bool = false, wrapsCallOnOneLine: Bool = false, declaresOnlyItsFunction: Bool = false) {
+		storage = Storage(Fields(property: property, isErased: isErased, concreteType: concreteType, isExtension: isExtension, target: target, arguments: arguments, forwardedProperties: forwardedProperties, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments, functionName: functionName, isSendable: isSendable, typesDeclaredEscaping: typesDeclaredEscaping, lineEnd: lineEnd, hasFunction: hasFunction, children: children, node: node, sharingFields: sharingFields, callFields: callFields, returnsPropertyType: returnsPropertyType, functionAlwaysWritesReturn: functionAlwaysWritesReturn, wrapsCallOnOneLine: wrapsCallOnOneLine, declaresOnlyItsFunction: declaresOnlyItsFunction))
+	}
+
+	/// The fields of a record.
+	struct Fields: Sendable {
+		var property: Property
+		var isErased: Bool
+		var concreteType: TypeDescription
+		/// Whether the built type is declared through an extension, which decides how its bindings are annotated.
+		var isExtension: Bool
+		var target: ConstructionTarget
+		/// The construction's arguments, in the initializer's order.
+		var arguments: [PlaceRead]
+		/// The properties the place's wrapper forwards, sorted.
+		var forwardedProperties: [Property]
+		/// The parameters the path key's function takes for a lazy cycle that closes on it.
+		var cycleParameters: [Property]
+		/// What the place's binding passes those parameters.
+		var callCycleArguments: [PlaceRead]
+		/// The path key's name of the place's function.
+		var functionName: String
+		var isSendable: Bool
+		var typesDeclaredEscaping: Set<TypeDescription>
+		/// What ends the line that constructs the type.
+		var lineEnd: String
+		/// Whether the place declares a builder function: `false` only for a constant built in place.
+		var hasFunction: Bool
+		/// The code of the places the function's body builds, in order.
+		var children: [GeneratedCode]
+		/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
+		/// shared by every place that reads that code from the generator's cache.
+		var node: PlanNode
+		/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
+		/// as small to copy as one that holds none of it.
+		var sharingFields: PlaceSharingFields?
+		/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
+		/// that every other place leaves `nil`.
+		var callFields: CallFields?
+		/// Whether the place's function returns the property's type, its construction erased to it where the place is erased,
+		/// so that its call erases nothing: a mock's erased node, whose override returns the property's type
+		/// (`NodeRecords+MockErased.swift`). Every other place's function returns `concreteType`.
+		var returnsPropertyType: Bool
+		/// Whether the place's function writes `return` before its value though its body holds no statement: a constant a kind
+		/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
+		/// function writes it only after statements (`BuilderBody.returnKeyword`).
+		var functionAlwaysWritesReturn: Bool
+		/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
+		/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
+		var wrapsCallOnOneLine: Bool
+		/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
+		/// nothing reads the value.
+		var declaresOnlyItsFunction: Bool
+	}
+
+	/// A record's fields, with the read lists the engine reads of every place, worked out once from them.
+	final class Storage: Sendable {
+		let fields: Fields
+		let constructionReads: [PlaceRead]
+		let callSiteReads: [PlaceRead]
+		let parameterProperties: [Property]
+
+		init(_ fields: Fields) {
+			self.fields = fields
+			constructionReads = BuiltPlaceRecord.constructionReads(of: fields)
+			callSiteReads = BuiltPlaceRecord.callSiteReads(of: fields)
+			parameterProperties = BuiltPlaceRecord.parameterProperties(of: fields)
+		}
+	}
+
+	var property: Property {
+		storage.fields.property
+	}
+
+	var isErased: Bool {
+		storage.fields.isErased
+	}
+
+	var concreteType: TypeDescription {
+		storage.fields.concreteType
+	}
+
+	var isExtension: Bool {
+		storage.fields.isExtension
+	}
+
+	var target: ConstructionTarget {
+		storage.fields.target
+	}
+
+	var arguments: [PlaceRead] {
+		storage.fields.arguments
+	}
+
+	var forwardedProperties: [Property] {
+		storage.fields.forwardedProperties
+	}
+
+	var cycleParameters: [Property] {
+		storage.fields.cycleParameters
+	}
+
+	var callCycleArguments: [PlaceRead] {
+		storage.fields.callCycleArguments
+	}
+
+	var functionName: String {
+		storage.fields.functionName
+	}
+
+	var isSendable: Bool {
+		storage.fields.isSendable
+	}
+
+	var typesDeclaredEscaping: Set<TypeDescription> {
+		storage.fields.typesDeclaredEscaping
+	}
+
+	var lineEnd: String {
+		storage.fields.lineEnd
+	}
+
+	var hasFunction: Bool {
+		storage.fields.hasFunction
+	}
+
+	var children: [GeneratedCode] {
+		storage.fields.children
+	}
+
+	var node: PlanNode {
+		storage.fields.node
+	}
+
+	var sharingFields: PlaceSharingFields? {
+		get { storage.fields.sharingFields }
+		set {
+			var fields = storage.fields
+			fields.sharingFields = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	var callFields: CallFields? {
+		get { storage.fields.callFields }
+		set {
+			var fields = storage.fields
+			fields.callFields = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	var returnsPropertyType: Bool {
+		get { storage.fields.returnsPropertyType }
+		set {
+			var fields = storage.fields
+			fields.returnsPropertyType = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	var functionAlwaysWritesReturn: Bool {
+		get { storage.fields.functionAlwaysWritesReturn }
+		set {
+			var fields = storage.fields
+			fields.functionAlwaysWritesReturn = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	var wrapsCallOnOneLine: Bool {
+		get { storage.fields.wrapsCallOnOneLine }
+		set {
+			var fields = storage.fields
+			fields.wrapsCallOnOneLine = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	var declaresOnlyItsFunction: Bool {
+		get { storage.fields.declaresOnlyItsFunction }
+		set {
+			var fields = storage.fields
+			fields.declaresOnlyItsFunction = newValue
+			storage = Storage(fields)
+		}
+	}
+
+	/// The reads the place's construction makes where it is built (`constructionReads(of:)`).
+	var constructionReads: [PlaceRead] {
+		storage.constructionReads
+	}
+
+	/// The reads the place's call makes in its parent's body (`callSiteReads(of:)`).
+	var callSiteReads: [PlaceRead] {
+		storage.callSiteReads
+	}
+
+	/// The values the place's function is handed and declares for its body (`parameterProperties(of:)`).
+	var parameterProperties: [Property] {
+		storage.parameterProperties
+	}
+
+	private var storage: Storage
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {

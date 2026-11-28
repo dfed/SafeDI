@@ -139,6 +139,19 @@ struct GeneratedCode: Sendable {
 	}
 
 	/// This level without the indentations around it.
+	/// The record of the place this code is beneath its indentations, read without building the code's `node`, which
+	/// copies the record.
+	var placeRecord: PlaceRecord? {
+		guard case let .children(children) = unindented.storage, case .place = children.kind else { return nil }
+		return children.record
+	}
+
+	/// Whether this code, beneath its indentations, is a place with a record (`placeRecord`), which it does not copy.
+	var isRecordedPlace: Bool {
+		guard case let .children(children) = unindented.storage, case .place = children.kind else { return false }
+		return children.hasRecord
+	}
+
 	private var unindented: GeneratedCode {
 		var code = self
 		while case let .children(children) = code.storage, case .indented = children.kind {
@@ -233,6 +246,11 @@ struct GeneratedCode: Sendable {
 		/// A place's record (`Kind.place`), or `nil` for every other level.
 		var record: PlaceRecord? {
 			recordSlot.value.first
+		}
+
+		/// Whether the level is a place with a record, read without copying the record.
+		var hasRecord: Bool {
+			!recordSlot.value.isEmpty
 		}
 
 		private let slot: DeferredReleaseSlot<[GeneratedCode]>
