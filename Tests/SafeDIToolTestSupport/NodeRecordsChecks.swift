@@ -36,7 +36,7 @@ enum NodeRecordsChecks {
 		// the text's guard line and builder arguments.
 		let seamCallObserver = TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void> { call in
 			if let boundNames = call.boundNames {
-				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
+				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, keptFunctionNames: call.keptFunctionNames, place: "a seam call") {
 					Issue.record(Comment(rawValue: mismatch))
 				}
 			}

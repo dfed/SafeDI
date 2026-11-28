@@ -55,8 +55,8 @@ struct CallGuard: Hashable, Sendable {
 	}
 }
 
-/// A call of another module's seam as `ScopeGenerator.seamCallRecord` writes it, where it passes no fill: its text, and
-/// what its record, as the engine is to spell it, says of that text. Handed to `observer`, which the tests set to check that
+/// A call of another module's seam as `ScopeGenerator.seamCallRecord` writes it: its text, and what its record, as the
+/// engine is to spell it, says of that text. Handed to `observer`, which the tests set to check that
 /// the record lists every value the text reads, binds and declares, and that the engine's spelling of the record's guard
 /// and builder arguments is the text's, where the call's code is generated in a task that inherits it.
 public struct SeamCallRecordObservation: Sendable {
@@ -68,6 +68,10 @@ public struct SeamCallRecordObservation: Sendable {
 	public let readNames: [String]?
 	/// The names the record says the text binds, and the functions it declares; `nil` where `readNames` is.
 	public let boundNames: [String]?
+	/// The fills, dispatchers and level functions the text keeps in place (`AliasPlaceRecord.keptFunctionNames`), each of
+	/// which binds its own parameters and values: what one reads of the caller's scope is among `readNames`. Empty where
+	/// `readNames` is `nil`.
+	public let keptFunctionNames: [String]
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]
 	/// The guard line and builder arguments the text writes, in the same order.

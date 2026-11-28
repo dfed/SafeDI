@@ -43,9 +43,12 @@ extension HoleSiteRecordObservation {
 	}
 
 	/// Each way the record of `place`, written as `text`, disagrees with it, as `recordMismatches` says of a hole's site.
-	static func recordMismatches(text: String, readNames: [String]?, boundNames: [String], place: String) -> [String] {
+	/// Each function named in `keptFunctionNames` (a seam call's fills and dispatchers kept in place) is a declaration of
+	/// the text, and binds its own parameters and values: of its body, only what it reads of the code around it is a read of
+	/// the text.
+	static func recordMismatches(text: String, readNames: [String]?, boundNames: [String], keptFunctionNames: [String] = [], place: String) -> [String] {
 		let syntax = Parser.parse(source: text)
-		let visitor = NameVisitor(viewMode: .sourceAccurate)
+		let visitor = NameVisitor(keptFunctionNames: Set(keptFunctionNames.map(Self.withoutBackticks)))
 		visitor.walk(syntax)
 		let bound = Set(boundNames.map(Self.withoutBackticks))
 		var mismatches = [String]()
@@ -78,6 +81,13 @@ extension HoleSiteRecordObservation {
 		var declaredNames = Set<String>()
 		var referencedNames = Set<String>()
 		var calledNames = Set<String>()
+		/// The functions whose bodies bind their own names (`recordMismatches(text:readNames:boundNames:keptFunctionNames:place:)`).
+		private let keptFunctionNames: Set<String>
+
+		init(keptFunctionNames: Set<String>) {
+			self.keptFunctionNames = keptFunctionNames
+			super.init(viewMode: .sourceAccurate)
+		}
 
 		override func visit(_ node: IdentifierPatternSyntax) -> SyntaxVisitorContinueKind {
 			declaredNames.insert(node.identifier.text)
@@ -91,7 +101,12 @@ extension HoleSiteRecordObservation {
 
 		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
 			declaredNames.insert(node.name.text)
-			return .visitChildren
+			guard keptFunctionNames.contains(node.name.text) else { return .visitChildren }
+			let freeNames = FreeNameVisitor()
+			freeNames.walk(node)
+			referencedNames.formUnion(freeNames.referencedNames)
+			calledNames.formUnion(freeNames.calledNames)
+			return .skipChildren
 		}
 
 		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
@@ -111,6 +126,107 @@ extension HoleSiteRecordObservation {
 				calledNames.insert(reference.baseName.text)
 			}
 			return .visitChildren
+		}
+	}
+
+	/// The names a function's text reads of the code around it: each name it refers to that neither it nor a function or
+	/// closure inside it declares, as a parameter or a value, around the reference. A name declared anywhere in a function or
+	/// closure is taken as declared throughout it, as Swift lets a local function be called before its declaration.
+	private final class FreeNameVisitor: SyntaxVisitor {
+		var referencedNames = Set<String>()
+		var calledNames = Set<String>()
+
+		/// A function or closure being walked: what it declares, and the names it refers to that are not yet resolved.
+		private struct Scope {
+			var declaredNames = Set<String>()
+			var references = [(name: String, isCall: Bool)]()
+		}
+
+		private var scopes = [Scope]()
+
+		init() {
+			super.init(viewMode: .sourceAccurate)
+		}
+
+		override func visit(_: AttributeSyntax) -> SyntaxVisitorContinueKind {
+			.skipChildren
+		}
+
+		override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+			// The function walked first is declared by the text around it.
+			if !scopes.isEmpty {
+				declare(node.name.text)
+			}
+			scopes.append(Scope())
+			return .visitChildren
+		}
+
+		override func visitPost(_: FunctionDeclSyntax) {
+			closeScope()
+		}
+
+		override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+			scopes.append(Scope())
+			return .visitChildren
+		}
+
+		override func visitPost(_: ClosureExprSyntax) {
+			closeScope()
+		}
+
+		override func visit(_ node: FunctionParameterSyntax) -> SyntaxVisitorContinueKind {
+			declare((node.secondName ?? node.firstName).text)
+			return .visitChildren
+		}
+
+		override func visit(_ node: ClosureParameterSyntax) -> SyntaxVisitorContinueKind {
+			declare((node.secondName ?? node.firstName).text)
+			return .visitChildren
+		}
+
+		override func visit(_ node: ClosureShorthandParameterSyntax) -> SyntaxVisitorContinueKind {
+			declare(node.name.text)
+			return .visitChildren
+		}
+
+		override func visit(_ node: IdentifierPatternSyntax) -> SyntaxVisitorContinueKind {
+			declare(node.identifier.text)
+			return .visitChildren
+		}
+
+		override func visit(_ node: DeclReferenceExprSyntax) -> SyntaxVisitorContinueKind {
+			if let memberAccess = node.parent?.as(MemberAccessExprSyntax.self), memberAccess.declName.id == node.id {
+				return .visitChildren
+			}
+			// An anonymous closure parameter, such as `$0`, is its closure's own.
+			guard !node.baseName.text.hasPrefix("$") else { return .visitChildren }
+			var callee = Syntax(node)
+			if let specialization = callee.parent?.as(GenericSpecializationExprSyntax.self) {
+				callee = Syntax(specialization)
+			}
+			let isCall = callee.parent?.as(FunctionCallExprSyntax.self)?.calledExpression.id == callee.id
+			scopes[scopes.count - 1].references.append((node.baseName.text, isCall))
+			return .visitChildren
+		}
+
+		private func declare(_ name: String) {
+			scopes[scopes.count - 1].declaredNames.insert(name)
+		}
+
+		/// Ends the innermost scope: each of its references it does not declare is left to the scope around it, or read of
+		/// the code around the function where none is.
+		private func closeScope() {
+			let scope = scopes.removeLast()
+			for reference in scope.references where !scope.declaredNames.contains(reference.name) {
+				if scopes.isEmpty {
+					referencedNames.insert(reference.name)
+					if reference.isCall {
+						calledNames.insert(reference.name)
+					}
+				} else {
+					scopes[scopes.count - 1].references.append(reference)
+				}
+			}
 		}
 	}
 }

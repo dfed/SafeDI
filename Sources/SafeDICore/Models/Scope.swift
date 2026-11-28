@@ -2552,7 +2552,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			guard reachesFilledSite else {
 				// The call hands on what the call's own member of the seam's or public mock's struct returns.
 				if let memberCall = route?.memberCall {
-					return .init(label: label, value: memberCall, passedUpStruct: route?.passedUpStruct)
+					return .init(label: label, value: memberCall, passesPlacesUp: true, passedUpStruct: route?.passedUpStruct)
 				}
 				guard isPublicMockCall else {
 					if enumKey.holeType.builtType.isOptional {
@@ -2562,14 +2562,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 						let closureIndent = ScopeGenerator.standardIndent
 						let bodyIndent = closureIndent + ScopeGenerator.standardIndent
 						var levelsWithoutScope = ScopeGenerator.LevelsWithoutScope(scopeEnums: calledBuilders.scopeEnums)
-						let functions = levelsWithoutScope.functionDeclarations(reachedFrom: [enumKey], indent: bodyIndent)
+						let functions = levelsWithoutScope.functions(reachedFrom: [enumKey], indent: bodyIndent)
 						let value = """
 						{
-						\(functions.joined(separator: "\n"))
+						\(functions.map(\.declaration).joined(separator: "\n"))
 						\(bodyIndent)return \(levelsWithoutScope.call(ofLevel: enumKey, handing: ReservedName.nilBuilderSource))
 						\(closureIndent)}()
 						"""
-						return .init(label: label, value: value)
+						return .init(label: label, value: value, levelFunctionNames: functions.map(\.name))
 					}
 					return .init(label: label, value: "")
 				}

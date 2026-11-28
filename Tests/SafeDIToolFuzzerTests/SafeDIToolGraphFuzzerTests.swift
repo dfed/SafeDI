@@ -7903,7 +7903,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 136,
-		.innerSeam: 1_262,
+		.innerSeam: 1_263,
 		.instanceHeldByCaller: 771,
 		.instanceReceiveBeneathSeam: 1_146,
 		.otherKindWrapperReceiveBeneathSeam: 63,
@@ -7989,9 +7989,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.samePackageCallerRunWithoutPackageName: 116,
 		.seamModuleRunWithoutPackageName: 124,
 		.seamDependency: 749,
-		.seamDependencyChain: 103,
+		.seamDependencyChain: 108,
 		.seamDependencyReadThroughView: 400,
-		.seamDependencyChainReadThroughView: 60,
+		.seamDependencyChainReadThroughView: 62,
 		.hole: 647,
 		.holeOwnedBySeam: 159,
 		.holeProtocolInMarkerFreeFile: 314,
@@ -8274,6 +8274,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamRingOfSendableInstantiators: 71,
 		.seamRingWithoutRootValues: 101,
 		.seamRingRooted: 135,
+		.holeSeamCallReachedOnTwoPaths: 251,
 		.carrierDrawUnequalSiblings: 299,
 		.carrierDrawUnequalSiblingsBeneathChild: 153,
 		.carrierDrawCoincidingLabel: 332,
