@@ -33,6 +33,9 @@ struct TypeFactsPlaces {
 		var reads = ConstructionLog()
 		/// What the generator built at the place decided, once the place is finished.
 		var generator: TypeFactsGeneratorFacts?
+		/// For a fill, whether its call's generator builds it in a `@Sendable` function
+		/// (`ScopeGenerator.buildsInSendableFunction(ofFill:)`), once the call's place is finished; `nil` for any other place.
+		var fillBuildsInSendableFunction: Bool?
 	}
 
 	private(set) var places = [Place]()
@@ -52,6 +55,20 @@ struct TypeFactsPlaces {
 	/// Records what the generator built at the place at `index` decided.
 	mutating func record(_ index: Int, generator: ScopeGenerator) {
 		places[index].generator = TypeFactsGeneratorFacts(generator)
+		// A call decides which of its fills are `@Sendable`. The places of its fills, each finished before it, are its place's
+		// children that are fills, in the order of its generators of fills: two fills of one call can fill places of one
+		// property, which so does not tell them apart. A fill's own generator holds the call whose fills it holds.
+		let call = if case .fill = generator.scopeData, let child = generator.propertiesToGenerate.first {
+			child
+		} else {
+			generator
+		}
+		let fills = call.propertiesToGenerate.filter { $0.fillHole != nil }
+		guard !fills.isEmpty else { return }
+		let fillPlaces = places.indices.dropFirst(index + 1).filter { places[$0].parent == index && places[$0].declaration.key.isFill }
+		for (fillPlace, fill) in zip(fillPlaces, fills) where fillPlaces.count == fills.count {
+			places[fillPlace].fillBuildsInSendableFunction = call.buildsInSendableFunction(ofFill: fill)
+		}
 	}
 }
 
@@ -179,6 +196,10 @@ public struct TypeFactsReport: Sendable {
 		func type(_ id: Int32) -> String {
 			graph.typeTable[Int(id)].asSource
 		}
+		var fillHoleIsSendableByEdge = [Int32: Bool]()
+		for fill in graph.fills {
+			fillHoleIsSendableByEdge[fill.edge] = fill.holeIsSendable
+		}
 		nodes = graph.graph.nodes.indices.map { index in
 			let edgeFacts = graph.edgeFacts(from: index)
 			return Node(
@@ -201,6 +222,7 @@ public struct TypeFactsReport: Sendable {
 						bindingsBefore: Int(edge.bindingsBefore),
 						boundFromScopeStruct: graph.receives.boundFromScopeStruct(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
 						hiddenFromCaller: graph.receives.hiddenFromCaller(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
+						fillHoleIsSendable: fillHoleIsSendableByEdge[Int32(edgeIndex)] ?? false,
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
@@ -257,6 +279,7 @@ public struct TypeFactsReport: Sendable {
 				cycleReads: cycleReads,
 				builtType: place.declaration.scope.instantiable.concreteInstantiable.asSource,
 				generator: place.generator.map(Generator.init),
+				fillBuildsInSendableFunction: place.fillBuildsInSendableFunction,
 			)
 		}
 	}
@@ -273,6 +296,8 @@ public struct TypeFactsReport: Sendable {
 		public let boundFromScopeStruct: [String]
 		/// Those of `boundFromScopeStruct` that hide the fill's reads from the caller (`TypeFactsReceives.hiddenFromCaller(atEdge:)`).
 		public let hiddenFromCaller: [String]
+		/// For a fill edge, whether the seam the fill is passed to takes it `@Sendable` (`TypeFactsFill.holeIsSendable`).
+		public let fillHoleIsSendable: Bool
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.
@@ -395,6 +420,8 @@ public struct TypeFactsReport: Sendable {
 		public let builtType: String
 		/// What the place's generator decided, or `nil` where the walk recorded none.
 		public let generator: Generator?
+		/// For a fill, whether its call's generator builds it in a `@Sendable` function; `nil` for any other place.
+		public let fillBuildsInSendableFunction: Bool?
 	}
 
 	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be

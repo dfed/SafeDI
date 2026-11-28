@@ -698,6 +698,7 @@ struct TypeFactsGraph: Sendable {
 				filledHoleOwnerType: types.id(of: hole.ownerType),
 				stackStart: stackStart,
 				stackCount: Int32(fillPathEntries.count) - stackStart,
+				holeIsSendable: hole.isSendable,
 			))
 		}
 
