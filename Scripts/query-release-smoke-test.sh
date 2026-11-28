@@ -16,6 +16,16 @@
 # SafeDITool on Linux" runs this on its build and `publish.yml` runs it on
 # each binary before uploading it. The failure came and went between runs,
 # hence three runs of each query.
+#
+# Then, over a root whose child receives a value, it runs `query graph`,
+# `query needs`, `generate` and `dump`, three times each. 2.4.2's release
+# binaries (Swift 6.3.3 on Linux, Xcode 26.4 on macOS) crashed in
+# `swift_task_localValuePush` on `query graph` over any module with a root,
+# since reading where each received value comes from binds a task-local
+# function, which those compilers' release builds cannot bind; the chain above
+# declares no root, so it never read one. The fix holds every task-local
+# function in a `TaskLocalFunction` (`taskLocalFunction` in
+# `.claude/rules/source-rules.md`).
 set -euo pipefail
 
 tool=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
@@ -268,4 +278,44 @@ for run in 1 2 3; do
 	"$tool" generate --include Generated --module-name Generated --combined-output generated.swift || fail "generate failed on run $run."
 	diff -u expected.swift generated.swift || fail "generate wrote other code than expected on run $run."
 done
-echo "query graph and query needs reported all $module_count modules, and generate wrote the expected code."
+mkdir -p Received
+cat > Received/Received.swift <<'SWIFT'
+import SafeDI
+
+@Instantiable(isRoot: true)
+public final class ReceivedRoot: Instantiable {
+    public init(service: ReceivedService, child: ReceivedChild) {
+        self.service = service
+        self.child = child
+    }
+
+    @Instantiated let service: ReceivedService
+    @Instantiated let child: ReceivedChild
+}
+
+@Instantiable
+public final class ReceivedService: Instantiable {
+    public init() {}
+}
+
+@Instantiable
+public final class ReceivedChild: Instantiable {
+    public init(service: ReceivedService) {
+        self.service = service
+    }
+
+    @Received let service: ReceivedService
+}
+SWIFT
+for run in 1 2 3; do
+	"$tool" query graph --include Received --output received-graph.json || fail "query graph over a root failed on run $run."
+	grep -q '"completeness" : "trees"' received-graph.json || fail "query graph over a root did not build its trees on run $run."
+	grep -q '"provenance" :' received-graph.json || fail "query graph over a root reported no provenance on run $run."
+	"$tool" query needs ReceivedRoot --json --include Received > received-needs.json || fail "query needs over a root failed on run $run."
+	grep -q '"typeName" : "ReceivedRoot"' received-needs.json || fail "query needs over a root did not report ReceivedRoot on run $run."
+	"$tool" generate --include Received --module-name Received --module-info-output Received.safedi --combined-output received.swift || fail "generate over a root failed on run $run."
+	grep -q 'extension ReceivedRoot' received.swift || fail "generate over a root wrote no initializer for ReceivedRoot on run $run."
+	"$tool" dump Received.safedi > received-dump.json || fail "dump of a module info file failed on run $run."
+	grep -q '"ReceivedChild"' received-dump.json || fail "dump of a module info file did not list ReceivedChild on run $run."
+done
+echo "query graph and query needs reported all $module_count modules, generate wrote the expected code, and query graph, query needs, generate and dump ran over a root whose child receives a value."

@@ -159,10 +159,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.tBuilder = tBuilder
 		            self.cBuilder = cBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(tBuilder: .init(__safeDI_noScope: __safeDI_builder), cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -174,10 +170,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.api = api
 		            self.cBuilder = cBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() }, cBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -188,10 +180,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built, tBuilder: @escaping (any Api) -> __safeDI_ApiCarrier_T<__safeDI_Built>) {
 		            self.api = api
 		            self.tBuilder = tBuilder
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() }, tBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -319,10 +307,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		        public init(tBuilder: __safeDI_ApiCarrier_T<__safeDI_Built>) {
 		            self.tBuilder = tBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(tBuilder: .init(__safeDI_noScope: __safeDI_builder))
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -334,10 +318,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		            self.r = r
 		            self.uBuilder = uBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(r: { _ in .init(__safeDI_noScope: __safeDI_builder) }, uBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -346,10 +326,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 
 		        public init(api: @escaping () -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() })
 		        }
 		    }
 
@@ -361,10 +337,6 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 		        public init(api: @escaping () -> __safeDI_Built, otherT: @escaping (any Api) -> __safeDI_ApiCarrier_T<__safeDI_Built>) {
 		            self.api = api
 		            self.otherT = otherT
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { __safeDI_builder() }, otherT: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -487,7 +459,7 @@ struct SafeDIToolSeamPlaceLevelTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func placeLevels(of files: [String]) async throws -> ([SeamPlaceLevels], TestOutput) {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamPlaceLevels.self)
-		let output = try await SeamPlaceLevels.$observer.withValue({ continuation.yield($0) }) {
+		let output = try await SeamPlaceLevels.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,

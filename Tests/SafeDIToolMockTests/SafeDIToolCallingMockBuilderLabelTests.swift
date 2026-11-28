@@ -63,7 +63,7 @@ struct SafeDIToolCallingMockBuilderLabelTests: ~Copyable {
 			valueProbes: [DifferentialValueProbe(
 				name: "Screen",
 				expression: "App.Screen.mock(serviceBuilder: { App.CountedService() })",
-				knownRightExpression: "App.Screen(__safeDI_serviceBuilder: .init(__safeDI_noScope: { App.CountedService() }))",
+				knownRightExpression: "App.Screen(serviceBuilder: { App.CountedService() })",
 			)],
 		), seed: 0)
 

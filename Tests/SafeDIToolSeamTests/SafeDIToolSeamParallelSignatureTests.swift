@@ -109,7 +109,7 @@ struct SafeDIToolSeamParallelSignatureTests: ~Copyable {
 	/// The levels of seam components the module's own signature computation settles while `body` runs, in level order.
 	private static func observedLevels(_ body: () async throws -> some Any) async throws -> [SeamSignatureLevel] {
 		let (stream, continuation) = AsyncStream.makeStream(of: SeamSignatureLevel.self)
-		_ = try await SeamSignatureObservation.$observesLevels.withValue({ continuation.yield($0) }) {
+		_ = try await SeamSignatureObservation.$observesLevels.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await body()
 		}
 		continuation.finish()

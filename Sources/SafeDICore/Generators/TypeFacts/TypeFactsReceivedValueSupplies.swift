@@ -281,7 +281,7 @@ struct TypeFactsReceivedValueSupplies: Sendable {
 /// tool: the two must be equal, as sets, on every test and fuzzer graph. The fold and the walk run only where it is set,
 /// uncounted by `GenerationWork`, while `generate` plans each root's code.
 public enum TypeFactsReceivedValueSuppliesObservation {
-	@TaskLocal public static var comparesWalk: (@Sendable (TypeFactsReceivedValueSuppliesComparison) -> Void)?
+	@TaskLocal public static var comparesWalk: TaskLocalFunction<@Sendable (TypeFactsReceivedValueSuppliesComparison) -> Void>?
 }
 
 /// One root's supplies and constructed types, from the fold and from the walk.
