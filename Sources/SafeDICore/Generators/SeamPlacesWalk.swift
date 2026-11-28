@@ -485,14 +485,7 @@ extension DependencyTreeGenerator {
 				dependenciesByGenerator[ObjectIdentifier(generator)] = dependencies
 				if depth > 0, let property = generator.property, generator.buildsInSendableFunction {
 					isInSendableFunction = true
-					let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(property) {
-						.instantiator(builtType: built.concreteInstantiable)
-					} else if case .sendableLazilyInstantiated = property.propertyType {
-						.sendableLazyWrapper(builtType: built.concreteInstantiable)
-					} else {
-						.other
-					}
-					opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: property, function: function)
+					opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: property, function: DependencyTreeGenerator.sendableFunction(openedBy: property, building: built.concreteInstantiable))
 				}
 				if depth > 0 {
 					for dependency in built.dependencies where dependency.source == .forwarded {
@@ -810,14 +803,7 @@ extension DependencyTreeGenerator {
 				// The call's own level, which declares nothing: the called seam's root stands beneath it.
 				var opensSendableFunction: SeamSignature.Places.SendableFunctionOpened?
 				if met.call.buildsInSendableFunction {
-					let function: SeamSignature.Hole.UncarriedDeclaration.SendableFunction = if ScopeGenerator.isBuilder(met.property) {
-						.instantiator(builtType: met.calledSeamType)
-					} else if case .sendableLazilyInstantiated = met.property.propertyType {
-						.sendableLazyWrapper(builtType: met.calledSeamType)
-					} else {
-						.other
-					}
-					opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: met.property, function: function)
+					opensSendableFunction = SeamSignature.Places.SendableFunctionOpened(property: met.property, function: DependencyTreeGenerator.sendableFunction(openedBy: met.property, building: met.calledSeamType))
 				}
 				let draft = SeamPlacesBuilder.LevelDraft(
 					key: SeamSignature.Places.LevelKey(builtType: met.calledSeamType, nextProperty: nil, isSeamRoot: false, isInFill: frames.last(where: \.endsLevel)?.isInFill ?? false, filledType: nil),
