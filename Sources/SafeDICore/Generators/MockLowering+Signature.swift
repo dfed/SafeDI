@@ -264,10 +264,26 @@ extension ScopeGenerator {
 		of instantiable: Instantiable,
 		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
 	) -> MockLowering.RootSignature {
-		// The one classification of the mock's parameters (`mockRootParameters(instantiable:mockDefaults:treeNames:)`),
-		// read from this generator's tree.
 		let tree = treeNames(of: instantiable)
-		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: tree.names)
+		var signature = Self.lowerRootSignature(of: instantiable, flatParameterMockDefaults: flatParameterMockDefaults, tree: tree, inputs: mockRootParameterInputs(of: instantiable))
+		// Only a public mock's plan reads the nodes, for the modules of each label's receivers (`receiverModules(in:context:)`);
+		// the signature reads nothing of them.
+		signature.propertyNodes = tree.names.propertyNodes
+		return signature
+	}
+
+	/// The parameters of the mock of `instantiable` other than its overrides, from the names of its tree, `tree`, and what
+	/// its root receives and declares, `inputs`, which a mock root's generator and its world both fill. Its `propertyNodes`
+	/// are empty.
+	static func lowerRootSignature(
+		of instantiable: Instantiable,
+		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
+		tree: TreeNames,
+		inputs: MockRootParameterInputs,
+	) -> MockLowering.RootSignature {
+		// The one classification of the mock's parameters (`mockRootParameters(instantiable:mockDefaults:treeNames:inputs:)`).
+		let typesDeclaredEscaping = inputs.typesDeclaredEscaping
+		let parameters = mockRootParameters(instantiable: instantiable, mockDefaults: flatParameterMockDefaults, treeNames: tree.names, inputs: inputs)
 		let forwardedParameters = parameters.forwardedDependencies.map { dependency in
 			MockLowering.RootSignature.Parameter(property: dependency.property, defaultExpression: parameters.forwardedParameterDefaults[dependency.property.label]?.expression)
 		}
@@ -444,7 +460,6 @@ extension ScopeGenerator {
 		)
 		signature.passedUpBuilders = passedUpBuilders
 		signature.seamMockBuilders = parameters.seamMockBuilders
-		signature.propertyNodes = tree.names.propertyNodes
 		for override in onlyIfAvailableOverrides where parameters.unavailableDependencyOverrideProperties.contains(override.receivedProperty) {
 			signature.unavailableDependencyOverrideNames[override.receivedProperty] = override.name
 		}
@@ -702,4 +717,29 @@ extension ScopeGenerator {
 			mockedTypeUncoveredProperties: Set(mockedTypeUncoveredDependencies.map(\.property)),
 		)
 	}
+}
+
+/// What the classification of a mock's parameters (`ScopeGenerator.mockRootParameters(instantiable:mockDefaults:treeNames:inputs:)`)
+/// reads of its mock root beside its tree's names. A mock root's generator fills it from itself
+/// (`ScopeGenerator.mockRootParameterInputs(of:)`); a mock root's world fills it before any tree is built, where it can
+/// (`MockTreeNamesFromWorld.rootInputs(of:)`). Each field is a plain value, so another reader can fill it.
+struct MockRootParameterInputs {
+	/// What the root's tree receives from above it, each in the most explicit spelling its receivers give.
+	let receivedProperties: Set<Property>
+	/// Of those, what some receiver requires.
+	let requiredReceivedProperties: Set<Property>
+	/// Of those, what every receiver receives only if available, unwrapped.
+	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
+	/// The names the root's tree declares `@escaping`.
+	let typesDeclaredEscaping: Set<TypeDescription>
+	/// What the root's scope declares (`Scope.propertiesToDeclare`).
+	let propertiesToDeclare: Set<Property>
+	/// What only the calls of other modules' public mocks in the tree receive.
+	let receivedOnlyByPublicMockCalls: Set<Property>
+	/// What those calls pass.
+	let passedByPublicMockCalls: Set<Property>
+	/// The labels of `passedByPublicMockCalls` a receiver reads inside a `@Sendable` function, for an internal mock.
+	let passedByPublicMockCallLabelsReadInsideSendableFunctions: Set<String>
+	/// The builders a public mock's tree takes, or `nil`.
+	let mockBuilders: DependencyTreeGenerator.ShapedBuilders?
 }

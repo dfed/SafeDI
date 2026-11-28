@@ -219,13 +219,8 @@ extension ScopeGenerator {
 			observer(MockTreeNamesObservation.report(
 				of: instantiable,
 				tree: treeNames(of: instantiable, readsFills: false),
-				inputs: MockRootParameterInputs(
-					receivedProperties: receivedProperties,
-					requiredReceivedProperties: requiredReceivedProperties,
-					onlyIfAvailableUnwrappedReceivedProperties: onlyIfAvailableUnwrappedReceivedProperties,
-					typesDeclaredEscaping: typesDeclaredEscaping,
-					childrenInBuildOrder: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap(\.generator.property),
-				),
+				inputs: mockRootParameterInputs(of: instantiable),
+				childrenInBuildOrder: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap(\.generator.property),
 				worldRoot: worldRoot,
 				passesNilToPinnedReceives: passesNilToPinnedReceives,
 			))
