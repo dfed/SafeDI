@@ -184,13 +184,14 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.alphaAgainFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [nil])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 		// The two write other text, so the comparison is of two programs.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] != walkOutput.mockFiles["Root+SafeDIMock.swift"])
 		// The `Gamma` and `Delta` each `Alpha` built again builds are beneath a repeated ancestor, so they record no
 		// configuration of their own: every lap reads the root's `alpha.gamma` configuration, as the walk's does.
 		let overridden = """
-		Root.mock(safeDIOverrides: .init(alpha: .init(gamma: .init(delta: { marked(Delta(), "delta") }))))
+		Root.mock(safeDIOverrides: .init(alpha: .init(gamma: .init(delta: .init({ marked(Delta(epsilon: $0), "delta") })))))
 		"""
 		let comparison = try await DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(fixtureFiles: Self.alphaAgainFixture, generatedFiles: #require(output.generatedFiles)),
@@ -659,7 +660,8 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		""",
 	]
 
-	/// A root's `Alpha` builds `Alpha` again, beneath which each `Alpha` builds a `Gamma` that builds a `Delta`.
+	/// A root's `Alpha` builds `Alpha` again, beneath which each `Alpha` builds a `Gamma` that builds a `Delta`, which builds
+	/// an `Epsilon`, and a `LoggedInFlow` whose settings' flow builds a `LoggedInFlow` again.
 	private static let alphaAgainFixture: [String: String] = [
 		"Marked.swift": markedFile,
 		"Root.swift": """
@@ -687,19 +689,60 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		"Gamma.swift": """
 		@Instantiable
 		public final class Gamma: Instantiable {
-		    public init(delta: Delta) {
+		    public init(delta: Delta, flow: Flow) {
 		        self.delta = delta
+		        self.flow = flow
 		    }
 
 		    @Instantiated let delta: Delta
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
 		}
 		""",
 		"Delta.swift": """
 		@Instantiable
 		public final class Delta: Instantiable, Marked {
-		    public init() {}
+		    public init(epsilon: Epsilon) {
+		        self.epsilon = epsilon
+		    }
 
+		    @Instantiated let epsilon: Epsilon
 		    public var marker = ""
+		}
+		""",
+		"Epsilon.swift": """
+		@Instantiable
+		public final class Epsilon: Instantiable {
+		    public init() {}
+		}
+		""",
+		"Flow.swift": """
+		public protocol Flow: AnyObject {}
+
+		@Instantiable
+		public final class LoggedInFlow: Instantiable, Flow {
+		    public init(settingsBuilder: Instantiator<Settings>) {
+		        self.settingsBuilder = settingsBuilder
+		    }
+
+		    @Instantiated let settingsBuilder: Instantiator<Settings>
+		}
+
+		@Instantiable
+		public final class Settings: Instantiable {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow
+		}
+
+		@Instantiable
+		public final class SettingsFlow: Instantiable, Flow {
+		    public init(flow: Flow) {
+		        self.flow = flow
+		    }
+
+		    @Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow
 		}
 		""",
 	]

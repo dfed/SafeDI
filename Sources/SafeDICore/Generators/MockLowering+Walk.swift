@@ -219,7 +219,7 @@ extension ScopeGenerator {
 			configurations: walk.configurationRecords,
 		)
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:walkSurface:handWrittenMockDefaultParameters:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:handWrittenMockDefaultParameters:)`).
 		if let worldRoot {
 			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
@@ -314,9 +314,6 @@ extension ScopeGenerator {
 					wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
 				),
 				outerDeclarations: outerDeclarations,
-				walkSurface: surface,
-				levelNamesTaken: walk.rootLevelNamesTaken,
-				renamesAbove: walk.renames,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			) {
 				surface = layout.surface
@@ -1806,16 +1803,6 @@ extension MockLowering {
 			case never
 			/// The configuration of the named type, `Sendable` where it is `@Sendable`-typed.
 			case whenConfigurationIsTypedSendable(String)
-		}
-
-		/// The member as generated code spells it, which two members of one meaning share.
-		var comparedSpelling: [String] {
-			let sendabilitySpelling = switch sendability {
-			case .always: "always"
-			case .never: "never"
-			case let .whenConfigurationIsTypedSendable(typeName): "when \(typeName)"
-			}
-			return [name, typeSource, defaultValue, sendabilitySpelling]
 		}
 
 		/// Whether SafeDI proves the member `Sendable`, given the types whose configurations are `@Sendable`-typed.

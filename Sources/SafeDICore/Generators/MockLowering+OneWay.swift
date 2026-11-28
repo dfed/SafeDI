@@ -38,14 +38,7 @@ extension MockLowering {
 		/// Whether an edge in `cycleEdges` is above the node, which then reads no override from its configuration.
 		let isBeneathCycleEdge: Bool
 		/// The order in which the walk entered the node's children: a node before the nodes beneath it, in declaration order.
-		private(set) var walkOrder: Int
-
-		/// The construction with `walkOrder` in place of its own.
-		func entered(at walkOrder: Int) -> OneWayConstruction {
-			var construction = self
-			construction.walkOrder = walkOrder
-			return construction
-		}
+		let walkOrder: Int
 
 		/// What a construction reads from its type's configuration: the child properties, the default-valued parameters by
 		/// label and type, the types the builder takes, and the labels of the values it is handed, in order, so that two

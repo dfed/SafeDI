@@ -116,8 +116,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case readAnsweredTwoWays
 	/// The engine could not lay the root out from the records.
 	case notLaidOut
-	/// A mock root's records say members of its `SafeDIOverrides` other than those its walk lists, or say none yet.
-	case mockSurfaceDiffers
 	/// A member of a loop of builders under two parents whose loops make different members of it again.
 	case builderLoopSharedApart
 	/// A loop of builders in a seam's own tree, whose levels the tree holds in a box and whose members bind its holes'
