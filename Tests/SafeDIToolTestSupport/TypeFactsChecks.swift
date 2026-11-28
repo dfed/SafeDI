@@ -1114,7 +1114,7 @@ enum TypeFactsChecks {
 		}
 		for (maker, calls) in report.variantMadeAgainCalls.enumerated() {
 			let makerNode = nodes[report.variantNodes[maker]]
-			for (member, callee) in zip(makerNode.madeAgain, calls) {
+			for (member, callee) in zip(report.variantMadeAgain[maker], calls) {
 				count(32)
 				let parents = edgeCallersByVariant[maker]
 				if parents.isEmpty {

@@ -277,14 +277,14 @@ struct ReadsFromAbove: Sendable {
 				}
 				mask.drain { _, _ in }
 				if let madeAgain {
-					// A member made again reads from above its caller's top, where only the labels the caller rebinds are
-					// bound: the caller's own declarations come after.
-					mask.load(row: index, of: madeAgain.rebound)
-					for target in madeAgain.targets(of: index) {
+					// A member made again reads from above its caller's top, where none of the caller's own declarations is
+					// bound yet, but for what its own parent answers at its edge to it.
+					for (target, answered) in zip(madeAgain.targets(of: index), madeAgain.answeredRows(of: index)) {
+						mask.load(row: Int(answered), of: madeAgain.answered)
 						work += rows.wordCount(ofRow: Int(target))
 						_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+						mask.drain { _, _ in }
 					}
-					mask.drain { _, _ in }
 				}
 				rows.appendWords(ofRow: index, from: &accumulator)
 			} else {
@@ -331,11 +331,11 @@ struct ReadsFromAbove: Sendable {
 						}
 						mask.drain { _, _ in }
 						if let madeAgain {
-							mask.load(row: Int(index), of: madeAgain.rebound)
-							for target in madeAgain.targets(of: Int(index)) {
+							for (target, answered) in zip(madeAgain.targets(of: Int(index)), madeAgain.answeredRows(of: Int(index))) {
+								mask.load(row: Int(answered), of: madeAgain.answered)
 								add(rowOf: target, excluding: mask)
+								mask.drain { _, _ in }
 							}
-							mask.drain { _, _ in }
 						}
 						pass.appendWords(ofRow: slot, from: &accumulator)
 					}
