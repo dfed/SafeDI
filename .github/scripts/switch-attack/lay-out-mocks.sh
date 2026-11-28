@@ -15,6 +15,9 @@ edit() {
 }
 edit Sources/SafeDICore/Generators/NodeRecords/NodeRecordsObservation.swift \
   '(@TaskLocal public static var laysOutMockRoots) = false$' '\1 = true'
-edit Sources/SafeDICore/Generators/DependencyTreeGenerator+MockOrchestration.swift \
-  'guard NodeRecordsObservation\.observer != nil else \{' 'guard NodeRecordsObservation.observer != nil || NodeRecordsObservation.laysOutMockRoots else {'
+# From f94e16ac2 on, mock generation takes the node-record path whenever laysOutMockRoots is on.
+if ! grep -qF 'guard NodeRecordsObservation.observer != nil || NodeRecordsObservation.laysOutMockRoots else {' "$root/Sources/SafeDICore/Generators/DependencyTreeGenerator+MockOrchestration.swift"; then
+  edit Sources/SafeDICore/Generators/DependencyTreeGenerator+MockOrchestration.swift \
+    'guard NodeRecordsObservation\.observer != nil else \{' 'guard NodeRecordsObservation.observer != nil || NodeRecordsObservation.laysOutMockRoots else {'
+fi
 git -C "$root" diff --stat
