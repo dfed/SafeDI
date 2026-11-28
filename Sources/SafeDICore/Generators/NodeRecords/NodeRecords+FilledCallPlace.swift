@@ -69,11 +69,11 @@ extension NodeRecords {
 				for fill in fills {
 					let typesEscaping = typesDeclaredEscapingOf(fill.facts.declaration)
 					if records.decisions.inlinedFillKeys.contains(fill.facts.key),
-					   let inlinedFill = try ScopeGenerator.FillDispatcher.InlinedFill(hole: fill.facts.hole, carrierUse: fill.facts.carrierUse, builtProperty: world.property(of: fill.facts.declaration), code: records.functionLines(of: fill, place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope).map { indent + $0 }.joined(separator: "\n"), leadingMemberWhitespace: indent)
+					   let inlinedFill = try ScopeGenerator.FillDispatcher.InlinedFill(hole: fill.facts.hole, carrierUse: fill.facts.carrierUse, builtProperty: world.property(of: fill.facts.declaration), code: fill.functionLines(place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope).map { indent + $0 }.joined(separator: "\n"), leadingMemberWhitespace: indent)
 					{
 						inlinedFills[fill.facts.key] = inlinedFill
 					} else {
-						try statements.append(.indented(records.functionCode(of: fill, place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope), by: indent))
+						try statements.append(.indented(fill.functionCode(place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope), by: indent))
 					}
 				}
 			} else {
@@ -134,50 +134,53 @@ extension FilledCallRecords.Fill {
 	}
 }
 
-extension FilledCallRecords {
-	/// The function of `fill`, whose place is `place`, as the tree writes it with no indentation: its lines up to its tree,
+extension FilledCallRecords.Fill {
+	/// The fill's function, whose place is `place`, as the tree writes it with no indentation: its lines up to its tree,
 	/// its place laid out with what it binds, takes and captures declared around it, the return of a constant's value, and
 	/// its close.
 	/// - Parameter namesInScope: The names visible where the call declares the fill, beside what the fill binds and takes.
 	/// - Throws: `NodeRecordRefusal.notLaidOut` where the engine cannot lay the place out.
-	func functionCode(of fill: Fill, place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> GeneratedCode {
-		let (outerDeclarations, names) = bodyDeclarations(of: fill, namesInScope: namesInScope)
+	func functionCode(place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> GeneratedCode {
+		let (outerDeclarations, names) = bodyDeclarations(namesInScope: namesInScope)
 		guard let body = TypeKeyBody.statements(ofBodyHolding: place, outerDeclarations: outerDeclarations, namesInScope: names) else { throw .notLaidOut }
 		let indent = ScopeGenerator.standardIndent
 		var lines = [GeneratedCode]()
-		for line in fill.signature.spelledSignature(functionName: fill.functionName, scopeParameterName: fill.scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping) {
+		for line in signature.spelledSignature(functionName: functionName, scopeParameterName: scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping) {
 			lines.append(.text(line))
 		}
 		lines.append(.indented(.lines(body), by: indent))
-		if fill.signature.returnsBoundValue {
-			lines.append(.text(indent + "return \(fill.facts.hole.property.label)"))
+		if signature.returnsBoundValue {
+			lines.append(.text(indent + "return \(facts.hole.property.label)"))
 		}
 		lines.append(.text("}"))
 		return .lines(lines)
 	}
 
-	/// `functionCode(of:place:typesDeclaredEscaping:namesInScope:)`'s lines, for a fill a dispatcher's case holds, whose
+	/// `functionCode(place:typesDeclaredEscaping:namesInScope:)`'s lines, for a fill a dispatcher's case holds, whose
 	/// body it takes as lines (`TypeKeyBody.lines(ofBodyHolding:outerDeclarations:namesInScope:)`, a bridge).
-	func functionLines(of fill: Fill, place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> [String] {
-		let (outerDeclarations, names) = bodyDeclarations(of: fill, namesInScope: namesInScope)
+	func functionLines(place: GeneratedCode, typesDeclaredEscaping: Set<TypeDescription>, namesInScope: Set<String>) throws(NodeRecordRefusal) -> [String] {
+		let (outerDeclarations, names) = bodyDeclarations(namesInScope: namesInScope)
 		guard let body = TypeKeyBody.lines(ofBodyHolding: place, outerDeclarations: outerDeclarations, namesInScope: names) else { throw .notLaidOut }
 		let indent = ScopeGenerator.standardIndent
-		var lines = fill.signature.spelledSignature(functionName: fill.functionName, scopeParameterName: fill.scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)
+		var lines = signature.spelledSignature(functionName: functionName, scopeParameterName: scopeParameterName, indent: indent, typesDeclaredEscaping: typesDeclaredEscaping)
 		lines += body.map { indent + $0 }
-		if fill.signature.returnsBoundValue {
-			lines.append(indent + "return \(fill.facts.hole.property.label)")
+		if signature.returnsBoundValue {
+			lines.append(indent + "return \(facts.hole.property.label)")
 		}
 		lines.append("}")
 		return lines
 	}
 
-	/// What a fill's body is laid out with: the declarations around it (`Fill.outerDeclarations`), and the names in scope
+	/// What a fill's body is laid out with: the declarations around it (`outerDeclarations`), and the names in scope
 	/// where it is declared.
-	private func bodyDeclarations(of fill: Fill, namesInScope: Set<String>) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
-		let outerDeclarations = fill.outerDeclarations
-		return (outerDeclarations, namesInScope.union(outerDeclarations.map(\.label) + [fill.scopeParameterName]))
+	private func bodyDeclarations(namesInScope: Set<String>) -> (outerDeclarations: [Property], namesInScope: Set<String>) {
+		let outerDeclarations = self.outerDeclarations
+		return (outerDeclarations, namesInScope.union(outerDeclarations.map(\.label) + [scopeParameterName]))
 	}
 
+}
+
+extension FilledCallRecords {
 	/// The declarations of the call's dispatchers, in the order the call declares them, each indented by `indent`: a root
 	/// function the root declares once where it captures nothing of the call, and otherwise text in the call's body.
 	/// - Parameter inlinedFills: The fills a dispatcher's case holds, by key.

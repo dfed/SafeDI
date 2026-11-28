@@ -45,22 +45,53 @@ extension NodeRecords {
 				false
 			}
 		}
-		// A call that fills a builder declares its fills and dispatchers in a builder function of its own.
-		if fills {
-			refusals.append(.publicMockCallFills)
+		// A call that fills a builder declares its fills and level functions in a builder function of its own, which the
+		// records make for a call of the shape `filledCallRefusal(of:call:in:)` admits.
+		let fillRefusal = fills ? filledCallRefusal(of: declaration, call: call, in: world) : nil
+		if let fillRefusal {
+			refusals.append(fillRefusal)
 		}
 		// A builder the call passes up is `mock()`'s, which the record reads under the name `mock()` binds it apart by
 		// (`MockRootNames.passedUpBuilderName(of:)`); one `mock()` takes no builder for is left to the walk.
 		// An override closure is handed a builder the call passes up as it is, where the call passes the called mock a struct
 		// made of it.
-		if call.passedParameters.contains(where: { $0.builder != nil && (!call.takesOverrides || world.mockRootNames.passedUpBuilderName(of: $0.dependency.property) == nil) }) {
+		// A builder the call fills is handed what its fills make (`publicMockFilledCallRecord`), never one `mock()` takes.
+		let filledLabels: Set<String> = if fills, NodeRecordsObservation.recordsFilledCalls, case let .success(records) = world.publicMockFilledCallRecords(of: declaration) {
+			Set(records.rootCallsByLabel.keys)
+		} else {
+			[]
+		}
+		if call.passedParameters.contains(where: { $0.builder != nil && !filledLabels.contains($0.name) && (!call.takesOverrides || world.mockRootNames.passedUpBuilderName(of: $0.dependency.property) == nil) }) {
 			refusals.append(.publicMockCallPassesUp)
 		}
 		// The leaf receives only if available each parameter its tier omits, which the call never passes, and each `T? = nil`
 		// parameter of the tier, which the call passes what the caller's tree holds, or `nil`: the variant's answer, which the
 		// record reads (`passedOnlyIfAvailable(_:by:variant:in:)`).
-		// A call that passes builders up and fills none makes its record of them (`.fill` is stage 1's refusal of any hole argument).
-		return NodeRecordClaim(kind: .publicMockCall, discharges: fills ? [.construction, .onlyIfAvailable] : [.construction, .onlyIfAvailable, .fill], refusals: refusals)
+		// The call makes its record of the builders it passes up and of the fills `filledCallRefusal(of:call:in:)` admits
+		// (`.fill` is stage 1's refusal of any hole argument).
+		return NodeRecordClaim(kind: .publicMockCall, discharges: fillRefusal == nil ? [.construction, .onlyIfAvailable, .fill] : [.construction, .onlyIfAvailable], refusals: refusals)
+	}
+
+	/// The refusal of `declaration`, a call of another module's public mock that fills a builder, where its records do not
+	/// make it yet, once a test turns on records of filled calls (`NodeRecordsObservation.recordsFilledCalls`), and `nil`
+	/// where they do: a constant call the root alone builds, not erased, of a mock that takes overrides, which the call's
+	/// function reads of `mock()`'s own, whose fills each build a type of no hand-written mock that instantiates nothing,
+	/// read nothing of the caller's scope, and return the value they bind. Every other call is left to the walk.
+	private static func filledCallRefusal(of declaration: DeclarationID, call: PublicMockCall, in world: some NodeRecordSources) -> NodeRecordRefusal? {
+		guard NodeRecordsObservation.recordsFilledCalls,
+		      call.takesOverrides,
+		      world.kind(of: declaration) == .constant,
+		      !world.isErased(declaration),
+		      world.parents(of: declaration).allSatisfy({ $0.parent == 0 }),
+		      case let .success(records) = world.publicMockFilledCallRecords(of: declaration),
+		      records.fills.allSatisfy({ fill in
+		      	fill.signature.returnsBoundValue
+		      		&& fill.facts.callerReads.isEmpty
+		      		&& world.edges(from: fill.facts.declaration).isEmpty
+		      		&& world.scope(of: fill.facts.declaration).instantiable.mockInitializer == nil
+		      })
+		else { return .publicMockCallFills }
+		return nil
 	}
 
 	/// The function of the called tier the call passes its arguments to: the leaf's mock, which takes the tier's
@@ -118,6 +149,8 @@ extension NodeRecords {
 		receivesBoundAgain: [MockReceiveBoundAgain],
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children _: [GeneratedCode],
+		filledBuilderValues: [String: String] = [:],
+		isSpelledInPlace: Bool = false,
 	) throws -> BuiltPlaceRecord {
 		let scope = world.scope(of: declaration)
 		let instantiable = scope.instantiable
@@ -133,6 +166,12 @@ extension NodeRecords {
 		// from the name `mock()` binds it apart by (`mockNamesReadApart(in:)`).
 		var builderStructValues = [Int: ValuePath]()
 		for calledArgument in initializer.arguments {
+			// A builder the call fills is handed what its fills make (`publicMockFilledCallRecord`), spelled where the call is.
+			if let value = filledBuilderValues[calledArgument.label] {
+				builderStructValues[arguments.count] = .spliced([.text(value)])
+				arguments.append(PlaceRead(argumentLabel: calledArgument.label, label: calledArgument.label, property: Property(label: calledArgument.label, typeDescription: .void(.tuple)), source: .spelledArgument(calledArgument.label), staysOutsideSendableFunctions: true))
+				continue
+			}
 			// The leaf receives a builder the call passes up as its label alone, which no argument's type matches: the called
 			// mock takes the builder's struct (`MockLowering.Walk.publicMockCallNode` matches it by label too).
 			if let dependency = instantiable.dependencies.first(where: { $0.property.label == calledArgument.innerLabel }),
@@ -166,7 +205,7 @@ extension NodeRecords {
 		}
 		// An `Instantiator` or an `ErasedInstantiator` declares the builder function it holds, as does a call that binds a
 		// builder again; any other constant call is made where it is bound.
-		let hasFunction = world.kind(of: declaration) == .instantiator || world.kind(of: declaration) == .erasedInstantiator || !receivesBoundAgain.isEmpty
+		let hasFunction = isSpelledInPlace || world.kind(of: declaration) == .instantiator || world.kind(of: declaration) == .erasedInstantiator || !receivesBoundAgain.isEmpty
 		let argumentValues: [Int: ValuePath]
 		let alternatives: [ConstructionAlternative]
 		let passedArguments: [PassedArgument]
@@ -211,7 +250,8 @@ extension NodeRecords {
 			isErased: world.isErased(declaration),
 			concreteType: calledType,
 			isExtension: false,
-			target: .publicMockCall(calledType, guard: CallGuard(calledType: calledType, guardTypeName: call.guardTypeName, comment: call.comment)),
+			// A call spelled in place names the mock's guard in a statement of its own (`publicMockFilledCallRecord`).
+			target: isSpelledInPlace ? .mock(calledType, name: ReservedName.publicMockFunctionName) : .publicMockCall(calledType, guard: CallGuard(calledType: calledType, guardTypeName: call.guardTypeName, comment: call.comment)),
 			arguments: arguments,
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
 			cycleParameters: [],

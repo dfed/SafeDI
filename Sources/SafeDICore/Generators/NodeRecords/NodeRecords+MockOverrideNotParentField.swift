@@ -40,6 +40,32 @@ struct MockPlaceBuilderBinding: Sendable {
 	}
 }
 
+/// The builder `mock()` takes for the places of one hole type and family a mock root's calls of other modules' public
+/// mocks fill, which each call hands the called builder in place of its fills where it is set (`MockRootNames.filledCallBuilders`).
+struct MockFilledCallBuilder: Sendable {
+	/// A hole type and family of the places a call fills.
+	struct Family: Hashable, Sendable {
+		let holeType: SeamSignature.HoleType
+		let isSendable: Bool
+	}
+
+	/// The name the body calls the builder by.
+	let name: String
+	/// Whether `mock()` takes it optional, the call's fills building the places where it is `nil`.
+	let isOptional: Bool
+
+	/// What the call passes the called builder, given `fillsStruct`, the struct its fills make: the struct of this builder,
+	/// or of the fills where an optional builder is `nil`.
+	func structValue(fillsStruct: String) -> String {
+		// No call of a builder that takes a value fills a place the builder of a plain place fills too: a place whose
+		// builder takes a value is an instantiator of a type that conforms to `Instantiable` by hand, which no type a
+		// caller declares can fulfill, since it would declare that conformance again, so no adapter is needed.
+		isOptional
+			? "\(name).map { .init(\(ReservedName.noScopeArgumentLabel): $0) } ?? \(fillsStruct)"
+			: ".init(\(ReservedName.noScopeArgumentLabel): \(name))"
+	}
+}
+
 /// What a mock root's lowering names that the records of its world read: values of the root's level, which no fact of
 /// the world holds, so the world is made with them (`TypeFactsGraph.mockRootNames`). Empty for every production root's world.
 struct MockRootNames: Sendable {
@@ -65,8 +91,12 @@ struct MockRootNames: Sendable {
 	///   - loopMembersBoundNowhere: The members of the root's loops of builders that nothing outside their loop reads,
 	///     whose function the root declares and whose wrapper it binds nowhere, as the walk writes them
 	///     (`ScopeGenerator.loopMembersReadOnlyInsideTheirLoop`).
-	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:], wrapperBindingNames: [String: [TypeDescription: String]] = [:], loopMembersBoundNowhere: Set<Property> = []) {
+	///   - filledCallBuilders: The builder `mock()` takes for the places of each hole type and family the root's calls of other
+	///     modules' public mocks fill, which each call hands the called builder in place of its fills where it is set
+	///     (`MockRootParameters.SeamMockBuilder.filledCallBuilders`).
+	init(namesApart: [String: [TypeDescription: String]] = [:], unavailableDependencyOverrides: [(property: Property, name: String)] = [], passedUpBuilderNames: [Property: String] = [:], uncoveredParameterNames: [Property: String] = [:], edgesConfigurationsLeaveOut: Set<ScopeGenerator.CycleEdge> = [], placeBuilderBindings: [Property: MockPlaceBuilderBinding] = [:], wrapperBindingNames: [String: [TypeDescription: String]] = [:], loopMembersBoundNowhere: Set<Property> = [], filledCallBuilders: [MockFilledCallBuilder.Family: MockFilledCallBuilder] = [:]) {
 		self.loopMembersBoundNowhere = loopMembersBoundNowhere
+		self.filledCallBuilders = filledCallBuilders
 		self.namesApart = namesApart
 		self.edgesConfigurationsLeaveOut = edgesConfigurationsLeaveOut
 		self.placeBuilderBindings = placeBuilderBindings
@@ -78,6 +108,9 @@ struct MockRootNames: Sendable {
 
 	/// The members of the root's loops of builders whose wrapper the root binds nowhere (`init`'s `loopMembersBoundNowhere`).
 	let loopMembersBoundNowhere: Set<Property>
+
+	/// The builder `mock()` takes for the places of a hole type and family its calls fill (`init`'s `filledCallBuilders`).
+	let filledCallBuilders: [MockFilledCallBuilder.Family: MockFilledCallBuilder]
 
 	/// The name the mock root binds `property` under where it names it apart from a sibling of its label, and `nil`
 	/// where the root binds the property under its label or does not bind it.

@@ -190,6 +190,9 @@ protocol NodeRecordVariantFacts {
 	/// The records of `call`, a seam call of a root's tree that fills places of the seam it calls (`FilledCallRecords`), or
 	/// why node records leave the call to the tree.
 	func filledCallRecords(of call: DeclarationID) -> Result<FilledCallRecords, NodeRecordRefusal>
+	/// The records of `call`, a call of another module's public mock at a mock root's level that fills places of the mock it
+	/// calls (`PublicMockFilledCallRecords`), or why node records leave the call to the walk.
+	func publicMockFilledCallRecords(of call: DeclarationID) -> Result<PublicMockFilledCallRecords, NodeRecordRefusal>
 }
 
 /// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
@@ -218,6 +221,13 @@ extension TypeFactsGraph: NodeRecordSources {
 		// A call of a root's tree is reached on one route (`NodeRecordRefusal.fillCallSeveralVariants`).
 		let variant = (0..<Int32(variantCount)).first { declaration(of: $0) == call } ?? 0
 		return Result { () throws(NodeRecordRefusal) -> FilledCallRecords in try FilledCallRecords.of(call: call, variant: variant, in: self, reservedNames: []) }
+	}
+
+	func publicMockFilledCallRecords(of call: DeclarationID) -> Result<PublicMockFilledCallRecords, NodeRecordRefusal> {
+		// A call the records make is a child of the root alone, reached on one route.
+		let variant = (0..<Int32(variantCount)).first { declaration(of: $0) == call } ?? 0
+		// Only an internal mock's root is laid out from records, which takes no builders of its own places.
+		return Result { () throws(NodeRecordRefusal) -> PublicMockFilledCallRecords in try PublicMockFilledCallRecords.of(call: call, variant: variant, in: self, mockRootHoles: nil) }
 	}
 
 	func declaredProperty(ofKey key: AnswerID) -> Property? {
@@ -403,7 +413,10 @@ struct NodeRecords: Sendable {
 			case .mockUnavailableDependency:
 				try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 			case .publicMockCall:
-				try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+				// A call that fills a builder declares its fills and level functions in its function (`publicMockFilledCallRecord`).
+				try Self.fillsAPlace(declaration, in: world)
+					? .alias(Self.publicMockFilledCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, childPlaces: childPlaces, typesDeclaredEscapingOf: { typesDeclaredEscaping[Int(variantByDeclaration[Int($0)])] }))
+					: .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
 			}
 			var record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
 			// A mock's member of a loop of builders is handed its level's overrides after its own (`NodeRecords+Loops.swift`).
@@ -741,9 +754,15 @@ struct NodeRecords: Sendable {
 	/// Whether a producer of the facts still owes `declaration`'s answers (`TypeFactsWorld.owedFacts(of:)`), which refuses
 	/// its world as `readAnsweredTwoWays`. The mock root's bits are not owed where a test lays mock roots out from their
 	/// records (`NodeRecordsObservation.laysOutMockRoots`), a mode no run of `generate` turns on; every run of it refuses
-	/// every mock world.
+	/// every mock world. Nor, where a test also turns on records of filled calls (`NodeRecordsObservation.recordsFilledCalls`),
+	/// is the fill channel's bit of a mock world's declaration, which the channel owes beneath every fill of a mock world
+	/// (`TypeFactsFillRefusal.mockWorld`): the one call whose fills the records make reads nothing of the caller's scope in
+	/// them (`filledCallRefusal(of:call:in:)`), and every other refuses its world.
 	private static func owesFacts(_ declaration: DeclarationID, in world: some NodeRecordVariantFacts) -> Bool {
-		let owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		var owedOnlyOutsideTests: TypeFactsOwedFacts = NodeRecordsObservation.laysOutMockRoots ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		if NodeRecordsObservation.laysOutMockRoots, NodeRecordsObservation.recordsFilledCalls, world.isMockWorld {
+			owedOnlyOutsideTests.insert(.fillBeingBuilt)
+		}
 		return !world.owedFacts(of: declaration).subtracting(owedOnlyOutsideTests).isEmpty
 	}
 
@@ -827,6 +846,8 @@ struct NodeRecords: Sendable {
 			return publicMockCallClaim(of: declaration, in: world).map { joiningProductionMarks([.erased], to: $0, of: declaration, in: world) }
 				?? testClaim(of: declaration, in: world)
 				?? renameClaim(of: declaration, in: world)
+				// A fill of a call is built as its type's initializer builds it, reading no override (`fillClaim(of:in:)`).
+				?? fillClaim(of: declaration, in: world)
 				// Asked last: it claims every node of a mock root's world that no kind before it claimed.
 				?? mockConstructionClaim(of: declaration, in: world)
 		}

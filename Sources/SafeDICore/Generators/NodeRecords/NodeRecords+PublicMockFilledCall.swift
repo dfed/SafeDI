@@ -47,7 +47,7 @@ extension LevelFunctionRecordsObservation {
 	/// dependency a scope instantiates and does not build (`Scope.instantiatedDependenciesNotGenerated`), which the calling
 	/// mock binds from a builder of its own. A hole counts only where the mock root takes no builders (`mockRootHoles` is
 	/// `nil`): where it does, the hole records model the hole's place.
-	private static func fillsHoldPlace(_ call: DeclarationID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Bool {
+	fileprivate static func fillsHoldPlace(_ call: DeclarationID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Bool {
 		var pending = world.edges(from: call).filter { world.construction(of: $0) == .fill }
 		var visited = Set(pending)
 		while let declaration = pending.popLast() {
@@ -63,7 +63,7 @@ extension LevelFunctionRecordsObservation {
 	/// hands the called mock from the caller's scope, bound by the called mock's root, whose form the fill reads, where the
 	/// case's payload does not carry the label or the copy does not provide every form the fill reads, as `Scope`'s
 	/// `callersOwnLabels` judges it before it asks the caller's nearest declaration.
-	private static func readsCallersOwnValue(_ call: DeclarationID, facts allFacts: [FillFacts], in world: TypeFactsGraph) -> Bool {
+	fileprivate static func readsCallersOwnValue(_ call: DeclarationID, facts allFacts: [FillFacts], in world: TypeFactsGraph) -> Bool {
 		let scope = world.scope(of: call)
 		guard let publicMockCall = scope.publicMockCall else { return false }
 		let labelsHandedFromCaller = Set(publicMockCall.passedParameters.compactMap { parameter in
@@ -87,6 +87,25 @@ extension LevelFunctionRecordsObservation {
 	/// `variant`, as the tree records them (`PublicMockLevelFunctions.records`), made from the world alone.
 	/// - Throws: The refusal of a call whose fills' facts node records leave to the tree, or that a fill encloses.
 	static func levelFunctionRecords(of call: DeclarationID, variant: VariantID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) throws(NodeRecordRefusal) -> LevelFunctionRecords {
+		try PublicMockFilledCallRecords.of(call: call, variant: variant, in: world, mockRootHoles: mockRootHoles).levelFunctions
+	}
+}
+
+/// The records of a call of another module's public mock that fills places of the mock it calls, made from the world
+/// alone: its level functions (`LevelFunctionRecords`), each fill that declares a function or that a member holds the body
+/// of, and the call of the root level function each builder it fills is passed (`PublicMockLevelFunctions.rootCallsByLabel`).
+struct PublicMockFilledCallRecords: Sendable {
+	let levelFunctions: LevelFunctionRecords
+	/// The call's fills that generate code, one per case, in the order of the call's fill arguments.
+	let fills: [FilledCallRecords.Fill]
+	/// The keys of the fills a member of a level function holds the body of, which declare no function.
+	let inlinedFillKeys: Set<String>
+	/// The call of its root level function each builder the call fills is passed, by the builder's label.
+	let rootCallsByLabel: [String: String]
+
+	/// The records of `call`, reached as `variant`.
+	/// - Throws: The refusal of a call whose fills' facts node records leave to the tree, or that a fill encloses.
+	static func of(call: DeclarationID, variant: VariantID, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) throws(NodeRecordRefusal) -> PublicMockFilledCallRecords {
 		let innerScopes = try FillInnerScopes.ofPublicMockCall(call, in: world, mockRootHoles: mockRootHoles)
 		let allFacts: [FillFacts]
 		switch FillFacts.of(call: call, in: world, levelsOfCallingTree: innerScopes.levelsOfCallingTree) {
@@ -95,8 +114,8 @@ extension LevelFunctionRecordsObservation {
 		case let .refused(refusal):
 			throw refusal
 		}
-		guard !readsCallersOwnValue(call, facts: allFacts, in: world) else { throw .fillReadsCallersOwnValue }
-		guard !fillsHoldPlace(call, in: world, mockRootHoles: mockRootHoles) else { throw .fillHoldsPlace }
+		guard !LevelFunctionRecordsObservation.readsCallersOwnValue(call, facts: allFacts, in: world) else { throw .fillReadsCallersOwnValue }
+		guard !LevelFunctionRecordsObservation.fillsHoldPlace(call, in: world, mockRootHoles: mockRootHoles) else { throw .fillHoldsPlace }
 		// What the root level functions read of the caller's scope, by label: the form no fill reads optionally first, then
 		// in `Property` order, as `ScopeGenerator.publicMockLevelFunctions` chooses it.
 		var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
@@ -167,7 +186,7 @@ extension LevelFunctionRecordsObservation {
 			enclosingLevelCalls: [:],
 		)
 		// The fills an override closure of the call is handed a function over take each field of their payload by themselves.
-		let overrideFillKeys = overrideFillKeys(of: call, facts: allFacts, levels: levels, levelFunctions: levelFunctions, in: world, mockRootHoles: mockRootHoles)
+		let overrideFillKeys = Self.overrideFillKeys(of: call, facts: allFacts, levels: levels, levelFunctions: levelFunctions, in: world, mockRootHoles: mockRootHoles)
 		var memberParameterFieldsByKey = fillParametersByKey
 		for facts in allFacts where overrideFillKeys.contains(facts.key) && !facts.takesPayloadFields {
 			memberParameterFieldsByKey[facts.key] = facts.payloadFields + facts.parametersTaken
@@ -188,12 +207,40 @@ extension LevelFunctionRecordsObservation {
 			// The fill binds from its scope each field its tree reads that it is not handed as a parameter of its own.
 			inlinedFillsBindingScope[facts.key] = (carriesPayloadByTargetKey[facts.key] ?? false) && !Set(facts.bound).subtracting(facts.parametersTaken.map(\.property.label)).isEmpty
 		}
-		return levelFunctions.records(
+		let records = levelFunctions.records(
 			sendableKeys: decisions.sendableKeys,
 			inlinedFillsBindingScope: inlinedFillsBindingScope,
 			fillsTakingPayloadFields: Set(allFacts.filter(\.takesPayloadFields).map(\.key)).union(overrideFillKeys),
 			fillMemberParameterFieldsByKey: memberParameterFieldsByKey,
-			typesDeclaredEscaping: typesDeclaredEscaping(beneath: call, in: world),
+			typesDeclaredEscaping: Self.typesDeclaredEscaping(beneath: call, in: world),
+		)
+		// Each fill one case's place makes, named as the call names it.
+		var fills = [FilledCallRecords.Fill]()
+		var seenCaseKeys = Set<String>()
+		for facts in allFacts where seenCaseKeys.insert(ScopeGenerator.fillCaseKey(of: facts.hole)).inserted {
+			let caseKey = ScopeGenerator.fillCaseKey(of: facts.hole)
+			if let functionName = names.functionName(ofFill: caseKey), let scopeParameterName = names.scopeParameterName(ofFill: caseKey) {
+				fills.append(FilledCallRecords.Fill(
+				facts: facts,
+				signature: FilledCallRecords.signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
+				functionName: functionName,
+				scopeParameterName: scopeParameterName,
+					callerDeclarations: callerSources.visibleDeclarations(facts: facts, call: call, variant: variant),
+				))
+			}
+		}
+		// The dispatchers name each root by the label the called mock's generated-only function takes the builder under; the call
+		// passes it by the builder's label.
+		let builders = world.scope(of: call).publicMockCall?.builders ?? []
+		var rootCallsByLabel = [String: String]()
+		for (generatedOnlyLabel, rootCall) in levelFunctions.rootCallsByLabel(passingNilFor: []) {
+			rootCallsByLabel[builders.first { $0.generatedOnlyArgumentLabel == generatedOnlyLabel }?.label ?? generatedOnlyLabel] = rootCall
+		}
+		return PublicMockFilledCallRecords(
+			levelFunctions: records,
+			fills: fills,
+			inlinedFillKeys: Set(inlinedFillsBindingScope.keys),
+			rootCallsByLabel: rootCallsByLabel,
 		)
 	}
 
@@ -203,7 +250,7 @@ extension LevelFunctionRecordsObservation {
 	/// fields the called mock's hand-written mock takes by label and type. Nor where the call passes up a builder it does not
 	/// fill to a mock root built with its builders (`mockRootHoles`), a public mock, whose body holds only the struct its
 	/// caller built, from which no builder a person writes can be made: the call hands that builder's override nothing.
-	private static func overrideFillKeys(of call: DeclarationID, facts allFacts: [FillFacts], levels: FillDispatchers, levelFunctions: PublicMockLevelFunctions, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Set<String> {
+	fileprivate static func overrideFillKeys(of call: DeclarationID, facts allFacts: [FillFacts], levels: FillDispatchers, levelFunctions: PublicMockLevelFunctions, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Set<String> {
 		let scope = world.scope(of: call)
 		guard let publicMockCall = scope.publicMockCall, !publicMockCall.takesOverrides,
 		      mockRootHoles == nil || levels.builtClosures.count == scope.calledBuilders?.builders.count
@@ -228,7 +275,7 @@ extension LevelFunctionRecordsObservation {
 	}
 
 	/// The types the tree beneath `declaration` declares `@escaping`, as the tree's generator of the node unions them.
-	private static func typesDeclaredEscaping(beneath declaration: DeclarationID, in world: TypeFactsGraph) -> Set<TypeDescription> {
+	fileprivate static func typesDeclaredEscaping(beneath declaration: DeclarationID, in world: TypeFactsGraph) -> Set<TypeDescription> {
 		var escaping = Set<TypeDescription>()
 		var pending = [declaration]
 		var visited: Set = [declaration]

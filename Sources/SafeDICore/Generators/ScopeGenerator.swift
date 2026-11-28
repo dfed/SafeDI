@@ -10695,12 +10695,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// What the call passes the called builder, given `fillsStruct`, the struct its fills make: the struct of this
 			/// builder, or of the fills where an optional builder is `nil`.
 			func structValue(fillsStruct: String) -> String {
-				// No call of a builder that takes a value fills a place the builder of a plain place fills too: a place whose
-				// builder takes a value is an instantiator of a type that conforms to `Instantiable` by hand, which no type a
-				// caller declares can fulfill, since it would declare that conformance again, so no adapter is needed.
-				isOptional
-					? "\(name).map { .init(\(ReservedName.noScopeArgumentLabel): $0) } ?? \(fillsStruct)"
-					: ".init(\(ReservedName.noScopeArgumentLabel): \(name))"
+				MockFilledCallBuilder(name: name, isOptional: isOptional).structValue(fillsStruct: fillsStruct)
 			}
 
 			/// What an override closure of the call is handed for the called builder, given `fillsCall`, the call of the

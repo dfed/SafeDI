@@ -300,6 +300,10 @@ extension ScopeGenerator {
 				placeBuilderBindings: placeBuilderBindings,
 				wrapperBindingNames: signature.lazilyInstantiatedBindingNamesByLabelAndType,
 				loopMembersBoundNowhere: Set(mockLoweringLoopMembersReadOnlyInsideTheirLoop.compactMap { propertiesToGenerate[$0].property }),
+				filledCallBuilders: Dictionary(
+					signature.seamMockBuilders.filter { !$0.filledCallBuilders.isEmpty }.map { (MockFilledCallBuilder.Family(holeType: $0.family.holeType, isSendable: $0.family.isSendable), MockFilledCallBuilder(name: $0.internalName, isOptional: $0.isOptional)) },
+					uniquingKeysWith: { first, _ in first },
+				),
 			)
 			// A public mock whose tree holds places is built with builders, whose holes its calls' fills read the levels of, as a
 			// seam's tree's calls do.

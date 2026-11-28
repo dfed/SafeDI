@@ -181,7 +181,7 @@ struct FilledCallRecords: Sendable {
 
 	/// The record of the function of the fill `facts` are of: how it takes and binds its case's values, as the tree writes it
 	/// (`ScopeGenerator.generateFillCode`).
-	private static func signature(of facts: FillFacts, isSendable: Bool) -> FillSignature {
+	static func signature(of facts: FillFacts, isSendable: Bool) -> FillSignature {
 		let hole = facts.hole
 		let form: FillSignature.Form
 		var bound = [FillSignature.BoundValue]()
