@@ -261,8 +261,13 @@ struct NodeRecords: Sendable {
 		if let enteredSlots {
 			try Self.checkMockCycles(in: world, slots: enteredSlots)
 		}
-		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
-		let mockNamesReadApart = Self.mockNamesReadApart(in: world)
+		var mockNamesReadApart = Self.mockNamesReadApart(in: world)
+		let onlyIfAvailableAnswers = try OnlyIfAvailableAnswers(
+			world: world,
+			rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world) + Self.mockNamesApartDeclarations(in: world),
+			receivesPassedNil: mockNamesReadApart.receivesPassedNil,
+		)
+		mockNamesReadApart.removeReceivesBoundAgain(passedNilBy: onlyIfAvailableAnswers)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
@@ -628,7 +633,7 @@ struct NodeRecords: Sendable {
 			}
 		}
 		do {
-			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world))
+			_ = try OnlyIfAvailableAnswers(world: world, rootParameters: seamTree?.parameters ?? outerDeclarations + Self.mockWrapperDeclarations(in: world) + Self.mockNamesApartDeclarations(in: world))
 		} catch {
 			refusals.insert(error)
 		}

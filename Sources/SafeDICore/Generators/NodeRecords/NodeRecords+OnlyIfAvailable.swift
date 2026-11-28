@@ -95,7 +95,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 	///   - rootParameters: A seam's parameters, which its root is handed as the nearest declarations of their labels
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
-	init(world: some NodeRecordSources, rootParameters: [Property] = []) throws(NodeRecordRefusal) {
+	///   - receivesPassedNil: By variant, the receives only if available a mock root's variant is passed `nil` for whatever
+	///     it sees (`NodeRecords.MockNamesReadApart.receivesPassedNil`); empty for any other root.
+	init(world: some NodeRecordSources, rootParameters: [Property] = [], receivesPassedNil: [Set<Property>] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		// The labels a rename only if available is fulfilled by.
 		var renamedLabels = Set<String>()
@@ -144,8 +146,13 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			// Inside the node's builder function, its forwarded properties are the nearest declarations of their labels.
+			// A mock root binds its children on one level with what `mock()` takes and binds before them, each form of a label
+			// under a name of its own, so no child of the root hides another declaration of its label there.
+			let bindsLevelBesideParameters = variant == 0 && world.isMockWorld
 			var contextInside = context
-			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) {
+			// A mock root's forwarded properties are parameters of `mock()`, which `rootParameters` hold beside every other
+			// value `mock()` binds under the label or apart from it.
+			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded && labels.contains(dependency.property.label) && !bindsLevelBesideParameters {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
 			// So is each dependency its type instantiates that its scope does not build, which a mock is passed as a parameter
@@ -175,7 +182,12 @@ struct OnlyIfAvailableAnswers: Sendable {
 					childBindingsByLabel[property.label, default: []].append(Binding(property: property, state: state))
 				}
 				for (label, bindings) in childBindingsByLabel {
-					calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
+					if bindsLevelBesideParameters {
+						let besideParameters = bindings.filter { $0.state == .available || $0.property.propertyType.isInstantiator } + (contextInside[label] ?? [])
+						calleeContext[label] = besideParameters.isEmpty ? nil : besideParameters
+					} else {
+						calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
+					}
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
@@ -196,7 +208,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				if try Self.binding(reading: dependency.property, in: context) == nil {
+				if receivesPassedNil.indices.contains(Int(variant)), receivesPassedNil[Int(variant)].contains(dependency.property) {
+					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
+				} else if try Self.binding(reading: dependency.property, in: context) == nil {
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 				}
 			}
