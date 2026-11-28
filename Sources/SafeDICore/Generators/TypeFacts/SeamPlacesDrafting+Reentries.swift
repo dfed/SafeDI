@@ -158,145 +158,18 @@ extension SeamPlacesDrafts {
 		}
 		// The labels the seam's caller holds: its parameters but the ones the seam forwards. A child that is no alias is
 		// buildable above the seam where its tree receives only those labels or its own.
-		let rootForwardedLabels = world.worldBindings(of: Int(world.declaration(of: rootVariant))).filter(\.isForwarded).map { world.propertyTable[Int($0.property)].label }
-		let receivedLabels = Set(parameters.map(\.property.label)).subtracting(rootForwardedLabels)
-		func labelsHeldAboveSeam(ofBinding property: Property, atVariant variant: VariantID) -> [String]? {
-			let targets = world.edges(from: world.declaration(of: variant))
-			guard let edge = targets.firstIndex(where: { world.graph.nodes[Int($0)].property == property }) else { return nil }
-			let child = targets[edge]
-			let node = world.graph.nodes[Int(child)]
-			guard node.alias == nil, !node.key.isFill else { return nil }
-			let receivedByTree = world.receives.received.columns(inRow: Int(child)).map { world.propertyTable[Int($0)].label }
-			guard receivedByTree.allSatisfy({ receivedLabels.contains($0) || $0 == property.label }) else { return nil }
-			return receivedLabels.union([property.label]).sorted() + ["in tree:"] + placesInTree(of: SeamPlacesLevelID(variant: variant, edge: Int32(edge - targets.startIndex)))
-		}
-		// The places the tree a level's next edge builds holds or passes up, in the order a last-in-first-out walk of it
-		// reaches them: each hole as its declaring type and label, each passed-up hole as the call's type. The walk follows
-		// the calls that build in line, so a call that closes a cycle adds nothing.
-		func placesInTree(of start: SeamPlacesLevelID) -> [String] {
-			var places = [String]()
-			var levelsToVisit = [start]
-			var visitedVariants = Set<VariantID>()
-			while let visited = levelsToVisit.popLast() {
-				let targets = world.edges(from: world.declaration(of: visited.variant))
-				let target = targets[targets.startIndex + Int(visited.edge)]
-				let node = world.graph.nodes[Int(target)]
-				for passUp in world.passUps(of: Int(target)) where passUp.calledCaseIndex >= 0 {
-					places.append("passed up by \(world.typeTable[Int(world.builtTypes[Int(target)])].asSource)")
-				}
-				if node.key.leaf == .hole {
-					places.append("\(world.graph.nodes[Int(world.declaration(of: visited.variant))].scope.instantiable.concreteInstantiable.asSource) \(node.property?.label ?? "fill")")
-				}
-				guard node.key.leaf == .none, buildsInLine(visited) else { continue }
-				let callee = world.calls(of: visited.variant)[world.calls(of: visited.variant).startIndex + Int(visited.edge)]
-				guard visitedVariants.insert(callee).inserted else { continue }
-				for edge in 0..<Int32(world.edges(from: world.declaration(of: callee)).count) {
-					levelsToVisit.append(SeamPlacesLevelID(variant: callee, edge: edge))
-				}
+		let drafter = SeamPlacesDeclarationDrafter(drafts: self, parameters: parameters)
+		func spelled(placeInTree place: SeamPlacesPlaceInTree) -> String {
+			switch place {
+			case let .hole(owner, hole):
+				"\(world.graph.nodes[Int(world.declaration(of: owner))].scope.instantiable.concreteInstantiable.asSource) \(world.graph.nodes[Int(hole)].property?.label ?? "fill")"
+			case let .passedUp(call, _):
+				"passed up by \(world.typeTable[Int(world.builtTypes[Int(call)])].asSource)"
 			}
-			return places.uniqued()
 		}
 		// A child's facts as the stored graph keeps them.
 		func spelled(childFacts: SeamSignature.Places.ChildFacts) -> String {
 			"child at \(childFacts.position)\(childFacts.isBuilder ? " builder" : "") loop \(childFacts.loop.map(String.init) ?? "none") builds \(childFacts.builtType?.asSource ?? "none")\(childFacts.isPlace ? " place" : "") only if available [\(childFacts.receivesOnlyIfAvailable.map(\.label).joined(separator: " "))] carriers [\(childFacts.carriers.map(\.label).joined(separator: " "))]"
-		}
-		func childFacts(ofBinding property: Property, atVariant variant: VariantID) -> SeamSignature.Places.ChildFacts? {
-			let declaration = world.declaration(of: variant)
-			let targets = world.edges(from: declaration)
-			let edgeFacts = world.edgeFacts(from: Int(declaration))
-			guard let edge = targets.firstIndex(where: { world.graph.nodes[Int($0)].property == property }) else { return nil }
-			let child = targets[edge]
-			let node = world.graph.nodes[Int(child)]
-			let facts = edgeFacts[edgeFacts.startIndex + (edge - targets.startIndex)]
-			guard !facts.isFill else { return nil }
-			let receivedOnlyIfAvailable = Set(world.receives.onlyIfAvailableUnwrapped.columns(inRow: Int(child)).map { world.propertyTable[Int($0)] })
-			let siblings = zip(targets, edgeFacts).compactMap { target, siblingFacts -> (position: Int32, property: Property)? in
-				guard !siblingFacts.isFill, let siblingProperty = world.graph.nodes[Int(target)].property, receivedOnlyIfAvailable.contains(siblingProperty.asUnwrappedProperty) else { return nil }
-				return (siblingFacts.buildPosition, siblingProperty)
-			}
-			// The siblings that start as carriers and that the child's tree requires, the first two in build order.
-			let required = Set(world.receives.required.columns(inRow: Int(child)).map { world.propertyTable[Int($0)] })
-			let carriers = zip(targets, edgeFacts).compactMap { target, siblingFacts -> (position: Int32, property: Property)? in
-				guard siblingFacts.isCarrier, let siblingProperty = world.graph.nodes[Int(target)].property, required.contains(siblingProperty) else { return nil }
-				return (siblingFacts.buildPosition, siblingProperty)
-			}
-			return SeamSignature.Places.ChildFacts(
-				position: Int(facts.buildPosition),
-				isBuilder: ScopeGenerator.isBuilder(property),
-				loop: facts.loop < 0 ? nil : Int(facts.loop),
-				builtType: node.key.leaf == .none ? world.typeTable[Int(world.builtTypes[Int(child)])] : nil,
-				isPlace: node.key.leaf == .hole,
-				receivesOnlyIfAvailable: siblings.sorted { $0.position < $1.position }.map(\.property),
-				carriers: Array(carriers.sorted { $0.position < $1.position }.prefix(2).map(\.property)),
-			)
-		}
-		// A binding of a level's scope as the place graph's list holds it, before any next property: what the facts give,
-		// and the defaults of the rows they do not give yet.
-		func draftedDeclaration(of binding: TypeFactsWorldBinding, atVariant variant: VariantID, labelsHeldAboveSeam: [String]?, child: SeamSignature.Places.ChildFacts?) -> SeamSignature.Places.Declaration {
-			let property = world.propertyTable[Int(binding.property)]
-			let targets = world.edges(from: world.declaration(of: variant))
-			let aliasNode = targets.lazy.map { world.graph.nodes[Int($0)] }.first { $0.property == property && $0.alias != nil }
-			let declaration = SeamSignature.Places.Declaration(
-				field: SeamSignature.Hole.Field(
-					property: property,
-					access: .internal,
-					declaringType: world.typeTable[Int(binding.declaringType)],
-					declarationLocation: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)],
-					isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable,
-					parameterTakingType: binding.parameterTakingType < 0 ? nil : world.typeTable[Int(binding.parameterTakingType)],
-					isSeamParameter: binding.isSeamParameter,
-				),
-				isBoundBeforeNextProperty: child == nil,
-				builtAfter: nil,
-				reason: .other,
-				isForwarded: binding.isForwarded,
-				cycleParameterOrigin: nil,
-				alias: aliasNode?.aliasFulfillingProperty.map { .init(fulfillingProperty: $0, isSeams: variant == rootVariant) },
-				isBoundFromCallersArgument: false,
-				isCycleParameter: binding.isCycleParameter,
-				isReboundByBuilderFunction: binding.isReboundByBuilderFunction && variant != rootVariant,
-				isFieldOfSeamParameter: false,
-				fillFieldHiding: nil,
-				buildability: labelsHeldAboveSeam.map { .init(labelsHeldAboveSeam: $0, placesInTree: []) },
-			)
-			return child.map(declaration.asChild) ?? declaration
-		}
-		// A signature parameter as the root's list holds it: bound before any child, declared where its first receiver
-		// declares it.
-		let seam = world.graph.nodes[Int(world.declaration(of: rootVariant))].scope.instantiable
-		var seamDependencyByProperty = [Property: Dependency]()
-		for dependency in seam.dependencies where seamDependencyByProperty[dependency.property] == nil {
-			seamDependencyByProperty[dependency.property] = dependency
-		}
-		func parameterDeclaration(of parameter: SeamSignature.Parameter) -> SeamSignature.Places.Declaration {
-			let firstReceiver = parameter.receivers.first
-			let declaringType = firstReceiver?.declaringType ?? seam.concreteInstantiable
-			let location = firstReceiver?.declarationLocation ?? seamDependencyByProperty[parameter.property]?.declarationLocation ?? seam.declarationLocation
-			return SeamSignature.Places.Declaration(
-				field: SeamSignature.Hole.Field(
-					property: parameter.property,
-					access: parameter.tierAccess,
-					accessCause: parameter.accessCause,
-					declaringType: declaringType,
-					declarationLocation: location,
-					isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
-					deferral: parameter.deferral,
-					isSeamParameter: true,
-					seamParameterOrigin: .init(of: parameter, of: seam, declaringType: declaringType, declarationLocation: location),
-				),
-				isBoundBeforeNextProperty: true,
-				builtAfter: nil,
-				reason: .other,
-				isForwarded: false,
-				cycleParameterOrigin: nil,
-				alias: nil,
-				isBoundFromCallersArgument: false,
-				isCycleParameter: false,
-				isReboundByBuilderFunction: false,
-				isFieldOfSeamParameter: false,
-				fillFieldHiding: nil,
-				buildability: nil,
-			)
 		}
 		func spelledPlaces(inTree cases: [Int]) -> [String] {
 			cases.map { index in
@@ -310,15 +183,10 @@ extension SeamPlacesDrafts {
 			let targets = world.edges(from: declaration)
 			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
 			let key = "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))"
-			let parameterFields = level.id.variant == rootVariant ? parameters.map { projected(parameterDeclaration(of: $0), placesInTree: []) } : []
+			let parameterFields = level.id.variant == rootVariant ? parameters.map { projected(drafter.parameterDeclaration(of: $0), placesInTree: []) } : []
 			let fields = parameterFields + world.worldBindings(of: Int(declaration)).filter { level.id.variant != rootVariant || !$0.isForwarded }.map { binding in
-				let property = world.propertyTable[Int(binding.property)]
-				let held = labelsHeldAboveSeam(ofBinding: property, atVariant: level.id.variant)
-				let split = held.flatMap { $0.firstIndex(of: "in tree:") }
-				return projected(
-					draftedDeclaration(of: binding, atVariant: level.id.variant, labelsHeldAboveSeam: split.map { Array(held![..<$0]) }, child: childFacts(ofBinding: property, atVariant: level.id.variant)),
-					placesInTree: split.map { Array(held![($0 + 1)...]) } ?? [],
-				)
+				let drafted = drafter.declaration(of: binding, atVariant: level.id.variant)
+				return projected(drafted.declaration, placesInTree: drafted.placesInTree.map(spelled(placeInTree:)).uniqued())
 			}
 			factsFieldsByList[key, default: []].insert(fields)
 		}
