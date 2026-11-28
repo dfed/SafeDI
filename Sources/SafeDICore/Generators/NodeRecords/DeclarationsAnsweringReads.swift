@@ -131,13 +131,11 @@ struct DeclarationsAnsweringReads: Sendable {
 							readsNonSendableWrapper = false
 						} else if !types.isEmpty {
 							readsNonSendableWrapper = types.contains { Self.readsNonSendableWrapper(receiving: Property(label: label, typeDescription: $0), among: declarations) }
-						} else if world.property(of: world.declaration(of: callee))?.label == label {
-							// The callee's own label, which it reads only to rebind it, is no receive.
-							readsNonSendableWrapper = false
 						} else {
-							// A read no receive's type reaches, as a fill's, is read by label.
-							readsNonSendableWrapper = declarations.contains { Self.isNonSendableWrapper($0.property) }
-								|| (answeringDeclaration < 0 && rootNonSendableWrapperLabels.contains(label))
+							// A read no receive's type reaches is the callee's read of its own label, which it reads only to
+							// rebind it and is no receive; any other is read by label.
+							readsNonSendableWrapper = world.property(of: world.declaration(of: callee))?.label != label
+								&& (declarations.contains { Self.isNonSendableWrapper($0.property) } || (answeringDeclaration < 0 && rootNonSendableWrapperLabels.contains(label)))
 						}
 					} else if answeringDeclaration >= 0 {
 						readsNonSendableWrapper = world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
