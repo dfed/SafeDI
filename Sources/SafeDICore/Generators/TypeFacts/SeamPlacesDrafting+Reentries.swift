@@ -109,6 +109,37 @@ extension SeamPlacesDrafts {
 			}
 			return "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(declarations.joined(separator: ", "))"
 		})
+		// Each declaration's field where a level's list is alike, projected to what the facts give it: its property with its
+		// type, its declaring type and location, and whether it is received only if available. The root's parameters are
+		// the signature's, so its lists are left out.
+		func projected(property: Property, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool) -> String {
+			"\(property.label): \(property.typeDescription.asSource) declared by \(declaringType.asSource) at \(location.map { "\($0.order) \($0.placement)" } ?? "none")\(isReceivedOnlyIfAvailable ? " only if available" : "")"
+		}
+		var factsFieldsByList = [String: Set<[String]>]()
+		for level in levels + closingLevels where level.id.variant != rootVariant {
+			let declaration = world.declaration(of: level.id.variant)
+			let targets = world.edges(from: declaration)
+			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
+			let key = "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))"
+			let fields = world.worldBindings(of: Int(declaration)).map { binding in
+				projected(property: world.propertyTable[Int(binding.property)], declaringType: world.typeTable[Int(binding.declaringType)], location: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)], isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable)
+			}
+			factsFieldsByList[key, default: []].insert(fields)
+		}
+		var fieldDifferences = Set<String>()
+		var comparedFieldCount = 0
+		for level in places.levels where !level.key.isSeamRoot {
+			let list = places.declarationLists[level.declarationList]
+			let key = "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(list.map { spelled(label: $0.field.property.label, isCycleParameter: $0.isCycleParameter, isRebound: $0.isReboundByBuilderFunction, isForwarded: $0.isForwarded) }.joined(separator: ", "))"
+			guard let factsFields = factsFieldsByList[key] else { continue }
+			let storedFields = list.map { projected(property: $0.field.property, declaringType: $0.field.declaringType, location: $0.field.declarationLocation, isReceivedOnlyIfAvailable: $0.field.isReceivedOnlyIfAvailable) }
+			comparedFieldCount += storedFields.count
+			guard !factsFields.contains(storedFields) else { continue }
+			let nearest = factsFields.sorted { $0.lexicographicallyPrecedes($1) }[0]
+			for (factsField, storedField) in zip(nearest, storedFields) where factsField != storedField {
+				fieldDifferences.insert("fields: \(key): facts \(factsField), stored \(storedField)")
+			}
+		}
 		// The rows the facts hold no column for yet, left out of the second count: rebindings and cycle parameters.
 		func withoutRowsToCome(_ entry: String) -> String {
 			let parts = entry.components(separatedBy: ": ")
@@ -117,7 +148,7 @@ extension SeamPlacesDrafts {
 		}
 		let storedWithoutRowsToCome = Set(fromStored.map(withoutRowsToCome))
 		let alikeWithoutRowsToCome = fromFacts.count(where: { storedWithoutRowsToCome.contains(withoutRowsToCome($0)) })
-		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters"]
+		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters", "report: declaration fields: \(comparedFieldCount) compared, \(fieldDifferences.count) differences"] + fieldDifferences.sorted()
 			+ fromFacts.subtracting(fromStored).sorted().map { "declarations: only from facts: \($0)" }
 			+ fromStored.subtracting(fromFacts).sorted().map { "declarations: only stored: \($0)" }
 	}
