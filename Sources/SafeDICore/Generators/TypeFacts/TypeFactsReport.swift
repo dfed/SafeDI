@@ -165,6 +165,7 @@ public struct TypeFactsReport: Sendable {
 						isCallEdge: edge.isCallEdge,
 						bindingsBefore: Int(edge.bindingsBefore),
 						boundFromScopeStruct: graph.receives.boundFromScopeStruct(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
+						hiddenFromCaller: graph.receives.hiddenFromCaller(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
@@ -233,6 +234,8 @@ public struct TypeFactsReport: Sendable {
 		public let bindingsBefore: Int
 		/// What a fill binds from its site's scope struct along the edge (`TypeFactsReceives.boundFromScopeStruct(atEdge:)`).
 		public let boundFromScopeStruct: [String]
+		/// Those of `boundFromScopeStruct` that hide the fill's reads from the caller (`TypeFactsReceives.hiddenFromCaller(atEdge:)`).
+		public let hiddenFromCaller: [String]
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.

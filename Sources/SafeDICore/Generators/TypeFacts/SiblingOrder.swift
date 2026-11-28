@@ -70,21 +70,28 @@ struct TypeFactsReceives: Sendable {
 	/// `requiredReceivedProperties` holds them: the fold of `required` along every edge, fill edges included. Sibling
 	/// order reads `required`, whose fold leaves fills out.
 	let requiredIncludingFills: BitRows
-	/// For each fill edge, by its position among the graph's edges, the properties the fill binds from the site's scope
-	/// struct, which hide the fill's reads of them from the caller (`ScopeGenerator.propertiesDeclared(byFillOf:passedByPublicMockCall:innerScopeReaders:)`),
-	/// each with its optional forms; `nil` in a world without fills.
-	let boundFromScopeStructByEdge: BitRows?
+	/// For each fill edge, by its position among the graph's edges, what the fill binds from the site's scope struct
+	/// (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:)`), each property with its
+	/// optional forms: all of it, and the part that hides the fill's reads from the caller. `nil` in a world without
+	/// fills.
+	let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
 	let onlyIfAvailableUnwrapped: BitRows
 	let requiredAliasFulfilling: BitRows
 
 	/// The properties a fill binds from the site's scope struct along `edge`, in increasing ID order: none along an edge
 	/// that is no fill's.
 	func boundFromScopeStruct(atEdge edge: Int) -> [Int32] {
-		boundFromScopeStructByEdge?.columns(inRow: edge) ?? []
+		fillStructRows?.bound.columns(inRow: edge) ?? []
+	}
+
+	/// Those of `boundFromScopeStruct(atEdge:)` that hide the fill's reads of them from the caller, which the fold
+	/// including fills leaves out along the edge.
+	func hiddenFromCaller(atEdge edge: Int) -> [Int32] {
+		fillStructRows?.hiddenFromCaller.columns(inRow: edge) ?? []
 	}
 
 	var wordCount: Int {
-		received.wordCount + required.wordCount + requiredIncludingFills.wordCount + (boundFromScopeStructByEdge?.wordCount ?? 0) + onlyIfAvailableUnwrapped.wordCount + requiredAliasFulfilling.wordCount
+		received.wordCount + required.wordCount + requiredIncludingFills.wordCount + (fillStructRows.map { $0.bound.wordCount + $0.hiddenFromCaller.wordCount } ?? 0) + onlyIfAvailableUnwrapped.wordCount + requiredAliasFulfilling.wordCount
 	}
 }
 

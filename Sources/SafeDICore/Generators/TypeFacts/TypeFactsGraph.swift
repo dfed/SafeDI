@@ -136,8 +136,8 @@ struct TypeFactsGraph: Sendable {
 		var edgeEntries = [Int32]()
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
-		// What each fill declares for its tree, parallel to `fillHoles`.
-		var fillDeclarations = [Set<Property>]()
+		// What each fill binds from its site's scope struct, parallel to `fillHoles`.
+		var fillStructBindings = [ScopeGenerator.FillStructBindings]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
 			guard declaration.key.leaf == .none else { return [] }
 			var targets = [TypeFactsDeclaration]()
@@ -155,7 +155,7 @@ struct TypeFactsGraph: Sendable {
 			}
 			let innerScopeReaders = declaration.scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 			for case let (index, .fill(hole, child, fillContext)) in declaration.scope.holeArguments.enumerated() {
-				fillDeclarations.append(ScopeGenerator.propertiesDeclared(byFillOf: hole, passedByPublicMockCall: declaration.scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders))
+				fillStructBindings.append(ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: declaration.scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders))
 				fillHoles.append((Int32(edgeEntries.count), hole))
 				targets.append(TypeFactsDeclaration(scope: child, property: hole.property, propertyID: fillContext.propertyID, erasedToConcreteExistential: false, isFill: true))
 				edgeEntries.append(Int32(index))
@@ -306,29 +306,32 @@ struct TypeFactsGraph: Sendable {
 		// shares the first.
 		// Along a fill edge, what the fill binds from the site's scope struct hides the fill's reads of it from the caller.
 		let requiredIncludingFillsRows: BitRows
-		let boundFromScopeStructByEdge: BitRows?
+		let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
 		if fillHoles.isEmpty {
 			requiredIncludingFillsRows = requiredRows
-			boundFromScopeStructByEdge = nil
+			fillStructRows = nil
 		} else {
-			var fillDeclarationsByEdge = [Int32: Set<Property>]()
-			for (fill, declarations) in zip(fillHoles, fillDeclarations) {
-				fillDeclarationsByEdge[fill.edge] = declarations
+			var fillStructBindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
+			for (fill, bindings) in zip(fillHoles, fillStructBindings) {
+				fillStructBindingsByEdge[fill.edge] = bindings
 			}
-			let hiddenAtEdge = BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
-				// A property no node reads or declares has no ID, and hides nothing.
-				for case let id? in (fillDeclarationsByEdge[Int32(edge)] ?? []).map(properties.existingID(of:)) {
-					insert(id)
-					propertiesByUnwrapped[id]?.forEach(insert)
+			// A property no node reads or declares has no ID, and hides nothing.
+			func rows(_ selected: (ScopeGenerator.FillStructBindings) -> Set<Property>) -> BitRows {
+				BitRows(rowCount: graph.edgeCount, columnCount: propertyCount) { edge, insert in
+					for case let id? in (fillStructBindingsByEdge[Int32(edge)].map(selected) ?? []).map(properties.existingID(of:)) {
+						insert(id)
+						propertiesByUnwrapped[id]?.forEach(insert)
+					}
 				}
 			}
+			let hiddenFromCaller = rows(\.hiddenFromCaller)
 			requiredIncludingFillsRows = ReadsFromAbove(
 				graph: graph,
 				own: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in ownRequired[node].forEach(insert) },
 				hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) },
-				hiddenAtEdge: hiddenAtEdge,
+				hiddenAtEdge: hiddenFromCaller,
 			).rows
-			boundFromScopeStructByEdge = hiddenAtEdge
+			fillStructRows = (rows(\.bound), hiddenFromCaller)
 		}
 		let onlyIfAvailableRows = ReadsFromAbove(
 			graph: graph,
@@ -430,7 +433,7 @@ struct TypeFactsGraph: Sendable {
 				requiredAliasFulfilling = requiredAliasFulfillingRows()
 			}
 		}
-		let receives = TypeFactsReceives(received: received, required: requiredRows, requiredIncludingFills: requiredIncludingFillsRows, boundFromScopeStructByEdge: boundFromScopeStructByEdge, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
+		let receives = TypeFactsReceives(received: received, required: requiredRows, requiredIncludingFills: requiredIncludingFillsRows, fillStructRows: fillStructRows, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
 
 		// The other union facts: the types built beneath, the names declared `@escaping` beneath, and whether a hole is.
 		let noneHidden = BitRows(rowCount: nodes.count, columnCount: types.values.count) { _, _ in }
