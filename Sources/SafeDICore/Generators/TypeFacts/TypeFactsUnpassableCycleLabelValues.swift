@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 extension TypeFactsGraph {
-	/// The labels no one parameter can pass (`unpassableCycleLabels()`) as the diagnostic reports each
+	/// The labels no one parameter can pass (`unpassableCycleLabelSolution()`) as the diagnostic reports each
 	/// (`UnpassableCycleLabel`), each once, in the order the fold finds them: the type the function builds, the first
 	/// receive of the label in the function's body, the forms the body receives, and the declaration between the function
 	/// and a call that closes a cycle on it that precedes the others in source order.
@@ -75,10 +75,6 @@ extension TypeFactsGraph {
 			for child in edges(from: declaration) {
 				if let position = pathBeneath.firstIndex(of: child) {
 					let closedOn = CyclePlace(declaration: child, componentMembersAbove: componentMembers(of: child, in: Array(pathBeneath[..<position])))
-					// The call's own type's receives, reached through the call.
-					if let receiver = receive(at: child, chain: chain + [graph.nodes[Int(child)].scope.instantiable.concreteInstantiable]) {
-						return receiver
-					}
 					if closedOn.declaration != place.declaration, !walking.contains(closedOn), parameterLabels[closedOn]?.contains(label) == true,
 					   let receiver = firstReceive(of: label, at: closedOn, parameterLabels: parameterLabels, walking: walking)
 					{

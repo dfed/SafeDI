@@ -27,7 +27,7 @@ extension TypeFactsGraph {
 		let componentMembersAbove: [Int32]
 	}
 
-	/// A label no one parameter can pass at one place of a function (`unpassableCycleLabels()`): the forms the function's
+	/// A label no one parameter can pass at one place of a function (`unpassableCycleLabelSolution()`): the forms the function's
 	/// body receives of it, in property order, and the declaration of it between the function and a call that closes a
 	/// cycle on it that precedes the others in source order (`CycleParameter.Redeclaration.preceding(_:)`).
 	struct UnpassablePlaceLabel {
@@ -37,7 +37,7 @@ extension TypeFactsGraph {
 		let redeclaration: CycleParameter.Redeclaration
 	}
 
-	/// What the fold of `unpassableCycleLabels()` settles: the labels no one parameter can pass, each at a place of its
+	/// What the fold of `unpassableCycleLabelSolution()` settles: the labels no one parameter can pass, each at a place of its
 	/// function in the order a walk from the root first meets the places, then in label order; and the labels each
 	/// place's function takes as parameters.
 	struct UnpassableCycleLabelSolution {
@@ -54,24 +54,14 @@ extension TypeFactsGraph {
 	}
 
 	/// The labels the function a cycle closes on receives from above it, which a declaration between the function and
-	/// the closing call declares again, in forms no one parameter can pass (`UnpassableCycleLabel`), each with the
-	/// declaration whose function it is, in declaration order then label order.
+	/// the closing call declares again, in forms no one parameter can pass (`UnpassableCycleLabel`), each at the place of
+	/// the function it is found at, with the forms the function's body receives and the declaration a diagnostic notes;
+	/// and the labels each function takes as parameters (`TypeFactsGraph.unpassableCycleLabelValues()` reads them).
 	///
 	/// A function's body is its declaration's tree down to each call that closes a cycle on a declaration being built
 	/// above the call. Such a call hands the closed-on function its parameters, so it receives, of a label, the one
 	/// parameter that function takes for it: the functions' parameters are solved together, to a fixed point, as the
 	/// tree's are.
-	func unpassableCycleLabels() -> [(declaration: DeclarationID, label: String)] {
-		var labelsByDeclaration = [Int32: Set<String>]()
-		for placeLabel in unpassableCycleLabelSolution().labels {
-			labelsByDeclaration[placeLabel.place.declaration, default: []].insert(placeLabel.label)
-		}
-		return labelsByDeclaration.keys.sorted().flatMap { declaration in
-			labelsByDeclaration[declaration, default: []].sorted().map { (declaration, $0) }
-		}
-	}
-
-	/// The fold `unpassableCycleLabels()` reads, with what a diagnostic of each label names.
 	func unpassableCycleLabelSolution() -> UnpassableCycleLabelSolution {
 		var ownReceives = [[(property: Property, isRequired: Bool)]]()
 		var declaredLabels = [Set<String>]()
