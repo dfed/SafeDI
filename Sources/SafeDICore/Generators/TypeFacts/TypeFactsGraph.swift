@@ -430,7 +430,8 @@ struct TypeFactsGraph: Sendable {
 		// A hole is a place only in a seam's own tree or a public mock's: in any other world it is a property passed `nil`.
 		let rootInstantiable = nodes[0].scope.instantiable
 		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
-		let worldHoldsHoles = holesArePlaces && holesBeneath.contains(0, inRow: 0)
+		// A hole inside a fill is a place too, whose siblings in the fill's tree start before it.
+		let worldHoldsHoles = holesArePlaces && nodes.contains { $0.key.leaf == .hole }
 		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
 
 		// The order each scope builds its children in, and the loops of builders among them.
@@ -465,10 +466,14 @@ struct TypeFactsGraph: Sendable {
 				positions[edge] = unbuiltPosition
 				unbuiltPosition += 1
 			}
+			// The fills follow the children, as the generator orders a call's fills after what it builds: a fill whose tree
+			// holds a place starts after the fills that hold none (`ScopeGenerator.startsAsCarrier`).
 			var fillPosition = Int32(childEdges.count)
-			for edge in edges where !followsEdge(edge) {
-				positions[edge] = fillPosition
-				fillPosition += 1
+			for startsAsCarrier in [false, true] {
+				for edge in edges where !followsEdge(edge) && carrierEdges.contains(edge) == startsAsCarrier {
+					positions[edge] = fillPosition
+					fillPosition += 1
+				}
 			}
 		}
 
@@ -576,6 +581,7 @@ struct TypeFactsGraph: Sendable {
 					isFill: edgeIsFill[edge],
 					bindingsBefore: bindingsBefore[edge],
 					isCallEdge: graph.componentByNode[Int(target)] == graph.componentByNode[index] && graph.isOnCycle(index),
+					isCarrier: carrierEdges.contains(edge),
 				))
 			}
 		}
@@ -1246,13 +1252,13 @@ struct TypeFactsGraph: Sendable {
 		}
 		var holdsPlace = Set<TypeProperty>()
 		for source in nodes.indices {
-			for edge in graph.edgeIndices(from: source) where isLeft[edge] && !edgeIsFill[edge] && reachesHoleAlongLeftEdges[Int(graph.edgeTargets[edge])] {
+			for edge in graph.edgeIndices(from: source) where isLeft[edge] && reachesHoleAlongLeftEdges[Int(graph.edgeTargets[edge])] {
 				holdsPlace.insert(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])]))
 			}
 		}
 		var carrierEdges = Set<Int>()
 		for source in nodes.indices {
-			for edge in graph.edgeIndices(from: source) where !edgeIsFill[edge] && holdsPlace.contains(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])])) {
+			for edge in graph.edgeIndices(from: source) where holdsPlace.contains(TypeProperty(type: builtTypes[source], property: nodeProperties[Int(graph.edgeTargets[edge])])) {
 				carrierEdges.insert(edge)
 			}
 		}

@@ -116,6 +116,8 @@ struct TypeFactsEdge: Equatable, Sendable {
 	let bindingsBefore: Int32
 	/// Whether the target is on a cycle with the source: a call, never a child built in line.
 	let isCallEdge: Bool
+	/// Whether the child starts as a carrier, after its siblings that hold no place (`ScopeGenerator.startsAsCarrier(_:)`).
+	let isCarrier: Bool
 }
 
 /// One declaration a node binds, in its binding order.

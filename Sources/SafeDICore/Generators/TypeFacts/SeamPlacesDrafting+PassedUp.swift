@@ -77,7 +77,15 @@ extension [SeamPlacesCaseDraft] {
 			placeCase.passedUp.map { spelled($0, isBuiltInSendableFunction: placeCase.isBuiltInSendableFunction, siteOpensSendableFunction: placeCase.siteOpensSendableFunction) }
 		}
 		let fromStored = Set(stored)
-		return ["report: passed-up: \(count { $0.passedUp != nil }) facts cases over \(fromFacts.count) distinct, \(stored.count) stored over \(fromStored.count)"]
+		// The order: the stored graph adds every own case before the passed-up ones, and these by call, in the order of the
+		// called signature's cases.
+		let factsOrder = compactMap { draft in
+			draft.passedUp.map { spelled($0, isBuiltInSendableFunction: draft.isBuiltInSendableFunction, siteOpensSendableFunction: draft.siteOpensSendableFunction) }
+		}
+		let firstPassedUp = places.cases.firstIndex { $0.passedUp != nil } ?? places.cases.count
+		let ownAfterPassedUp = places.cases[firstPassedUp...].contains { $0.passedUp == nil }
+		let order = factsOrder == stored ? "same order" : "order differs: facts \(factsOrder.joined(separator: " / ")); stored \(stored.joined(separator: " / "))"
+		return ["report: passed-up: \(count { $0.passedUp != nil }) facts cases over \(fromFacts.count) distinct, \(stored.count) stored over \(fromStored.count)", "report: passed-up order: \(order)\(ownAfterPassedUp ? ", an own case stored after a passed-up one" : "")"]
 			+ fromFacts.subtracting(fromStored).sorted().map { "passed-up: only from facts: \($0)" }
 			+ fromStored.subtracting(fromFacts).sorted().map { "passed-up: only stored: \($0)" }
 	}
