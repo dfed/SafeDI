@@ -25,7 +25,7 @@ struct MockRootTree {
 	/// Where a test compares the tree's checks (`MockRootTreeChecksObservation`): whether the per-type facts of the root's
 	/// world find a `Sendable` capture (`DeclarationsAnsweringReads`), resolving what `mock()` takes by label and type.
 	/// `nil` otherwise.
-	var worldFindsSendableCapture: Bool? = nil
+	var worldFindsSendableCapture: Bool?
 }
 
 extension DependencyTreeGenerator {
