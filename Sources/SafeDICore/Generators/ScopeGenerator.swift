@@ -1994,9 +1994,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// What a seam call passes one builder: the label it takes it under and the expression passed.
 	struct BuilderCallArgument: Sendable {
-		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passesPlacesUp: Bool = false, passedUpStruct: PassedUpStruct? = nil) {
+		init(label: String, value: String, enclosingFill: EnclosingFill? = nil, isSendable: Bool = false, builderStruct: PublicMockBuilderStruct? = nil, overrideHanding: OverrideHanding = .none, passesPlacesUp: Bool = false, passedUpStruct: PassedUpStruct? = nil, levelFunctionNames: [String] = []) {
 			self.label = label
 			self.value = value
+			self.levelFunctionNames = levelFunctionNames
 			self.passesPlacesUp = passesPlacesUp
 			self.passedUpStruct = passedUpStruct
 			self.enclosingFill = enclosingFill
@@ -2055,6 +2056,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Where a seam's call passes the builder's places up, the struct `value` calls a member of, which the type key records
 		/// as the call's read, where a binding of the caller's tree types it; `nil` for every other argument.
 		let passedUpStruct: PassedUpStruct?
+		/// The functions `value` declares inside the closure it calls, in the order it declares them: the levels of a builder
+		/// built from one that returns `nil`, for places only if available that nothing fulfills (`LevelsWithoutScope`).
+		let levelFunctionNames: [String]
 
 		/// The builder or level struct a seam's call passing places up calls its member on, by the name the caller's tree binds
 		/// it under and its type there, and the member read: of the call's own case.
@@ -7610,8 +7614,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fillReads = callReads
 			reads += fillReads
 		}
-		// The root declares the root functions the call reaches, which its text leaves out.
+		// The root declares the root functions the call reaches, which its text leaves out. The text keeps in place the fills
+		// and dispatchers its builder function declares, and the level functions a builder argument's closure declares.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
+		let keptFunctionNames = seamCallBody.keptFunctionNames + builderCallArguments.flatMap(\.levelFunctionNames)
 		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records.
 		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty {
 			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
@@ -7651,8 +7657,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			observer(SeamCallRecordObservation(
 				text: text,
 				readNames: (record.arguments + fillReads).filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
-				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []) + seamCallBody.keptFunctionNames,
-				keptFunctionNames: seamCallBody.keptFunctionNames,
+				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []) + keptFunctionNames,
+				keptFunctionNames: keptFunctionNames,
 				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
 				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
 			))
@@ -7660,7 +7666,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
-		record.keptFunctionNames = seamCallBody.keptFunctionNames
+		record.keptFunctionNames = keptFunctionNames
 		return .alias(record)
 	}
 

@@ -44,12 +44,17 @@ extension ScopeGenerator {
 		/// The local functions that build the levels reached from `roots`, each level once, in the order a walk from the roots
 		/// first reaches them, indented by `indent`.
 		mutating func functionDeclarations(reachedFrom roots: [SeamSignature.ScopeEnum.Key], indent: String) -> [String] {
-			var declarations = [String]()
+			functions(reachedFrom: roots, indent: indent).map(\.declaration)
+		}
+
+		/// The name and declaration of each local function `functionDeclarations(reachedFrom:indent:)` declares, in its order.
+		mutating func functions(reachedFrom roots: [SeamSignature.ScopeEnum.Key], indent: String) -> [(name: String, declaration: String)] {
+			var declarations = [(name: String, declaration: String)]()
 			var visitedKeys = Set<SeamSignature.ScopeEnum.Key>()
 			var keysToVisit = Array(roots.reversed())
 			while let key = keysToVisit.popLast() {
 				guard visitedKeys.insert(key).inserted, let scopeEnum = enumsByKey[key] else { continue }
-				declarations.append(functionDeclaration(of: scopeEnum, indent: indent))
+				declarations.append((name: Self.functionName(ofLevel: key, in: enumsByKey), declaration: functionDeclaration(of: scopeEnum, indent: indent)))
 				var heldKeys = [SeamSignature.ScopeEnum.Key]()
 				for enumCase in scopeEnum.cases {
 					switch enumCase.kind {
