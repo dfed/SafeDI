@@ -168,6 +168,8 @@ struct TypeKeyLayout {
 	/// functions its closers call.
 	struct Domain {
 		var labels = Set<String>()
+		/// The labels among `labels` that some read takes otherwise than only if available, or that a rename fulfills.
+		var labelsReadNotOnlyIfAvailable = Set<String>()
 		var closedOnFunctionNames = Set<String>()
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.

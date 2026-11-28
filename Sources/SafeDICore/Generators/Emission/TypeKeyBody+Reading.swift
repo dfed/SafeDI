@@ -75,10 +75,11 @@ extension TypeKeyLayout {
 					var outerView = [String: KeyedDeclaration]()
 					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						// A label of the view's domain that its own place declares is read beneath that declaration while it is
-						// built: no cycle parameter passes it (`bound`), so each read is only if available and reads `nil`, as the
-						// tree's reads do (`NearestDeclarations.resolvingBinding(of:)`).
-						let declaration = label == built.property.label ? PathValue.none : lookUp(label, inBody: body, before: position)
+						// A label of the view's own domain that its own place declares, and that every read of it there takes only if
+						// available, is read beneath that declaration while it is built: each such read reads `nil`, as the tree's
+						// reads do (`NearestDeclarations.resolvingBinding(of:)`).
+						let isReadOnlyIfAvailableWhileBuilt = label == built.property.label && domain.labels.contains(label) && !domain.labelsReadNotOnlyIfAvailable.contains(label)
+						let declaration = isReadOnlyIfAvailableWhileBuilt ? PathValue.none : lookUp(label, inBody: body, before: position)
 						outerDeclarations[label] = declaration
 						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
@@ -338,6 +339,9 @@ extension TypeKeyLayout {
 			func lookUp(_ read: PlaceRead) {
 				if !bound.contains(read.label), !boundBefore.contains(read.label) {
 					domain.labels.insert(read.label)
+					if !read.isOnlyIfAvailable {
+						domain.labelsReadNotOnlyIfAvailable.insert(read.label)
+					}
 				}
 			}
 			// A function a place of the body declares is resolved inside it (`resolvedFunction(named:from:)`), as its own is.
@@ -361,6 +365,9 @@ extension TypeKeyLayout {
 					if childBuilt.hasFunction, let childDomain = domainsByNode[childBuilt.node] {
 						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
 							domain.labels.insert(label)
+							if childDomain.labelsReadNotOnlyIfAvailable.contains(label) {
+								domain.labelsReadNotOnlyIfAvailable.insert(label)
+							}
 						}
 						for name in childDomain.closedOnFunctionNames {
 							close(name, beneathTheBody: true, rebindsLoopMember: childDomain.loopMemberFunctionNames.contains(name))
@@ -376,6 +383,7 @@ extension TypeKeyLayout {
 				case let .alias(alias):
 					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
 						domain.labels.insert(fulfillingProperty.label)
+						domain.labelsReadNotOnlyIfAvailable.insert(fulfillingProperty.label)
 					}
 					alias.listedReads.forEach(lookUp)
 					boundBefore.insert(alias.property.label)
