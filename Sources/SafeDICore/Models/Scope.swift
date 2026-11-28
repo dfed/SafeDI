@@ -826,7 +826,7 @@ extension ScopeRecord {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let placeIndex = placeIndices.removeLast()
 				if let placeIndex {
-					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove)
+					typeFactsPlaces?.finish(placeIndex, closesCycle: createdScope.closesCycle, reads: createdScope.readsAnsweredAbove, receivesPassedNil: createdScope.receivesPassedNil)
 				}
 				let scopeGenerator = createdScope.scopeGenerator()
 				if let placeIndex {
@@ -2720,7 +2720,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let unavailableOptionalProperties: Set<Property>
 	/// Those of `unavailableOptionalProperties` that a mock passes `nil` though its root binds a form they read, which
 	/// therefore receive nothing from above this scope. Empty outside a mock's tree.
-	private let receivesPassedNil: Set<Property>
+	let receivesPassedNil: Set<Property>
 	/// The generator the pass before created for this scope, or `nil` in the first pass (see `createScopeGenerator`).
 	private let previousPassGenerator: ScopeGenerator?
 	/// The properties of each type in the tree that hold a place, by which each scope's children start

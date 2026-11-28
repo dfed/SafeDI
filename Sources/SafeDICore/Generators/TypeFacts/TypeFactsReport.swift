@@ -33,6 +33,8 @@ struct TypeFactsPlaces {
 		var reads = ConstructionLog()
 		/// What the generator built at the place decided, once the place is finished.
 		var generator: TypeFactsGeneratorFacts?
+		/// The receives only if available the place's mock passes `nil`, as the walk decided them.
+		var receivesPassedNil = Set<Property>()
 	}
 
 	private(set) var places = [Place]()
@@ -44,9 +46,10 @@ struct TypeFactsPlaces {
 	}
 
 	/// Finishes the place at `index`.
-	mutating func finish(_ index: Int, closesCycle: Bool, reads: ConstructionLog) {
+	mutating func finish(_ index: Int, closesCycle: Bool, reads: ConstructionLog, receivesPassedNil: Set<Property>) {
 		places[index].closesCycle = closesCycle
 		places[index].reads = reads
+		places[index].receivesPassedNil = receivesPassedNil
 	}
 
 	/// Records what the generator built at the place at `index` decided.
@@ -149,6 +152,7 @@ public struct TypeFactsReport: Sendable {
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
 		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
+		variantReceivesPassedNil = (0..<graph.variantCount).map { graph.receivesPassedNil(of: VariantID($0)).map(\.asSource).sorted() }
 		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
 			sources.map { source in
 				switch source.kind {
@@ -263,6 +267,7 @@ public struct TypeFactsReport: Sendable {
 				cycleReads: cycleReads,
 				builtType: place.declaration.scope.instantiable.concreteInstantiable.asSource,
 				generator: place.generator.map(Generator.init),
+				receivesPassedNil: place.receivesPassedNil.map(\.asSource).sorted(),
 			)
 		}
 	}
@@ -372,7 +377,6 @@ public struct TypeFactsReport: Sendable {
 	private static func names(of owed: TypeFactsOwedFacts) -> Set<String> {
 		let named: [(TypeFactsOwedFacts, String)] = [
 			(.fillBeingBuilt, "fillBeingBuilt"),
-			(.mockRootPin, "mockRootPin"),
 			(.mockRootRecord, "mockRootRecord"),
 			(.mockRootBinding, "mockRootBinding"),
 		]
@@ -397,6 +401,8 @@ public struct TypeFactsReport: Sendable {
 		public let builtType: String
 		/// What the place's generator decided, or `nil` where the walk recorded none.
 		public let generator: Generator?
+		/// The receives only if available the place's mock passes `nil`, as the walk decided them.
+		public let receivesPassedNil: [String]
 	}
 
 	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
@@ -444,6 +450,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantMadeAgainCalls: [[Int]]
 	/// Whether each variant is called by exactly one call, a made-again call counted, and off every cycle.
 	public let variantIsCalledOnce: [Bool]
+	/// The receives only if available each variant's mock passes `nil` (`TypeFactsGraph.receivesPassedNil(of:)`), sorted.
+	public let variantReceivesPassedNil: [[String]]
 	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
 	/// `bound` with the answer's form.
 	public let variantCallSources: [[[String]]]

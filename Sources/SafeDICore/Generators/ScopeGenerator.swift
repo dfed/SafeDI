@@ -4109,7 +4109,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
 	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
-	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
+	/// from its world's declarations instead (`TypeFactsImports`), a mock root's beside what lies outside them
+	/// (`fulfillersOfMockOutsideTree(mockDefaults:)`), and the tests compare those with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -4146,12 +4147,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		GenerationWork.record(visitCount, by: .collectingTypesOfATree)
 	}
 
-	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
-	/// parameter of `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed
-	/// in `additionalMocksToGenerate` extends from another module.
+	/// The types a mock rooted at this scope names that its world's declarations do not: those a flat parameter of
+	/// `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed in
+	/// `additionalMocksToGenerate` extends from another module. Those its tree builds are its world's
+	/// (`TypeFactsImports(root:buildingMock:)`).
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
-	func fulfillersOfMock(mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> Set<FulfillerImports.Fulfiller> {
-		var fulfillers = await fulfillersOfTree(buildingMock: true)
+	func fulfillersOfMockOutsideTree(mockDefaults: [TypeDescription: FlatParameterMockDefault]) -> Set<FulfillerImports.Fulfiller> {
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)

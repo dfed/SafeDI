@@ -199,8 +199,6 @@ struct TypeFactsOwedFacts: OptionSet, Sendable {
 	/// The seam fill producer: whether a hole's property is still being built inside its own fill. Set on a fill and
 	/// on every declaration beneath one.
 	static let fillBeingBuilt = TypeFactsOwedFacts(rawValue: 1 << 0)
-	/// The mock root's pins: whether a mock read is pinned. Set on every declaration of a mock world.
-	static let mockRootPin = TypeFactsOwedFacts(rawValue: 1 << 1)
 	/// The mock root's required-receive records: what a read finds pinned or read above it. Set on every
 	/// declaration of a mock world.
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
@@ -508,6 +506,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		// A declaration being built is the one its own label's reads beneath it name, around the cycle it closes.
 		guard !answerIsBeingBuilt[Int(answer)] else { return true }
 		let declared = answerProperties[Int(answer)]
+		// A mock read's answer is what the mock root pins, no declaration.
+		guard declared >= 0 else { return false }
 		let label = readTable[Int(read)].label
 		return receives.received.columns(inRow: Int(declaration)).contains { received in
 			propertyFacts.labels[Int(received)] == label && propertyFacts.provides(declared, aFormReadBy: received)
@@ -633,7 +633,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
 		var owed: TypeFactsOwedFacts = []
 		if forMockGeneration {
-			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
+			owed.formUnion([.mockRootRecord, .mockRootBinding])
 		}
 		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
 		var visited: Set = [declaration]

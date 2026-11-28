@@ -553,7 +553,7 @@ extension DependencyTreeGenerator {
 			} else {
 				let tree = try builtTree()
 				scopeGenerator = tree.generator
-				fulfillers = TypeFactsImports(root: tree.rootScope).fulfillers
+				fulfillers = TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers
 				receivedValueSupplies = TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope)
 				rootScope = RootScopeInfo.kept(tree.rootScope)
 			}
@@ -1128,7 +1128,7 @@ extension DependencyTreeGenerator {
 						if skipsConfirmingPass, keepsFirstPassTrees, seamRoot != nil {
 							firstPassTree = SeamRootTree(
 								generator: generator,
-								fulfillers: TypeFactsImports(root: tree.rootScope).fulfillers,
+								fulfillers: TypeFactsImports(root: tree.rootScope, buildingMock: false).fulfillers,
 								receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: tree.rootScope),
 								rootScope: RootScopeInfo.kept(tree.rootScope),
 							)

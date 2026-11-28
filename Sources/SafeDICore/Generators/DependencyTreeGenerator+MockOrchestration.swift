@@ -86,6 +86,9 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The imports each mock root's file takes for the types its tree builds, folded over its world as soon as the mock
+		// root is accepted, so no world's table is kept until the roots are lowered.
+		var foldedMockImportsByType = [TypeDescription: Set<FulfillerImports.Fulfiller>]()
 		// The public mocks the module's own files declare, whose plans its module info carries.
 		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
@@ -121,7 +124,7 @@ extension DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
-				let mockRoot = try await createMockRoot(
+				let mockRootTree = try await createMockRoot(
 					for: instantiable,
 					scope: scope,
 					// A `generateMock: true` type declared in this module gets its mock whether
@@ -137,6 +140,7 @@ extension DependencyTreeGenerator {
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 					constructionMemo: &constructionMemo,
 				)
+				let mockRoot = mockRootTree.generator
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
 					if findings.isEmpty, let finding = try await callersViewFinding(
@@ -155,6 +159,7 @@ extension DependencyTreeGenerator {
 						ownPublicMockTypes.insert(instantiable.concreteInstantiable)
 					}
 				}
+				foldedMockImportsByType[instantiable.concreteInstantiable] = TypeFactsImports(root: mockRootTree.worldRoot, buildingMock: true).fulfillers
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
@@ -266,16 +271,24 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let worldRoots = recordedWorldRoots
+		let foldedMockImports = foldedMockImportsByType
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
-			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
+			let foldedFulfillers = foldedMockImports[instantiable.concreteInstantiable, default: []]
+			if let observer = TypeFactsImportsObservation.comparesWalk {
+				let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+					await mockRoot.fulfillersOfTree(buildingMock: true)
+				}
+				observer(TypeFactsImportsComparison(root: "mock of " + instantiable.concreteInstantiable.asSource, foldedFulfillers: foldedFulfillers, walkedFulfillers: walkedFulfillers))
+			}
+			async let fulfillersOutsideTree = mockRoot.fulfillersOfMockOutsideTree(mockDefaults: flatParameterMockDefaults)
 			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,
 					code: "",
-					fulfillers: fulfillers,
+					fulfillers: foldedFulfillers.union(fulfillersOutsideTree),
 				),
 				lowered: MockLowering.LoweredRoot(
 					mockedType: instantiable.concreteInstantiable,
@@ -726,7 +739,7 @@ extension DependencyTreeGenerator {
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
 		constructionMemo: inout ConstructionMemo,
-	) async throws -> ScopeGenerator {
+	) async throws -> MockRootTree {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
 		// make calls ambiguous or silently pick the generated method, and a
