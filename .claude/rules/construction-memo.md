@@ -42,6 +42,7 @@ Construction reads the scopes through `ConstructionScope`, a record of a frozen 
 | `depth` | Stored by no generator; used only for the log's answering depths, which a hit asks again at the new place. |
 | `placeHoldingPropertiesByType` | Constant within a pass of one tree; `nil` on every first pass; non-nil only in a tree with a build site, excluded, so every entry crossing trees was built with `nil`. |
 | `declaredTypeNames` | Constant for the run: `DependencyTreeGenerator`'s `let`. |
+| `mockCycleEdges` | Read by no place's build: only the graph of per-type facts a test observes (`TypeFactsOverrideSource`). |
 | `fill`, `enclosingFills` | Derived from the call. |
 | `fillPathStackCount`, `fillCallDepth` | 0 and `nil` outside a fill; derived from the call inside one. |
 | `enclosingFillNames` | Read only under non-empty `holeArguments`; empty outside a fill, derived from the enclosing call inside one. |

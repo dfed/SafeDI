@@ -616,7 +616,10 @@ func executeSafeDIToolMultiModuleTest(
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
 													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
 													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														try await tool.generate()
+														// Every mock world’s override sources must be what the mock writer answers (`TypeFactsChecks` check 38).
+														try await TypeFactsChecks.comparingOverrideSources(handingOn: MockOverrideSourceObservation.observer) {
+															try await tool.generate()
+														}
 													}
 												}
 											}

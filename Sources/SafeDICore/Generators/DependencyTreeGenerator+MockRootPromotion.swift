@@ -33,6 +33,8 @@ extension DependencyTreeGenerator {
 	/// - Parameter scopesWithValidatedDeclarations: The scopes of `typeDescriptionToScopeMap` whose trees' declarations are
 	///   already known to repeat no dependency label and to declare no rename the macro rejects, shared across mock roots:
 	///   a scope's tree is the same whichever mock root builds it, so a tree validated once is not walked again.
+	/// - Parameter cycleEdges: The module's mock cycle edges (`MockScopes.cycleEdges`), which the tree's graph of per-type
+	///   facts reads, where a test observes it, for the configurations' fields (`TypeFactsOverrideSource`).
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), which a public
 	///   mock's root reads, or `nil` when the module declares no public mock.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
@@ -48,6 +50,7 @@ extension DependencyTreeGenerator {
 		frozenScopeMap: FrozenScopeMap,
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		cycleEdges: Set<ScopeGenerator.CycleEdge>,
 		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
 		checksConstructions: Bool = true,
@@ -494,6 +497,7 @@ extension DependencyTreeGenerator {
 				mockBuilders: builders,
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
+				mockCycleEdges: cycleEdges,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
 			)

@@ -33,6 +33,10 @@ extension ScopeGenerator {
 		let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels.union(signature.lazilyInstantiatedBindings.map(\.name)), uncoveredProperties: signature.uncoveredProperties)
+		if let observer = MockOverrideSourceObservation.observer {
+			let mockRoot = instantiable.concreteInstantiable.asSource
+			walk.overrideSourceObserver = { decision in observer(mockRoot, decision) }
+		}
 		walk.rootFlatReceivedLabels = Set(signature.flatReceivedParameters.map(\.property.label))
 		walk.rootNamesDeclaredInBuilderFunctions = signature.namesDeclaredInBuilderFunctions
 		// A receive of a flat received parameter or override named apart from its label is handed that
@@ -318,6 +322,9 @@ extension MockLowering {
 	struct Walk {
 		/// The global back edges of the module's mock graphs, beneath which a node reads no override.
 		let cycleEdges: Set<ScopeGenerator.CycleEdge>
+		/// What a test observes of each question the walk asks of `cycleEdges` (`MockOverrideSourceObservation`), or
+		/// `nil` where nothing observes it, as in every run of the tool.
+		var overrideSourceObserver: (@Sendable (MockOverrideSourceDecision) -> Void)?
 		/// The nodes built around the node the walk is at, each as `MockLowering.cycleNodeKey(of:builtAs:)` spells it:
 		/// a node that repeats one reads no override of its own.
 		var ancestorTypes = Set<String>()
@@ -778,9 +785,9 @@ extension MockLowering {
 		/// parent's configuration has no field for it, so neither it nor anything beneath it reads an override. The one
 		/// question the walk asks of the cycle edges.
 		func isPruned(_ concreteType: TypeDescription, beneath parentConcreteType: String?) -> Bool {
-			// Nearly every mock graph has no cycle edge, and spelling the type is most of the question's cost.
-			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
-			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
+			let isPruned = ScopeGenerator.CycleEdge.leavesOut(concreteType, beneath: parentConcreteType, in: cycleEdges)
+			overrideSourceObserver?(MockOverrideSourceDecision(parentConcreteType: parentConcreteType, concreteType: concreteType.asSource, isLeftOut: isPruned))
+			return isPruned
 		}
 
 		/// The node of `generator`, which closes a cycle on a node around it of `property`, built as `instantiable`, whose
@@ -1011,7 +1018,10 @@ extension MockLowering {
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
 			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
-			let ownFieldReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			// Asked at every node, an unreachable override path included, so the question is put of each type edge the
+			// walk builds (`MockOverrideSourceObservation`); the answer is what the parent's configuration holds.
+			let isLeftOut = isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
+			let ownFieldReachable = overridePathReachable && !isLeftOut
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
 			// Every wrapper kind builds its type in a builder function, as an `Instantiator` does,

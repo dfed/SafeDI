@@ -390,6 +390,8 @@ extension ScopeRecord {
 	///   - mockBuilders: For a public mock's root, the builders its `mock()` takes, which each site of the tree calls and
 	///     each call of another module's public mock hands its places up to, as a seam's tree calls the builders of
 	///     `seamRoot`'s signature.
+	///   - mockCycleEdges: For a mock root, the module's mock cycle edges, which only the graph of per-type facts a test
+	///     observes reads (`TypeFactsOverrideSource`); no place's build reads them, so they are no input of the memo.
 	///   - constructionMemo: The memo of the trees created before this one, whose generators the tree's first pass may
 	///     reuse when it is shared across trees, and which then keeps that pass's generators once the tree is created
 	///     (see `ConstructionMemo.Sharing`).
@@ -415,6 +417,7 @@ extension ScopeRecord {
 		mockBuilders: DependencyTreeGenerator.ShapedBuilders? = nil,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
+		mockCycleEdges: Set<ScopeGenerator.CycleEdge> = [],
 		validatesForwardedProperties: Bool = true,
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
@@ -473,7 +476,7 @@ extension ScopeRecord {
 					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, mockCycleEdges: mockCycleEdges))
 		}
 		return scopeGenerator
 	}

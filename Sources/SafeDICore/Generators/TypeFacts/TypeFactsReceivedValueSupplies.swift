@@ -34,7 +34,7 @@
 /// enter either. It holds the supplies and the types, for as long as its owner keeps it; the graph dies with `init`.
 struct TypeFactsReceivedValueSupplies: Sendable {
 	init(root: ConstructionScope) {
-		let facts = TypeFactsGraph(root: root, forMockGeneration: false)
+		let facts = TypeFactsGraph(root: root, forMockGeneration: false, mockCycleEdges: [])
 		let graph = facts.graph
 		let nodes = graph.nodes
 		let edgeFacts = facts.edgeFacts

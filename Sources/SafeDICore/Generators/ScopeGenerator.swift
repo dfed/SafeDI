@@ -11794,6 +11794,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct CycleEdge: Hashable {
 		let parent: String
 		let child: String
+
+		/// Whether a node of `concreteType` beneath a node of `parentConcreteType` (`nil` at a mock's root, whose
+		/// `SafeDIOverrides` leaves nothing out) is beneath an edge in `cycleEdges`: its parent's configuration has no field
+		/// for it. The one rule the mock writer (`MockLowering.Walk.isPruned(_:beneath:)`) and the per-type facts' edge
+		/// column (`TypeFactsOverrideSource`) both read.
+		static func leavesOut(_ concreteType: TypeDescription, beneath parentConcreteType: String?, in cycleEdges: Set<CycleEdge>) -> Bool {
+			// Nearly every mock graph has no cycle edge, and spelling the type is most of the question's cost.
+			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
+			return cycleEdges.contains(CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
+		}
 	}
 
 	/// A concrete type, and whether it is built with its hand-written mock.

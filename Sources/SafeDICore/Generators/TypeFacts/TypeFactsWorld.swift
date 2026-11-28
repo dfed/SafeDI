@@ -116,6 +116,25 @@ struct TypeFactsEdge: Equatable, Sendable {
 	let bindingsBefore: Int32
 	/// Whether the target is on a cycle with the source: a call, never a child built in line.
 	let isCallEdge: Bool
+	/// Where the child's override comes from in a mock world (`TypeFactsOverrideSource`), or `nil` where the mock writer
+	/// asks no such question of the edge: every edge of a production world, which has no configuration, and an edge to an
+	/// alias, a hole, a fill, or a property instantiated only if available that nothing fulfills (`isUnavailableDependency`,
+	/// bound to an override of what the mock receives only if available), which the writer builds no node of its own for.
+	/// A fact of the edge, never of a variant's key.
+	let overrideSource: TypeFactsOverrideSource?
+}
+
+/// Whether the parent's configuration in a mock world has a field for the child of an edge: the mock writer's one rule
+/// (`ScopeGenerator.CycleEdge.leavesOut(_:beneath:in:)`, which `MockLowering.Walk.isPruned(_:beneath:)` asks), read
+/// from the cycle edges the writer reads (`MockScopes.cycleEdges`). The type edge is the parent's concrete type and the
+/// child's; at the mock's root, whose `SafeDIOverrides` leaves nothing out, the parent is none. Whether anything above
+/// the parent reads an override (a node beneath a node left out reads none) is no fact of the edge.
+enum TypeFactsOverrideSource: UInt8, Sendable {
+	/// The parent's `SafeDIMockConfiguration`, or the mock's `SafeDIOverrides` at its root, has a field for the child.
+	case parentConfiguration
+	/// The type edge is in the cycle edges: the parent's configuration has no field for the child, which builds as it
+	/// would with no override (its configuration's `.init()`).
+	case leftOut
 }
 
 /// One declaration a node binds, in its binding order.

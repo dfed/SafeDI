@@ -114,8 +114,8 @@ struct TypeFactsGeneratorFacts: Sendable {
 /// and the reads its subtree made of the context above it, as `Read`s and with their answers. Made only where a test
 /// observes trees, never by the tool.
 public struct TypeFactsReport: Sendable {
-	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool) {
-		let graph = TypeFactsGraph(root: root, forMockGeneration: forMockGeneration)
+	init(root: ConstructionScope, places: TypeFactsPlaces, forMockGeneration: Bool, mockCycleEdges: Set<ScopeGenerator.CycleEdge>) {
+		let graph = TypeFactsGraph(root: root, forMockGeneration: forMockGeneration, mockCycleEdges: mockCycleEdges)
 		self.graph = graph
 		self.root = root.instantiable.concreteInstantiable.asSource
 		self.forMockGeneration = forMockGeneration
@@ -164,6 +164,7 @@ public struct TypeFactsReport: Sendable {
 						isFill: edge.isFill,
 						isCallEdge: edge.isCallEdge,
 						bindingsBefore: Int(edge.bindingsBefore),
+						overrideSource: edge.overrideSource.map { "\($0)" },
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
@@ -229,6 +230,10 @@ public struct TypeFactsReport: Sendable {
 		public let isFill: Bool
 		public let isCallEdge: Bool
 		public let bindingsBefore: Int
+		/// Where the child's override comes from in a mock world (`TypeFactsOverrideSource`): `parentConfiguration` or
+		/// `leftOut`, `nil` in a production world and for an edge to an alias, a hole, a fill or a property instantiated only if
+		/// available that nothing fulfills.
+		public let overrideSource: String?
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.

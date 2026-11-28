@@ -175,13 +175,9 @@ extension DependencyTreeGenerator {
 		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
-		// Compute the global cycle edges across all mock-reachable types. Per-tree
-		// cycle detection (`isPropertyCycle`) breaks at a different edge depending
-		// on which root is being walked — fine for breaking infinite tree descent
-		// but not for `SafeDIMockConfiguration` struct shape, which must agree
-		// across every root's view of a given type. The SCC-derived feedback arc
-		// set guarantees the same back-edges are filtered everywhere.
-		let cycleEdges = Self.computeCycleEdges(in: typeDescriptionToScopeMap)
+		// The global cycle edges across all mock-reachable types (`MockScopes.cycleEdges`), which every mock root's tree
+		// was built beside, so the per-type facts of each mock world read the set the writer reads.
+		let cycleEdges = mockScopes.cycleEdges
 
 		// A type with a hand-written mock configures every property with the defaults the mock declares, whether
 		// the property is built with the mock or with `init`: the struct is shared, so it cannot hold both. A
@@ -410,6 +406,14 @@ extension DependencyTreeGenerator {
 		var flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
 		/// Where each concrete type's hand-written methods named `mock` are declared.
 		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>]
+		/// The global cycle edges across all mock-reachable types, of the scopes every internal mock's tree is built from,
+		/// which a public mock's tree, built from `publicMockTypeDescriptionToScopeMap`, shares (`forMockRoot` keeps them).
+		/// Per-tree cycle detection (`isPropertyCycle`) breaks at a different edge depending on which root is being
+		/// walked — fine for breaking infinite tree descent but not for `SafeDIMockConfiguration` struct shape, which must
+		/// agree across every root's view of a given type. The SCC-derived feedback arc set guarantees the same back-edges
+		/// are filtered everywhere. The mock writer reads them (`MockContext.cycleEdges`), and so does each mock world's
+		/// graph of per-type facts (`TypeFactsOverrideSource`), from this one computation.
+		let cycleEdges: Set<ScopeGenerator.CycleEdge>
 	}
 
 	/// An `@Instantiated(erasedToConcreteExistential: true)` property, with the concrete type it erases.
@@ -552,6 +556,7 @@ extension DependencyTreeGenerator {
 			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace) },
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
+			cycleEdges: Self.computeCycleEdges(in: typeDescriptionToScopeMap),
 		)
 	}
 
@@ -710,6 +715,7 @@ extension DependencyTreeGenerator {
 			frozenScopeMap: mockScopes.frozenScopeMap,
 			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			cycleEdges: mockScopes.cycleEdges,
 			publicMockContext: publicMockContext,
 			emittingModule: emittingModule,
 			checksConstructions: checksConstructions,

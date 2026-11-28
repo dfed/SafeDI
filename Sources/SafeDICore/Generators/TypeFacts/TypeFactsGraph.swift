@@ -113,8 +113,8 @@ enum TypeFactsConstruction: UInt8, Sendable {
 /// One world's graph: a node per declaration its root reaches, each with its edges in the order its scope lists them
 /// (the properties it instantiates, aliases and holes, then the fills it passes), and its facts in flat columns indexed
 /// by node or by edge: its kind, its edges' facts (`TypeFactsEdge`: the order its scope builds them in, the loops of
-/// builders, the function each opens, the bindings before each), its bindings in the order its scope binds them, its
-/// cycle identity and twin, the union facts of its subtree, its parents and its fills; and the least sets of reads each
+/// builders, the function each opens, the bindings before each, and in a mock world where each child's override comes
+/// from), its bindings in the order its scope binds them, its cycle identity and twin, the union facts of its subtree, its parents and its fills; and the least sets of reads each
 /// subtree takes from above it (`ReadsFromAbove`). A world is one tree to generate: a production root, a seam's own tree,
 /// or a mock root.
 ///
@@ -129,7 +129,9 @@ struct TypeFactsGraph: Sendable {
 	/// - Parameters:
 	///   - forMockGeneration: Whether the world is a mock root's, whose receives only if available read what the mock root
 	///     binds or pins (`ReadChannel.mock`), and whose types are built with their hand-written mocks.
-	init(root: ConstructionScope, forMockGeneration: Bool) {
+	///   - mockCycleEdges: In a mock world, the module's mock cycle edges, which the mock writer reads too
+	///     (`MockScopes.cycleEdges`), for each edge's `TypeFactsOverrideSource`.
+	init(root: ConstructionScope, forMockGeneration: Bool, mockCycleEdges: Set<ScopeGenerator.CycleEdge>) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -562,6 +564,9 @@ struct TypeFactsGraph: Sendable {
 			fillHoleByEdge[edge] = hole
 		}
 		for index in nodes.indices {
+			// The mock writer asks of the cycle edges with the parent's concrete type, none at the mock's root; spelling it is
+			// most of the question's cost, and a world without cycle edges, or a production world, asks nothing of it.
+			let parentConcreteType = index == 0 || mockCycleEdges.isEmpty ? nil : nodes[index].scope.instantiable.concreteInstantiable.asSource
 			for edge in graph.edgeIndices(from: index) {
 				let target = graph.edgeTargets[edge]
 				// A fill opens what its fulfiller's wrapper opens, or, where the place is built in another `@Sendable` function,
@@ -576,6 +581,7 @@ struct TypeFactsGraph: Sendable {
 					isFill: edgeIsFill[edge],
 					bindingsBefore: bindingsBefore[edge],
 					isCallEdge: graph.componentByNode[Int(target)] == graph.componentByNode[index] && graph.isOnCycle(index),
+					overrideSource: Self.overrideSource(of: nodes[Int(target)], beneath: parentConcreteType, isFill: edgeIsFill[edge], forMockGeneration: forMockGeneration, mockCycleEdges: mockCycleEdges),
 				))
 			}
 		}
@@ -1274,6 +1280,13 @@ struct TypeFactsGraph: Sendable {
 		case .sendableLazilyInstantiated:
 			return .sendableLazy
 		}
+	}
+
+	/// Where the child `target` of an edge from a node of `parentConcreteType` takes its override from
+	/// (`TypeFactsEdge.overrideSource`).
+	private static func overrideSource(of target: TypeFactsDeclaration, beneath parentConcreteType: String?, isFill: Bool, forMockGeneration: Bool, mockCycleEdges: Set<ScopeGenerator.CycleEdge>) -> TypeFactsOverrideSource? {
+		guard forMockGeneration, !isFill, target.key.leaf == .none, !target.scope.isUnavailableDependency else { return nil }
+		return ScopeGenerator.CycleEdge.leavesOut(target.scope.instantiable.concreteInstantiable, beneath: parentConcreteType, in: mockCycleEdges) ? .leftOut : .parentConfiguration
 	}
 
 	/// How the declaration's type comes to exist: a fill, a call of another module's seam or public mock, in a mock's world

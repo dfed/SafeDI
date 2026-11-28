@@ -43,13 +43,69 @@ import Testing
 ///     what the tree's construction log records), never from the variant's key; and whether a wrapper is still being
 ///     built (rule 2) is left out. Two places of one variant that pass two classes are a finding: the key merged two
 ///     parameter types.
+/// 38. In a mock world, each place's edge's override source (`TypeFactsReport.Edge.overrideSource`) is what the mock
+///     writer answered when it lowered the world's mock root (`MockOverrideSourceObservation`): whether the configuration
+///     of the place's parent's type, or the mock's `SafeDIOverrides` at its root, has a field for the place's type. The
+///     writer's answer is a function of the two types, so it is compared by them; a mock world whose root the writer
+///     never lowered (a plan, `query needs`) is not compared. Checked only for a run inside `comparingOverrideSources`,
+///     which holds a mock world's report back until the writer has run.
 ///
 /// Findings are recorded as issues only where `SAFEDI_TYPE_FACTS_STRICT` is set, until every graph passes; a run that
 /// sets `SAFEDI_TYPE_FACTS_LOG` to a file appends a line per tree to it, with each check's count of findings and its
 /// first finding, for a sweep.
 enum TypeFactsChecks {
 	static func check(_ report: TypeFactsReport) {
-		let result = findings(of: report)
+		if report.forMockGeneration, let deferredMockWorld {
+			deferredMockWorld(report)
+		} else {
+			record(findings(of: report), of: report)
+		}
+	}
+
+	/// Where set, receives each mock world's report, which `comparingOverrideSources` checks once the writer has run.
+	@TaskLocal private static var deferredMockWorld: (@Sendable (TypeFactsReport) -> Void)?
+
+	/// Runs `operation`, checking each mock world it builds only once it has finished, with what the mock writer answered
+	/// of its root's cycle edges (check 38), and handing each of the writer's answers to `enclosingObserver` too.
+	static func comparingOverrideSources<Output>(
+		handingOn enclosingObserver: (@Sendable (String, MockOverrideSourceDecision) -> Void)?,
+		_ operation: () async throws -> Output,
+	) async throws -> Output {
+		let (reports, reportContinuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		let (decisions, decisionContinuation) = AsyncStream.makeStream(of: (mockRoot: String, decision: MockOverrideSourceDecision).self)
+		func finish() {
+			reportContinuation.finish()
+			decisionContinuation.finish()
+		}
+		let output: Output
+		do {
+			output = try await $deferredMockWorld.withValue({ reportContinuation.yield($0) }) {
+				try await MockOverrideSourceObservation.$observer.withValue({ mockRoot, decision in
+					decisionContinuation.yield((mockRoot, decision))
+					enclosingObserver?(mockRoot, decision)
+				}) {
+					try await operation()
+				}
+			}
+		} catch {
+			finish()
+			for await report in reports {
+				record(findings(of: report), of: report)
+			}
+			throw error
+		}
+		finish()
+		var decisionsByMockRoot = [String: [MockOverrideSourceDecision]]()
+		for await (mockRoot, decision) in decisions {
+			decisionsByMockRoot[mockRoot, default: []].append(decision)
+		}
+		for await report in reports {
+			record(findings(of: report, writerOverrideSources: decisionsByMockRoot[report.root]), of: report)
+		}
+		return output
+	}
+
+	private static func record(_ result: Result, of report: TypeFactsReport) {
 		let environment = ProcessInfo.processInfo.environment
 		if environment["SAFEDI_TYPE_FACTS_STRICT"] != nil {
 			for (check, findings) in result.findingsByCheck.sorted(by: { $0.key < $1.key }) {
@@ -96,7 +152,9 @@ enum TypeFactsChecks {
 		var line = ""
 	}
 
-	static func findings(of report: TypeFactsReport) -> Result {
+	/// - Parameter writerOverrideSources: What the mock writer answered of the cycle edges as it lowered the world's root,
+	///   or `nil` where it lowered none, which check 38 compares the edges' override sources with.
+	static func findings(of report: TypeFactsReport, writerOverrideSources: [MockOverrideSourceDecision]? = nil) -> Result {
 		var result = Result()
 		func add(_ check: Int, _ finding: String) {
 			result.findingsByCheck[check, default: []].append(finding)
@@ -462,6 +520,9 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
+		if report.forMockGeneration, let writerOverrideSources {
+			overrideSourceCheck(of: report, writerOverrideSources: writerOverrideSources, add: add, compared: &compared)
+		}
 		result.comparedByCheck = compared
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
@@ -614,7 +675,56 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 38
+
+	/// Check 38: each place's edge's override source against the writer's answer for the place's parent's type and its own,
+	/// at every place outside a fill, which production emission builds asking the writer nothing.
+	private static func overrideSourceCheck(
+		of report: TypeFactsReport,
+		writerOverrideSources: [MockOverrideSourceDecision],
+		add: (Int, String) -> Void,
+		compared: inout [Int: Int],
+	) {
+		struct TypeEdge: Hashable {
+			let parentConcreteType: String?
+			let concreteType: String
+		}
+		var writerAnswers = [TypeEdge: Set<Bool>]()
+		for decision in writerOverrideSources {
+			writerAnswers[TypeEdge(parentConcreteType: decision.parentConcreteType, concreteType: decision.concreteType), default: []].insert(decision.isLeftOut)
+		}
+		for (typeEdge, answers) in writerAnswers.sorted(by: { "\($0.key)" < "\($1.key)" }) where answers.count > 1 {
+			add(38, "the writer answers both ways for \(typeEdge.concreteType) beneath \(typeEdge.parentConcreteType ?? "the mock's root")")
+		}
+		let places = report.places
+		// A place inside a fill is emitted by production emission (`mockLoweringFillCode`), which reads no configuration,
+		// so the writer asks nothing of its type edge there; the column still holds what the parent's configuration holds.
+		var isInsideFill = places.map(\.isFill)
+		for index in places.indices {
+			if let parent = places[index].parent, isInsideFill[parent] {
+				isInsideFill[index] = true
+			}
+		}
+		for (index, place) in places.enumerated() where !isInsideFill[index] {
+			guard let parent = place.parent,
+			      let node = place.node,
+			      let parentNode = places[parent].node,
+			      let edge = report.nodes[parentNode].edges.firstIndex(of: node),
+			      let column = report.nodes[parentNode].edgeFacts[edge].overrideSource
+			else { continue }
+			compared[38, default: 0] += 1
+			let typeEdge = TypeEdge(parentConcreteType: parent == 0 ? nil : places[parent].builtType, concreteType: place.builtType)
+			let parentDescription = typeEdge.parentConcreteType ?? "the mock's root"
+			if let answers = writerAnswers[typeEdge] {
+				let writerColumn = answers.contains(true) ? "leftOut" : "parentConfiguration"
+				if writerColumn != column {
+					add(38, "place \(index) \(place.declaration) beneath \(parentDescription) has override source \(column) where the writer answers \(writerColumn)")
+				}
+			} else {
+				add(38, "place \(index) \(place.declaration) beneath \(parentDescription) has override source \(column) where the writer asks nothing of its type edge")
+			}
+		}
+	}
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
