@@ -494,7 +494,6 @@ extension DependencyTreeGenerator {
 		guard draftsPlaceLevels else { return HolesAndPlaces(holes: sortedHoles) }
 		// The paths to the calls that close cycles, after every place's and call's: where a cycle re-enters a scope is a fact
 		// of the route, which the graph's query reads from these levels.
-		placesBuilder.beginClosingCalls()
 		for (closingSite, closesOn) in closingCallSites(in: generator) {
 			var childDeclarationsOnPathToCall = [ObjectIdentifier: ChildDeclarations]()
 			var levels = fields(

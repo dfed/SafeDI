@@ -316,7 +316,6 @@ extension DependencyTreeGenerator {
 		/// path, in the order the generated code makes them, the last with the entry it closes on: a walk of the subtrees that
 		/// hold a cycle-closing scope, which keeps no walk for reuse.
 		mutating func addClosingCalls(from root: ScopeGenerator) {
-			builder.beginClosingCalls()
 			isAddingClosingCalls = true
 			pushRoot(root)
 			while let frame = frames.last {

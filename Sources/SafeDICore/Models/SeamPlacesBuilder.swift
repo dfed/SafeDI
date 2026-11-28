@@ -102,8 +102,6 @@ struct SeamPlacesBuilder {
 	private var lists = [DeclarationList]()
 	private var listIndexByProjection = [ListProjection: Int]()
 	private var edges = Set<EdgeKey>()
-	/// The number of levels when the closing calls' phase began (`beginClosingCalls()`), or `nil` before it.
-	private var closingCallsStart: Int?
 	private var cases = [CaseDraft]()
 	private var caseIndexByKey = [CaseKey: Int]()
 	private var caseIndexBySite = [SeamSignature.Hole.Site: Int]()
@@ -233,7 +231,7 @@ struct SeamPlacesBuilder {
 	/// `addPlacesInTree`.
 	mutating func addLevel(_ draft: LevelDraft, listProjection: ListProjection, parent: Int?) -> Int {
 		let listIndex = listIndexByProjection[listProjection] ?? addList(draft, projection: listProjection)
-		let index = variantIndex(of: draft, inList: listIndex, beneath: parent)
+		let index = variantIndex(of: draft, inList: listIndex)
 		if let parent {
 			addEdge(to: index, from: parent, declaredSegment: draft.declaredSegment)
 		}
@@ -247,18 +245,14 @@ struct SeamPlacesBuilder {
 		variants[index].declaredSegmentByParent.append(declaredSegment)
 	}
 
-	/// Starts the phase that adds the levels of the paths to the calls that close cycles, after every place's and call's,
-	/// so that every level before keeps its index and its parents.
-	mutating func beginClosingCalls() {
-		closingCallsStart = closingCallsStart ?? variants.count
-	}
-
 	/// Adds the levels of the path to a call that closes a cycle, root first, the last the level that makes the call, whose
-	/// `closesOn` says what it closes on. Called in the closing calls' phase (`beginClosingCalls()`).
+	/// `closesOn` says what it closes on. Called after every place's and call's levels are added, so that every level before
+	/// keeps its index. A level a path to a place or call added already is that level, which gains the edge from its parent
+	/// here where it is new.
 	mutating func addClosingCall(levels: [LevelDraft]) {
 		var parent: Int?
 		for draft in levels {
-			let index = variantIndex(of: draft, inList: declarationListIndex(of: draft), beneath: parent)
+			let index = variantIndex(of: draft, inList: declarationListIndex(of: draft))
 			if let parent {
 				addEdge(to: index, from: parent, declaredSegment: draft.declaredSegment)
 			}
@@ -369,14 +363,9 @@ struct SeamPlacesBuilder {
 		variantIndex(of: draft, inList: declarationListIndex(of: draft))
 	}
 
-	/// The index of the variant of `draft`, whose declaration list is at `listIndex`, reached beneath `parent`. In the closing
-	/// calls' phase, a level there before it that `parent` does not enclose yet is not reused but copied: a level that leads
-	/// to a place gains no parent from a path to a closing call, so a route up from a place never climbs one, while the way
-	/// down from a closed-on level to its closing calls stays whole.
-	private mutating func variantIndex(of draft: LevelDraft, inList listIndex: Int, beneath parent: Int? = nil) -> Int {
-		let index = variantIndex(of: VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop, closesOn: draft.closesOn, isCopyOnWayToClosingCall: false), draft: draft, inList: listIndex)
-		guard let closingCallsStart, index < closingCallsStart, let parent, !edges.contains(EdgeKey(level: index, parent: parent)) else { return index }
-		return variantIndex(of: VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop, closesOn: draft.closesOn, isCopyOnWayToClosingCall: true), draft: draft, inList: listIndex)
+	/// The index of the variant of `draft`, whose declaration list is at `listIndex`.
+	private mutating func variantIndex(of draft: LevelDraft, inList listIndex: Int) -> Int {
+		variantIndex(of: VariantProjection(declarationList: listIndex, key: draft.key, nextPosition: draft.nextPosition, nextLoop: draft.nextLoop, closesOn: draft.closesOn), draft: draft, inList: listIndex)
 	}
 
 	private mutating func variantIndex(of projection: VariantProjection, draft: LevelDraft, inList listIndex: Int) -> Int {
@@ -422,8 +411,6 @@ struct SeamPlacesBuilder {
 		let nextPosition: Int?
 		let nextLoop: Int?
 		let closesOn: SeamSignature.Places.StackEntry?
-		/// Whether it is the copy of a level that leads to a place, on a path to a closing call (`variantIndex(of:inList:beneath:)`).
-		let isCopyOnWayToClosingCall: Bool
 	}
 
 	/// Every fact of a level but its next property and its declarations' places in their trees, source locations included.
