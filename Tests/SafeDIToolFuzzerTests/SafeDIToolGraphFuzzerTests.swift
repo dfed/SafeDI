@@ -4802,8 +4802,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// field's type, and of a type only that field's configuration reaches (seed 3's `T8`, beneath `T7`), is handed only new
 	/// configurations, so it builds its node with no override, while the other naming's function reads the override the
 	/// field may set. The override goes with the field, which `computeCycleEdges` places by names; this goes once it no
-	/// longer does.
-	@Test(arguments: [3, 77] as [UInt64])
+	/// longer does. Seed 279's mock may leave a place out, so the naming without the field enters its place left out
+	/// (`__safeDI_entered.leavingOut.entering`) where the other hands the field.
+	@Test(arguments: [3, 77, 279] as [UInt64])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func renamedGraphFailures_nameThePresenceOfAConfigurationField_whenALaidOutMockBuildsWithNoOverrideATypeOnlyADroppedFieldConfigures(seed: UInt64) async throws {
 		let (toolRuns, mockRootReports) = try await Self.toolRunsLayingOutMockRoots(of: GraphFuzzerGenerator.fixture(forSeed: seed))

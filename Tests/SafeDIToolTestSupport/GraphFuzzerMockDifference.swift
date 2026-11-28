@@ -51,7 +51,10 @@ import SwiftSyntax
 ///   the places entered, so no node’s place in the tree shows there: the one read of a dropped field is the field of the
 ///   handed configuration a function hands on as it enters a child’s place (`__safeDI_entered.configuration.<label>`,
 ///   handed to `__safeDI_entered.entering`), where the outcome that lacks the field hands a new configuration of the
-///   field’s type (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`), and it reads as that. A dropped field
+///   field’s type (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`), and it reads as that. In a mock that
+///   may leave a place out, that call enters the place left out (`__safeDI_entered.leavingOut.entering`), where the
+///   outcome with the field hands it only where the places are not left out, or hands the field of the overrides a
+///   function without places entered takes, and that call reads as the other's (`leftOutEntryOfDroppedField(_:)`). A dropped field
 ///   is the field of an edge that closes a cycle, so the child it configures is on that cycle and its place is entered
 ///   by name: a call that enters the nearest place of a type, or only hands the places on, hands no dropped field, and
 ///   such a read there is not forgiven.
@@ -482,6 +485,10 @@ private struct Rendering {
 			return membersText(of: list, in: scope)
 		} else if let list = node.as(CodeBlockItemListSyntax.self), scope.isInFunctionBody {
 			return statementsText(of: list, in: scope)
+		} else if let call = node.as(FunctionCallExprSyntax.self), scope.isInFunctionBody, let entry = leftOutEntryOfDroppedField(call) {
+			// The other outcome has no field to hand, so its call enters the place left out with a new configuration of the
+			// field's type.
+			return "\(call.leadingTrivia)\(Self.enteredPlacesParameterName).\(Self.leavingOutMemberName).\(Self.enteringFunctionName)(\(entry.slot), \(entry.field.type)())\(call.trailingTrivia)"
 		} else if let list = node.as(LabeledExprListSyntax.self), scope.isInFunctionBody {
 			return argumentsText(of: list, in: scope)
 		} else if let expression = node.as(IfExprSyntax.self), let elseStatements = elseStatementsOfDroppedOverride(expression, in: scope) ?? elseStatementsOfOverrideNoConfigurationReaches(expression) {
@@ -704,6 +711,70 @@ private struct Rendering {
 		return field
 	}
 
+	/// The slot and the dropped field of `call`, when it enters a place by name with a dropped field where the place is
+	/// not left out (`__safeDI_entered.entering(<slot>, <read>)`): in a mock that may leave a place out, the field the
+	/// handed configuration holds, read where the places entered are not left out
+	/// (`__safeDI_entered.isLeftOut ? C() : __safeDI_entered.configuration.<label>`), or a field of the configuration a
+	/// function that takes no places entered is handed as its overrides (`safeDIOverrides.<label>`). The other outcome,
+	/// whose configuration has no such field, enters the place left out with a new configuration of the field's type
+	/// (`__safeDI_entered.leavingOut.entering(<slot>, C())`), as its edge is one the configurations leave out.
+	func leftOutEntryOfDroppedField(_ call: FunctionCallExprSyntax) -> (slot: String, field: GraphFuzzerMockDifference.ConfigurationField)? {
+		guard let callee = call.calledExpression.as(MemberAccessExprSyntax.self),
+		      callee.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+		      callee.declName.baseName.text == Self.enteringFunctionName,
+		      call.trailingClosure == nil,
+		      call.arguments.count == 2,
+		      let slot = call.arguments.first, slot.label == nil,
+		      let handed = call.arguments.last, handed.label == nil,
+		      let field = droppedFieldHandedWhereNotLeftOut(by: handed.expression)
+		else { return nil }
+		return (slot.expression.trimmedDescription, field)
+	}
+
+	/// The dropped field `expression` hands a place entered by name, as `leftOutEntryOfDroppedField(_:)` describes.
+	private func droppedFieldHandedWhereNotLeftOut(by expression: ExprSyntax) -> GraphFuzzerMockDifference.ConfigurationField? {
+		// The parser leaves a ternary unfolded: its condition, the `? then :`, and its else expression in sequence.
+		if let sequence = expression.as(SequenceExprSyntax.self) {
+			let elements = Array(sequence.elements)
+			guard elements.count == 3,
+			      let condition = elements[0].as(MemberAccessExprSyntax.self),
+			      let choice = elements[1].as(UnresolvedTernaryExprSyntax.self),
+			      condition.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+			      condition.declName.baseName.text == Self.isLeftOutMemberName,
+			      let new = choice.thenExpression.as(FunctionCallExprSyntax.self), new.arguments.isEmpty, new.trailingClosure == nil,
+			      let field = droppedFieldOfHandedConfiguration(readBy: elements[2]),
+			      new.calledExpression.trimmedDescription == field.type
+			else { return nil }
+			return field
+		} else if let read = expression.as(MemberAccessExprSyntax.self),
+		          read.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == mockOverridesParameterName,
+		          let owner = overridesParameterType(ofFunctionAround: Syntax(expression)),
+		          let field = fields[owner]?[read.declName.baseName.text],
+		          droppedFields.contains(field)
+		{
+			return field
+		} else {
+			return nil
+		}
+	}
+
+	/// The type of the overrides the nearest function around `position` takes, when it takes them as `safeDIOverrides`
+	/// and no places entered.
+	private func overridesParameterType(ofFunctionAround position: Syntax) -> String? {
+		var ancestor = position.parent
+		while let current = ancestor {
+			if let function = current.as(FunctionDeclSyntax.self) {
+				let parameters = function.signature.parameterClause.parameters
+				guard !parameters.contains(where: { ($0.secondName ?? $0.firstName).text == Self.enteredPlacesParameterName }),
+				      let overrides = parameters.first(where: { ($0.secondName ?? $0.firstName).text == mockOverridesParameterName })
+				else { return nil }
+				return overrides.type.trimmedDescription
+			}
+			ancestor = current.parent
+		}
+		return nil
+	}
+
 	/// The configuration the nearest function around `position` that takes the places entered is handed with them, as a
 	/// field's type spells it: the generic argument of its `__safeDI_entered` parameter's type.
 	private func configurationHandedToFunction(around position: Syntax) -> String? {
@@ -793,6 +864,16 @@ private struct Rendering {
 
 	/// Whether `expression` is `__safeDI_entered.configuration`, the configuration a function is handed with the places
 	/// entered.
+	/// Whether `expression` is the places entered, or the places entered left out: `__safeDI_entered` or
+	/// `__safeDI_entered.leavingOut`.
+	private static func isEnteredPlaces(_ expression: ExprSyntax?) -> Bool {
+		if let leavingOut = expression?.as(MemberAccessExprSyntax.self) {
+			leavingOut.declName.baseName.text == leavingOutMemberName && leavingOut.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
+		} else {
+			expression?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
+		}
+	}
+
 	private static func isHandedConfiguration(_ expression: ExprSyntax?) -> Bool {
 		guard let configuration = expression?.as(MemberAccessExprSyntax.self) else { return false }
 		return configuration.declName.baseName.text == enteredConfigurationMemberName && configuration.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == enteredPlacesParameterName
@@ -832,7 +913,7 @@ private struct Rendering {
 			else { continue }
 			guard let handed = call.arguments.first(where: { $0.label?.text == Self.enteredPlacesParameterName })?.expression.as(FunctionCallExprSyntax.self),
 			      let callee = handed.calledExpression.as(MemberAccessExprSyntax.self),
-			      callee.base?.as(DeclReferenceExprSyntax.self)?.baseName.text == Self.enteredPlacesParameterName,
+			      Self.isEnteredPlaces(callee.base),
 			      callee.declName.baseName.text == Self.enteringFunctionName,
 			      handed.arguments.count >= 2,
 			      let handedConfiguration = handed.arguments.dropFirst().first, handedConfiguration.label == nil
@@ -840,7 +921,7 @@ private struct Rendering {
 				candidates.remove(name)
 				continue
 			}
-			if let field = droppedFieldOfHandedConfiguration(readBy: handedConfiguration.expression), field.type == configuration {
+			if let field = droppedFieldOfHandedConfiguration(readBy: handedConfiguration.expression) ?? leftOutEntryOfDroppedField(handed)?.field, field.type == configuration {
 				handsDroppedField.insert(name)
 			} else if let new = handedConfiguration.expression.as(FunctionCallExprSyntax.self), new.arguments.isEmpty, new.trailingClosure == nil, new.calledExpression.trimmedDescription == configuration {
 				// A new configuration, as the other outcome hands.
@@ -1088,4 +1169,6 @@ private struct Rendering {
 	private static let enteredTypeName = "__safeDI_Entered"
 	private static let enteredConfigurationMemberName = "configuration"
 	private static let enteringFunctionName = "entering"
+	private static let leavingOutMemberName = "leavingOut"
+	private static let isLeftOutMemberName = "isLeftOut"
 }
