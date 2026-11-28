@@ -82,6 +82,7 @@ struct SeamPlacesSiteDraft: Equatable, Sendable {
 
 /// The places of one owner level in one family: one `.place(sites:)` case.
 struct SeamPlacesCaseDraft: Equatable, Sendable {
+	/// The owner level of the site that names the case; an own case holds the sites of one type's hole on every route.
 	let owner: SeamPlacesLevelID
 	let isBuiltInSendableFunction: Bool
 	let siteOpensSendableFunction: Bool
@@ -91,8 +92,8 @@ struct SeamPlacesCaseDraft: Equatable, Sendable {
 	let passedUp: SeamSignature.Places.CalledCase?
 	/// The first case, in facts order, that presents the same places.
 	let firstCasePresentingSamePlaces: Int?
-	/// The least route from the seam's root to the owner level in source order, root first, the owner last: what names
-	/// the case, never the order a walk reached it in. Empty for a case passed up.
+	/// The least route in builder-label order from the seam's root to one of its sites' owner levels, root first, that
+	/// owner last: what names the case, never the order a walk reached it in. Empty for a case passed up.
 	let namingRoute: [SeamPlacesLevelID]
 }
 
@@ -280,14 +281,27 @@ struct SeamPlacesDrafts: Sendable {
 				familyWork.append(callee)
 			}
 		}
-		// A case per site and family: each hole edge of a variant is one owner level.
+		// A case per declaration, hole and family: the variants of one declaration, which read from above what their
+		// routes bind otherwise, take what they differ in as the builder's parameters.
+		struct CaseKey: Hashable {
+			let declaration: DeclarationID
+			let edge: Int32
+			let isSendable: Bool
+		}
 		var cases = [SeamPlacesCaseDraft]()
+		var caseIndexByKey = [CaseKey: Int]()
 		for site in sites {
 			// A hole held in a `@Sendable` wrapper is built in the function the wrapper opens, on every route to it.
 			let isSendableHole = world.graph.nodes[Int(site.hole)].property?.propertyType.isSendable ?? false
 			let siteFamilies = isSendableHole ? SeamPlacesFamilies.sendable : families[Int(site.owner.variant)]
 			for (family, isSendable) in [(SeamPlacesFamilies.plain, false), (.sendable, true)] where siteFamilies.contains(family) {
-				cases.append(SeamPlacesCaseDraft(owner: site.owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: isSendableHole, sites: [site], passedUp: nil, firstCasePresentingSamePlaces: nil, namingRoute: []))
+				let key = CaseKey(declaration: world.declaration(of: site.owner.variant), edge: site.owner.edge, isSendable: isSendable)
+				guard let index = caseIndexByKey[key] else {
+					caseIndexByKey[key] = cases.count
+					cases.append(SeamPlacesCaseDraft(owner: site.owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: isSendableHole, sites: [site], passedUp: nil, firstCasePresentingSamePlaces: nil, namingRoute: []))
+					continue
+				}
+				cases[index] = SeamPlacesCaseDraft(owner: cases[index].owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: cases[index].siteOpensSendableFunction, sites: cases[index].sites + [site], passedUp: nil, firstCasePresentingSamePlaces: nil, namingRoute: [])
 			}
 		}
 		/// Where the property an edge builds is declared, which orders routes in source order: a fill's is none, after
@@ -310,14 +324,14 @@ struct SeamPlacesDrafts: Sendable {
 		}
 		// The cases in builder-label order: by the hole's label, and the cases of one label by their naming routes.
 		let naming = Self.namingRoutes(
-			to: cases.map { ($0.owner, $0.siteOpensSendableFunction ? .either : $0.isBuiltInSendableFunction ? .opensSendableFunction : .plain) },
+			to: cases.map { draftCase in (draftCase.sites.map(\.owner), draftCase.siteOpensSendableFunction ? .either : draftCase.isBuiltInSendableFunction ? .opensSendableFunction : .plain) },
 			in: world,
 			buildsInLine: buildsInLine,
 			holdsPlace: holdsPlace,
 		)
 		let namedCases = zip(cases, naming.routes).map { draftCase, namingRoute in
 			SeamPlacesCaseDraft(
-				owner: draftCase.owner,
+				owner: namingRoute.last ?? draftCase.owner,
 				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
 				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
 				sites: draftCase.sites,
@@ -417,8 +431,8 @@ struct SeamPlacesDrafts: Sendable {
 		return world.fillSitePathLabels[Int(fill.sitePathStart)..<Int(fill.sitePathStart + fill.sitePathCount)].map { world.labelTexts[Int($0)].spelledWithoutBackticks } + [label]
 	}
 
-	/// The route that names each case, root first, its owner last: of the routes of its family from the seam's root down
-	/// the calls that build in line, the one whose labels (`pathLabels(of:in:)`), joined with `_`, sort first, as the
+	/// The route that names each case, root first, the owner it reaches last: of the routes of its family from the seam's
+	/// root down the calls that build in line to any of its owners, the one whose labels (`pathLabels(of:in:)`), joined with `_`, sort first, as the
 	/// builder of the site at the end of it is named and the case is named by its first site in builder-label order
 	/// (`Hole.pathLabels(of:)`); routes alike in their labels go by source order. Empty where no route reaches the owner.
 	///
@@ -432,7 +446,7 @@ struct SeamPlacesDrafts: Sendable {
 	/// prefix of the other (`panel` sorts before `panelMaker`, `panel_widget` after `panelMaker_widget`), and a later route
 	/// that some kept one does not prefix sorts after it under every extension. So each call is followed once per route
 	/// kept at its variant, one where no labels nest, and each piece of its labels is a trie node visited once.
-	static func namingRoutes(to owners: [(owner: SeamPlacesLevelID, family: SeamPlacesRouteFamily)], in world: TypeFactsGraph, buildsInLine: [Bool], holdsPlace: [Bool]) -> (routes: [[SeamPlacesLevelID]], work: Int) {
+	static func namingRoutes(to owners: [(owners: [SeamPlacesLevelID], family: SeamPlacesRouteFamily)], in world: TypeFactsGraph, buildsInLine: [Bool], holdsPlace: [Bool]) -> (routes: [[SeamPlacesLevelID]], work: Int) {
 		/// Where a property is declared, which breaks a tie of labels in source order.
 		func declarationLocation(of level: SeamPlacesLevelID) -> Dependency.DeclarationLocation? {
 			let declaration = world.declaration(of: level.variant)
@@ -603,19 +617,21 @@ struct SeamPlacesDrafts: Sendable {
 				path.removeLast()
 			}
 		}
-		let routes = owners.map { owner, family -> [SeamPlacesLevelID] in
-			let plain = kept[2 * Int(owner.variant)].first
-			let opened = kept[2 * Int(owner.variant) + 1].first
-			let least = switch family {
-			case .plain:
-				plain
-			case .opensSendableFunction:
-				opened
-			case .either:
-				[plain, opened].compactMap(\.self).min { $0.order < $1.order }
+		let routes = owners.map { owners, family -> [SeamPlacesLevelID] in
+			// The least route to any of the case's owners, by the order the walk reached them.
+			let reached = owners.flatMap { owner -> [(owner: SeamPlacesLevelID, route: Int32, order: Int)] in
+				let slots = switch family {
+				case .plain:
+					[2 * Int(owner.variant)]
+				case .opensSendableFunction:
+					[2 * Int(owner.variant) + 1]
+				case .either:
+					[2 * Int(owner.variant), 2 * Int(owner.variant) + 1]
+				}
+				return slots.compactMap { kept[$0].first.map { (owner, $0.route, $0.order) } }
 			}
-			guard let least else { return [] }
-			return route(endingAt: least.route) + [owner]
+			guard let least = reached.min(by: { $0.order < $1.order }) else { return [] }
+			return route(endingAt: least.route) + [least.owner]
 		}
 		return (routes, work)
 	}
