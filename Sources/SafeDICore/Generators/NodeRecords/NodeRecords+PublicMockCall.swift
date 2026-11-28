@@ -229,7 +229,10 @@ extension NodeRecords {
 			passedArguments = slot.passedArguments
 		}
 		var record = BuiltPlaceRecord(
-			property: property,
+			// A call the mock makes for an optional property it promotes is bound as the unwrapped type it returns, as every
+			// node the mock builds is bound non-optional (`mockConstructionRecord(of:variant:in:unavailableProperties:lazilyInstantiatedInstanceProperties:receivesBoundAgain:enteredSlots:wrapperArgumentNames:typesDeclaredEscaping:children:)`); the optional receiver takes it
+			// through optional promotion.
+			property: property.typeDescription.isOptional ? Property(label: property.label, typeDescription: property.typeDescription.unwrapped) : property,
 			// Production's erasure, which joins the call's claim (`joiningProductionMarks(_:to:of:in:)`), wraps the call in
 			// the property's type where the node is erased.
 			isErased: world.isErased(declaration),
