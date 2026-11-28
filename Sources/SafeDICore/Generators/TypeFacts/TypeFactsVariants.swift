@@ -125,15 +125,17 @@ struct TypeFactsVariants: Sendable {
 
 	/// The variants a worklist finds from `seeds`, each a variant made first, in order, with its keys as given: what the
 	/// mock worlds' shared graph builds from every world's calls into it (`MockWorldsSharedGraph.variants(seededBy:)`),
-	/// whose graph is a forest. A seed equal to one before it is that variant (`seedVariants`).
+	/// whose graph is a forest. A seed equal to one before it is that variant (`seedVariants`). `madeAgain` is as the
+	/// root's initializer takes it.
 	init(
 		graph: OrderedGraph<some Hashable & Sendable>,
 		reads: ReadsFromAbove,
 		seeds: [Seed],
 		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
 		key: (_ read: Int32, _ answer: Int32) -> Int32,
+		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)?,
 	) {
-		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: { _, family in family }, key: key, madeAgain: nil, bucket: TypeFactsVariants.hash)
+		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: { _, family in family }, key: key, madeAgain: madeAgain, bucket: TypeFactsVariants.hash)
 	}
 
 	/// A variant a worklist starts from: its node, family and keys, one per read of the node's reads from above.

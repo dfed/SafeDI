@@ -154,6 +154,7 @@ struct MockWorldsSharedGraph: Sendable {
 			bindingOffsets: facts.bindingOffsets,
 			bindingsBefore: facts.bindingsBefore,
 			properties: facts.properties,
+			loopsOf: facts,
 			seeding: TypeFactsGraph.VariantSeeding(answers: answers, seeds: seeds),
 		)
 		return MockWorldsSharedVariants(variants: answered.variants)

@@ -1130,7 +1130,7 @@ struct TypeFactsGraph: Sendable {
 	/// wrapper alone, as one being built does (rule 2), so a member made again keys as its parent's call of it does.
 	///
 	/// The answers and variants of `graph`'s bodies: from its root, or, where `seeding` is given, from its seeds, whose
-	/// answers are interned first, each as the key it is, in order. A graph seeded so holds no loop of builders.
+	/// answers are interned first, each as the key it is, in order.
 	private static func answers(
 		of graph: OrderedGraph<TypeFactsDeclaration>,
 		reads: ReadsFromAbove,
@@ -1286,7 +1286,16 @@ struct TypeFactsGraph: Sendable {
 			let seeds = seeding.seeds.map { seed in
 				TypeFactsVariants.Seed(node: seed.node, family: seed.family, keys: seed.keys.map { $0 < 0 ? $0 : seedAnswerIDs[Int($0)] })
 			}
-			variants = TypeFactsVariants(graph: graph, reads: reads, seeds: seeds, binding: binding(edge:readID:), key: key(readID:answer:))
+			variants = TypeFactsVariants(
+				graph: graph,
+				reads: reads,
+				seeds: seeds,
+				binding: binding(edge:readID:),
+				key: key(readID:answer:),
+				madeAgain: madeAgain.map { madeAgain in
+					(madeAgain.edges, { node, readID in madeAgainAnswer(at: node, for: readTable[Int(readID)]) })
+				},
+			)
 		} else {
 			variants = TypeFactsVariants(
 				graph: graph,
@@ -1305,8 +1314,8 @@ struct TypeFactsGraph: Sendable {
 		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, kinds)
 	}
 
-	/// The answers and variants of a graph that holds no loop of builders, from `seeding`'s seeds: what the mock worlds'
-	/// shared graph builds (`MockWorldsSharedGraph.variants(seededBy:)`).
+	/// The answers and variants of a graph from `seeding`'s seeds, with the loops of builders of `facts`, its declaration
+	/// facts: what the mock worlds' shared graph builds (`MockWorldsSharedGraph.variants(seededBy:)`).
 	static func seededAnswers(
 		of graph: OrderedGraph<TypeFactsDeclaration>,
 		reads: ReadsFromAbove,
@@ -1316,9 +1325,10 @@ struct TypeFactsGraph: Sendable {
 		bindingOffsets: [Int32],
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
+		loopsOf facts: DeclarationFacts,
 		seeding: VariantSeeding,
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32], kinds: [Property.PropertyType]) {
-		let answers = answers(of: graph, reads: reads, readTable: readTable, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: nil, seeding: seeding)
+		let answers = answers(of: graph, reads: reads, readTable: readTable, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, madeAgain: facts.madeAgain.map { ($0, facts.madeAgainByNode, facts.loopParentByMember) }, seeding: seeding)
 		return (answers.variants, answers.isBeingBuilt, answers.texts, answers.keys, answers.properties, answers.kinds)
 	}
 
