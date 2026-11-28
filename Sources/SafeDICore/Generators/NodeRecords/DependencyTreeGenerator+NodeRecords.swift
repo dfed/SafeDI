@@ -28,6 +28,7 @@ extension DependencyTreeGenerator {
 		constructionScope: ConstructionScope,
 		declaredTypeNames: DeclaredTypeNames,
 		readersOfEveryTree: [TreeForcer],
+		mayHaveUnpassableCycleLabel: () -> Bool,
 	) -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
 		// A root every tree's reader forces is built from its tree, so only a test that observes node records makes its
 		// world, to name what they refuse.
@@ -40,8 +41,10 @@ extension DependencyTreeGenerator {
 			// them (`plannedRootCode(of:declaredTypeNames:)`), and what forces the tree is named as the kind they refused
 			// before they made any cycle's records. A world whose cycle members are built two ways is laid out from the
 			// per-type plan of its cycles (`NodeRecords.cycleVariants`), whose code a test compares with the tree's byte for
-			// byte, since its tree grows with every path to each member.
-			guard !nodeRecords.cycleVariants.isEmpty || !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			// byte, since its tree grows with every path to each member, but only where no reader forces its tree anyway,
+			// and no label may be passed around a cycle in forms no one parameter can take, which only the tree reports
+			// (`unpassableCycleLabelsInTree`).
+			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) || !nodeRecords.cycleVariants.isEmpty && readersOfEveryTree.isEmpty && !mayHaveUnpassableCycleLabel() else { return nil }
 			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
 		}) {
 		case let .success(layout):
@@ -179,14 +182,17 @@ extension DependencyTreeGenerator {
 		let (treeCode, placeComparisons) = planned
 		// The texts' difference below is the only one a root laid out from the per-type plan of its cycles is compared by.
 		let comparisons = layout.isLaidOutFromCyclePlan ? placeComparisons.map { (differences: [String](), treePlaceCount: $0.treePlaceCount) } : placeComparisons
-		let captures = await tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable)
+		// The checks of the tree are no run's work either; typed for the same reason.
+		let (captures, unpassableLabels) = await GenerationWork.$observer.withValue(nil, operation: { () async -> ([ScopeGenerator.NonSendableWrapperCapture], Bool) in
+			await (tree.nonSendableWrapperCaptures(ofTreeRootedAt: instantiable), tree.unpassableCycleLabelsInTree.isEmpty)
+		})
 		let texts = NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: layout.code.spelled())
 		// The texts' difference comes first, and what no text shows after it, which a test that accepts an approved
 		// difference of the texts still reports (`NodeRecordsReport.differencesNoTextShows`).
 		let factsTheRecordsMiss: [(holds: Bool, difference: String)] = [
 			(texts.tree == texts.nodeRecords, "root: the code laid out from node records differs from the tree’s"),
 			(captures.isEmpty, "root: the tree’s @Sendable builder functions capture a wrapper, which node records cannot see"),
-			(tree.unpassableCycleLabelsInTree.isEmpty, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
+			(unpassableLabels, "root: the tree holds a label no cycle parameter can pass, which node records cannot see"),
 		]
 		var report = NodeRecordsReport(
 			root: instantiable.concreteInstantiable.asSource,

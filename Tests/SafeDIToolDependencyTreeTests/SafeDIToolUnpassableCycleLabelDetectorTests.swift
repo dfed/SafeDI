@@ -104,9 +104,10 @@ struct SafeDIToolUnpassableCycleLabelDetectorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesRootToPlan_whenNoTypeOnCycleReceivesLabel() async throws {
+	mutating func generate_buildsNoTreeForRoot_whenNoTypeOnCycleReceivesLabel() async throws {
 		// Screens open each other through builders whose labels each screen declares again, and no screen receives
-		// anything: no label is passed around the cycle, so the detector leaves the root to its plan.
+		// anything: no label is passed around the cycle, so the detector leaves the root to its node records, which lay it
+		// out from one body per screen (`S2` is built beneath `S0` and beneath `S1`), and no tree is built to report one.
 		let (_, detections) = try await detections(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let home: S0
@@ -130,7 +131,7 @@ struct SafeDIToolUnpassableCycleLabelDetectorTests: ~Copyable {
 		}
 		""")
 
-		#expect(detections == ["Root": Detection(detectorFires: false, todaysTreeReports: false)])
+		#expect(detections.isEmpty)
 	}
 
 	// MARK: Private
