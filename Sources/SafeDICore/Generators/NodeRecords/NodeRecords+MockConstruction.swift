@@ -23,7 +23,7 @@ extension NodeRecords {
 	/// node `builtByInitializer` makes in a production root's world (`refusalsOfBuiltByInitializer(_:in:)`), whose override
 	/// is the field of its parent's configuration under the node's own label, discharging nothing and holding each refusal
 	/// of a node whose override it does not read yet. Any other node is left unclaimed, so its first refusal is its own.
-	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	static func mockConstructionClaim(of declaration: DeclarationID, in world: some NodeKindSources) -> NodeRecordClaim? {
 		guard world.isMockWorld, refusalsOfBuiltByInitializer(declaration, in: world).isEmpty else { return nil }
 		var refusals = [NodeRecordRefusal]()
 		let instantiable = world.scope(of: declaration).instantiable
@@ -34,7 +34,7 @@ extension NodeRecords {
 		// The root's own such parameters are parameters of `mock()`, which the root's lowering judges
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:world:bindsOnlyNodes:)`). A type's configuration
 		// takes the defaults its hand-written mock declares too, whichever way a node builds it.
-		if declaration != 0 {
+		if !world.isRoot(declaration) {
 			let takesDefaultValuedParameter = instantiable.initializer.map { !ScopeGenerator.DefaultParameter.defaultParameters(of: $0, dependencies: instantiable.dependencies).isEmpty } ?? false
 			if takesDefaultValuedParameter || instantiable.mockInitializer != nil {
 				refusals.append(.mockDefaultValuedParameter)
@@ -57,7 +57,7 @@ extension NodeRecords {
 	static func mockConstructionRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeKindSources,
 		typesDeclaredEscaping: Set<TypeDescription>,
 		children: [GeneratedCode],
 	) throws -> BuiltPlaceRecord {

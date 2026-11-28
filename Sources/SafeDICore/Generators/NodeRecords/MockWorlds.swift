@@ -18,8 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// One mock root's world, built once before the module's mock roots are lowered (`MockWorlds`) and handed to its root's
 /// lowering (`ScopeGenerator.nodeRecordsMockStatements(of:world:bindsOnlyNodes:)`). It holds the world's node records,
 /// which hold the table's shared records where the world holds their rows, and the table, from which the layout reads
@@ -47,57 +45,69 @@ struct MockWorld: Sendable {
 /// Every mock world of a module, each built once, before the mock roots are lowered, from the frozen mock worlds' table,
 /// with the records the worlds share made once for the run (`MockWorldsTable.sharedRecords`).
 ///
-/// A row is one (declaration, mock flag, key): the table's declaration, a mock world's (every world here is one), and
-/// whether every parent of the declaration in its world is the world's root, which decides where a mock construction
-/// reads its override (the field of `mock()`'s own overrides or of its parent's configuration), so a declaration that is
-/// the root's child in one world and deeper in another is two rows. A variant is a row only where the table finds its
-/// declaration shareable (no mock root's own, none that reaches a cycle, a hole or a fill), it is no member of a loop of
-/// builders in its world and holds none (a member's record reads its siblings and the world's builder function names,
-/// `TypeFactsEdge.loop`), it is of kind `mockConstruction` and holds no refusal (`NodeRecords.kindAndRefusals(of:in:)`),
-/// and every variant it calls is a row. Each fact is of the declaration's subtree, but the loop's, which is read per
-/// world, so a subtree beneath a member that reaches no loop stays a row.
+/// A row is one (shared variant, mock flag, key): a variant of the mock worlds' shared graph (`MockWorldsSharedVariants`),
+/// a mock world's (every world here is one), and whether every parent of its declaration in its world is the world's
+/// root, which decides where a mock construction reads its override (the field of `mock()`'s own overrides or of its
+/// parent's configuration), so a declaration that is the root's child in one world and deeper in another is two rows. A
+/// shared variant is a row where its declaration is of kind `mockConstruction` and holds no refusal
+/// (`NodeRecords.mockKindAndRefusals(of:in:)`) and every variant it calls is a row: facts of the shared graph alone, found
+/// once for the run. A shareable declaration is no member of a loop of builders and holds none (`MockWorldsTable`), so
+/// no world's loop decides a row.
 ///
-/// Four passes, three of them parallel, each task reading only frozen values: each world's graph and the row each of its
-/// variants is (one task per world); the rows' numbering, in the order the worlds first meet them (serial, a pass over
-/// integers); each row's record, built from the first world that holds it, in levels by height, so a record's children
-/// are the records of the level below, frozen before it starts (one task per row); and each world's node records, which
-/// take each shared variant's record from the table (one task per world). A world never decides another's: two worlds
-/// that share no row build apart in every pass.
+/// Five passes, three of them parallel, each task reading only frozen values: each world's top graph and its calls into
+/// the shared graph (one task per world); the shared graph's variants and which are rows (serial); each world's walk of
+/// its variants, in the order its whole graph's worklist makes them, which gives each its declaration's key and its row,
+/// over integers (one task per world); each row's record, built from the shared graph itself, in levels by height, so a
+/// record's children are the records of the levels below, frozen before it starts (one task per row), the rows numbered
+/// in the order the worlds first meet them; and each world's node records, which take each frontier variant's record
+/// from the table (one task per world). A world never decides another's: two worlds that share no row build apart in
+/// every pass.
 ///
-/// Each world's records are also built without the table, and the two compared field by field (`NodeRecordsObservation`,
-/// with the sharing fields), so a record a row would make wrong in some world is reported (`MockWorldsTableReport`).
+/// A world every shared variant of which is a row, none of whose shared declarations it reaches in two variants, makes
+/// its node records over its top graph alone: its frontier variants take their rows' records, and only its top graph's
+/// declarations make records. Any other world, which reaches a shared declaration that refuses it or that a test's claim
+/// makes of another kind, makes them over its dense view of its top graph and the shared graph (`MockWorldGraph`),
+/// taking the record of each of its variants that is a row, so that it reports every refusal its whole graph holds.
+///
+/// Where a test observes the table (`MockWorldsTableObservation`), each world's graph is also built whole, its records
+/// built from it without the table, and the two compared field by field (`NodeRecordsObservation`, with the sharing
+/// fields), with their refusals, so a record a row would make wrong in some world is reported (`MockWorldsTableReport`).
 /// Both builds are made without refusing a world for owed facts, so that the comparison covers every world whose records
-/// are made, and the owed facts are judged after.
+/// are made, and the owed facts are judged after. No run that no test observes builds a whole graph a world does not use.
 struct MockWorlds: Sendable {
 	/// Each world, in the order of `roots`.
 	let worlds: [MockWorld]
-	/// What a test observes of the table and the worlds' records.
-	let report: MockWorldsTableReport
+	/// What a test observes of the table and the worlds' records, where a test observes the table.
+	let report: MockWorldsTableReport?
 
 	/// - Parameters:
 	///   - roots: The root of each mock root's world, in the order the module lowers them, which `table` was built from.
 	///   - table: The mock worlds' table of `roots`, holding no shared record yet.
 	///   - sharedGraph: The shared graph of `table`'s shareable declarations, whose facts each world's are compared with.
 	static func build(roots: [ConstructionScope], table: MockWorldsTable, sharedGraph: MockWorldsSharedGraph) async throws -> MockWorlds {
-		let width = ProcessInfo.processInfo.activeProcessorCount
-		// Each world's top graph, which stops at the shared declarations it reaches, and the calls it makes into them; and
-		// its graph built whole, which the observers compare with. A `.public` mock whose root reaches a hole is built
-		// whole: its holes are places, whose carrier edges are a fact of its whole tree.
+		// Each pass reads the module's mock roots at the bound their lowering reads them at, a measured memory constant
+		// (`BoundedConcurrency.mockRootWidth`), never the processor count: a world's graphs and records are alive while its
+		// job runs. Widening the pre-pass needs a measurement of its peak memory first.
+		let width = BoundedConcurrency.mockRootWidth
+		let isObserved = MockWorldsTableObservation.observer != nil
+		// Each world's top graph, which stops at the shared declarations it reaches, and the calls it makes into them; and,
+		// where a test observes the table, its graph built whole, which the observers compare with. A `.public` mock whose
+		// root reaches a hole is built whole: its holes are places, whose carrier edges are a fact of its whole tree.
 		let tops = try await BoundedConcurrency.map(roots, width: width) { root, _ in
-			let wholeGraph = TypeFactsGraph(root: root, forMockGeneration: true)
 			let topGraph = TypeFactsGraph(root: root, forMockGeneration: true, sharedBelow: sharedGraph)
 			let isBuiltWhole = (root.instantiable.generatesDependencyTree || root.instantiable.generateMock == .public) && topGraph.holesBeneath.contains(0, inRow: 0)
+			let wholeGraph = isBuiltWhole || isObserved ? TypeFactsGraph(root: root, forMockGeneration: true) : nil
 			return WorldTop(
 				wholeGraph: wholeGraph,
-				top: isBuiltWhole ? wholeGraph : topGraph,
+				top: isBuiltWhole ? wholeGraph ?? topGraph : topGraph,
 				isBuiltWhole: isBuiltWhole,
 				entries: isBuiltWhole ? [] : frontierEntries(of: topGraph, in: sharedGraph),
-				sharedFactsDifferences: sharedFactsDifferences(of: wholeGraph, in: table, sharedGraph: sharedGraph),
+				sharedFactsDifferences: wholeGraph.map { sharedFactsDifferences(of: $0, in: table, sharedGraph: sharedGraph) } ?? [],
 			)
 		}
 
 		// Every world's calls into the shared graph, each distinct one numbered in the order the worlds first make it, and
-		// the shared graph's variants found from them.
+		// the shared graph's variants found from them, and which of them are rows.
 		var entries = [MockWorldsSharedEntry]()
 		// Identity numbers an entry by its first call and orders nothing.
 		var entryIndexByEntry = [MockWorldsSharedEntry: Int]()
@@ -112,6 +122,8 @@ struct MockWorlds: Sendable {
 			}
 		}
 		let sharedVariants = sharedGraph.variants(seededBy: entries)
+		let sources = MockWorldsSharedSources(graph: sharedGraph, variants: sharedVariants)
+		let isRowVariant = rowVariants(of: sources)
 		let frozenEntryIndicesByWorld = entryIndicesByWorld
 
 		let worldRows = try await BoundedConcurrency.map(Array(tops.indices), width: width) { world, _ in
@@ -120,72 +132,92 @@ struct MockWorlds: Sendable {
 			for (call, entryIndex) in zip(top.entries, frozenEntryIndicesByWorld[world]) {
 				variantOfTopVariant[Int(call.topVariant)] = sharedVariants.variantOfEntry[entryIndex]
 			}
-			let view = MockWorldGraph(top: top.top, shared: top.isBuiltWhole ? nil : MockWorldGraph.Shared(graph: sharedGraph, variants: sharedVariants, variantOfTopVariant: variantOfTopVariant), table: table)
-			let declarationKeyByVariant = declarationKeys(of: view)
-			return WorldRows(
-				graph: view,
-				wholeGraph: top.wholeGraph,
-				graphDeclarationCount: top.top.declarationCount,
-				declarationKeyByVariant: declarationKeyByVariant,
-				rowKeyByVariant: rowKeys(of: view, in: table, declarationKeyByVariant: declarationKeyByVariant),
-				sharedFactsDifferences: top.sharedFactsDifferences + viewDifferences(of: view, from: top.wholeGraph, in: table),
-			)
+			let walk = WorldWalk(top: top.top, sources: sources, variantOfTopVariant: variantOfTopVariant, table: table, isRowVariant: isRowVariant)
+			// A world that is not clean reads its dense view, which a test also compares with its graph built whole.
+			let view = walk.isClean ? nil : MockWorldGraph(top: top.top, shared: MockWorldGraph.Shared(graph: sharedGraph, variants: sharedVariants, variantOfTopVariant: variantOfTopVariant), table: table)
+			var differences = top.sharedFactsDifferences
+			if let wholeGraph = top.wholeGraph {
+				differences += view.map { viewDifferences(of: $0, from: wholeGraph, in: table) } ?? []
+				differences += declarationKeys(of: wholeGraph, in: table) == walk.declarationKeyByVariant ? [] : ["the walk’s declaration keys differ from the world’s graph’s"]
+			}
+			return WorldRows(top: top.top, wholeGraph: top.wholeGraph, view: view, walk: walk, variantOfTopVariant: variantOfTopVariant, sharedFactsDifferences: differences)
 		}
 
-		// Each row's number, in the order the worlds first meet it, and the world and variant it is first met at.
+		// Each row, by its key, in the order the worlds first meet it, and the rows its shared variant calls, which are rows
+		// too, in call order: a row's callee is called beneath a shared declaration, so no parent of its declaration is the
+		// root.
 		var rowByKey = [Int32](repeating: -1, count: sharedVariants.variants.count * 2)
-		var rowOwners = [RowOwner]()
-		for (worldIndex, rows) in worldRows.enumerated() {
-			for (variant, key) in rows.rowKeyByVariant.enumerated() where key >= 0 && rowByKey[Int(key)] < 0 {
-				rowByKey[Int(key)] = Int32(rowOwners.count)
-				rowOwners.append(RowOwner(world: worldIndex, variant: VariantID(variant)))
+		var keysInFirstMeetOrder = [Int32]()
+		for rows in worldRows {
+			for key in rows.walk.rowKeyByVariant where key >= 0 && rowByKey[Int(key)] < 0 {
+				rowByKey[Int(key)] = Int32(keysInFirstMeetOrder.count)
+				keysInFirstMeetOrder.append(key)
 			}
 		}
 		let frozenRowByKey = rowByKey
-		let frozenRowOwners = rowOwners
-		// The rows each row's variant calls in its owner's world, which are rows too, in call order.
-		let childRowsByRow = frozenRowOwners.map { owner in
-			let rows = worldRows[owner.world]
-			return rows.graph.calls(of: owner.variant).map { frozenRowByKey[Int(rows.rowKeyByVariant[Int($0)])] }
+		let rowKeys = keysInFirstMeetOrder
+		let childRowsByRow = rowKeys.map { key in
+			sources.calls(of: key / 2).map { frozenRowByKey[Int($0) * 2] }
 		}
 
-		// Each row's record, in levels by height: a leaf's first, each level after the levels its children are in.
-		var records = [BuiltPlaceRecord?](repeating: nil, count: frozenRowOwners.count)
+		// Each row's record, in levels by height: a leaf's first, each level after the levels its children are in, each
+		// record kept at its row.
+		var recordByRow = [BuiltPlaceRecord?](repeating: nil, count: rowKeys.count)
 		for level in levels(ofRowsCalling: childRowsByRow) {
-			let recordsBelow = records
+			let recordsBelow = recordByRow
 			let levelRecords = try await BoundedConcurrency.map(level, width: width) { row, _ in
-				let owner = frozenRowOwners[Int(row)]
-				return try record(of: owner.variant, in: worldRows[owner.world].graph, childRecords: childRowsByRow[Int(row)].compactMap { recordsBelow[Int($0)] })
+				let variant = rowKeys[Int(row)] / 2
+				return try record(of: variant, in: sources, childRecords: childRowsByRow[Int(row)].compactMap { recordsBelow[Int($0)] })
 			}
 			for (row, record) in zip(level, levelRecords) {
-				records[Int(row)] = record
+				recordByRow[Int(row)] = record
 			}
 		}
-		let sharedRecords = records.compactMap(\.self)
-		var rows = [MockWorldsTable.Row]()
-		for case let (owner, record?) in zip(frozenRowOwners, records) {
-			let world = worldRows[owner.world]
-			let key = world.declarationKeyByVariant[Int(owner.variant)]
-			rows.append(MockWorldsTable.Row(declaration: key / 2, everyParentIsRoot: key % 2 == 1, record: record))
+		// Every row's record is made above, in its level.
+		let sharedRecords = recordByRow.compactMap(\.self)
+		let rows = zip(rowKeys, sharedRecords).map { key, record in
+			MockWorldsTable.Row(declaration: sharedGraph.declarations[Int(sources.declaration(of: key / 2))], everyParentIsRoot: key % 2 == 1, record: record)
 		}
 		let sharedTable = table.holding(sharedRecordsOf: rows)
 		// Only a root laid out from its records reads the facts of their nodes.
 		let nodeFacts = NodeRecordsObservation.laysOutMockRoots ? NodeLayoutFacts(records: sharedRecords) : .none
 
 		let builtWorlds = try await BoundedConcurrency.map(worldRows, width: width) { rows, _ in
-			let sharedRecordByVariant = rows.rowKeyByVariant.map { key in key < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(key)])] }
-			let records = NodeRecords.refusingWhatRecordsThrow {
-				try NodeRecords(world: rows.graph, declaredTypeNames: nil, sharedRecordByVariant: sharedRecordByVariant, refusesOwedFacts: false)
+			let records: Result<NodeRecords, NodeRecordRefusal>
+			let world: MockWorld
+			if let view = rows.view {
+				let sharedRecordByVariant = rows.walk.rowKeyByVariant.map { key in key < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(key)])] }
+				records = NodeRecords.refusingWhatRecordsThrow {
+					try NodeRecords(world: view, declaredTypeNames: nil, sharedRecordByVariant: sharedRecordByVariant, refusesOwedFacts: false)
+				}
+				world = Self.world(of: view, records: records, table: sharedTable, nodeFacts: nodeFacts, declarationKeyByVariant: rows.walk.declarationKeyByVariant)
+			} else {
+				// Each frontier variant takes the record of its row, of the shared variant it calls.
+				let sharedRecordByVariant = rows.variantOfTopVariant.map { variant in
+					variant < 0 ? nil : sharedRecords[Int(frozenRowByKey[Int(rows.walk.rowKey(ofSharedVariant: variant))])]
+				}
+				records = NodeRecords.refusingWhatRecordsThrow {
+					try NodeRecords(world: rows.top, declaredTypeNames: nil, sharedRecordByVariant: sharedRecordByVariant, refusesOwedFacts: false)
+				}
+				world = Self.world(of: rows.top, records: records, table: sharedTable, nodeFacts: nodeFacts, declarationKeyByVariant: rows.walk.declarationKeyByVariant)
+			}
+			guard let wholeGraph = rows.wholeGraph, isObserved else {
+				return BuiltWorld(world: world, builtRecords: [], recordCountWithoutTable: 0, differences: [])
 			}
 			let recordsWithoutTable = NodeRecords.refusingWhatRecordsThrow {
-				try NodeRecords(world: rows.wholeGraph, declaredTypeNames: nil, refusesOwedFacts: false)
+				try NodeRecords(world: wholeGraph, declaredTypeNames: nil, refusesOwedFacts: false)
 			}
+			let refusalsWithoutTable = Self.world(of: wholeGraph, records: recordsWithoutTable, table: sharedTable, nodeFacts: nodeFacts, declarationKeyByVariant: []).everyRefusal
+			let refusalDifferences = world.everyRefusal == refusalsWithoutTable ? [] : ["every refusal is \(world.everyRefusal.map(\.rawValue)) with the table, \(refusalsWithoutTable.map(\.rawValue)) without it"]
 			return BuiltWorld(
-				world: world(of: rows.graph, records: records, table: sharedTable, nodeFacts: nodeFacts, declarationKeyByVariant: rows.declarationKeyByVariant),
+				world: world,
 				builtRecords: builtRecords(of: records),
 				recordCountWithoutTable: builtRecords(of: recordsWithoutTable)?.count ?? 0,
-				differences: Self.differences(between: records, and: recordsWithoutTable),
+				differences: Self.differences(between: records, and: recordsWithoutTable) + refusalDifferences,
 			)
+		}
+		guard isObserved else {
+			return MockWorlds(worlds: builtWorlds.map(\.world), report: nil)
 		}
 		var differences = [String]()
 		for ((root, builtWorld), rows) in zip(zip(roots, builtWorlds), worldRows) {
@@ -196,13 +228,44 @@ struct MockWorlds: Sendable {
 			report: sharedTable.report(
 				sharedGraphDeclarations: sharedGraph.declarations,
 				sharedVariantCount: sharedVariants.variants.count,
-				graphDeclarationCounts: worldRows.map(\.graphDeclarationCount),
+				graphDeclarationCounts: worldRows.map(\.top.declarationCount),
 				worldRecords: builtWorlds.map(\.builtRecords),
-				declarationKeysByWorld: worldRows.map(\.declarationKeyByVariant),
+				declarationKeysByWorld: worldRows.map(\.walk.declarationKeyByVariant),
 				recordCountsWithoutTable: builtWorlds.map(\.recordCountWithoutTable),
 				differences: differences,
 			),
 		)
+	}
+
+	/// Whether each of the shared graph's variants is a row: its declaration is of kind `mockConstruction` and holds no
+	/// refusal, and every variant it calls is a row. A post-order walk of the variants, with a stack; the shared graph is
+	/// a forest of subtrees that reach no cycle, so no callee is still on the path.
+	private static func rowVariants(of sources: MockWorldsSharedSources) -> [Bool] {
+		let variantCount = sources.variants.variants.count
+		// Whether each shared declaration may be a row, found once per declaration.
+		var mayBeRowByDeclaration = [Bool?](repeating: nil, count: sources.graph.graph.nodes.count)
+		var isRowVariant = [Bool?](repeating: nil, count: variantCount)
+		for start in 0..<Int32(variantCount) where isRowVariant[Int(start)] == nil {
+			var stack: [(variant: VariantID, childrenPushed: Bool)] = [(start, false)]
+			while let (variant, childrenPushed) = stack.popLast() {
+				let calls = sources.calls(of: variant)
+				guard childrenPushed else {
+					stack.append((variant, true))
+					for callee in calls.reversed() where isRowVariant[Int(callee)] == nil {
+						stack.append((callee, false))
+					}
+					continue
+				}
+				let declaration = sources.declaration(of: variant)
+				let mayBeRow = mayBeRowByDeclaration[Int(declaration)] ?? {
+					let (kind, refusals) = NodeRecords.mockKindAndRefusals(of: declaration, in: sources)
+					return kind == .mockConstruction && refusals.isEmpty
+				}()
+				mayBeRowByDeclaration[Int(declaration)] = mayBeRow
+				isRowVariant[Int(variant)] = mayBeRow && calls.allSatisfy { isRowVariant[Int($0)] == true }
+			}
+		}
+		return isRowVariant.map { $0 == true }
 	}
 
 	/// Each call `top`, a world's top graph, makes into the shared graph: each of its variants whose declaration is a
@@ -305,58 +368,15 @@ struct MockWorlds: Sendable {
 		return differences
 	}
 
-	/// The key of each of `world`'s variants' declarations (`MockWorld.declarationKeyByVariant`). The table was built from
-	/// the same roots by the same walk of each root's declarations, so it holds every declaration of the world, and no
-	/// entry is -1.
-	private static func declarationKeys(of world: MockWorldGraph) -> [Int32] {
+	/// The key of each of `world`'s variants' declarations (`MockWorld.declarationKeyByVariant`), from the world's graph built
+	/// whole, which a world's walk (`WorldWalk`) gives where a test observes the table. The table was built from the same
+	/// roots by the same walk of each root's declarations, so it holds every declaration of the world, and no entry is -1.
+	private static func declarationKeys(of world: TypeFactsGraph, in table: MockWorldsTable) -> [Int32] {
 		let keyByDeclaration = (0..<Int32(world.declarationCount)).map { declaration in
 			let everyParentIsRoot = world.parents(of: declaration).allSatisfy { $0.parent == 0 }
-			return world.tableDeclarations[Int(declaration)] * 2 + (everyParentIsRoot ? 1 : 0)
+			return (table.declarationID(of: world.graph.nodes[Int(declaration)]) ?? -1) * 2 + (everyParentIsRoot ? 1 : 0)
 		}
 		return (0..<Int32(world.variantCount)).map { keyByDeclaration[Int(world.declaration(of: $0))] }
-	}
-
-	/// The row of each of `world`'s variants, its declaration's key (`declarationKeyByVariant`), or -1 for a variant that
-	/// is no row.
-	private static func rowKeys(of world: MockWorldGraph, in table: MockWorldsTable, declarationKeyByVariant: [Int32]) -> [Int32] {
-		// Each member of a loop of builders, and each declaration whose children hold one.
-		var holdsLoop = [Bool](repeating: false, count: world.declarationCount)
-		for declaration in 0..<Int32(world.declarationCount) {
-			for edge in world.edgeFacts(from: declaration) where edge.loop >= 0 {
-				holdsLoop[Int(declaration)] = true
-				holdsLoop[Int(edge.child)] = true
-			}
-		}
-		// Whether each declaration may be a row of its own. The root, declaration 0, is its world's own.
-		var mayBeRow = [Bool](repeating: false, count: world.declarationCount)
-		for declaration in 1..<world.declarationCount where !holdsLoop[declaration] {
-			guard table.isShareable(world.tableDeclarations[declaration]) else { continue }
-			let (kind, refusals) = NodeRecords.kindAndRefusals(of: Int32(declaration), in: world)
-			mayBeRow[declaration] = kind == .mockConstruction && refusals.isEmpty
-		}
-		// A variant is a row where its declaration may be one and every variant it calls is a row: a post-order walk from
-		// the root, with a stack, since a tree can be as deep as the module has types. A callee still on the path closes a
-		// cycle, and is no row.
-		var rowKeyByVariant = [Int32](repeating: -1, count: world.variantCount)
-		var state = [VisitState](repeating: .unvisited, count: world.variantCount)
-		var stack: [(variant: VariantID, childrenPushed: Bool)] = [(0, false)]
-		while let (variant, childrenPushed) = stack.popLast() {
-			let calls = world.calls(of: variant)
-			guard childrenPushed else {
-				guard state[Int(variant)] == .unvisited else { continue }
-				state[Int(variant)] = .onPath
-				stack.append((variant, true))
-				for callee in calls.reversed() where state[Int(callee)] == .unvisited {
-					stack.append((callee, false))
-				}
-				continue
-			}
-			state[Int(variant)] = .visited
-			let sharedVariant = world.sharedVariants[Int(variant)]
-			guard sharedVariant >= 0, mayBeRow[Int(world.declaration(of: variant))], calls.allSatisfy({ rowKeyByVariant[Int($0)] >= 0 }) else { continue }
-			rowKeyByVariant[Int(variant)] = sharedVariant * 2 + declarationKeyByVariant[Int(variant)] % 2
-		}
-		return rowKeyByVariant
 	}
 
 	/// The rows of `childRowsByRow`, each row's children by row, in levels: the rows of each level call only rows of the
@@ -390,11 +410,11 @@ struct MockWorlds: Sendable {
 		return levels
 	}
 
-	/// The record of a row, the variant `variant` of `world` that is its first world's, whose children's rows have the
+	/// The record of a row, of the shared variant `variant` of `world`, the shared graph, whose children's rows have the
 	/// records `childRecords`, in call order: the record `NodeRecords` makes of a node of kind `mockConstruction`.
 	/// - Throws: Nothing for a row: a row's declaration is of kind `mockConstruction` and holds no refusal, so it is built
 	///   as a property, has an initializer, and its initializer's arguments fulfill its dependencies.
-	private static func record(of variant: VariantID, in world: MockWorldGraph, childRecords: [BuiltPlaceRecord]) throws -> BuiltPlaceRecord {
+	private static func record(of variant: VariantID, in world: MockWorldsSharedSources, childRecords: [BuiltPlaceRecord]) throws -> BuiltPlaceRecord {
 		let declaration = world.declaration(of: variant)
 		let calls = world.calls(of: variant)
 		// Two calls of one variant are of one row, so the first call's record is each one's. Found by variant, never iterated.
@@ -408,7 +428,7 @@ struct MockWorlds: Sendable {
 
 	/// The world whose node records, made with the table and without refusing owed facts, are `records`: refused as
 	/// `readAnsweredTwoWays` where a producer owes its facts, as `NodeRecords` refuses it.
-	private static func world(of graph: MockWorldGraph, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable, nodeFacts: NodeLayoutFacts, declarationKeyByVariant: [Int32]) -> MockWorld {
+	private static func world(of graph: some NodeRecordSources, records: Result<NodeRecords, NodeRecordRefusal>, table: MockWorldsTable, nodeFacts: NodeLayoutFacts, declarationKeyByVariant: [Int32]) -> MockWorld {
 		let records = records.flatMap { made in NodeRecords.owesFacts(in: graph) ? .failure(.readAnsweredTwoWays) : .success(made) }
 		let everyRefusal: [NodeRecordRefusal] = switch records {
 		case .success:
@@ -449,17 +469,18 @@ struct MockWorlds: Sendable {
 		}
 	}
 
-	/// A world's graph, the key of each of its variants' declarations (`declarationKeys(of:in:)`), and the row each of its
-	/// variants is (`rowKeys(of:in:declarationKeyByVariant:)`).
+	/// A world's top graph, its graph built whole where a test observes it, its dense view where it is not clean, and its
+	/// walk (`WorldWalk`).
 	private struct WorldRows: Sendable {
-		/// The world's dense view, which its records read.
-		let graph: MockWorldGraph
-		/// The world's graph built whole, which the observers compare with.
-		let wholeGraph: TypeFactsGraph
-		/// How many declarations the world's own graph holds: its top graph's, or its whole graph's where it is built whole.
-		let graphDeclarationCount: Int
-		let declarationKeyByVariant: [Int32]
-		let rowKeyByVariant: [Int32]
+		/// The world's top graph, or its whole graph where it is built whole.
+		let top: TypeFactsGraph
+		/// The world's graph built whole, where a test observes the table or the world is built whole.
+		let wholeGraph: TypeFactsGraph?
+		/// The world's dense view, which its records read where the world is not clean.
+		let view: MockWorldGraph?
+		let walk: WorldWalk
+		/// The shared variant of each of `top`'s variants whose declaration is a frontier, -1 for each other.
+		let variantOfTopVariant: [Int32]
 		/// Each way the world's facts of its shareable declarations differ from the shared graph's, and its dense view from
 		/// its graph built whole.
 		let sharedFactsDifferences: [String]
@@ -473,7 +494,8 @@ struct MockWorlds: Sendable {
 			let entry: MockWorldsSharedEntry
 		}
 
-		let wholeGraph: TypeFactsGraph
+		/// The world's graph built whole, where a test observes the table or the world is built whole.
+		let wholeGraph: TypeFactsGraph?
 		let top: TypeFactsGraph
 		/// Whether the world takes nothing from the shared graph, and `top` is its whole graph.
 		let isBuiltWhole: Bool
@@ -481,10 +503,120 @@ struct MockWorlds: Sendable {
 		let sharedFactsDifferences: [String]
 	}
 
-	/// The world and variant where the worlds first meet a row.
-	private struct RowOwner: Sendable {
-		let world: Int
-		let variant: VariantID
+	/// A world's variants, walked over integers in the order its whole graph's worklist makes them (`MockWorldGraph`): from
+	/// the root's, each top variant's calls in edge order, a frontier's callee taken as its shared variant, then its
+	/// made-again calls, and each shared variant's calls, a callee met first walked next. It gives each variant its
+	/// declaration's key and its row, and says whether the world is clean: every shared variant it reaches is a row, and it
+	/// reaches each shared declaration, and each frontier, in one variant. It holds its columns for as long as its world is
+	/// being built.
+	private struct WorldWalk: Sendable {
+		init(top: TypeFactsGraph, sources: MockWorldsSharedSources, variantOfTopVariant: [Int32], table: MockWorldsTable, isRowVariant: [Bool]) {
+			func sharedNode(ofTopNode node: Int32) -> Int32 {
+				top.sharedNodeByNode.isEmpty ? -1 : top.sharedNodeByNode[Int(node)]
+			}
+			let sharedNodeCount = sources.graph.graph.nodes.count
+			var origins: [(isShared: Bool, variant: Int32)] = [(false, 0)]
+			var isTopVariantMade = [Bool](repeating: false, count: top.variantCount)
+			isTopVariantMade[0] = true
+			var isSharedVariantMade = [Bool](repeating: false, count: sources.variants.variants.count)
+			// Whether each shared node is called beneath a shared declaration, the frontier it is, and how many variants of it,
+			// and of each frontier, the world reaches.
+			var isInterior = [Bool](repeating: false, count: sharedNodeCount)
+			var topNodeBySharedNode = [Int32](repeating: -1, count: sharedNodeCount)
+			var variantCountBySharedNode = [Int32](repeating: 0, count: sharedNodeCount)
+			var variantCountByTopNode = [Int32](repeating: 0, count: top.declarationCount)
+			var reachesSharedVariantThatIsNoRow = false
+			var next = 0
+			while next < origins.count {
+				let (isShared, variant) = origins[next]
+				next += 1
+				if isShared {
+					let node = sources.declaration(of: variant)
+					variantCountBySharedNode[Int(node)] += 1
+					reachesSharedVariantThatIsNoRow = reachesSharedVariantThatIsNoRow || !isRowVariant[Int(variant)]
+					for callee in sources.calls(of: variant) {
+						isInterior[Int(sources.declaration(of: callee))] = true
+						if !isSharedVariantMade[Int(callee)] {
+							isSharedVariantMade[Int(callee)] = true
+							origins.append((true, callee))
+						}
+					}
+					continue
+				}
+				for callee in top.calls(of: variant) {
+					let calleeNode = top.declaration(of: callee)
+					let calleeSharedNode = sharedNode(ofTopNode: calleeNode)
+					guard calleeSharedNode >= 0 else {
+						if !isTopVariantMade[Int(callee)] {
+							isTopVariantMade[Int(callee)] = true
+							origins.append((false, callee))
+						}
+						continue
+					}
+					topNodeBySharedNode[Int(calleeSharedNode)] = calleeNode
+					if !isTopVariantMade[Int(callee)] {
+						isTopVariantMade[Int(callee)] = true
+						variantCountByTopNode[Int(calleeNode)] += 1
+					}
+					let sharedVariant = variantOfTopVariant[Int(callee)]
+					if !isSharedVariantMade[Int(sharedVariant)] {
+						isSharedVariantMade[Int(sharedVariant)] = true
+						origins.append((true, sharedVariant))
+					}
+				}
+				for callee in top.madeAgainCalls(of: variant) where !isTopVariantMade[Int(callee)] {
+					isTopVariantMade[Int(callee)] = true
+					origins.append((false, callee))
+				}
+			}
+			// Whether every parent of each declaration is the root: a top declaration's parents are the top graph's, and a
+			// shared one's are its frontier's where nothing shared calls it.
+			func everyParentIsRoot(ofTopNode node: Int32) -> Bool {
+				top.parents(of: node).allSatisfy { $0.parent == 0 }
+			}
+			let bitBySharedNode = (0..<sharedNodeCount).map { node in
+				!isInterior[node] && topNodeBySharedNode[node] >= 0 && everyParentIsRoot(ofTopNode: topNodeBySharedNode[node]) ? Int32(1) : 0
+			}
+			var declarationKeyByVariant = [Int32]()
+			var rowKeyByVariant = [Int32]()
+			declarationKeyByVariant.reserveCapacity(origins.count)
+			rowKeyByVariant.reserveCapacity(origins.count)
+			for (isShared, variant) in origins {
+				guard isShared else {
+					let node = top.declaration(of: variant)
+					// The table was built from the same roots by the same walk of each root's declarations, so it holds every
+					// declaration of the world.
+					declarationKeyByVariant.append((table.declarationID(of: top.graph.nodes[Int(node)]) ?? -1) * 2 + (everyParentIsRoot(ofTopNode: node) ? 1 : 0))
+					rowKeyByVariant.append(-1)
+					continue
+				}
+				let node = sources.declaration(of: variant)
+				declarationKeyByVariant.append(sources.graph.declarations[Int(node)] * 2 + bitBySharedNode[Int(node)])
+				rowKeyByVariant.append(isRowVariant[Int(variant)] ? variant * 2 + bitBySharedNode[Int(node)] : -1)
+			}
+			self.declarationKeyByVariant = declarationKeyByVariant
+			self.rowKeyByVariant = rowKeyByVariant
+			self.bitBySharedNode = bitBySharedNode
+			self.sources = sources
+			isClean = !reachesSharedVariantThatIsNoRow && variantCountBySharedNode.allSatisfy { $0 <= 1 } && variantCountByTopNode.allSatisfy { $0 <= 1 }
+		}
+
+		/// The key of each variant's declaration, in the walk's order (`MockWorld.declarationKeyByVariant`).
+		let declarationKeyByVariant: [Int32]
+		/// The row of each variant, in the walk's order: its shared variant times two, plus its declaration's bit, or -1 for
+		/// a variant that is no row.
+		let rowKeyByVariant: [Int32]
+		/// Whether the world's node records can be made over its top graph alone.
+		let isClean: Bool
+
+		/// The row key of the shared variant `variant`, which the world reaches.
+		func rowKey(ofSharedVariant variant: Int32) -> Int32 {
+			variant * 2 + bitBySharedNode[Int(sources.declaration(of: variant))]
+		}
+
+		/// Whether every parent of each shared node's declaration in the world is the world's root, as 1 or 0.
+		private let bitBySharedNode: [Int32]
+		private let sources: MockWorldsSharedSources
 	}
 
 	/// A world built from the table, with its built records and its differences from the world built without it.
@@ -494,11 +626,5 @@ struct MockWorlds: Sendable {
 		/// How many built records the world's node records hold where they are made without the table.
 		let recordCountWithoutTable: Int
 		let differences: [String]
-	}
-
-	private enum VisitState {
-		case unvisited
-		case onPath
-		case visited
 	}
 }

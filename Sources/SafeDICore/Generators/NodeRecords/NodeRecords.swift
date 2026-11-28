@@ -92,39 +92,55 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case recordsThrew
 }
 
-/// What a world's records read of it: of the frozen interface (`TypeFactsWorld`), each declaration's kind,
-/// construction, edges, parents, reads and owed facts, and its variants' calls and sources, as `TypeFactsWorld` states
-/// them; and beside it the scope a node builds and the property it builds as, from which a node's construction facts come
-/// until the facts' columns hold them. A world's graph is one (`TypeFactsGraph`), and so is a mock world's dense view of
-/// its top graph and the shared graph (`MockWorldGraph`).
-protocol NodeRecordSources {
-	var declarationCount: Int { get }
+/// What a node's kind, its refusals and the record of a mock construction read of the graph that holds it: each
+/// declaration's kind, construction, edges and loops, the scope it builds and the property it builds as, and each variant's
+/// declaration and calls. A world is one (`NodeRecordSources`), and so is the mock worlds' shared graph with its variants
+/// (`MockWorldsSharedSources`), whose records the worlds share.
+protocol NodeKindSources {
 	func kind(of declaration: DeclarationID) -> TypeFactsKind
 	func construction(of declaration: DeclarationID) -> TypeFactsConstruction
 	func isOnCycle(_ declaration: DeclarationID) -> Bool
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
-	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
 	/// The loop members the declaration makes again, in the order its body rebinds them.
 	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
 	/// The loop members whose parents' loops make different members again.
 	var loopMembersSharedApart: [Int32] { get }
-	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
-	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
-	func read(_ read: ReadID) -> Read
-	var variantCount: Int { get }
 	func declaration(of variant: VariantID) -> DeclarationID
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
-	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	func scope(of declaration: DeclarationID) -> ConstructionScope
 	/// The property the declaration is built as, `nil` for the root.
 	func property(of declaration: DeclarationID) -> Property?
 	/// Whether the declaration's built value is erased to its property's type (`erasedToConcreteExistential`).
 	func isErased(_ declaration: DeclarationID) -> Bool
+	/// Whether the graph is a mock root's, each of whose nodes reads its override.
+	var isMockWorld: Bool { get }
+	/// Whether the declaration is its world's root, which its world's mock or initializer builds as its caller asks.
+	func isRoot(_ declaration: DeclarationID) -> Bool
+}
+
+/// What a world's records read of it: of the frozen interface (`TypeFactsWorld`), each declaration's kind,
+/// construction, edges, parents, reads and owed facts, and its variants' calls and sources, as `TypeFactsWorld` states
+/// them; and beside it the scope a node builds and the property it builds as, from which a node's construction facts come
+/// until the facts' columns hold them. A world's graph is one (`TypeFactsGraph`), and so is a mock world's dense view of
+/// its top graph and the shared graph (`MockWorldGraph`).
+protocol NodeRecordSources: NodeKindSources {
+	var declarationCount: Int { get }
+	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
+	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
+	func read(_ read: ReadID) -> Read
+	var variantCount: Int { get }
+	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// The text of a label a read asks about (`Read.label`).
 	func text(ofLabel label: WorldLabelID) -> String
-	/// Whether the world is a mock root's, each of whose nodes reads its override.
-	var isMockWorld: Bool { get }
+}
+
+extension NodeRecordSources {
+	/// A world's root is its first declaration.
+	func isRoot(_ declaration: DeclarationID) -> Bool {
+		declaration == 0
+	}
 }
 
 extension TypeFactsGraph: NodeRecordSources {
@@ -519,7 +535,17 @@ struct NodeRecords: Sendable {
 	/// every check of `builtByInitializer` the claim does not discharge (`refusalsOfBuiltByInitializer(_:in:)`). A node of two kinds,
 	/// one claimed, is still refused for the other.
 	static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
-		let claim = claim(of: declaration, in: world)
+		kindAndRefusals(of: declaration, in: world, claim: claim(of: declaration, in: world))
+	}
+
+	/// The kind `declaration` of a mock root's graph is made as, and every refusal it holds, as `kindAndRefusals(of:in:)`
+	/// finds them: what makes a node of the mock worlds' shared graph a row (`MockWorlds`).
+	static func mockKindAndRefusals(of declaration: DeclarationID, in graph: some NodeKindSources) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
+		kindAndRefusals(of: declaration, in: graph, claim: mockClaim(of: declaration, in: graph))
+	}
+
+	/// The kind `claim` makes `declaration` as, and every refusal it holds.
+	private static func kindAndRefusals(of declaration: DeclarationID, in world: some NodeKindSources, claim: NodeRecordClaim?) -> (kind: NodeRecordKind, refusals: [NodeRecordRefusal]) {
 		let discharged = claim?.discharges ?? []
 		let refusals = (claim?.refusals ?? []) + refusalsOfBuiltByInitializer(declaration, in: world).filter { !discharged.contains($0) } + loopRefusals(of: declaration, in: world)
 		return (claim?.kind ?? .builtByInitializer, refusals)
@@ -531,9 +557,7 @@ struct NodeRecords: Sendable {
 	/// mock writer's alone, so no production kind's record, which reads no override, is made of one.
 	private static func claim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
 		// A test's claim comes first, so that it can claim a node another kind would.
-		guard !world.isMockWorld else {
-			return testClaim(of: declaration, in: world) ?? mockConstructionClaim(of: declaration, in: world)
-		}
+		guard !world.isMockWorld else { return mockClaim(of: declaration, in: world) }
 		// A hole is claimed apart from the chains below, which the compiler cannot type-check as one.
 		guard let claim = testClaim(of: declaration, in: world) ?? seamHoleClaim(of: declaration, in: world) else {
 			let seamClaim = inlineSeamClaim(of: declaration, in: world)
@@ -549,8 +573,13 @@ struct NodeRecords: Sendable {
 		return claim
 	}
 
+	/// What a kind claims of `declaration` of a mock root's graph: a test's claim, else `mockConstruction`'s.
+	private static func mockClaim(of declaration: DeclarationID, in graph: some NodeKindSources) -> NodeRecordClaim? {
+		testClaim(of: declaration, in: graph) ?? mockConstructionClaim(of: declaration, in: graph)
+	}
+
 	/// The claim a test makes of `declaration` by its type's name (`NodeRecordsObservation.claimsForTesting`).
-	private static func testClaim(of declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordClaim? {
+	private static func testClaim(of declaration: DeclarationID, in world: some NodeKindSources) -> NodeRecordClaim? {
 		NodeRecordsObservation.claimsForTesting[world.scope(of: declaration).instantiable.concreteInstantiable.asSource].map { discharged in
 			NodeRecordClaim(kind: .builtByInitializer, discharges: Set(discharged.compactMap(NodeRecordRefusal.init(rawValue:))))
 		}

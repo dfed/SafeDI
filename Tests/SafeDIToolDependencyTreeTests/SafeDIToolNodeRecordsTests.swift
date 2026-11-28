@@ -814,6 +814,58 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_refusesWorldAsReadAnsweredTwoWaysFirst_whenAClaimDischargesEveryKindOfTheFill() async throws {
+		// The same world, with the call that passes the fill and the fill's fulfiller claimed as kinds that make them: no
+		// declaration refuses for its kind, so the world is refused last, for what the facts still owe (`fillBeingBuilt`).
+		let claims = ["Screen": ["construction", "fill"], "LiveApi": ["construction"]]
+		let (_, reports) = try await NodeRecordsObservation.$claimsForTesting.withValue(claims) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(
+					modules: [
+						ModuleFixture(name: "Feature", packageName: "App", swiftFileContent: [
+							"""
+							public protocol Api {}
+
+							@Instantiable(generateDependencyTree: true)
+							public struct Screen: Instantiable {
+							    public init(api: any Api) {
+							        self.api = api
+							    }
+
+							    @Instantiated let api: any Api
+							}
+							""",
+						], dependencies: []),
+						ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+							"""
+							import Feature
+
+							@Instantiable(fulfillingAdditionalTypes: [(any Api).self])
+							public struct LiveApi: Api, Instantiable {
+							    public init() {}
+							}
+
+							@Instantiable(isRoot: true)
+							public struct Root: Instantiable {
+							    public init(screen: Screen) {
+							        self.screen = screen
+							    }
+
+							    @Instantiated let screen: Screen
+							}
+							""",
+						], dependencies: ["Feature"]),
+					],
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(reports.filter { $0.root == "Root" }.map(\.refusal) == ["readAnsweredTwoWays"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsPinsRecordsAndBindingsAreOwed() async throws {
 		// The facts still owe every declaration of a mock root's world its pins, required-receive records and bindings
 		// (`mockRootPin`, `mockRootRecord`, `mockRootBinding`), which are set together.

@@ -31,6 +31,9 @@ enum NodeRecordsChecks {
 	/// Whether `executeSafeDIToolTest` observes node records, which builds every mock root's world. Off only where a test
 	/// shows what a run that no test observes builds.
 	@TaskLocal static var observesNodeRecords = true
+	/// Whether `executeSafeDIToolTest` observes the mock worlds' table, which builds each world's graph whole beside its
+	/// own and compares the two. Off only where a test shows what a run that observes node records but not the table builds.
+	@TaskLocal static var observesMockWorldsTable = true
 
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
@@ -95,7 +98,7 @@ enum NodeRecordsChecks {
 			enclosingTableObserver?(report)
 		}
 		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
-			try await MockWorldsTableObservation.$observer.withValue(tableObserver) {
+			try await MockWorldsTableObservation.$observer.withValue(observesMockWorldsTable ? tableObserver : nil) {
 				try await checkingNodeRecordsOfRoots(reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
 			}
 		}

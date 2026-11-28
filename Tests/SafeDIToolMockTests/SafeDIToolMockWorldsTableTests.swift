@@ -396,6 +396,123 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports.map { $0.worlds.map(\.recordCountWithoutTable).reduce(0, +) } == [24])
 	}
 
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedRecordsOnceAndOnlyTopRecordsPerWorld_whenMockRootsShareSubtree(rootCount: Int) async throws {
+		var declarations = (0..<rootCount).map { index in
+			"""
+			@Instantiable(generateMock: true)
+			public struct Screen\(index): Instantiable {
+			    public init(shared: Shared) {
+			        self.shared = shared
+			    }
+
+			    @Instantiated let shared: Shared
+			}
+			"""
+		}
+		declarations += [
+			"""
+			@Instantiable
+			public struct Shared: Instantiable {
+			    public init(first: First) {
+			        self.first = first
+			    }
+
+			    @Instantiated let first: First
+			}
+			""",
+			"""
+			@Instantiable
+			public struct First: Instantiable {
+			    public init(second: Second) {
+			        self.second = second
+			    }
+
+			    @Instantiated let second: Second
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Second: Instantiable {
+			    public init(third: Third) {
+			        self.third = third
+			    }
+
+			    @Instantiated let third: Third
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Third: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// The subtree is four rows, `shared`, `first`, `second` and `third`, whose records are built once for the run however
+		// many worlds share them; each world's graph holds its root and the frontier `shared`, and the world makes no record
+		// of its own, taking `shared`'s, while without the table each world builds all four.
+		#expect(reports.map(\.sharedRecordCount) == [4])
+		#expect(reports.map(\.sharedVariantCount) == [4])
+		#expect(reports.map(\.rows) == [["1: shared: Shared, every parent the root", "2: first: First", "3: second: Second", "4: third: Third"]])
+		#expect(reports.map(\.graphDeclarationCounts) == [Array(repeating: 2, count: rootCount)])
+		#expect(reports.map { $0.worlds.map { $0.recordCount - $0.sharedRecordCount } } == [Array(repeating: 0, count: rootCount)])
+		#expect(reports.map { $0.worlds.map(\.sharedRecordCount) } == [Array(repeating: 1, count: rootCount)])
+		#expect(reports.map { $0.worlds.map(\.recordCountWithoutTable).reduce(0, +) } == [4 * rootCount])
+		#expect(reports.map(\.differences) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoMockWorldsTableReport_whenNoTestObservesTheTable() async throws {
+		let reports = try await NodeRecordsChecks.$observesMockWorldsTable.withValue(false) {
+			try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(
+					swiftFileContent: [
+						"""
+						@Instantiable(generateMock: true)
+						public struct AlphaScreen: Instantiable {
+						    public init(store: SessionStore) {
+						        self.store = store
+						    }
+
+						    @Instantiated let store: SessionStore
+						}
+						""",
+						"""
+						@Instantiable
+						public struct SessionStore: Instantiable {
+						    public init(clock: Clock) {
+						        self.clock = clock
+						    }
+
+						    @Instantiated let clock: Clock
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Clock: Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		}
+		#expect(reports.isEmpty)
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_makesTwoRowsOfOneDeclaration_whenOneWorldBuildsItAtItsRootAndAnotherDeeper() async throws {
