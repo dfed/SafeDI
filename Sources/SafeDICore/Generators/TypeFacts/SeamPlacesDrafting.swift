@@ -367,70 +367,74 @@ struct SeamPlacesDrafts: Sendable {
 	let variantOrder: [VariantID]
 	let world: TypeFactsGraph
 
-	/// Test only, deleted before merge: how the drafts' levels compare with `places`, the stored place graph of the same
-	/// seam, as lines of a report. A facts level is per declaration and its answers, where a stored level merges every
-	/// build of a type before one next property, so the counts are reported by both keys.
-	func levelReport(against places: SeamSignature.Places) -> [String] {
+	/// Test only, deleted before merge: how the drafts' levels and own cases differ from `places`, the stored place graph
+	/// of the same seam, a line per difference, empty where none does. A stored level is a type built before a next
+	/// property, merged over every build, and a facts level one per variant and edge, so they are compared by that key.
+	/// A stored level that only owns a passed-up case is the passed-up cases' (`passedUpCases()`). Where the stored graph
+	/// splits a key's case per route (a ring), only the key is compared.
+	func levelAndSiteDifferences(from places: SeamSignature.Places) -> [String] {
+		func edgeTarget(of level: SeamPlacesLevelID) -> TypeFactsDeclaration {
+			let targets = world.edges(from: world.declaration(of: level.variant))
+			return world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])]
+		}
+		func builtType(of variant: VariantID) -> String {
+			let node = world.graph.nodes[Int(world.declaration(of: variant))]
+			return node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource
+		}
 		func key(of level: SeamPlacesLevelDraft) -> String {
-			let declaration = world.declaration(of: level.id.variant)
-			let node = world.graph.nodes[Int(declaration)]
-			let target = world.edges(from: declaration)[world.edges(from: declaration).startIndex + Int(level.id.edge)]
-			let next = world.graph.nodes[Int(target)]
-			let built = node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource
-			let nextProperty = next.key.isFill ? "fill" : next.property.map { "\($0.label): \($0.typeDescription.asSource)" } ?? "none"
-			return "\(built) before \(nextProperty)"
+			let next = edgeTarget(of: level.id)
+			return "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill")"
 		}
-		let storedKeys = Set(places.levels.map { level in
-			let built = level.key.builtType?.asSource ?? "fill"
-			let nextProperty = level.key.nextProperty.map { "\($0.label): \($0.typeDescription.asSource)" } ?? "fill"
-			return "\(built) before \(nextProperty)"
-		})
-		let draftKeys = Set(levels.map(key(of:)))
-		let closingKeys = Set(closingLevels.map(key(of:)))
-		let declarations = Set(levels.map { world.declaration(of: $0.id.variant) })
-		let storedCaseKeys = Set(places.cases.filter { $0.passedUp == nil }.map { placeCase in
+		func storedKey(of level: SeamSignature.Places.Level) -> String {
+			"\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill")"
+		}
+		let ownerLevelsOfOwnCases = Set(places.cases.filter { $0.passedUp == nil }.map(\.ownerLevel))
+		let ownerLevelsOfPassedUpCasesOnly = Set(places.cases.filter { $0.passedUp != nil }.map(\.ownerLevel)).subtracting(ownerLevelsOfOwnCases)
+		var storedKeys = Set<String>()
+		var passedUpKeys = Set<String>()
+		for (index, level) in places.levels.enumerated() {
+			if ownerLevelsOfPassedUpCasesOnly.contains(index) {
+				passedUpKeys.insert(storedKey(of: level))
+			} else {
+				storedKeys.insert(storedKey(of: level))
+			}
+		}
+		let draftKeys = Set((levels + closingLevels).map(key(of:)))
+		var differences = [String]()
+		for draftKey in draftKeys.subtracting(storedKeys).sorted() {
+			differences.append("level \(draftKey): drafted, not stored")
+		}
+		for storedKey in storedKeys.subtracting(draftKeys).subtracting(passedUpKeys).sorted() {
+			differences.append("level \(storedKey): stored, not drafted")
+		}
+		// The own cases, by type, hole and family, and each one's naming route where the stored graph holds one case of it.
+		func caseKey(type: String, hole: String, isSendable: Bool) -> String {
+			"\(type) before \(hole)\(isSendable ? ", @Sendable" : "")"
+		}
+		var storedCasesByKey = [String: [SeamSignature.Places.Case]]()
+		for placeCase in places.cases where placeCase.passedUp == nil {
 			let level = places.levels[placeCase.ownerLevel]
-			return "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill") sendable \(placeCase.isBuiltInSendableFunction)"
-		})
-		let draftCaseKeys = Set(cases.map { draftCase in
-			let declaration = world.declaration(of: draftCase.owner.variant)
-			let node = world.graph.nodes[Int(declaration)]
-			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
-			return "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) before \(hole.property?.label ?? "fill") sendable \(draftCase.isBuiltInSendableFunction)"
-		})
-		// Each case's naming route, as the labels the code declares along it to the owner, beside the stored case of its key.
-		func storedKey(_ placeCase: SeamSignature.Places.Case) -> String {
-			let level = places.levels[placeCase.ownerLevel]
-			return "\(level.key.builtType?.asSource ?? "fill") \(level.key.nextProperty?.label ?? "fill") \(placeCase.isBuiltInSendableFunction)"
+			storedCasesByKey[caseKey(type: level.key.builtType?.asSource ?? "fill", hole: level.key.nextProperty?.label ?? "fill", isSendable: placeCase.isBuiltInSendableFunction), default: []].append(placeCase)
 		}
-		var storedRouteByKey = [String: [String]]()
-		for placeCase in places.cases where placeCase.passedUp == nil && storedRouteByKey[storedKey(placeCase)] == nil {
-			storedRouteByKey[storedKey(placeCase)] = placeCase.namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label) }
-		}
-		var routeMismatches = [String]()
+		var draftCaseKeys = Set<String>()
 		for draftCase in cases {
-			let declaration = world.declaration(of: draftCase.owner.variant)
-			let node = world.graph.nodes[Int(declaration)]
 			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
-			let key = "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) \(hole.property?.label ?? "fill") \(draftCase.isBuiltInSendableFunction)"
-			let draftRoute = draftCase.namingRoute.dropLast().map { level -> String in
-				let declaration = world.declaration(of: level.variant)
-				let targets = world.edges(from: declaration)
-				return world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])].property?.label ?? "fill"
+			let draftKey = caseKey(type: builtType(of: draftCase.owner.variant), hole: hole.property?.label ?? "fill", isSendable: draftCase.isBuiltInSendableFunction)
+			draftCaseKeys.insert(draftKey)
+			guard let storedCases = storedCasesByKey[draftKey] else {
+				differences.append("case \(draftKey): drafted, not stored")
+				continue
 			}
-			if let stored = storedRouteByKey[key], stored != draftRoute {
-				routeMismatches.append("\(key): facts \(draftRoute.joined(separator: ".")), stored \(stored.joined(separator: "."))")
+			guard storedCases.count == 1 else { continue }
+			let draftRoute = draftCase.namingRoute.dropLast().map { edgeTarget(of: $0).property?.label ?? "fill" }
+			let storedRoute = storedCases[0].namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label) }
+			if draftRoute != storedRoute {
+				differences.append("case \(draftKey): named by \(draftRoute.joined(separator: ".")) drafted, \(storedRoute.joined(separator: ".")) stored")
 			}
 		}
-		let storedOrder = places.cases.filter { $0.passedUp == nil }.map(storedKey)
-		let draftOrder = cases.map { draftCase -> String in
-			let node = world.graph.nodes[Int(world.declaration(of: draftCase.owner.variant))]
-			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
-			return "\(node.key.isFill ? "fill" : node.scope.instantiable.concreteInstantiable.asSource) \(hole.property?.label ?? "fill") \(draftCase.isBuiltInSendableFunction)"
+		for storedKey in Set(storedCasesByKey.keys).subtracting(draftCaseKeys).sorted() {
+			differences.append("case \(storedKey): stored, not drafted")
 		}
-		return [
-			"naming routes: \(routeMismatches.count) differ of \(cases.count) \(routeMismatches.prefix(2)); case order \(storedOrder == draftOrder ? "same" : "differs, stored \(storedOrder.prefix(4)) facts \(draftOrder.prefix(4))")",
-			"levels: facts \(levels.count) (\(Set(levels.map(\.id.variant)).count) variants of \(declarations.count) declarations, \(draftKeys.count) type-and-next keys), closing-only \(closingLevels.count) (\(closingKeys.subtracting(draftKeys).count) more keys), stored \(places.levels.count) (\(storedKeys.count) keys); keys only in facts \(draftKeys.union(closingKeys).subtracting(storedKeys).count), only stored \(storedKeys.subtracting(draftKeys.union(closingKeys)).count) \(storedKeys.subtracting(draftKeys.union(closingKeys)).sorted().prefix(4)) only facts \(draftKeys.union(closingKeys).subtracting(storedKeys).sorted().prefix(4)); sites \(sites.count); cases: facts \(cases.count) (\(draftCaseKeys.count) keys), stored own \(places.cases.filter { $0.passedUp == nil }.count) (\(storedCaseKeys.count) keys), keys only in facts \(draftCaseKeys.subtracting(storedCaseKeys).sorted().prefix(3)), only stored \(storedCaseKeys.subtracting(draftCaseKeys).sorted().prefix(3)); variants \(world.variantCount), declarations \(world.declarationCount)",
-		]
+		return differences
 	}
 }
