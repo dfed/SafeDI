@@ -119,6 +119,7 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	mutating func generate_provesNoAccess_whenModuleCallsForeignSeamAndGeneratesNoSeamOrPublicMock() async throws {
 		// `App`'s root calls `Feature`'s seam `Service`, whose signature `App` reads from `Feature`'s module info. `App`
 		// generates no seam and declares no public mock, so nothing in its run reads a proof of its declarations' access.
+		// Nothing forces `Root`'s tree, so `App`'s run lays `Root` out from its node records and builds no tree of it.
 		let layers = try await Self.countLayers {
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -136,7 +137,6 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 			"Feature: access proof of Feature": 1,
 			"Feature: tree of Service": 1,
 			"App: seam signatures of App": 1,
-			"App: tree of Root": 1,
 		])
 	}
 
