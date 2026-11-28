@@ -337,6 +337,15 @@ struct SafeDIToolSeamLevelsWithoutScopeTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_defaultWidget_WidgetBuilder_Home_widgetBuilder() -> ErasedInstantiator<(), any Widget>.Builder {
+			            return __safeDI_fillBody_15C1B4CA72A2CC76()
+			        }
+			        func __safeDI_fillBody_15C1B4CA72A2CC76() -> ErasedInstantiator<(), any Widget>.Builder {
+			            func __safeDI_widgetBuilder() -> DefaultWidget {
+			                DefaultWidget()
+			            }
+			            return { _ in __safeDI_widgetBuilder() }
+			        }
 			        func __safeDI_apiBuilder_Home() -> Home.__safeDI_ApiCarrier<any Api> {
 			            .init(screenABuilder: { values_inner in __safeDI_apiBuilder_Home_ScreenA_Scope() }, screenBBuilder: { values_inner in __safeDI_apiBuilder_Home_ScreenB_Scope() }, folder: { values_inner, values_screenABuilder, values_screenBBuilder, values_widgetBuilder, values_workerBuilder in __safeDI_apiBuilder_Home_Folder_Scope() }, inner: __safeDI_apiBuilder_Inner())
 			        }
@@ -367,6 +376,9 @@ struct SafeDIToolSeamLevelsWithoutScopeTests: ~Copyable {
 			                return api
 			            })
 			        }
+			        func __safeDI_defaultWidget_WidgetBuilder_Home() -> Home.__safeDI_DefaultWidget_WidgetCarrier<any Widget> {
+			            .init(widgetBuilder: { values_inner, values_screenABuilder, values_screenBBuilder in __safeDI_defaultWidget_WidgetBuilder_Home_widgetBuilder() })
+			        }
 			        @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Home() -> Home.__safeDI_GadgetSendableCarrier<any Gadget> {
 			            .init(workerBuilder: { __safeDI_gadgetBuilder_Home_Worker_Scope() })
 			        }
@@ -378,15 +390,6 @@ struct SafeDIToolSeamLevelsWithoutScopeTests: ~Copyable {
 			        }
 			        func __safeDI_home() -> Home {
 			            _ = Home.__safeDI_Home_33C41EF320BE023C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_defaultWidget_WidgetBuilder_Home_widgetBuilder() -> ErasedInstantiator<(), any Widget>.Builder {
-			                func __safeDI_widgetBuilder() -> DefaultWidget {
-			                    DefaultWidget()
-			                }
-			                return { _ in __safeDI_widgetBuilder() }
-			            }
-			            func __safeDI_defaultWidget_WidgetBuilder_Home() -> Home.__safeDI_DefaultWidget_WidgetCarrier<any Widget> {
-			                .init(widgetBuilder: { values_inner, values_screenABuilder, values_screenBBuilder in __safeDI_defaultWidget_WidgetBuilder_Home_widgetBuilder() })
-			            }
 			            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_defaultWidget_WidgetBuilder: __safeDI_defaultWidget_WidgetBuilder_Home(), __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_Home(), __safeDI_trackerOptionalBuilder: {
 			                @Sendable nonisolated func __safeDI_noScope_Home_SafeDICarrierScope_TrackerOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Home.__safeDI_TrackerOptionalCarrier<__safeDI_Built> {
 			                    .init(screenABuilder: { _ in __safeDI_noScope_Home_SafeDICarrierScope_TrackerOptional_ScreenA_Scope(__safeDI_builder) }, folder: { _, _, _, _, _ in __safeDI_noScope_Home_SafeDICarrierScope_TrackerOptional_Folder_Scope(__safeDI_builder) }, inner: __safeDI_noScope_Inner_SafeDICarrierScope_TrackerOptional(__safeDI_builder))
