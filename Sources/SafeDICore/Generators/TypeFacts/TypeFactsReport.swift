@@ -152,7 +152,7 @@ public struct TypeFactsReport: Sendable {
 		variantCalls = (0..<graph.variantCount).map { graph.calls(of: VariantID($0)).map(Int.init) }
 		variantMadeAgainCalls = (0..<graph.variantCount).map { graph.madeAgainCalls(of: VariantID($0)).map(Int.init) }
 		variantIsCalledOnce = (0..<graph.variantCount).map { graph.isCalledOnce(VariantID($0)) }
-		variantReceivesPassedNil = (0..<graph.variantCount).map { graph.receivesPassedNil(of: VariantID($0)).map(\.asSource).sorted() }
+		formDebts = graph.formDebts.map(\.rawValue).sorted()
 		func sourceDescriptions(_ sources: ArraySlice<AnswerSource>) -> [String] {
 			sources.map { source in
 				switch source.kind {
@@ -240,7 +240,20 @@ public struct TypeFactsReport: Sendable {
 				owedFacts: Self.names(of: graph.owedFacts(of: Int32(index))),
 			)
 		}
-		self.places = places.places.map { place in
+		// What each place's mock passes `nil`, from the pins along the nodes from the mock root to the place: a pin keys no
+		// variant, so it is read per place.
+		let pins = forMockGeneration ? TypeFactsMockRootPins(graph: graph.graph, root: 0, edgeIsFill: graph.edgeFacts.map(\.isFill)) : nil
+		var pathByPlace = [[Int]?]()
+		pathByPlace.reserveCapacity(places.places.count)
+		for place in places.places {
+			let node = graph.graph.index(of: place.declaration)
+			if let parent = place.parent {
+				pathByPlace.append(node.flatMap { node in pathByPlace[parent].map { $0 + [node] } })
+			} else {
+				pathByPlace.append(node.map { [$0] })
+			}
+		}
+		self.places = places.places.enumerated().map { index, place in
 			var reads = [String]()
 			var answeredReads = [String]()
 			var cycleReads = [String]()
@@ -268,6 +281,7 @@ public struct TypeFactsReport: Sendable {
 				builtType: place.declaration.scope.instantiable.concreteInstantiable.asSource,
 				generator: place.generator.map(Generator.init),
 				receivesPassedNil: place.receivesPassedNil.map(\.asSource).sorted(),
+				pinsPassNil: (pathByPlace[index].flatMap { path in pins?.receivesPassedNil(alongPath: path) } ?? []).map(\.asSource).sorted(),
 			)
 		}
 	}
@@ -403,6 +417,9 @@ public struct TypeFactsReport: Sendable {
 		public let generator: Generator?
 		/// The receives only if available the place's mock passes `nil`, as the walk decided them.
 		public let receivesPassedNil: [String]
+		/// The receives only if available the place's mock passes `nil`, as the pins along its path decide them
+		/// (`TypeFactsMockRootPins.receivesPassedNil(alongPath:)`): empty outside a mock root's world.
+		public let pinsPassNil: [String]
 	}
 
 	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
@@ -450,8 +467,8 @@ public struct TypeFactsReport: Sendable {
 	public let variantMadeAgainCalls: [[Int]]
 	/// Whether each variant is called by exactly one call, a made-again call counted, and off every cycle.
 	public let variantIsCalledOnce: [Bool]
-	/// The receives only if available each variant's mock passes `nil` (`TypeFactsGraph.receivesPassedNil(of:)`), sorted.
-	public let variantReceivesPassedNil: [[String]]
+	/// The forms no parameter carries that the world's variants split on (`TypeFactsFormDebt`), by name, sorted.
+	public let formDebts: [String]
 	/// For each call of each variant, in edge order, where each answer it hands comes from: `none`, `passedThrough`, or
 	/// `bound` with the answer's form.
 	public let variantCallSources: [[[String]]]
