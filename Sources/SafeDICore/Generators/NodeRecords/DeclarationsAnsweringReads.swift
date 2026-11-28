@@ -165,6 +165,11 @@ struct DeclarationsAnsweringReads: Sendable {
 	/// declaration still being built around the call, the node of the label that `answeringDeclaration` builds on the path
 	/// to `callee`, which captures nothing (`NearestDeclarations.resolvingBinding(of:)`). A required read of the label reads
 	/// `value` beside it, which is judged on its own.
+	///
+	/// A deliberate gap from the tree: a receive only if available that a required receive pins to a form it cannot read
+	/// (`MockReceivesPassedNil`) is passed `nil` by the tree, but not judged here, so the world finds a capture the tree does
+	/// not and keeps the tree, which is safe. `MockRootTreeChecksOracle` counts such roots in its log, and
+	/// `SafeDIToolMockSendableCaptureCheckTests` holds the tree's code for the shape.
 	private static func isPassedNil(
 		_ channel: ReadChannel,
 		of label: String,
