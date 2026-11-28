@@ -109,7 +109,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		)
 		let signature = try #require(output.modules["Feature"]?.generateOutput?.seamSignaturesWrittenToModuleInfo?.first?.signature)
 		#expect(signature.holes.count == 36)
-		#expect(signature.casePlaces.map(\.caseIndex) == [0, 1, 2, 3])
+		// One place of each of the four cases, whatever the graph numbers them.
+		#expect(signature.casePlaces.compactMap(\.caseIndex).sorted() == [0, 1, 2, 3])
 		#expect(signature.casePlaces.map(\.hole.site) == [0, 9, 18, 27].map { signature.holes[$0].site })
 		#expect(signature.casePlaces.map { $0.hole.sitePath.map(\.label).joined(separator: ".") } == [
 			"screen0Builder.screen5Builder.screen8Builder.model8.api",
