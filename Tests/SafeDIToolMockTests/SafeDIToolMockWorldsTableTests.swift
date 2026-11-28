@@ -737,6 +737,205 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_tellsWorldsVariantsApartOnlyByEachWorldsClasses_whenTwoRootsOfferLabelsInAlternatingClasses(labelCount: Int) async throws {
+		let labels = (0..<labelCount).map { (label: "value\($0)", type: "Value\($0)") }
+		let evenLabels = labels.indices.filter { $0.isMultiple(of: 2) }.map { labels[$0] }
+		let oddLabels = labels.indices.filter { !$0.isMultiple(of: 2) }.map { labels[$0] }
+		var declarations = [
+			Self.type("Screen0", mocked: true, instantiating: evenLabels + [("holder0", "Holder0")]),
+			Self.type("Screen1", mocked: true, instantiating: oddLabels + [("holder1", "Holder1")]),
+			Self.type("Holder0", instantiating: oddLabels + [("page", "Page")]),
+			Self.type("Holder1", instantiating: evenLabels + [("page", "Page")]),
+			Self.type("Page", instantiating: [("shared", "Shared")]),
+			Self.type("Shared", instantiating: labels.indices.map { (label: "reader\($0)", type: "Reader\($0)") }),
+		]
+		for (index, label) in labels.enumerated() {
+			declarations.append(Self.type("Reader\(index)", receiving: [label]))
+			declarations.append(Self.type(label.type))
+		}
+		let source = declarations.joined(separator: "\n\n")
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Screen0`'s root binds the even labels and its `holder0` the odd ones, `Screen1` the reverse, and each holder calls
+		// the shared `page`. Each holder's own labels are shared leaves of one variant each. Every reader is offered its label
+		// in one class by each world and in the other class by the other, so `page`, `shared` and each reader have two
+		// variants, one per world: at most two per declaration whatever the number of labels, and 3k + 4 in all, never a
+		// variant per mix of the labels' classes.
+		let half = labelCount / 2
+		var shareableDeclarations = evenLabels.enumerated().map { "\($0.offset + 1): \($0.element.label): \($0.element.type)" }
+		shareableDeclarations.append("\(half + 1): holder0: Holder0")
+		shareableDeclarations += oddLabels.enumerated().map { "\(half + 2 + $0.offset): \($0.element.label): \($0.element.type)" }
+		shareableDeclarations += ["\(labelCount + 2): page: Page", "\(labelCount + 3): shared: Shared"]
+		shareableDeclarations += labels.indices.map { "\(labelCount + 4 + $0): reader\($0): Reader\($0)" }
+		shareableDeclarations.append("\(2 * labelCount + 5): holder1: Holder1")
+		var sharedChainParents = ["\(half + 1) ← shared \(half)"]
+		sharedChainParents += labels.indices.map { "\(half + 2 + $0) ← shared \(half + 1)" }
+		var screen0Parents = (0..<half).map { "\($0) ← top \(half + 1)" }
+		screen0Parents.append("\(half) ← top \(half + 1)")
+		var screen1Parents = (0..<half).map { "\(half + 2 + labelCount + $0) ← top \(2 * labelCount + 5)" }
+		screen1Parents.append("\(half) ← top \(2 * labelCount + 5)")
+		var sharedVariantCounts = Array(repeating: 1, count: half)
+		sharedVariantCounts += Array(repeating: 2, count: labelCount + 2)
+		sharedVariantCounts += Array(repeating: 1, count: half)
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 2 * labelCount + 6,
+				sharedDeclarationCount: 2 * labelCount + 2,
+				sharedVariantCount: 3 * labelCount + 4,
+				sharedVariantCounts: sharedVariantCounts,
+				shareableDeclarations: shareableDeclarations,
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 2 * labelCount + 4, shareableDeclarationCount: 2 * labelCount + 3, topDeclarationCount: half + 2, frontierDeclarationCount: half + 1, sharedVariantsCalled: Array(0...half), sharedDeclarationParents: screen0Parents + sharedChainParents),
+					.init(mockedType: "Screen1", rootDeclaration: 2 * labelCount + 4, declarationCount: 2 * labelCount + 4, shareableDeclarationCount: 2 * labelCount + 3, topDeclarationCount: half + 2, frontierDeclarationCount: half + 1, sharedVariantsCalled: Array((half + 1)...(labelCount + 1)), sharedDeclarationParents: screen1Parents + sharedChainParents),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_tellsWorldsVariantsApart_whenOneWorldOffersReadNothingAndAnotherAParameter() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("page", "Page")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("holder", "Holder")]))
+
+		\(Self.type("Holder", instantiating: [("theme", "Theme"), ("page", "Page")]))
+
+		\(Self.type("Page", instantiating: [("shared", "Shared")]))
+
+		\(Self.type("Shared", receivingOnlyIfAvailable: [("theme", "Theme")]))
+
+		\(Self.type("Theme"))
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Screen0` builds `page` itself and calls the shared `shared`, which nothing above hands `theme`: it is passed `nil`.
+		// `Screen1`'s `holder` binds `theme` outside the root's body and calls the shared `page`, whose call of `shared`
+		// passes it through as a parameter. So `shared` has two variants, nothing's and the parameter's, `page` one, and
+		// `holder`'s `theme`, a shared leaf, one.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 6,
+				sharedDeclarationCount: 3,
+				sharedVariantCount: 4,
+				sharedVariantCounts: [2, 1, 1],
+				shareableDeclarations: ["1: page: Page", "2: shared: Shared", "4: holder: Holder", "5: theme: Theme"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1"]),
+					.init(mockedType: "Screen1", rootDeclaration: 3, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 2, frontierDeclarationCount: 2, sharedVariantsCalled: [1, 2], sharedDeclarationParents: ["1 ← top 4", "2 ← top 4", "0 ← shared 2"]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsWorldClean_whenTwoOfItsTopDeclarationsCallOneSharedDeclarationOfferingItsReadInOtherClasses() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel"), ("holder", "Holder")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel")]))
+
+		\(Self.type("Holder", instantiating: [("theme", "Theme"), ("shared", "Shared")]))
+
+		\(Self.type("Panel", instantiating: [("shared", "Shared")]))
+
+		\(Self.type("Shared", receiving: [("theme", "Theme")]))
+
+		\(Self.type("Theme"))
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Screen0` calls the shared `shared` from two of its own declarations: its `panel`, whose call offers `theme` its
+		// root's statement, and its `holder`, which binds `theme` itself. Its top graph holds `shared` as one frontier
+		// variant of one key, whose outcome is already joined over both calls, as built whole, so both calls seed one
+		// shared variant, and the world stays clean. `Screen1` offers its root's statement alone: a second variant.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 6,
+				sharedDeclarationCount: 1,
+				sharedVariantCount: 2,
+				sharedVariantCounts: [2],
+				shareableDeclarations: ["1: theme: Theme", "2: panel: Panel", "3: shared: Shared", "4: holder: Holder"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 4, topDeclarationCount: 4, frontierDeclarationCount: 1, sharedVariantsCalled: [0, 0], sharedDeclarationParents: ["0 ← top 2, top 4"]),
+					.init(mockedType: "Screen1", rootDeclaration: 5, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [1], sharedDeclarationParents: ["0 ← top 2"]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsWorldWhole_whenTwoOfItsSharedVariantsConvergeOnOneCalleeWithReadInOtherClasses() async throws {
+		let source = """
+		\(Self.type("Screen0", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel"), ("holder", "Holder")]))
+
+		\(Self.type("Screen1", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel")]))
+
+		\(Self.type("Holder", instantiating: [("theme", "Theme"), ("box", "Box")]))
+
+		\(Self.type("Box", instantiating: [("shared", "Shared")]))
+
+		\(Self.type("Panel", instantiating: [("shared", "Shared")]))
+
+		\(Self.type("Shared", receiving: [("theme", "Theme")]))
+
+		\(Self.type("Theme"))
+		"""
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `Screen0` calls the shared `shared` from its `panel`, offering `theme` its root's statement, and the shared `box`
+		// from its `holder`, which binds `theme` itself; `box` passes `theme` through to `shared` in the class `holder`
+		// offers. So the shared graph holds two variants of `shared` that differ only in that class, and the world built
+		// whole joins them into one: the world is built whole, and so nothing of it is compared. `Screen1` calls only the
+		// root statement's variant, which equals its own built whole.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 7,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 3,
+				sharedVariantCounts: [2, 1],
+				shareableDeclarations: ["1: theme: Theme", "2: panel: Panel", "3: shared: Shared", "4: holder: Holder", "5: box: Box"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "Screen0", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 5, topDeclarationCount: 4, frontierDeclarationCount: 2, sharedVariantsCalled: [0, 1], sharedDeclarationParents: ["0 ← top 2, shared 1", "1 ← top 4"], builtWholeReason: .callsSharedDeclarationInOtherClasses),
+					.init(mockedType: "Screen1", rootDeclaration: 6, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
+				],
+			),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

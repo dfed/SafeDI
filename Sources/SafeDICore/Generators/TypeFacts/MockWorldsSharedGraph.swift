@@ -273,12 +273,40 @@ struct MockWorldsSharedGraph: Sendable {
 		worlds = zip(zip(topGraphs, topByWorld), zip(isFrontierByWorld, callsByWorld)).map { topAndSet, frontierAndCalls in
 			let (topGraph, top) = topAndSet
 			let (isFrontier, calls) = frontierAndCalls
+			let frontierCalls = calls.map { FrontierCall(caller: $0.caller, edgeIndex: $0.edgeIndex, frontierVariant: $0.callee, sharedVariant: graph.variants.seedVariants[$0.seed]) }
 			return World(
 				topGraph: topGraph,
-				frontierCalls: calls.map { FrontierCall(caller: $0.caller, edgeIndex: $0.edgeIndex, frontierVariant: $0.callee, sharedVariant: graph.variants.seedVariants[$0.seed]) },
+				frontierCalls: frontierCalls,
 				parentsByDeclaration: Self.parentsOfSharedDeclarations(topGraph: topGraph, isFrontier: isFrontier, shared: graph, table: table, top: top),
+				builtWholeReason: Self.reachesVariantsApartOnlyByClass(from: frontierCalls, in: graph) ? .callsSharedDeclarationInOtherClasses : nil,
 			)
 		}
+	}
+
+	/// Whether the shared variants a world's calls reach, its frontier calls' and every variant those call in turn, hold two
+	/// of one declaration in one family with one key that the shared graph tells apart only by the class a read is offered
+	/// (`TypeFactsVariants.OfferedClass`): two frontier calls that offer one read in different classes, or two variants
+	/// whose calls converge on one callee with a label passed through in different classes. Built whole, the world makes
+	/// one variant of those calls, whose outcome joins the two classes and so equals neither shared variant's, so such a
+	/// world is built whole. One walk of the variants this world reaches, which dies with the call; no fold across worlds.
+	private static func reachesVariantsApartOnlyByClass(from calls: [FrontierCall], in graph: TypeFactsGraph) -> Bool {
+		let variants = graph.variants
+		var isReached = [Bool](repeating: false, count: variants.count)
+		// The reached variants of each declaration, in the order the walk reaches them; read only to compare, so no order
+		// of the dictionary reaches the result.
+		var reachedByNode = [Int32: [Int32]]()
+		var pending = calls.map(\.sharedVariant)
+		while let variant = pending.popLast() {
+			guard !isReached[Int(variant)] else { continue }
+			isReached[Int(variant)] = true
+			let node = variants.node(of: Int(variant))
+			for other in reachedByNode[node, default: []] where variants.family(of: Int(other)) == variants.family(of: Int(variant)) && variants.keys(of: Int(other)).elementsEqual(variants.keys(of: Int(variant))) {
+				return true
+			}
+			reachedByNode[node, default: []].append(variant)
+			pending.append(contentsOf: variants.callees(of: Int(variant)))
+		}
+		return false
 	}
 
 	/// A node of a world walked whole across its top graph and the shared graph: a node of either, by its position there.
@@ -353,6 +381,8 @@ struct MockWorldsSharedGraph: Sendable {
 		/// Each shared declaration the world reaches, by its position in the shared graph, in the order the world first
 		/// reaches them, with the parents the world reaches it through, in the world's order of edges.
 		let parentsByDeclaration: [(declaration: Int32, parents: [Parent])]
+		/// Why the shared graph's facts cannot stand for the world's, so that it is built whole, or `nil` where they can.
+		let builtWholeReason: MockWorldSharingReport.BuiltWholeReason?
 	}
 
 	/// The shared graph.
@@ -377,7 +407,8 @@ extension MockWorldsSharedGraph {
 	/// - Parameter worldsBuiltWhole: Each world's graph built from its root, in the table's order of worlds.
 	func differences(fromWorldsBuiltWhole worldsBuiltWhole: [TypeFactsGraph]) -> [String] {
 		var differences = [String]()
-		for (index, (world, whole)) in zip(worlds, worldsBuiltWhole).enumerated() {
+		// A world built whole takes nothing of the shared graph, so nothing of it is compared.
+		for (index, (world, whole)) in zip(worlds, worldsBuiltWhole).enumerated() where world.builtWholeReason == nil {
 			var isShared = [Bool](repeating: false, count: whole.graph.nodes.count)
 			for (declaration, _) in world.parentsByDeclaration {
 				let wholeNode = whole.graph.index(of: graph.graph.nodes[Int(declaration)])

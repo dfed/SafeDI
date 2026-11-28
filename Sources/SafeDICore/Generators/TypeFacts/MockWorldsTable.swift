@@ -375,6 +375,7 @@ struct MockWorldsTable: Sendable {
 						}
 						return "\(declaration) ← \(parentTexts.joined(separator: ", "))"
 					},
+					builtWholeReason: shared.worlds[world].builtWholeReason,
 				)
 			},
 		)
@@ -434,7 +435,7 @@ public enum MockWorldsTableObservation {
 public struct MockWorldsTableReport: Equatable, Sendable {
 	/// One mock root's world.
 	public struct World: Equatable, Sendable {
-		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, topDeclarationCount: Int, frontierDeclarationCount: Int, sharedVariantsCalled: [Int], sharedDeclarationParents: [String]) {
+		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, topDeclarationCount: Int, frontierDeclarationCount: Int, sharedVariantsCalled: [Int], sharedDeclarationParents: [String], builtWholeReason: MockWorldSharingReport.BuiltWholeReason? = nil) {
 			self.mockedType = mockedType
 			self.rootDeclaration = rootDeclaration
 			self.declarationCount = declarationCount
@@ -443,6 +444,7 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 			self.frontierDeclarationCount = frontierDeclarationCount
 			self.sharedVariantsCalled = sharedVariantsCalled
 			self.sharedDeclarationParents = sharedDeclarationParents
+			self.builtWholeReason = builtWholeReason
 		}
 
 		/// The mocked type.
@@ -465,6 +467,9 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		/// reaches them, with the parents the world reaches it through, in the world's order: `top` and the table ID of a
 		/// declaration of the world's own graph, or `shared` and a position in the shared graph.
 		public let sharedDeclarationParents: [String]
+		/// Why the facts the shared graph holds cannot stand for the world's, so that it is built whole, or `nil` where they
+		/// can.
+		public let builtWholeReason: MockWorldSharingReport.BuiltWholeReason?
 	}
 
 	public init(declarationCount: Int, sharedDeclarationCount: Int, sharedVariantCount: Int, sharedVariantCounts: [Int], shareableDeclarations: [String], differences: [String], worlds: [World]) {

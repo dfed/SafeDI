@@ -63,6 +63,10 @@ public struct MockWorldSharingReport: Equatable, Sendable {
 		case rootReachesHole
 		/// The world reaches a variant of the shared graph that is no row.
 		case reachesSharedVariantThatIsNoRow
+		/// The world reaches two variants of one shared declaration that differ only in the class a read is offered (a
+		/// root statement, a parameter, or nothing): built whole, the world joins their calls into one variant, whose
+		/// outcome neither shared variant has.
+		case callsSharedDeclarationInOtherClasses
 	}
 
 	/// One mock root's world.
