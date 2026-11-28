@@ -2446,7 +2446,20 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				}
 				guard isPublicMockCall else {
 					if enumKey.holeType.builtType.isOptional {
-						return .init(label: label, value: ".init(\(ReservedName.noScopeArgumentLabel): \(ReservedName.nilBuilderSource))")
+						// Places only if available that nothing fulfills are passed `nil`: the call hands the levels of the builder
+						// built from a builder that returns it, by functions a closure it calls declares (`LevelsWithoutScope`).
+						// The call is written one level into its body, so the closure's lines are indented one level more.
+						let closureIndent = ScopeGenerator.standardIndent
+						let bodyIndent = closureIndent + ScopeGenerator.standardIndent
+						var levelsWithoutScope = ScopeGenerator.LevelsWithoutScope(scopeEnums: calledBuilders.scopeEnums)
+						let functions = levelsWithoutScope.functionDeclarations(reachedFrom: [enumKey], indent: bodyIndent)
+						let value = """
+						{
+						\(functions.joined(separator: "\n"))
+						\(bodyIndent)return \(levelsWithoutScope.call(ofLevel: enumKey, handing: ReservedName.nilBuilderSource))
+						\(closureIndent)}()
+						"""
+						return .init(label: label, value: value)
 					}
 					return .init(label: label, value: "")
 				}

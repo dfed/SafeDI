@@ -81,10 +81,6 @@ struct SafeDIToolSeamSkippedConfirmingPassTests: ~Copyable {
 		            self.api = api
 		            self.featureBuilder = featureBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() }, featureBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

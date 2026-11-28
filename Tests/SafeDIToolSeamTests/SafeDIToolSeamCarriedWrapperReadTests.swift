@@ -1621,7 +1621,7 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		// the place's field, `Outer`'s wrapper: the wrapper's read is the caller's, as the tree's fill reads it.
 		let modules = Self.carriedWrapperModules(gizmoReadsValueToo: true)
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

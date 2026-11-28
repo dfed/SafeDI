@@ -42,7 +42,7 @@ struct SafeDIToolScopeTableOverlayTests {
 		let mismatchesBySeed = Mutex([UInt64: [String]]())
 		for seed in SafeDIToolGraphFuzzerTests.seamSmokeSeeds {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
-			try await ScopeTableObservation.$overlayOracle.withValue({ mismatches in
+			try await ScopeTableObservation.$overlayOracle.withValue(TaskLocalFunction { mismatches in
 				passCount.withLock { $0 += 1 }
 				if !mismatches.isEmpty {
 					mismatchesBySeed.withLock { $0[seed, default: []].append(contentsOf: mismatches) }

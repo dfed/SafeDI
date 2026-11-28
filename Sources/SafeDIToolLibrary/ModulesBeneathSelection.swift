@@ -49,14 +49,15 @@ struct ModulesBeneathSelection {
 	/// - Parameters:
 	///   - ownModule: The module the run generates code for.
 	///   - listedFiles: The module info files the build lists.
-	init(ownModule: ModuleInfo, listedFiles: [ModuleInfoFile]) {
+	///   - references: The entries the references of the listed files' views resolve to.
+	init(ownModule: ModuleInfo, listedFiles: [ModuleInfoFile], references: ResolvedModuleReferences) {
 		for declaration in read(ownModule.instantiables, isOwn: true) where declaration.instantiable.isRoot || declaration.instantiable.generatesDependencyTree {
 			startingVisits.append(Visit(declaration: declaration, walk: .tree))
 		}
 		guard !startingVisits.isEmpty else { return }
 		for listedFile in listedFiles {
 			read(listedFile)
-			otherModules.add(listedFile)
+			otherModules.add(listedFile, viewing: references.entries(of: listedFile.view))
 		}
 	}
 
@@ -81,7 +82,8 @@ struct ModulesBeneathSelection {
 	/// - Parameter files: The module info files of the modules beneath, without those the build lists.
 	mutating func indicesOfFilesToRead(among files: [ModuleInfoFile]) -> Set<Int> {
 		for (index, file) in files.enumerated() {
-			otherModules.add(file)
+			// Read without its view, so it carries no declarations of other modules.
+			otherModules.add(file, viewing: [])
 			for instantiable in file.instantiables where !instantiable.mockOnly {
 				for instantiableType in instantiable.instantiableTypes {
 					fileIndicesDeclaringType[instantiableType, default: []].insert(index)
@@ -152,14 +154,14 @@ struct ModulesBeneathSelection {
 	/// What a run knows of other modules from the module info files it opens and the views they carry, which it need not
 	/// read: the declarations of the modules whose seams a walk can reach and of the modules those read.
 	private struct OtherModules {
-		mutating func add(_ file: ModuleInfoFile) {
+		mutating func add(_ file: ModuleInfoFile, viewing viewedEntries: [ViewedModuleEntry]) {
 			moduleNamesReadByModuleName[file.moduleName] = Set(file.dependencyModuleNames + [file.moduleName])
 			add(moduleNamed: file.moduleName, instantiables: file.instantiables)
 			for identity in file.view.moduleGraph {
 				moduleNamesReadByModuleName[identity.moduleName] = Set(identity.dependencyModuleNames + [identity.moduleName])
 			}
-			for viewedModule in file.view.declarations {
-				add(moduleNamed: viewedModule.moduleName, instantiables: viewedModule.instantiables)
+			for viewed in viewedEntries {
+				add(moduleNamed: viewed.entry.moduleName, instantiables: viewed.entry.instantiables)
 			}
 		}
 

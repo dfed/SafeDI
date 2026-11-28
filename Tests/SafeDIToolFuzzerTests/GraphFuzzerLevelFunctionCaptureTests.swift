@@ -555,7 +555,9 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
+		// `App`'s three level functions, and the three `Home`'s plain initializer declares, one per level it builds from the
+		// builder it is handed.
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	@Test
@@ -579,7 +581,9 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
+		// `App`'s three level functions, and the three `Home`'s plain initializer declares, one per level it builds from the
+		// builder it is handed.
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	@Test
@@ -602,8 +606,10 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		// Three level functions, whose carriers' members take each level's values positionally, so none names a run struct.
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
+		// Six level functions, whose carriers' members take each level's values positionally, so none names a run struct:
+		// `App`'s three level functions, and the three `Home`'s plain initializer declares, one per level it builds from the
+		// builder it is handed.
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	@Test
@@ -625,7 +631,9 @@ struct GraphFuzzerLevelFunctionCaptureTests: ~Copyable {
 			],
 		), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 
-		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 3, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0))
+		// `App`'s three level functions, and the three `Home`'s plain initializer declares, one per level it builds from the
+		// builder it is handed.
+		#expect(Self.captures(of: output) == GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0))
 	}
 
 	// MARK: Private

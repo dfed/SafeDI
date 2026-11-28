@@ -34,7 +34,7 @@ enum NodeRecordsChecks {
 		let enclosingSeamCallObserver = SeamCallRecordObservation.observer
 		// A seam call's record, as the engine is to spell it, must list what its text reads, binds and declares, and spell
 		// the text's guard line and builder arguments.
-		let seamCallObserver: @Sendable (SeamCallRecordObservation) -> Void = { call in
+		let seamCallObserver = TaskLocalFunction<@Sendable (SeamCallRecordObservation) -> Void> { call in
 			if let boundNames = call.boundNames {
 				for mismatch in HoleSiteRecordObservation.recordMismatches(text: call.text, readNames: call.readNames, boundNames: boundNames, place: "a seam call") {
 					Issue.record(Comment(rawValue: mismatch))
@@ -73,9 +73,9 @@ enum NodeRecordsChecks {
 		}
 	}
 
-	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
+	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?, _ body: () async throws -> Result) async rethrows -> Result {
 		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
-			try await NodeRecordsObservation.$observer.withValue({ report in
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
 				let outcome = Self.outcome(of: report)
 				for difference in outcome.differences {
 					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))

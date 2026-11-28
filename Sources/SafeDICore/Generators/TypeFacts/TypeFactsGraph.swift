@@ -849,6 +849,7 @@ struct TypeFactsGraph: Sendable {
 		self.fillPathEntries = fillPathEntries
 		self.fillHandedMemos = fillHandedMemos
 		self.propertyFacts = propertyFacts
+		owedFactsByNode = Self.owedFacts(of: graph, forMockGeneration: forMockGeneration)
 		propertyTable = properties.values
 		typeTable = types.values
 		moduleNames = modules.values
@@ -1481,6 +1482,33 @@ struct TypeFactsGraph: Sendable {
 	let moduleNames: [String]
 	/// Each declaration location ID's location.
 	let declarationLocations: [Dependency.DeclarationLocation]
+
+	/// The facts producers still owe each node's answers (`TypeFactsOwedFacts`), found once for the whole world.
+	let owedFactsByNode: [TypeFactsOwedFacts]
+
+	/// The facts producers still owe each node's answers, in one walk down from the fills: a node is beneath a fill where
+	/// a fill reaches it. Each node and each node a walk from a fill reaches counts as one visit of `findingOwedFacts`;
+	/// asked of each declaration with a walk up its parents, a chain of n declarations walked n² parents.
+	private static func owedFacts(of graph: OrderedGraph<TypeFactsDeclaration>, forMockGeneration: Bool) -> [TypeFactsOwedFacts] {
+		let everyNode: TypeFactsOwedFacts = forMockGeneration ? [.mockRootPin, .mockRootRecord, .mockRootBinding] : []
+		var owed = [TypeFactsOwedFacts](repeating: everyNode, count: graph.nodes.count)
+		var visits = graph.nodes.count
+		// A declaration is beneath a fill where any of its routes enters one: a walk down from every fill.
+		var pending = [Int]()
+		for index in graph.nodes.indices where graph.nodes[index].key.isFill {
+			owed[index].insert(.fillBeingBuilt)
+			pending.append(index)
+		}
+		while let current = pending.popLast() {
+			visits += 1
+			for target in graph.edges(from: current) where !owed[Int(target)].contains(.fillBeingBuilt) {
+				owed[Int(target)].insert(.fillBeingBuilt)
+				pending.append(Int(target))
+			}
+		}
+		GenerationWork.record(visits, by: .findingOwedFacts)
+		return owed
+	}
 
 	/// The facts of the node's edges, parallel to `graph.edges(from:)`.
 	func edgeFacts(from index: Int) -> ArraySlice<TypeFactsEdge> {
