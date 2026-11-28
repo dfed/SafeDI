@@ -111,6 +111,11 @@ struct FilledCallRecords: Sendable {
 			callerArguments: callerArguments,
 			callerMemoArguments: [:],
 		)
+		// A call some route builds inside a `@Sendable` function calls its dispatchers there, so each of them is `@Sendable`,
+		// and each function their cases lead to, but a fill held in place, a closure of its dispatcher.
+		let keysInsideSendableFunction = world.isBuiltInsideSendableFunction(call)
+			? FillEmissionDecisions.keysReached(from: levels.dispatchers, among: levels.dispatchers).subtracting(decisions.inlinedFillKeys)
+			: []
 		var fills = [Fill]()
 		var seenCaseKeys = Set<String>()
 		for facts in allFacts {
@@ -121,13 +126,13 @@ struct FilledCallRecords: Sendable {
 			else { continue }
 			fills.append(Fill(
 				facts: facts,
-				signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key)),
+				signature: signature(of: facts, isSendable: decisions.sendableKeys.contains(facts.key) || keysInsideSendableFunction.contains(facts.key)),
 				functionName: functionName,
 				scopeParameterName: scopeParameterName,
 				callerDeclarations: callerSources.visibleDeclarations(facts: facts, call: call, variant: variant),
 			))
 		}
-		let dispatchers = levels.dispatchers.map { DispatcherRecord(dispatcher: $0.dispatcher, parameters: $0.parameters, isSendable: decisions.sendableKeys.contains($0.key)) }
+		let dispatchers = levels.dispatchers.map { DispatcherRecord(dispatcher: $0.dispatcher, parameters: $0.parameters, isSendable: decisions.sendableKeys.contains($0.key) || keysInsideSendableFunction.contains($0.key)) }
 		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		var closureArguments = [ClosureArgumentEntry]()
 		var builtClosures = [BuiltClosure]()
@@ -275,7 +280,7 @@ public struct FilledCallRecordsObservation: Sendable {
 	public let closureArguments: [String]
 
 	/// Called with each production root's filled calls, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FilledCallRecordsObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FilledCallRecordsObservation) -> Void>?
 
 	/// Hands the observer, where one is set, the records of `world`'s filled calls that node records accept.
 	static func observe(root: String, world: TypeFactsGraph) {
@@ -311,9 +316,11 @@ public struct FilledCallRecordsObservation: Sendable {
 				continue
 			}
 			functions.merge(records.spelledFunctions(typesDeclaredEscaping: typesDeclaredEscaping), uniquingKeysWith: { first, _ in first })
-			// The tree writes no record of a call in a world with a loop of builders, whose members' functions rebind what the
-			// call reads (`ScopeGenerator.observeFilledCall`).
-			for (argument, closure) in zip(records.closureArguments, records.builtClosures) where !holdsBuilderLoop {
+			// The tree writes no record of a call in a world with a loop of builders it refuses, whose members' functions rebind
+			// what the call reads, nor of a call that is itself a member, which makes its rebindings again in its body
+			// (`ScopeGenerator.observeFilledCall`).
+			let writesNoRecord = holdsBuilderLoop || !world.madeAgain(from: declaration).isEmpty
+			for (argument, closure) in zip(records.closureArguments, records.builtClosures) where !writesNoRecord {
 				closureArguments.append("\(argument.label): \(closure.spelled(dispatcherName: records.dispatcherNames[closure.rootDispatcherKey] ?? "", structNames: []))")
 			}
 		}

@@ -218,8 +218,10 @@ extension TypeKeyLayout {
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
-	/// key's call does. Every function is declared in the root's body (`computePlacement`), so a closing call captures
-	/// what the path key's function captures.
+	/// key's call does. Every function is declared in the root's body (`computePlacement`), or, under
+	/// `declaresLoopMembersAsThePathKeyDoes`, nested as the path key nests it, a cycle's functions included, where
+	/// `nestingAsThePathKeyDoes` checks that each closing call's target is declared in a body enclosing the call; so a
+	/// closing call captures what the path key's function captures.
 	func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
@@ -262,7 +264,7 @@ extension TypeKeyLayout {
 	/// place: a member of a loop of builders calling a sibling's. Any other closer calls an enclosing place's function or a
 	/// statement the view's key pins (`KeyedDeclaration.absolute`).
 	func closesOnSibling(_ closer: ClosingPlaceRecord, from body: Int) -> Bool {
-		guard closer.rebindsLoopMember, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
+		guard body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
 		return declaringBody == bodies[body].parent
 	}
 

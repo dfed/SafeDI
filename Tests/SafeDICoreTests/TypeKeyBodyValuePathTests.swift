@@ -25,51 +25,87 @@ import Testing
 /// handed a read of the body. No walk records one yet, so each test builds the root's places as a walk would.
 struct TypeKeyBodyValuePathTests {
 	@Test
-	func statements_beginsThePlacesFunctionWithItsEnteredPlaceLines_whenItsRecordCarriesAnEnteredPlace() throws {
+	func statements_handsTheResultOfACallThatTakesASlotAndAValue_whenACallHandsAPassedArgumentAValueAnotherValueMakesOfOne() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
-			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: nil)), closureArguments: [])
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("entering", of: .rootDeclaration("places"), slot: 1, value: .emptyInitialization(.simple(name: "Cfg")), flags: []), staysOutsideSendableFunctions: false)]
 		}))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1
-		        func __safeDI_b() -> B {
-		            let __safeDI_place = __safeDI_entered.b ?? .init(safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
-		            return B()
+		        func __safeDI_b(places: Places) -> B {
+		            B()
 		        }
-		        let b: B = __safeDI_b()
+		        let b: B = __safeDI_b(places: places.entering(1, Cfg()))
 		""")
 	}
 
 	@Test
-	func statements_entersANewPlaceWithTheNearestConfigurationOfItsType_whenItsEnteredPlaceNamesANearestOfTypeSlot() throws {
+	func statements_passesTrueUnderEachFlagAfterTheValue_whenACallThatHandsAValueNamesFlags() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
-			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "b", nearestOfTypeSlot: "nearestB")), closureArguments: [])
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("entering", of: .rootDeclaration("places"), slot: 1, value: .emptyInitialization(.simple(name: "Cfg")), flags: ["nearest", "default"]), staysOutsideSendableFunctions: false)]
 		}))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1
-		        func __safeDI_b() -> B {
-		            let __safeDI_place = __safeDI_entered.b ?? .init(__safeDI_entered.nearestB?.configuration ?? safeDIOverrides, above: __safeDI_entered)
-		            let safeDIOverrides = __safeDI_place.configuration
-		            let __safeDI_entered = __safeDI_place.enteredAbove.entering(b: __safeDI_place)
-		            return B()
+		        func __safeDI_b(places: Places) -> B {
+		            B()
 		        }
-		        let b: B = __safeDI_b()
+		        let b: B = __safeDI_b(places: places.entering(1, Cfg(), nearest: true, default: true))
 		""")
 	}
 
 	@Test
-	func statements_beginsThePlacesFunctionByEnteringOnlyTheNearestPlaceOfItsType_whenItsEnteredPlaceHasNoSlot() throws {
+	func statements_handsTheValueAlone_whenACallThatHandsAValueHasNoSlot() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
-			built.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: nil, nearestOfTypeSlot: "nearestB")), closureArguments: [])
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: .callHanding("passing", of: .rootDeclaration("places"), slot: nil, value: .read(Self.idRead), flags: []), staysOutsideSendableFunctions: false)]
 		}))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1
-		        func __safeDI_b() -> B {
-		            let __safeDI_entered = __safeDI_entered.entering(nearestB: .init(safeDIOverrides, above: __safeDI_entered))
-		            return B()
+		        func __safeDI_b(places: Places) -> B {
+		            B()
 		        }
-		        let b: B = __safeDI_b()
+		        let b: B = __safeDI_b(places: places.passing(id))
+		""")
+	}
+
+	@Test(arguments: [
+		ValuePath.callHanding("passing", of: .read(mistypedIdRead), slot: nil, value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
+		.callHanding("passing", of: .rootDeclaration("places"), slot: nil, value: .read(mistypedIdRead), flags: []),
+		.callHanding("passing", of: .passedArgument("missing"), slot: nil, value: .emptyInitialization(.simple(name: "Cfg")), flags: []),
+		.callHanding("passing", of: .rootDeclaration("places"), slot: nil, value: .passedArgument("missing"), flags: []),
+	])
+	func statements_keepsThePathKeysBody_whenACallThatHandsAValueReadsWhatItsBodyCannot(value: ValuePath) {
+		#expect(TypeKeyBody.statements(ofRootBody: Self.rootBody { built in
+			built.passedArguments = [PassedArgument(parameterName: "places", type: .simple(name: "Places"), value: value, staysOutsideSendableFunctions: false)]
+		}) == nil)
+	}
+
+	@Test
+	func statements_handsTheClosedOnFunctionTheResultOfACall_whenACloserHandsACallThatReadsOnlyWhatItsFunctionWasHanded() throws {
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .callHanding("entering", of: .passedArgument("cfg"), slot: 1, value: .member("child", of: .passedArgument("cfg")), flags: []), staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: cfg.entering(1, cfg.child))
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
+		""")
+	}
+
+	@Test
+	func statements_handsTheClosedOnFunctionTheResultOfACall_whenACloserHandsACallThatReadsADeclaration() throws {
+		let value = ValuePath.callHanding("entering", of: .passedArgument("cfg"), slot: 1, value: .read(Self.idRead), flags: [])
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: value, staysOutsideSendableFunctions: false))))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_b(cfg: Cfg) -> B {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_b(cfg: cfg.entering(1, id))
+		            }
+		            return B(bBuilder: bBuilder)
+		        }
+		        let b: B = __safeDI_b(cfg: Cfg())
 		""")
 	}
 
@@ -340,7 +376,7 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_handsTheClosedOnFunctionTheMember_whenACloserHandsAPassedArgumentAMember() throws {
+	func statements_handsTheClosedOnFunctionAMember_whenACloserHandsAPassedArgumentAMember() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1
@@ -594,10 +630,6 @@ struct TypeKeyBodyValuePathTests {
 		// A passed argument's key (`PassedArgument.shape`).
 		case passedArgumentType
 		case passedArgumentParameterName
-		// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
-		case enteredPlaceSlot
-		case enteredPlaceNearestOfTypeSlot
-		case enteredPlaceWithoutSlot
 
 		func configure(_ c: inout BuiltPlaceRecord, isSecond: Bool) {
 			let cfg = ValuePath.passedArgument("cfg")
@@ -651,12 +683,6 @@ struct TypeKeyBodyValuePathTests {
 				c.passedArguments = [passed("cfg"), passed("alt", type: isSecond ? "OtherCfg" : "Cfg")]
 			case .passedArgumentParameterName:
 				c.passedArguments = [passed("cfg"), passed(isSecond ? "other" : "alt")]
-			case .enteredPlaceSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? "other" : "c", nearestOfTypeSlot: nil)), closureArguments: [])
-			case .enteredPlaceNearestOfTypeSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "c", nearestOfTypeSlot: isSecond ? "nearestC" : nil)), closureArguments: [])
-			case .enteredPlaceWithoutSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? nil : "c", nearestOfTypeSlot: "nearestC")), closureArguments: [])
 			}
 		}
 	}

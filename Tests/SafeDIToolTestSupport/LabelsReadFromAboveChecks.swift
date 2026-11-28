@@ -28,10 +28,10 @@ enum LabelsReadFromAboveChecks {
 	/// Runs `operation` while comparing the two computations for every scope asked about, handing each answer to
 	/// `enclosingObserver` too, and records an issue for each scope whose answers differ.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ type: String, _ remembered: [String], _ byComponent: [String], _ byPasses: [String]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ type: String, _ remembered: [String], _ byComponent: [String], _ byPasses: [String]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await LabelsReadFromAboveObservation.$observer.withValue({ type, remembered, byComponent, byPasses in
+		try await LabelsReadFromAboveObservation.$observer.withValue(TaskLocalFunction { type, remembered, byComponent, byPasses in
 			if byComponent != byPasses {
 				Issue.record(Comment(rawValue: """
 				The labels \(type) reads from above differ between the two computations:

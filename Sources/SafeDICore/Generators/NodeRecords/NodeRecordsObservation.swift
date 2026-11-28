@@ -23,11 +23,11 @@
 /// differ from the records the tree's places made: at every place, the record of the place's node must equal the
 /// place's own.
 public enum NodeRecordsObservation {
-	/// Whether a root whose world node records accept is laid out from them, rather than from its tree's places, where
-	/// `observer` is set. Off unless a test turns it on; the tree's places are laid out where the engine cannot lay the
-	/// records out. The tree is still planned and laid out beside the records, for the comparison, so the engine lays each
-	/// such root out twice: a test that counts the engine's views sees each count twice, and the mode must drop the tree's
-	/// plan before it is turned on for every run, or generate time doubles.
+	/// Whether a root whose world node records accept is laid out from them, rather than from its tree's places, whether or
+	/// not `observer` is set, which only records. Off unless a test turns it on; the tree's places are laid out where the
+	/// engine cannot lay the records out. Where `observer` is set the tree is still planned and laid out beside the records,
+	/// for the comparison, so the engine lays each such root out twice: a test that counts the engine's views sees each
+	/// count twice. A run no test observes plans no tree beside the records.
 	@TaskLocal public static var laysOutRoots = false
 
 	/// Whether a run no test observes lays out each root of a module with seams that built its tree, a seam's own root or a
@@ -46,25 +46,27 @@ public enum NodeRecordsObservation {
 	@TaskLocal public static var claimsForTesting = [String: [String]]()
 
 	/// Whether a mock root whose world node records accept has the statements that build its nodes laid out from them,
-	/// rather than written by the mock's walk, where `observer` is set. Off unless a test turns it on: the two write other
-	/// text for a node beneath a function, which is handed its override where the walk's captures the root's.
+	/// rather than written by the mock's walk, whether or not `observer` is set, which only records. Off unless a test turns
+	/// it on: the two write other text for a node beneath a function, which is handed its override where the walk's
+	/// captures the root's.
 	@TaskLocal public static var laysOutMockRoots = false
 
 	/// Whether a mock root's world joins the terms that claim a node in the reverse of their order
 	/// (`NodeRecords.joiningProductionMarks(_:to:of:in:)`), so that a test shows the order cannot matter. Only a test sets it.
 	@TaskLocal public static var joinsMockWorldTermsInReverse = false
 
-	/// Handed each mocked type and the root of its mock root's world as the mock root is built, where a test observes node records
+	/// Handed each mocked type and its mock root's world (`MockWorldRoot`) as the mock root is built, where a test observes
+	/// node records or `laysOutMockRoots` is on
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`). A task local rather than a parameter: an optional closure
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
-	@TaskLocal static var recordsMockWorldRoot: (@Sendable (TypeDescription, ConstructionScope) -> Void)?
+	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, MockWorldRoot) -> Void>?
 
 	/// Handed each root's report, where set. Only a test sets it.
-	@TaskLocal public static var observer: (@Sendable (NodeRecordsReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 
 	/// Handed the body of the root a tree's places build, beside the node records made for the same root, where a root's
 	/// plan is observed: set by the generator around one root's plan.
-	@TaskLocal static var rootBodyObserver: (@Sendable (_ rootBody: [GeneratedCode]) -> Void)?
+	@TaskLocal static var rootBodyObserver: TaskLocalFunction<@Sendable (_ rootBody: [GeneratedCode]) -> Void>?
 
 	/// The ways `nodeRecordsBody`, the root's body node records make, differs from `treeBody`, the body the tree's places
 	/// make: a line per difference, each naming the place by the labels on its path, and how many places the tree's body
@@ -122,23 +124,6 @@ public enum NodeRecordsObservation {
 			}
 		}
 		return (differences, treePlaceCount)
-	}
-
-	/// Whether `body`, a root's body node records make, holds a call that fills a place. Node records declare a fill's
-	/// builders at the top of its body, where the tree nests each where it is built, so the root's text is compared nowhere:
-	/// the root's expectations, its compiled code and the value comparison with the last release check it instead.
-	static func holdsAFilledCall(_ body: [GeneratedCode]) -> Bool {
-		var pending = body
-		while let code = pending.popLast() {
-			for statement in statements(of: code) {
-				guard case let .place(plan) = unindented(statement).code.node, let record = plan.record else { continue }
-				guard !fillsAPlace(record) else { return true }
-				if case let .built(built) = record {
-					pending += built.children
-				}
-			}
-		}
-		return false
 	}
 
 	/// Whether `record` is a call that fills a place, whose record only node records make (`ScopeGenerator.seamCallRecord`).
@@ -295,4 +280,13 @@ public struct NodeRecordsComparedTexts: Sendable {
 	public let tree: String
 	/// The code laid out from node records.
 	public let nodeRecords: String
+}
+
+/// What node records are made of for a mock root, where a test observes them: the root of the mock root's world, and the
+/// receives only if available its promotion found production passes `nil`
+/// (`DependencyTreeGenerator.receivesPassedNilInMockTree`), which the mock root's bindings hold for the tree and no fact
+/// of the world holds.
+struct MockWorldRoot: Sendable {
+	let scope: ConstructionScope
+	let receivesPassedNil: MockReceivesPassedNil
 }

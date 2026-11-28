@@ -271,7 +271,7 @@ struct FillLevelsObservation: Sendable {
 
 	/// Called with each call's observation as the tree writes its dispatchers, when set: by the node records hook in a test,
 	/// never by the tool.
-	@TaskLocal static var observer: (@Sendable (FillLevelsObservation) -> Void)?
+	@TaskLocal static var observer: TaskLocalFunction<@Sendable (FillLevelsObservation) -> Void>?
 
 	/// `dispatcher` and `parameters`, what it takes, as text for meaning: every field but the names a call allocates
 	/// (the dispatcher's function name, its targets' names, the names it takes carried structs under).

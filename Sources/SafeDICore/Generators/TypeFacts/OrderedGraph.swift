@@ -116,21 +116,15 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 		indexByNode[node].map(Int.init)
 	}
 
+	/// The targets of the node's edges, in the order its edges were given.
 	/// The position of the node's first edge among every node's edges, in node order: an edge's position is this plus its
 	/// index among the node's edges.
 	func edgeOffset(of index: Int) -> Int {
 		Int(edgeOffsets[index])
 	}
 
-	/// The targets of the node's edges, in the order its edges were given.
 	func edges(from index: Int) -> ArraySlice<Int32> {
 		edgeTargets[Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])]
-	}
-
-	/// The positions of the node's edges among every edge of the graph, in the order its edges were given: what a column
-	/// parallel to the edges is indexed by.
-	func edgeIndices(from index: Int) -> Range<Int> {
-		Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])
 	}
 
 	/// The targets of the node's edges as indices of `nodes`, in the order its edges were given.
@@ -141,6 +135,12 @@ struct OrderedGraph<Node: Hashable & Sendable>: Sendable {
 	/// The strongly connected component of the node, numbered as `componentByNode` numbers it.
 	func component(of index: Int) -> Int {
 		Int(componentByNode[index])
+	}
+
+	/// The positions of the node's edges among every edge of the graph, in the order its edges were given: what a column
+	/// parallel to the edges is indexed by.
+	func edgeIndices(from index: Int) -> Range<Int> {
+		Int(edgeOffsets[index])..<Int(edgeOffsets[index + 1])
 	}
 
 	/// How many edges the graph has, duplicates included.

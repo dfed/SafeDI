@@ -4112,7 +4112,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// string or a `fulfillingAdditionalTypes:` entry, or as what a mock promotes for such a property, and, in a mock, by
 	/// calling a hand-written mock another module merges in. The code generated for the tree names each, while no
 	/// declaration of the property does, so no file SafeDI read need import its module. A root's file takes its imports
-	/// from its world's declarations instead (`TypeFactsImports`), which the tests compare with this walk of its tree.
+	/// from its world's declarations instead (`TypeFactsImports`), a mock root's beside what lies outside them
+	/// (`fulfillersOfMockOutsideTree(mockDefaults:)`), and the tests compare those with this walk of its tree.
 	/// - Parameter buildingMock: Whether the tree is a mock's, which builds a type with its hand-written mock.
 	func fulfillersOfTree(buildingMock: Bool) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
@@ -4149,12 +4150,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		GenerationWork.record(visitCount, by: .collectingTypesOfATree)
 	}
 
-	/// The types a mock rooted at this scope names that its declarations do not: those its tree builds, those a flat
-	/// parameter of `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed
-	/// in `additionalMocksToGenerate` extends from another module.
+	/// The types a mock rooted at this scope names that its world's declarations do not: those a flat parameter of
+	/// `mock()` defaults to, which no scope of the tree builds, and the type it extends, which a mock listed in
+	/// `additionalMocksToGenerate` extends from another module. Those its tree builds are its world's
+	/// (`TypeFactsImports(root:buildingMock:)`).
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
-	func fulfillersOfMock(mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> Set<FulfillerImports.Fulfiller> {
-		var fulfillers = await fulfillersOfTree(buildingMock: true)
+	func fulfillersOfMockOutsideTree(mockDefaults: [TypeDescription: FlatParameterMockDefault]) -> Set<FulfillerImports.Fulfiller> {
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)
@@ -4906,7 +4908,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockLowering.argumentsSurfacedWithoutOverride(of:usesMockInitializer:handWrittenDefaults:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [DefaultParameter]]
 		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
-		/// `sendableConfigurationTypeNames(ofMockRootOf:)` across every root. Such a struct stores each labeled
+		/// `TypeFactsSendableConfigurations` across every root. Such a struct stores each labeled
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
@@ -7200,7 +7202,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			node: PlanNode(),
 		)
 		record.callFields = CallFields(
-			leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+			leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 			closureArguments: closureArguments,
 			builtClosures: builtClosures,
 		)
@@ -7209,7 +7211,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The text declares the call's dispatchers and fills, whose names and reads the record does not hold yet.
 			readNames: nil,
 			boundNames: nil,
-			spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + spelledArguments,
+			spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + spelledArguments,
 			written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + builderCallArguments.map { "\($0.label): \($0.value)" },
 		))
 	}
@@ -7235,7 +7237,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		inPlaceStatements: (before: [GeneratedCode], after: [GeneratedCode])?,
 		lineEnd: String,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		if SeamCallRecordObservation.observer != nil {
+		if SeamCallRecordObservation.observer != nil, forwardedProperties.isEmpty {
 			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
 		}
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
@@ -7295,14 +7297,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				node: PlanNode(),
 			)
 			record.callFields = CallFields(
-				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 				closureArguments: passedOn.map { ClosureArgumentEntry(label: $0.label, value: .passedOn($0.read)) },
 			)
 			observer(SeamCallRecordObservation(
 				text: text,
 				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
 				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []),
-				spelledFromRecord: (record.leadingStatement?.spelledLines ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
+				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
 				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
 			))
 		}
@@ -7356,7 +7358,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callRecord.argumentValues = argumentValues
 			}
 			callRecord.callFields = CallFields(
-				leadingStatement: .callGuard(seamCall.callGuard(for: instantiable.concreteInstantiable)),
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
 				closureArguments: closureArguments,
 			)
 			record.call = InPlaceCall(
@@ -7948,7 +7950,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, capturingCallerDeclarations: capturingKeys)
 		if let observer = FillEmissionDecisionsObservation.observer {
-			observeFillEmissionDecisions(of: body, rootFunctionKeys: rootFunctionKeys, capturingKeys: capturingKeys, fillPlaceBindings: fillPlaceBindings, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls, observer: observer)
+			observeFillEmissionDecisions(of: body, rootFunctionKeys: rootFunctionKeys, capturingKeys: capturingKeys, fillPlaceBindings: fillPlaceBindings, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls, observer: observer.function)
 		}
 		// Where a test observes them, each dispatcher's declaration is spelled again from the call's records alone, beside
 		// the text written here.
@@ -8240,7 +8242,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with `forwardedArguments`, of a type declared through an extension where `isExtension` is set, erased where
 	/// `isErased` is set, and read through `inlinePlaceBuilder` where it is set
 	/// (`instantiatorDeclaration(handing:forwardedArguments:inlinePlaceBuilder:)`).
-	static func instantiatorDeclaration(of property: Property, isExtension: Bool, isErased: Bool, handing functionName: String, forwardedArguments: String, inlinePlaceBuilder: FillPlaceBindings.HoleBuilder? = nil) -> String {
+	static func instantiatorDeclaration(of property: Property, isExtension: Bool, isErased: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool = false, inlinePlaceBuilder: FillPlaceBindings.HoleBuilder? = nil) -> String {
 		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
@@ -8250,29 +8252,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: property,
 			rule: .instantiator(isExtension: isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		let expression = instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments)
+		let expression = instantiatorExpression(of: property, spelledForConstruction: unwrappedTypeDescription, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments, onOneLine: onOneLine)
 		guard let inlinePlaceBuilder else { return "\(propertyDeclaration.spelled) = \(expression)" }
 		return "\(propertyDeclaration.spelled) = \(inlinePlaceBuilder.inlinePlaceValue(construction: expression, overrideExpression: nil, wrappingBuilderIn: unwrappedTypeDescription))"
 	}
 
-	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:)` declares.
-	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String) -> String {
-		let unwrappedTypeDescription = property
+	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:onOneLine:inlinePlaceBuilder:)`
+	/// declares: around the function itself where it is handed nothing and erases nothing, and otherwise around a closure
+	/// that calls it, on one line where `onOneLine` holds.
+	///
+	/// `unwrappedTypeDescription` is the property's unwrapped type as a construction spells it (`spelledForConstruction`),
+	/// which a caller that spells it already hands in rather than spelling it again.
+	private static func instantiatorExpression(of property: Property, spelledForConstruction unwrappedTypeDescription: String? = nil, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String, onOneLine: Bool) -> String {
+		let unwrappedTypeDescription = unwrappedTypeDescription ?? property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
-			"\(unwrappedTypeDescription)(\(functionName))"
-		} else if erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: forwardedArguments), as: property.typeDescription.unwrapped.asInstantiatedType).spelled)
-			}
-			"""
+		guard !forwardedArguments.isEmpty || erasedToConcreteExistential else { return "\(unwrappedTypeDescription)(\(functionName))" }
+		let call: Expression = .call(function: functionName, arguments: forwardedArguments)
+		let closureBody = erasedToConcreteExistential ? Expression.erasure(call, as: property.typeDescription.unwrapped.asInstantiatedType).spelled : call.spelled
+		return wrapperClosure(of: unwrappedTypeDescription, calling: closureBody, onOneLine: onOneLine)
+	}
+
+	/// `wrapperType` built around a closure whose one statement is `body`: on one line where `onOneLine` holds, else with
+	/// `body` on a line of its own.
+	static func wrapperClosure(of wrapperType: String, calling body: String, onOneLine: Bool) -> String {
+		if onOneLine {
+			"\(wrapperType) { \(body) }"
 		} else {
 			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(functionName)(\(forwardedArguments))
+			\(wrapperType) {
+			\(standardIndent)\(body)
 			}
 			"""
 		}
@@ -8348,6 +8358,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isErased: fulfillingIsErased,
 				handing: fulfillingDeclaration.functionName,
 				forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
+				onOneLine: false,
 			),
 			ofType: fulfillingDeclaration.property.typeDescription,
 			erasedToConcreteExistential: false,
@@ -9018,26 +9029,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		callingFunctionNamed functionName: String,
 		cycleArguments: String,
 		erasedToConcreteExistential: Bool,
+		onOneLine: Bool = false,
 	) -> String {
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
 			.asSource
-		return if erasedToConcreteExistential {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: cycleArguments), as: property.typeDescription.asInstantiatedType).spelled)
-			}
-			"""
-		} else if cycleArguments.isEmpty {
-			"\(unwrappedTypeDescription)(\(functionName))"
-		} else {
-			"""
-			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(functionName)(\(cycleArguments))
-			}
-			"""
-		}
+		guard !cycleArguments.isEmpty || erasedToConcreteExistential else { return "\(unwrappedTypeDescription)(\(functionName))" }
+		let call: Expression = .call(function: functionName, arguments: cycleArguments)
+		let closureBody = erasedToConcreteExistential ? Expression.erasure(call, as: property.typeDescription.asInstantiatedType).spelled : call.spelled
+		return wrapperClosure(of: unwrappedTypeDescription, calling: closureBody, onOneLine: onOneLine)
 	}
 
 	/// The code of this scope, which builds `property` from `instantiable`, written around `childCode`, its children's
@@ -11993,14 +11994,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Concrete type names referenced by this scope's mock tree from a
-	/// `SendableInstantiator` scope. Aggregated across all roots before generation
-	/// so every root emits consistent `@Sendable`-ness for a given type's
-	/// `SafeDIMockConfiguration` struct.
+	/// `SendableInstantiator` scope: the walk the fold over the mock root's world (`TypeFactsSendableConfigurations`),
+	/// which mock generation reads, is compared with where a test sets
+	/// `TypeFactsSendableConfigurationsObservation.comparesWalk`. The tool never runs it.
 	///
-	/// Read from the generator tree before any root's code is generated: a node is the lowering's for each child built
-	/// for a property, inside a `Sendable` scope where it or an ancestor builds in a `@Sendable` function, and needs a
-	/// configuration struct where a child of its own is built for a property, its construction has default-valued
-	/// parameters, or it closes a cycle.
+	/// Read from the generator tree: a node is the lowering's for each child built for a property, inside a `Sendable`
+	/// scope where it or an ancestor builds in a `@Sendable` function, and needs a configuration struct where a child of
+	/// its own is built for a property, its construction has default-valued parameters, or it closes a cycle.
 	nonisolated func sendableConfigurationTypeNames(ofMockRootOf mockedInstantiable: Instantiable) -> Set<String> {
 		var result = Set<String>()
 		var constructions = MockConstructions()

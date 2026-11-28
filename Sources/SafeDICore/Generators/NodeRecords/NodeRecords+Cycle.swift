@@ -52,11 +52,13 @@ extension NodeRecords {
 	/// body takes the label as an optional parameter there (rule 1), where today's tree may write a body per value or `nil`;
 	/// or where one cycle identity (`cycle(of:)`) is built both as a lazily instantiated wrapper and otherwise: a twin.
 	static func checkVariantsPartitionAlike(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
-		for variant in 0..<Int32(world.variantCount) where world.isOnCycle(world.declaration(of: variant)) {
+		for variant in 0..<Int32(world.variantCount) where !world.isMockWorld && world.isOnCycle(world.declaration(of: variant)) {
 			guard !world.keys(of: variant).contains(TypeFactsGraph.optionalParameterKey) else { throw .cycleVariantsPartitionApart }
 		}
 		var isLazyByIdentity = [CycleID: Bool]()
-		for declaration in 0..<Int32(world.declarationCount) where world.isOnCycle(declaration) {
+		// A mock's function on a cycle reads its configuration from the place it is handed, whatever form built that place
+		// (`mockPlace`), so one cycle identity built lazily and by value lays out alike there.
+		for declaration in 0..<Int32(world.declarationCount) where !world.isMockWorld && world.isOnCycle(declaration) {
 			let isLazy = switch world.kind(of: declaration) {
 			case .lazy, .sendableLazy:
 				true
@@ -68,14 +70,15 @@ extension NodeRecords {
 		}
 	}
 
-	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
-	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
-	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
-	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
-		var labels = Set<String>()
+	/// Refuses `world`, which holds a cycle, where one of its types receives a builder, plainly, only if available or
+	/// through a rename.
+	/// - Throws: `cycleReceivesBuilder` where a type of a production world receives a builder. A mock root's world lays
+	///   out its loops of builders from the records (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`).
+	static func refuseReceivedBuilders(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard !world.isMockWorld else { return }
 		for declaration in 0..<Int32(world.declarationCount) {
-			let reads = world.scope(of: declaration).instantiable.dependencies.compactMap { dependency -> Property? in
-				switch dependency.source {
+			for dependency in world.scope(of: declaration).instantiable.dependencies {
+				let read: Property? = switch dependency.source {
 				case .received:
 					dependency.property
 				case let .aliased(fulfillingProperty, _, _):
@@ -83,13 +86,9 @@ extension NodeRecords {
 				case .instantiated, .forwarded:
 					nil
 				}
-			}
-			for read in reads {
-				guard read.asUnwrappedProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
-				labels.insert(read.label)
+				guard read?.asUnwrappedProperty.propertyType.isConstant ?? true else { throw .cycleReceivesBuilder }
 			}
 		}
-		return labels
 	}
 
 	/// Whether `declaration` is built in a `@Sendable` function of its own.
@@ -100,6 +99,21 @@ extension NodeRecords {
 		case .constant, .instantiator, .erasedInstantiator, .lazy, .alias, .hole:
 			false
 		}
+	}
+
+	/// Whether two variants of the world, of two declarations, build one concrete type.
+	static func variantsShareConcreteType(in world: some NodeRecordSources) -> Bool {
+		var declarationByConcreteType = [TypeDescription: DeclarationID]()
+		for variant in 0..<VariantID(world.variantCount) {
+			let declaration = world.declaration(of: variant)
+			let concreteType = world.scope(of: declaration).instantiable.concreteInstantiable
+			if let seen = declarationByConcreteType[concreteType], seen != declaration {
+				return true
+			} else {
+				declarationByConcreteType[concreteType] = declaration
+			}
+		}
+		return false
 	}
 
 	/// The labels `declaration`'s body declares: what it instantiates, what it is forwarded and the names it gives aliases.
@@ -120,13 +134,17 @@ extension NodeRecords {
 	/// `cycleArguments` (`cycleArguments(of:unavailableProperties:lazilyInstantiatedInstanceProperties:)`). `caller` is the
 	/// variant whose body holds the call,
 	/// which a production closer reads nothing of; a mock's closer, which passes what its caller binds, takes this site.
-	static func closingRecord(closingOn declaration: DeclarationID, from caller: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
+	static func closingRecord(closingOn declaration: DeclarationID, building builtDeclaration: DeclarationID? = nil, from caller: VariantID, functionName: String? = nil, cycleArguments: [PlaceRead] = [], in world: some NodeRecordSources, enteredSlots: MockEnteredSlots? = nil) throws(NodeRecordRefusal) -> PlaceRecord {
 		// Every node a call reaches is built as a property: the root is called by none.
 		guard let property = world.property(of: declaration) else { throw .noInitializer }
+		// The call builds its own declaration, which is the closed-on one's twin of the same label and type where they
+		// differ: its wrapper around the twin's function.
+		let builtDeclaration = builtDeclaration ?? declaration
+		guard let builtProperty = world.property(of: builtDeclaration) else { throw .noInitializer }
 		let instantiable = world.scope(of: declaration).instantiable
 		var closer = ClosingPlaceRecord(
-			property: property,
-			isErased: world.isErased(declaration),
+			property: builtProperty,
+			isErased: world.isErased(builtDeclaration),
 			isExtension: instantiable.declarationType.isExtension,
 			closedOnFunctionName: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
 			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
@@ -175,6 +193,7 @@ extension NodeRecords {
 			)
 			named.sharingFields = built.sharingFields
 			named.callFields = built.callFields
+			named.returnsPropertyType = built.returnsPropertyType
 			return .built(named)
 		case .alias, .closer:
 			return record
@@ -205,6 +224,12 @@ extension NodeRecords {
 			guard counts.indices.allSatisfy({ $0 == twin.form || counts[$0] == 0 }) else { throw .cycleVariantsPartitionApart }
 			counts[twin.form] += 1
 			countsOnPath[twin.key] = counts
+		}
+
+		/// Whether `declaration` is a twin of `other`: another form of its label and type.
+		func isTwin(_ declaration: DeclarationID, of other: DeclarationID) -> Bool {
+			guard let twin = twinKey(of: declaration), let otherTwin = twinKey(of: other) else { return false }
+			return twin.key == otherTwin.key && twin.form != otherTwin.form
 		}
 
 		/// Whether a place of `declaration`, or of its twin (another form of its label and type), is on the path.
@@ -257,7 +282,10 @@ extension NodeRecords {
 	/// on a variant whose place is being built above it.
 	enum BodyEntry {
 		case place(VariantID)
-		case closer(closingOn: VariantID)
+		/// A call that closes a cycle on `closingOn`'s place, building `building`: the closed-on variant's declaration, or,
+		/// in a mock's world, its twin (`TwinsOnPath.isTwin(_:of:)`), whose call hands its own wrapper the function of the
+		/// twin's place, as today's tree closes a constant and a lazy declaration of one label and type on each other.
+		case closer(closingOn: VariantID, building: DeclarationID)
 	}
 
 	/// The names the bodies of a world with a cycle give the functions they declare, and the functions a call that closes a
@@ -267,7 +295,10 @@ extension NodeRecords {
 	/// innermost function of that name in scope, so a body between the two that declares a function of that name renames
 	/// it `<name>_<type identifier>` (`ScopeGenerator.identifierSafeNames`), and the bodies beneath refer to the renamed
 	/// function by its new name. A variant's place is one record wherever a body holds it, so a variant two bodies name
-	/// differently, or whose body two paths hand different names, is refused (`cycleBuilderNameShared`).
+	/// differently, or whose body two paths hand different names, is refused (`cycleBuilderNameShared`). A mock's place
+	/// serves every body that holds it (`mockPlace`), so there a function one body names apart and another does not takes
+	/// the name apart in both, whichever is read first, and is refused only where that name meets another function of a
+	/// body that did not give it, or where two bodies give two names apart.
 	struct CycleFunctionNames {
 		/// - Parameters:
 		///   - entries: What each variant's body holds (`BodyEntry`), by variant.
@@ -278,51 +309,73 @@ extension NodeRecords {
 			enclosingFunctionNames = Array(repeating: [:], count: world.variantCount)
 			var isNamed = [Bool](repeating: false, count: world.variantCount)
 			isNamed[0] = true
+			let isMockWorld = world.isMockWorld
 			func closedOn(_ entry: BodyEntry) -> Set<VariantID> {
 				switch entry {
-				case let .closer(closingOn: callee):
+				case let .closer(closingOn: callee, _):
 					[callee]
 				case let .place(callee):
 					variantsClosedOn[Int(callee)]
 				}
 			}
+			// The name a place's function takes before any body renames it: a child of the mock root's level that the mock
+			// names apart is built in a function named after that name (`mockConstructionRecord`).
+			func unrenamedFunctionName(of declaration: DeclarationID, property: Property) -> String {
+				let nameApart = isMockWorld && world.edges(from: 0).contains(declaration) ? world.mockRootNames.nameApart(of: property) : nil
+				return ScopeGenerator.functionName(toBuildPropertyNamed: nameApart ?? property.label)
+			}
 			func callee(of entry: BodyEntry) -> VariantID {
 				switch entry {
-				case let .closer(closingOn: callee), let .place(callee):
+				case let .closer(closingOn: callee, _), let .place(callee):
 					callee
 				}
 			}
-			var bodies: [VariantID] = [0]
-			while let variant = bodies.popLast() {
-				let enclosing = enclosingFunctionNames[Int(variant)]
-				let body = entries[Int(variant)]
-				// The functions enclosing the body that a call in it closes a cycle on, by the names the body sees them by.
-				var referencedNames = Set<String>()
-				for entry in body {
+			// The functions a call in the body of `variant` closes a cycle on, by the names the body sees them by, each with
+			// the variants it names: those enclosing the body, and, in a mock's world, the place of the body itself that a
+			// call beneath a place of another variant closes on (`mockPlace`), which no function of the body shadows.
+			func variantsReferenced(inBodyOf variant: VariantID, enclosing: [VariantID: String]) -> [String: Set<VariantID>] {
+				var variantsByReferencedName = [String: Set<VariantID>]()
+				for entry in entries[Int(variant)] {
 					for closedOnVariant in closedOn(entry) {
-						if let property = world.property(of: world.declaration(of: closedOnVariant)) {
-							referencedNames.insert(enclosing[closedOnVariant] ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
+						let closedOnDeclaration = world.declaration(of: closedOnVariant)
+						if let property = world.property(of: closedOnDeclaration) {
+							variantsByReferencedName[enclosing[closedOnVariant] ?? unrenamedFunctionName(of: closedOnDeclaration, property: property), default: []].insert(closedOnVariant)
 						}
 					}
 				}
-				// Every entry built as a property declares or calls a function by its label: an alias or a hole has none.
+				return variantsByReferencedName
+			}
+			// Every entry of the body of `variant` built as a property declares or calls a function by its label: an alias or
+			// a hole has none.
+			func functionCandidates(inBodyOf variant: VariantID) -> [(index: Int, property: Property, name: String)] {
 				var candidates = [(index: Int, property: Property, name: String)]()
-				for (index, entry) in body.enumerated() {
+				for (index, entry) in entries[Int(variant)].enumerated() {
 					let declaration = world.declaration(of: callee(of: entry))
 					switch world.kind(of: declaration) {
 					case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy:
 						if let property = world.property(of: declaration) {
-							candidates.append((index, property, ScopeGenerator.functionName(toBuildPropertyNamed: property.label)))
+							candidates.append((index, property, unrenamedFunctionName(of: declaration, property: property)))
 						}
 					case .alias, .hole:
 						break
 					}
 				}
+				return candidates
+			}
+			// Whether a mock's variant took a name apart that only some of the bodies that hold its place give it.
+			var isNamedApartByOnlySomeBodies = false
+			var bodies: [VariantID] = [0]
+			while let variant = bodies.popLast() {
+				let enclosing = enclosingFunctionNames[Int(variant)]
+				let body = entries[Int(variant)]
+				let variantsByReferencedName = variantsReferenced(inBodyOf: variant, enclosing: enclosing)
+				let referencedNames = Set(variantsByReferencedName.keys)
+				let candidates = functionCandidates(inBodyOf: variant)
 				// A call that closes a cycle declares no function.
 				let renamed = candidates.filter { candidate in
 					switch body[candidate.index] {
-					case .place:
-						referencedNames.contains(candidate.name)
+					case let .place(callee):
+						variantsByReferencedName[candidate.name].map { $0 != [callee] } ?? false
 					case .closer:
 						false
 					}
@@ -339,20 +392,49 @@ extension NodeRecords {
 				for case let (index, .place(child)) in body.enumerated() {
 					let functionName = renamedNameByIndex[index]
 					// A call beneath the child refers to the functions enclosing it, and to the child's own function when the
-					// call closes on it.
+					// call closes on it, by the name it is declared under where that is not the label's.
 					var childEnclosing = variantsClosedOn[Int(child)].isEmpty ? [:] : enclosing
-					if let functionName, entries[Int(child)].contains(where: { closedOn($0).contains(child) }) {
-						childEnclosing[child] = functionName
+					let declaredName = functionName ?? candidates.first(where: { $0.index == index }).flatMap { candidate in
+						candidate.name == ScopeGenerator.functionName(toBuildPropertyNamed: candidate.property.label) ? nil : candidate.name
+					}
+					if let declaredName, entries[Int(child)].contains(where: { closedOn($0).contains(child) }) {
+						childEnclosing[child] = declaredName
 					}
 					if isNamed[Int(child)] {
-						guard functionNames[Int(child)] == functionName, enclosingFunctionNames[Int(child)] == childEnclosing else {
+						// A mock's place serves every body that holds it, so its function takes the name apart that any of them
+						// gives it, in whatever order the bodies are read; today's tree, which production's records are compared
+						// with, names the function in each body.
+						let takesNameApart = isMockWorld && functionNames[Int(child)] != functionName && (functionNames[Int(child)] == nil || functionName == nil)
+						guard functionNames[Int(child)] == functionName || takesNameApart, enclosingFunctionNames[Int(child)] == childEnclosing else {
 							throw .cycleBuilderNameShared
+						}
+						if takesNameApart {
+							functionNames[Int(child)] = functionNames[Int(child)] ?? functionName
+							isNamedApartByOnlySomeBodies = true
 						}
 					} else {
 						isNamed[Int(child)] = true
 						functionNames[Int(child)] = functionName
 						enclosingFunctionNames[Int(child)] = childEnclosing
 						bodies.append(child)
+					}
+				}
+			}
+			// A name apart that a body did not give must meet no other function that body declares, and none it refers to.
+			if isNamedApartByOnlySomeBodies {
+				for variant in 0..<VariantID(world.variantCount) where isNamed[Int(variant)] {
+					let variantsByReferencedName = variantsReferenced(inBodyOf: variant, enclosing: enclosingFunctionNames[Int(variant)])
+					var declaredNames = Set<String>()
+					for candidate in functionCandidates(inBodyOf: variant) {
+						switch entries[Int(variant)][candidate.index] {
+						case let .place(child):
+							let name = functionNames[Int(child)] ?? candidate.name
+							guard declaredNames.insert(name).inserted, variantsByReferencedName[name].map({ $0 == [child] }) ?? true else {
+								throw .cycleBuilderNameShared
+							}
+						case .closer:
+							break
+						}
 					}
 				}
 			}

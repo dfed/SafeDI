@@ -226,6 +226,65 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsBodyWithoutAnswer_whenCallPassesNilForLabelBuiltAfterIt() async throws {
+		// `Logger` receives `t3Builder` only if available, so `Home` and `T0` each build `logger` after `t3Builder`, whose
+		// function takes `logger` as a parameter of the cycle: each call passes `nil`, and every receive of `logger`
+		// beneath the call is `nil`, as in a body no declaration answers `logger` for.
+		let bodies = try await bodies(of:
+			"""
+			@Instantiable(generateMock: true) public final class Home: Instantiable {
+			    @Instantiated let session: Session
+			    @Instantiated let logger: Logger
+			    @Instantiated let t3Builder: Instantiator<T3>
+			    public init(session: Session, logger: Logger, t3Builder: Instantiator<T3>) { self.session = session; self.logger = logger; self.t3Builder = t3Builder }
+			}
+
+			@Instantiable public final class T3: Instantiable {
+			    @Received(onlyIfAvailable: true) let session: Session?
+			    @Received(onlyIfAvailable: true) let logger: Logger?
+			    @Instantiated let t0Builder: Instantiator<T0>
+			    @Instantiated let t4Builder: Instantiator<T4>
+			    public init(session: Session?, logger: Logger?, t0Builder: Instantiator<T0>, t4Builder: Instantiator<T4>) { self.session = session; self.logger = logger; self.t0Builder = t0Builder; self.t4Builder = t4Builder }
+			}
+
+			@Instantiable public final class T0: Instantiable {
+			    @Instantiated let session: Session
+			    @Instantiated let logger: Logger
+			    @Instantiated let t3Builder: Instantiator<T3>
+			    public init(session: Session, logger: Logger, t3Builder: Instantiator<T3>) { self.session = session; self.logger = logger; self.t3Builder = t3Builder }
+			}
+
+			@Instantiable public final class T4: Instantiable {
+			    @Instantiated let t3Builder: Instantiator<T3>
+			    public init(t3Builder: Instantiator<T3>) { self.t3Builder = t3Builder }
+			}
+
+			@Instantiable public final class Session: Instantiable { public init() {} }
+
+			@Instantiable public final class Logger: Instantiable {
+			    @Received(onlyIfAvailable: true) let t3Builder: Instantiator<T3>?
+			    public init(t3Builder: Instantiator<T3>?) { self.t3Builder = t3Builder }
+			}
+			""")
+
+		#expect(bodies == [
+			Bodies(place: "\"session: Session\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"t3Builder: Instantiator<T3>\"", todaysUnavailableProperties: ["logger: Logger?"], bodysUnavailableProperties: ["logger: Logger?"]),
+			Bodies(place: "\"logger: Logger\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"t0Builder: Instantiator<T0>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"t3Builder: Instantiator<T3>\" called by \"t3Builder: Instantiator<T3>\" in \"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: ["logger: Logger?"], bodysUnavailableProperties: ["logger: Logger?"]),
+			Bodies(place: "\"t0Builder: Instantiator<T0>\" called by \"t3Builder: Instantiator<T3>\" in \"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"t4Builder: Instantiator<T4>\" called by \"t3Builder: Instantiator<T3>\" in \"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"session: Session\" called by \"t3Builder: Instantiator<T3>\" in \"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"logger: Logger\" called by \"t3Builder: Instantiator<T3>\" in \"t4Builder: Instantiator<T4>\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"session: Session\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+			Bodies(place: "\"logger: Logger\"", todaysUnavailableProperties: [], bodysUnavailableProperties: []),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsBodyOfPromotedTreeBeneathDeclarationsMockedTypePinsNothingIn_whenMockedTypeRequiresLabel() async throws {
 		// The mocked type requires `value: Value`, which pins its own `Detail`, but not the `Detail` of the `Feed` it promotes,
 		// whose tree production builds above it: a promoted tree’s bodies are built beneath the bindings alone.
@@ -287,7 +346,7 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func bodies(of swiftFileContent: String) async throws -> [Bodies] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
-		try await MockVariantBodyObservation.$observer.withValue({ _, place, todaysUnavailableProperties, bodysUnavailableProperties in
+		try await MockVariantBodyObservation.$observer.withValue(TaskLocalFunction { _, place, todaysUnavailableProperties, bodysUnavailableProperties in
 			continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
 		}) {
 			_ = try await executeSafeDIToolTest(

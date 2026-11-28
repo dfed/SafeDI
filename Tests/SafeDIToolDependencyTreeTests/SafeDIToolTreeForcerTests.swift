@@ -177,7 +177,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_laysOutAppRoot_whenRootsSeamCallDefersParameterSendable() async throws {
 		// `Screen`'s `Panel`, built in a `SendableInstantiator`'s `@Sendable` function, receives `token`, so the seam defers
 		// its pass-through `token` `@Sendable`: `Root`'s call reads it from inside a `@Sendable` closure, which captures a
-		// `Token`, no wrapper, so the capture check (`DeclarationsAnsweringReads`) refuses nothing.
+		// `Token`, no wrapper, so the capture check (`DeclarationsAnsweringReads`) refuses nothing. `Screen`'s own root's
+		// keys are seeded from its parameters, so node records lay it out with no tree.
 		let (forcers, _) = try await treeForcers(
 			of: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
@@ -189,8 +190,8 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		)
 		#expect(forcers == """
 		Root\tnone
-		Screen\tseam world, kind lazy
-		roots that built a tree: 1 of 2
+		Screen\tnone
+		roots that built a tree: 0 of 2
 
 		""")
 	}
@@ -311,7 +312,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
 		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
 		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
-		// (`NodeRecordsChecks`), and the engine lays the erased rename that keeps its label out.
+		// (`NodeRecordsChecks`), and the engine lays the root out, the rename read before its binding as one from outside.
 		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
 		#expect(forcers == """
 		Root\tnone
@@ -450,7 +451,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 		let output = TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt")
 		filesToDelete.append(output)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await HeldCodeTasks.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: files,
 				buildSwiftOutputDirectory: true,
@@ -473,7 +474,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func treeForcersReported(byModules modules: [ModuleFixture]) async throws -> [String: [String]] {
 		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		_ = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+		_ = try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

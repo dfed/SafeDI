@@ -106,12 +106,15 @@ struct BuiltPlaceRecord: Sendable {
 	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
 	/// function writes it only after statements (`BuilderBody.returnKeyword`).
 	var functionAlwaysWritesReturn = false
+	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
+	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
+	var wrapsCallOnOneLine = false
 	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
 	/// nothing reads the value.
 	var declaresOnlyItsFunction = false
 
 	/// The statement the place's builder function begins with, before its children.
-	var leadingStatement: LeadingStatement? {
+	var leadingStatement: CallGuard? {
 		callFields?.leadingStatement
 	}
 
@@ -325,6 +328,29 @@ extension ValuePath {
 	/// The member `name` of the optional `base`, read through the optional.
 	static func optionalMember(_ name: String, of base: ValuePath) -> ValuePath {
 		.optionalMemberRead(name, of: ValuePathBase(base))
+	}
+
+	/// A call of the member `name` of `value` that hands it `handed`, spelled
+	/// `<value>.<name>(<slot>, <handed>, <flag>: true, …)`: the slot's number first where `slot` is set, and `true`
+	/// under each label of `flags` last. It is the two values spliced with the text between them, so it reads what they
+	/// read, and where neither reads a declaration it is the same text wherever its function is called.
+	static func callHanding(_ name: String, of value: ValuePath, slot: Int?, value handed: ValuePath, flags: [String]) -> ValuePath {
+		var opening = ".\(name)("
+		if let slot {
+			opening += "\(slot), "
+		}
+		var closing = ""
+		for flag in flags {
+			closing += ", \(flag.spelledAsArgumentLabel): true"
+		}
+		closing += ")"
+		return .spliced([.value(value), .text(opening), .value(handed), .text(closing)])
+	}
+
+	/// One of two values by a flag of a third, spelled `<value>.<flag> ? <whenSet> : <otherwise>`: the three values
+	/// spliced with the text between them, so it reads what they read.
+	static func choice(byMember flag: String, of value: ValuePath, whenSet: ValuePath, otherwise: ValuePath) -> ValuePath {
+		.spliced([.value(.member(flag, of: value)), .text(" ? "), .value(whenSet), .text(" : "), .value(otherwise)])
 	}
 }
 

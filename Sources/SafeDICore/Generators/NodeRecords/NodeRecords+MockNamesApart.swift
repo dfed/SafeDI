@@ -27,8 +27,10 @@ extension NodeRecords {
 	struct MockReceiveBoundAgain: Equatable {
 		/// The receive, as the node's type declares it.
 		let property: Property
-		/// The declaration the mock root binds apart, which the binding reads.
-		let nameApart: Property
+		/// The declaration the mock root binds apart, which the binding reads; `nil` for a binding to `nil` of the name
+		/// itself, which a node whose required receive pins that declaration makes for everything it builds
+		/// (`MockNamesReadApart.bindNamesToNil(beneathPinsFoundBy:)`).
+		let nameApart: Property?
 
 		/// The place of the binding, the first statement of the node's builder function, as the mock's walk writes it
 		/// (`MockLowering.ConstantNode.receiverBindingLines(indent:)`), read as a rename of the name is, so the function is
@@ -36,12 +38,16 @@ extension NodeRecords {
 		var place: GeneratedCode {
 			// A builder a call passes up is received `@escaping`, which no binding spells.
 			let type = property.typeDescription.strippingEscaping
-			let text = "let \(property.label): \(type.asSource) = \(nameApart.label)"
-			let record = AliasPlaceRecord(
-				property: Property(label: property.label, typeDescription: type),
-				fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
-				text: text,
-			)
+			let record = if let nameApart {
+				AliasPlaceRecord(
+					property: Property(label: property.label, typeDescription: type),
+					fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
+					text: "let \(property.label): \(type.asSource) = \(nameApart.label)",
+				)
+			} else {
+				AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.label): \(type.asSource) = nil", reads: [])
+			}
+			let text = record.text
 			return .indented(
 				.place(PlacePlan(code: .text(text), record: .alias(record))),
 				by: ScopeGenerator.standardIndent,
@@ -59,6 +65,50 @@ extension NodeRecords {
 		var wrapperArgumentNames: [[Property: String]]
 		/// The name of the wrapper each variant that is a rename of such a wrapper reads, as the walk reads it by name.
 		var wrapperNamesReadByRenames: [VariantID: String]
+		/// The receives only if available each variant is passed `nil` for wherever its type is built beneath the mock
+		/// root's bindings of their labels (`MockRootNames.passesNilWhereverBuilt(toReceiveOf:on:)`), unless a sibling
+		/// built before it declares what the receive reads (`OnlyIfAvailableAnswers`).
+		var receivesPassedNil: [Set<Property>]
+
+		/// Leaves each variant only the receives it binds again that it is not passed `nil` for: a receive only if
+		/// available whose name apart is not built where the variant is, as `answers` find it, binds nothing, as the walk
+		/// binds nothing for a receive it passes `nil` (`ScopeGenerator.bodyUnavailableProperties(_:)`).
+		mutating func removeReceivesBoundAgain(passedNilBy answers: OnlyIfAvailableAnswers) {
+			for variant in receivesBoundAgain.indices {
+				let unavailableProperties = answers.unavailableProperties(of: VariantID(variant))
+				guard !unavailableProperties.isEmpty else { continue }
+				receivesBoundAgain[variant].removeAll { unavailableProperties.contains($0.property) }
+			}
+		}
+
+		/// Binds, first in the builder function of each variant whose required receive pins a name apart for only some
+		/// calls of a variant beneath it, as `answers` find them, that name to `nil`, and passes the variant beneath the
+		/// name itself in place of a binding of it under the receive's label: its one function, which serves every call,
+		/// then takes the name as a parameter, which a call beneath the pin passes `nil` and every other call the mock
+		/// root's binding, where the walk writes two functions, one of which passes `nil`. A parameter in place of a
+		/// rebinding, for mocks only, since production rejects the receive that makes the pin.
+		/// - Throws: `onlyIfAvailableAnsweredApart` where the receive reads no name of its own unwrapped form, such as a
+		///   lazy wrapper's, or its variant is a call of another module's public mock, whose record passes no name.
+		mutating func bindNamesToNil(beneathPinsFoundBy answers: OnlyIfAvailableAnswers, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+			var namesBoundToNil = [Int: Set<Property>]()
+			for variant in receivesBoundAgain.indices {
+				for (property, pinningVariants) in answers.variantsPinningReceives(of: VariantID(variant)) {
+					guard let index = receivesBoundAgain[variant].firstIndex(where: { $0.property == property }),
+					      let nameApart = receivesBoundAgain[variant][index].nameApart,
+					      nameApart.typeDescription == property.asUnwrappedProperty.typeDescription,
+					      world.scope(of: world.declaration(of: VariantID(variant))).publicMockCall == nil
+					else { throw .onlyIfAvailableAnsweredApart }
+					receivesBoundAgain[variant].remove(at: index)
+					wrapperArgumentNames[variant][property] = nameApart.label
+					for pinningVariant in pinningVariants {
+						namesBoundToNil[Int(pinningVariant), default: []].insert(Property(label: nameApart.label, typeDescription: .optional(nameApart.typeDescription)))
+					}
+				}
+			}
+			for (variant, names) in namesBoundToNil {
+				receivesBoundAgain[variant].insert(contentsOf: names.sorted().map { MockReceiveBoundAgain(property: $0, nameApart: nil) }, at: 0)
+			}
+		}
 	}
 
 	/// What each variant of a mock root's world reads under a name the mock root binds apart, read from the names the mock
@@ -79,6 +129,7 @@ extension NodeRecords {
 			receivesBoundAgain: [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount),
 			wrapperArgumentNames: [[Property: String]](repeating: [:], count: world.variantCount),
 			wrapperNamesReadByRenames: [:],
+			receivesPassedNil: [Set<Property>](repeating: [], count: world.variantCount),
 		)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
 		let wrapperBindingNames = world.mockRootNames.wrapperBindingNames
@@ -128,6 +179,16 @@ extension NodeRecords {
 				let wrapperNames = MockLowering.removingRenames(hiddenBy: declarations, from: visible.wrapperNames)
 				functionNames = (namesApart, wrapperNames)
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
+					// A receive only if available that a required receive on its type, or beneath it, pins is passed `nil`
+					// where the label's nearest declaration is the mock root's, unless a sibling built before the node declares
+					// what it reads, which the answers find per call; it binds its name again only there
+					// (`removeReceivesBoundAgain(passedNilBy:)`).
+					if dependency.source == .received(onlyIfAvailable: true),
+					   !((namesApart[dependency.property.label]?.isEmpty ?? true) && (wrapperNames[dependency.property.label]?.isEmpty ?? true)),
+					   world.mockRootNames.passesNilWhereverBuilt(toReceiveOf: dependency.property, on: instantiable.concreteInstantiable)
+					{
+						namesRead.receivesPassedNil[Int(variant)].insert(dependency.property)
+					}
 					if let name = Self.name(of: dependency.property, among: wrapperNames) {
 						// A receive of a wrapper `mock()` makes of an instance it takes is passed the wrapper by name.
 						namesRead.wrapperArgumentNames[Int(variant)][dependency.property] = name
@@ -135,7 +196,7 @@ extension NodeRecords {
 					}
 					guard let names = namesApart[dependency.property.label] else { continue }
 					// The receive's own form, or the non-optional form the root binds for its optional one.
-					if let nameApart = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
+					if let nameApart: Property = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
 						namesRead.receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
 					} else if let wrapper = Self.lazyWrapperNamedApart(providingInstanceReadBy: dependency.property, among: names) {
 						// A receive by value of a lazy wrapper's instance binds the wrapper named apart again under its label,
@@ -162,6 +223,18 @@ extension NodeRecords {
 		world.mockRootNames.wrapperBindingNames.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }.sorted()
 	}
 
+	/// The parameters and overrides a mock root names apart, each under the label of the receives that read it, in label
+	/// and then type order: a receive only if available of that label finds the form it reads available from the root, as
+	/// the walk finds it, and binds its name again (`mockNamesReadApart(in:)`). A child of the root named apart is none: a
+	/// read finds it where it is built, as it finds any child.
+	static func mockNamesApartDeclarations(in world: some NodeRecordSources) -> [Property] {
+		let rootChildren = Set(world.edges(from: 0).compactMap { world.property(of: $0) })
+		return world.mockRootNames.namesApart
+			.flatMap { label, names in names.keys.map { Property(label: label, typeDescription: $0) } }
+			.filter { !rootChildren.contains($0) }
+			.sorted()
+	}
+
 	/// The name among `names`, by label and then type, of `property` or of its unwrapped form, which a non-optional wrapper
 	/// gives an optional receive of it; `nil` where neither is named.
 	private static func name(of property: Property, among names: [String: [TypeDescription: String]]) -> String? {
@@ -169,7 +242,7 @@ extension NodeRecords {
 	}
 
 	/// The property the rename `declaration` reads, as its scope declares it.
-	private static func renamedProperty(of declaration: DeclarationID, in world: some NodeRecordSources) -> Property? {
+	static func renamedProperty(of declaration: DeclarationID, in world: some NodeRecordSources) -> Property? {
 		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
 			if case let .aliased(property, fulfillingProperty, _, _, _) = propertyToGenerate, property == world.property(of: declaration) {
 				fulfillingProperty

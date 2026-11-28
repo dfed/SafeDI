@@ -210,11 +210,12 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesSeamsOwnRootAsCallsAnsweringAVariantApart_whenTwoPathsHandARenamesLabelOneAsAWrappersInstance() async throws {
+	mutating func generate_refusesSeamsOwnRootAsLazy_whenTwoPathsHandARenamesLabelOneAsAnOptionalDeferredParametersInstance() async throws {
 		// `Reader` keeps `authToken`'s label under a rename and is built under `Screen` directly, where `authToken` is the
-		// instance of the wrapper of the seam's parameter, and beneath `Detail`'s rename, whose value is no wrapper's: the
-		// tree binds `Reader`'s rename two ways, and one record cannot. The calls into `Reader`'s variant answer its label
-		// apart, which refuses the world before the rename's own check.
+		// instance of the memo of the seam's optional deferred parameter, and beneath `Detail`'s rename, whose value is no
+		// wrapper's: the tree binds `Reader`'s rename two ways. The seam's root's keys are seeded from its parameters, so the
+		// two calls key `Reader` apart, a variant each, and the rename's own check refuses the one that reads the memo's
+		// instance through an optional binding, which its record does not write, before any record is laid out.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let authToken: Secret", "@Instantiated let screen: Screen"]),
@@ -227,9 +228,8 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		let screenReports = reports.filter { $0.root == "Screen" }
-		// A seam's root's keys are not yet seeded from its parameters, so the read of a deferred parameter's instance refuses
-		// the world as `lazy` first.
 		#expect(screenReports.map(\.refusal) == ["lazy"])
+		#expect(screenReports.map(\.everyRefusal) == [[]])
 		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
 	}
 
@@ -245,7 +245,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

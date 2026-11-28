@@ -34,7 +34,7 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property]) -> String? {
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property], handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]]) -> (statements: String, surface: MockLowering.RootSurface)? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
@@ -76,16 +76,27 @@ extension ScopeGenerator {
 			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
 			return nil
 		}
-		// Where the world's cycles enter places, `mock()` declares their struct and binds a value of it with none entered
+		// Where the world's cycles enter places, `mock()` declares what holds them and binds a value with none entered
 		// before its nodes, which its body and every function that takes no places hand a function that takes them
 		// (`NodeRecords+MockCycle.swift`).
-		let enteredSlots = nodeRecords.mockEnteredSlots
-		let enteredPlaces: [GeneratedCode] = enteredSlots.isEmpty ? [] : (
-			MockEnteredSlot.mockEnteredPlacesDeclaration(slots: enteredSlots, isSendable: false)
-				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
-		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
-		let statements = TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
-		report(refusal: statements == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: statements != nil, recordCount: nodeRecords.recordCount)
-		return statements.map { GeneratedCode.lines(enteredPlaces + $0).spelled() }
+		// Where an actor is sent a value a function handed the places builds, the places take their `Sendable` form, so that
+		// the value is built of nothing that cannot be sent. That form holds only configurations of the `Sendable` form,
+		// which every type built beneath an actor takes: a function handed the places whose type is built beneath none, as
+		// one on another cycle of the mock's is, keeps the walk's statements.
+		let placesThatMustBeSendable = nodeRecords.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable
+		let refusalOfPlaces = placesThatMustBeSendable?.refusal(whereConfigurationsOfSendableFormAre: sendableConfigurationTypeNames)
+		guard refusalOfPlaces == nil else {
+			report(refusal: refusalOfPlaces, everyRefusal: [refusalOfPlaces].compactMap(\.self), isLaidOut: false, recordCount: 0)
+			return nil
+		}
+		let enteredPlaces: [GeneratedCode] = ((nodeRecords.mockEnteredPlacesUse.map { MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable: placesThatMustBeSendable != nil, entersNearest: $0.entersNearest, passes: $0.passes, leavesOut: $0.leavesOut, slotCount: $0.slotCount) } ?? []) + nodeRecords.mockLoopSendableStructDeclarations)
+			.map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
+		// What the records say the mock declares of its nodes: its overrides' fields and its configurations.
+		let layout = nodeRecords.mockRootSurface(in: world, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters).flatMap { surface in
+			TypeKeyBody.statements(ofRootBody: nodeRecords.rootBody, outerDeclarations: outerDeclarations, namesInScope: Set(outerDeclarations.map(\.label)), rootPassedArgumentNames: [ReservedName.mockOverridesParameterName], laysOutEveryLoop: true)
+				.map { (statements: GeneratedCode.lines(enteredPlaces + $0).spelled(), surface: surface) }
+		}
+		report(refusal: layout == nil ? .notLaidOut : nil, everyRefusal: [], isLaidOut: layout != nil, recordCount: nodeRecords.recordCount)
+		return layout
 	}
 }

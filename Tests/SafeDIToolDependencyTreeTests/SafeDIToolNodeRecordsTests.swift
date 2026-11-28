@@ -19,8 +19,8 @@
 // SOFTWARE.
 
 import Foundation
-import SafeDICore
 import Testing
+@testable import SafeDICore
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
@@ -412,13 +412,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which a record would read from its variant's
-		// key; a seam's root's keys are not yet seeded from its parameters, so its world is refused as `lazy` until they
-		// are.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which a record reads from its variant's key,
+		// seeded from the seam's parameters, so both roots are laid out.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["lazy", nil])
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [0, 2])
+		#expect(reports.map(\.refusal) == [nil, nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.map(\.recordCount) == [1, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -558,10 +557,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// A seam's root's keys are not yet seeded from its parameters, so `Screen`'s world, which reads its deferred
-		// parameter's instance, is refused as `lazy` until they are.
+		// A seam's root's keys are seeded from its parameters, so `Screen`'s world, which reads its deferred parameter's
+		// instance, is laid out from node records too.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true, true])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -1025,9 +1024,9 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsPinsRecordsAndBindingsAreOwed() async throws {
-		// The facts still owe every declaration of a mock root's world its pins, required-receive records and bindings
-		// (`mockRootPin`, `mockRootRecord`, `mockRootBinding`), which are set together.
+	mutating func generate_refusesMockWorldAsReadAnsweredTwoWays_whenTheMockRootsRecordsAndBindingsAreOwed() async throws {
+		// The facts still owe every declaration of a mock root's world its required-receive records and bindings
+		// (`mockRootRecord`, `mockRootBinding`), which are set together.
 		let (_, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [
 				"""
@@ -1061,11 +1060,13 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// and its dispatchers made by `FillDispatcher`'s statics, as step 3's interface allows. A world with a cycle names a
 		// body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of the places the body holds. A
 		// mock world with a cycle asks which edges its module's configurations leave out (`CycleEdge`), a fact of the module's
-		// types together that the world is made with until an edge fact holds it.
+		// types together that the world is made with until an edge fact holds it. A mock world's configuration records
+		// (`NodeRecords+MockConfigurations.swift`) read how a mock builds one type (`MockConstruction`), a fact of that type
+		// alone, as the walk's records read it.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames", "CycleEdge"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames", "CycleEdge", "MockConstruction"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {
@@ -1120,11 +1121,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
 		}
 		""")
-		// A seam's root's keys are not yet seeded from its parameters, so a world that reads a deferred parameter's instance
-		// is refused as `lazy` until they are.
+		// A seam's root's keys are seeded from its parameters, the deferred one as its memo, so the world, which reads the
+		// memo's instance, is laid out from node records.
 		let screenReports = reports.filter { $0.root == "Screen" }
-		#expect(screenReports.map(\.refusal) == ["lazy"])
-		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(screenReports.map(\.refusal) == [nil])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -1195,12 +1196,116 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		""")
-		// A seam's root's keys are not yet seeded from its parameters, so `Screen`'s world, whose rename reads a deferred
-		// parameter's instance, is refused as `lazy` until they are; `Root`'s is laid out.
-		#expect(reports.first { $0.root == "Screen" }?.refusal == "lazy")
+		// A seam's root's keys are seeded from its parameters, the deferred `user` as its memo, so `Screen`'s renames key and
+		// read the memo's instance, as `Root`'s rename reads its own wrapper's, and both roots are laid out.
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
 		#expect(reports.first { $0.root == "Root" }?.refusal == nil)
-		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == false)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
 		#expect(reports.first { $0.root == "Root" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInItsTreeReceivesADeferredPassThroughByValue() async throws {
+		// `Header`, in `Screen`'s own tree, receives `user` by value, with no rename. `Screen` defers the pass-through and binds
+		// its memo under the label, which its root's keys are seeded with, so `Header`'s record reads the memo's instance
+		// where the tree does.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received let user: User"]),
+			seamFixtureType(named: "User", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        let header = Header(user: user.instance)
+		        self.init(header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInItsTreeReceivesADeferredPassThroughOnlyIfAvailable() async throws {
+		// `Header` receives `user` only if available: `Screen` defers the optional pass-through and binds its memo, whose
+		// instance the tree reads, and so does `Header`'s record, from its variant's key.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
+			seamFixtureType(named: "User", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
+		        let user = LazilyInstantiated<User?>(__safeDI_user)
+		        let header = Header(user: user.instance)
+		        self.init(header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_B61C3DC8DD996187 {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInASendableFunctionOfItsTreeReceivesADeferredPassThrough() async throws {
+		// `Panel`, built in a `SendableInstantiator`'s `@Sendable` function, receives `token`, so `Screen` defers the
+		// pass-through `@Sendable` and binds its memo as a `SendableLazilyInstantiated`, which its root's keys are seeded
+		// with: `Panel`'s record reads the memo's instance where the tree does.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"]),
+			seamFixtureType(named: "Panel", declarations: ["@Received let token: Token"], conformances: ", Sendable"),
+			seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_token: @autoclosure @escaping @Sendable () -> Token) {
+		        let token = SendableLazilyInstantiated<Token>(__safeDI_token)
+		        @inline(never) @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+		            Panel(token: token.instance)
+		        }
+		        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
+		        self.init(panelBuilder: panelBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_03EF6477B3A206A0 {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -1490,26 +1595,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// the level `detailBuilder` opens: the call's dispatchers sit in a place two places below the root, where the root's
 		// functions are found only if every place on the way holds its children's code. Node records lay out the whole root
 		// by type, where the tree nests each function where it is built.
-		let modules = [
-			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				"public protocol Api {}",
-				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
-				seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
-			], dependencies: []),
-			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
-				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer"]),
-				"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
-				"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
-				"""
-				import Feature
-
-				@Instantiable(fulfillingAdditionalTypes: [Api.self])
-				public final class LiveApi: Api, Instantiable {
-				    public init() {}
-				}
-				""",
-			], dependencies: ["Feature"]),
-		]
+		let modules = Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot
 		let (output, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
 			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				// Under the plugin, which runs no second pass over module info files that store their positions apart: that pass
@@ -1554,10 +1640,197 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		let rootReports = reports.filter { $0.root == "Root" }
 		#expect(rootReports.map(\.refusal) == [nil])
 		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.flatMap(\.differences) == [])
+		// The root's text differs from the tree's only where it declares its functions, which entry 24 approves.
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
+		#expect(reports.filter { $0.root != "Root" }.flatMap(\.differences) == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsWhatAFillRequiresOfTheCallerBeforeTheCall_whenTheCallerDeclaresItAfterTheCallsParent() async throws {
+		// `LiveApi`, which fills `Screen`'s hole, receives `logger`, which only `Root` declares, after `outer`, whose tree makes the
+		// call two places down: the root builds `logger` first, as the tree does, so the fill's function can capture it.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			], dependencies: []),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer", "@Instantiated let logger: Logger"]),
+				"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+				"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+				"""
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Api, Instantiable {
+				    public init(logger: Logger) {
+				        self.logger = logger
+				    }
+
+				    @Received let logger: Logger
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+		let (output, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				// Under the plugin, as `generate_laysOutAFilledSeamCallsDispatchersAsTheTreeDoes_whenTheCallIsTwoPlacesBelowTheRoot`.
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let logger = Logger()
+		        func __safeDI_inner() -> Inner {
+		            func __safeDI_screen() -> Screen {
+		                _ = Screen.__safeDI_Screen_AD974FF4533A0485.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+		                func __safeDI_apiBuilder_Screen() -> Screen.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: {
+		                        let api: any Api = LiveApi(logger: logger)
+		                        return api
+		                    })
+		                }
+		                return Screen(__safeDI_apiBuilder: __safeDI_apiBuilder_Screen())
+		            }
+		            let screen: Screen = __safeDI_screen()
+		            return Inner(screen: screen)
+		        }
+		        func __safeDI_outer() -> Outer {
+		            let inner: Inner = __safeDI_inner()
+		            return Outer(inner: inner)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer, logger: logger)
+		    }
+		}
+		"""])
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		// The root's text differs from the tree's only where it declares its functions, which entry 24 approves.
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
+		#expect(reports.filter { $0.root != "Root" }.flatMap(\.differences) == [])
+	}
+
+	@Test(arguments: [
+		// Outside every function: the root's argument.
+		["self.init(outer: outer)", "self.init(outer: __safeDI_outer())"],
+		// Inside a function, as it builds its value.
+		["return Inner(screen: screen)", "return Inner(screen: __safeDI_screen())"],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func outcome_failsRoot_whenAFilledCallsRootLaidOutByTheTypeKeyDiffersBesideWhereItDeclaresItsFunctions(replacement: [String]) async throws {
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		var report = try #require(reports.first { $0.root == "Root" })
+		let texts = try #require(report.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: replacement[0]).count == 2)
+		// A second difference, which no entry approves, beside entry 24's.
+		report.comparedTexts = NodeRecordsComparedTexts(tree: texts.tree, nodeRecords: texts.nodeRecords.replacingOccurrences(of: replacement[0], with: replacement[1]))
+		let outcome = NodeRecordsChecks.outcome(of: report)
+		#expect(outcome.differences == report.differences)
+		#expect(outcome.differences.contains("root: the code laid out from node records differs from the tree’s"))
+		#expect(outcome.approvedEntries == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_marksAFilledCallsDispatchersSendable_whenTheCallIsBuiltInItsOwnSendableFunction() async throws {
+		// `Root` builds `Screen` through a `SendableInstantiator`, so the call is made inside a `@Sendable` function: the
+		// call's dispatchers, which the root declares, are `@Sendable`, as the tree's are.
+		let modules = [Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot[0], ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let screenBuilder: SendableInstantiator<Screen>"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"])]
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		let texts = try #require(rootReports.first?.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: "@Sendable nonisolated func __safeDI_apiBuilder_Screen").count == 3)
+		#expect(rootReports.map { NodeRecordsChecks.outcome(of: $0).differences } == [[]])
+	}
+
+	@Test(arguments: ["", "@MainActor\n"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func outcome_approvesAFunctionMovedOutOfASendableFunction_whenTheTypeKeyMarksItSendable(rootAttribute: String) async throws {
+		// `Root` builds `Outer` through a `SendableInstantiator`: the tree nests `Inner`'s function, plain, inside `Outer`'s
+		// `@Sendable` one, where the type key declares it at the root, marked `@Sendable` as the function that calls it
+		// requires. Entry 24 approves the move with the mark, whose code compiles under a root of either isolation.
+		let modules = [Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot[0], ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + rootAttribute + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outerBuilder: SendableInstantiator<Outer>"]),
+			"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+			"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"])]
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		let rootReports = reports.filter { $0.root == "Root" }
+		let texts = try #require(rootReports.first?.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: "@Sendable nonisolated func __safeDI_inner()").count == 2)
+		#expect(texts.tree.components(separatedBy: "@Sendable nonisolated func __safeDI_inner()").count == 1)
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
 	}
 
 	// MARK: Private
+
+	/// `App`'s `Root` builds `Outer`, which builds `Inner`, which calls `Feature`'s seam `Screen` and fills its hole `api`.
+	private static let modulesCallingAFilledSeamTwoPlacesBelowTheRoot = [
+		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+			"public protocol Api {}",
+			seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
+			seamFixtureType(named: "Detail", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+		], dependencies: []),
+		ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer"]),
+			"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+			"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"]),
+	]
 
 	private var filesToDelete: [URL]
 
@@ -1700,7 +1973,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

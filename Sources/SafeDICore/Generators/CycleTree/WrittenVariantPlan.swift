@@ -23,7 +23,7 @@
 public enum PlanCodeObservation {
 	/// Called for each root that reaches a cycle with the root's type and the code its plan lays out, `nil` where the type
 	/// key keeps the path key's body.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ code: String?) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ code: String?) -> Void>?
 }
 
 /// Lets a test see, for each production root that reaches a cycle in a module that generates no seam, whether its code
@@ -38,11 +38,14 @@ public enum RootTreeChoiceObservation {
 		case holdsValueOnlyIfAvailable
 		/// A type of the root's tree holds a `@Sendable` function.
 		case holdsSendableFunction
-		/// A type of the root's tree receives, or renames, a builder by a label whose declaration builds a type that
-		/// reaches the receiver, which closes a loop of builders.
-		case receivesBuilderThatClosesLoop
+		/// A type of the root's tree declares a loop of builders: builders each of whose trees receives, or renames, the
+		/// next one's label, back to the first, or one builder whose tree receives its own.
+		case declaresLoopOfBuilders
 		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
 		case buildsSeam
+		/// The root's tree calls a seam's generated initializer held in a wrapper that forwards the seam values, a call the
+		/// tree writes no record of yet (`ScopeGenerator`'s seam call place).
+		case callsSeamForwardedValues
 		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other
 		/// than the root declares, or the root does not: today's function captures that declaration, and a function of
 		/// the plan captures only the root's own statements.
@@ -64,7 +67,7 @@ public enum RootTreeChoiceObservation {
 	}
 
 	/// Called once per such root with the root's type and `nil` where its code is laid out from its plan.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ perPathReason: PerPathReason?) -> Void>?
 
 	/// The number of places a root's tree per path may hold before it is abandoned for the root's plan by type, in place of
 	/// `DependencyTreeGenerator.scopeGeneratorLimitOfTodaysTree`: a test lowers it to plan a small root, or raises it to
@@ -87,11 +90,11 @@ public enum RootTreeChoiceObservation {
 public enum PlanCaptureObservation {
 	/// Called once per such root, where today's tree is built too, with the root's type and whether today's walk finds a
 	/// capture.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ todaysWalkFindsCapture: Bool) -> Void>?
 }
 
 public enum PlanSendableObservation {
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void>?
 }
 
 /// The per-type plan of one root's cycles as the type key reads it, written from the plan's bodies once their code is
@@ -138,26 +141,6 @@ struct WrittenVariantPlan: TypeKeyVariantPlan {
 				return true
 			}
 			return false
-		}
-
-		/// Why the layout cannot write some call's argument yet, the first such reason among the calls: a member of a
-		/// loop of builders made again at the call (`Answer.declaredMadeAgainAtCall`), whose wrapper the layout does not
-		/// write. The instance of a lazily instantiated declaration (`Answer.instance`) is no reason: the function takes
-		/// the wrapper (`Answer.parameter(labeled:)`) and creates the instance where its body first reads it.
-		var argumentTheLayoutCannotWrite: RootTreeChoiceObservation.PerPathReason? {
-			for callsOfBody in calls {
-				for call in callsOfBody {
-					for argument in call.arguments {
-						switch argument {
-						case .declaredMadeAgainAtCall:
-							return .passesLoopMemberMadeAgainAtCall
-						case .none, .declared, .instance:
-							continue
-						}
-					}
-				}
-			}
-			return nil
 		}
 
 		/// The bodies of `plan` in `bodies`, each call of the body it calls by its position here, and each body's labels,

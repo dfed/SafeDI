@@ -68,7 +68,12 @@ struct FillEmissionDecisions: Sendable, Equatable {
 		callerArguments: [Property: ArgumentSource],
 		callerMemoArguments: [Property: ArgumentSource],
 	) -> FillEmissionDecisions {
-		let sendableKeys = sendableKeys(fills: fills, dispatchers: dispatchers)
+		// The fills and dispatchers that are `@Sendable`: each a `@Sendable`-family argument of the call reaches – a fill of a
+		// `@Sendable` builder, a dispatcher of a `@Sendable` family – and each such a dispatcher's case leads to. No fill of a
+		// root's call refers to another by name, so nothing else decides one `@Sendable`. A call built inside a `@Sendable`
+		// function marks the functions it spells there (`FilledCallRecords`), as the tree marks a root function a
+		// `@Sendable` function reaches, which decides nothing: a fill held in place stays a closure of its dispatcher.
+		let sendableKeys = Set(fills.filter(\.hole.isSendable).map(\.key)).union(keysReached(from: dispatchers.filter(\.dispatcher.isSendableFamily), among: dispatchers))
 		var parametersByKey = [String: [SeamSignature.Hole.Field]]()
 		for fill in fills {
 			parametersByKey[fill.key] = fill.parameters
@@ -102,12 +107,10 @@ struct FillEmissionDecisions: Sendable, Equatable {
 		)
 	}
 
-	/// The fills and dispatchers that are `@Sendable`: each a `@Sendable`-family argument of the call reaches – a fill of a
-	/// `@Sendable` builder, a dispatcher of a `@Sendable` family – and each such a dispatcher's case leads to. No fill of a
-	/// root's call refers to another by name, so nothing else makes one `@Sendable`.
-	private static func sendableKeys(fills: [Fill], dispatchers: [DispatcherRecord]) -> Set<String> {
-		var keys = Set(fills.filter(\.hole.isSendable).map(\.key))
-		var dispatchersToVisit = dispatchers.filter(\.dispatcher.isSendableFamily)
+	/// The keys of `starts` and of each fill or dispatcher their cases lead to, among `dispatchers`.
+	static func keysReached(from starts: [DispatcherRecord], among dispatchers: [DispatcherRecord]) -> Set<String> {
+		var keys = Set<String>()
+		var dispatchersToVisit = starts
 		let dispatcherByKey = Dictionary(dispatchers.map { ($0.key, $0) }) { first, _ in first }
 		keys.formUnion(dispatchersToVisit.map(\.key))
 		while let dispatcher = dispatchersToVisit.popLast() {
@@ -240,7 +243,7 @@ public struct FillEmissionDecisionsObservation: Sendable {
 	public let fromRecords: String
 
 	/// Called with each call a root's decisions are made for, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillEmissionDecisionsObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillEmissionDecisionsObservation) -> Void>?
 }
 
 extension FillEmissionDecisions: CustomStringConvertible {

@@ -33,6 +33,17 @@ public enum MockLowering {
 		}
 	}
 
+	/// What a mock root declares of its nodes beside the statements that build them: whether it has any, whether one builds
+	/// a property, the members of its `SafeDIOverrides` that configure them, in inline order, and the configuration records
+	/// of its tree. The walk makes it, and the node records of a root they lay out
+	/// (`ScopeGenerator.nodeRecordsMockStatements`).
+	struct RootSurface: Sendable {
+		let hasNodes: Bool
+		let buildsPropertyNode: Bool
+		let overridesFields: [OverridesField]
+		let configurations: [ConfigurationRecord]
+	}
+
 	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,
 	/// generated from that node, holds. Recorded per node and construction in the order the walk finishes the nodes,
 	/// children first, never keyed by a generator, since one generator can build a type at two places.
@@ -208,9 +219,9 @@ public enum MockLowering {
 
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
-	/// emitter throw. `worldRoot` is the root of the mock root's world, where a test observes node records
+	/// emitter throw. `worldRoot` is the mock root's world, where a test observes node records
 	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:)`).
-	func lowerMockRoot(context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
+	func lowerMockRoot(context: MockContext, worldRoot: MockWorldRoot? = nil) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {

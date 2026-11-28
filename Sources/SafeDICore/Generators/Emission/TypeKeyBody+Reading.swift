@@ -150,16 +150,9 @@ extension TypeKeyLayout {
 					}
 					statement = .closer(closer, target: target)
 					recordCloser(closer, at: (body: body, index: position), closing: target)
-				} else if !closer.rebindsLoopMember {
-					// A closer that rebinds no member of a loop of builders calls the function of an enclosing place, the nearest
-					// of its name.
-					let target = enclosingFunction(named: closer.closedOnFunctionName, from: body)
-					guard target != 0 else { return false }
-					statement = .closer(closer, target: target)
-					recordCloser(closer, at: (body: body, index: position), closing: target)
 				} else {
-					// The function a member of a loop of builders calls is the nearest of its name, as Swift resolves it: one a
-					// statement of an enclosing body declares, or an enclosing place's.
+					// The function a closing scope calls is the nearest of its name, as Swift resolves it: an enclosing place's, or,
+					// for a member of a loop of builders, one a statement of an enclosing body declares.
 					switch resolvedFunction(named: closer.closedOnFunctionName, from: body) {
 					case let .enclosing(target):
 						statement = .closer(closer, target: target)
@@ -253,16 +246,6 @@ extension TypeKeyLayout {
 	enum ResolvedFunction {
 		case enclosing(Int)
 		case statement(body: Int, index: Int, record: BuiltPlaceRecord)
-	}
-
-	/// The body of the nearest enclosing place, from `body` outward, whose function is named `name`, or the root's body
-	/// where none is.
-	func enclosingFunction(named name: String, from body: Int) -> Int {
-		var target = body
-		while target != 0, bodies[target].record?.functionName != name {
-			target = bodies[target].parent
-		}
-		return target
 	}
 
 	/// The function named `name` that code in `body` calls, as Swift resolves the name: from `body` outward, a function a

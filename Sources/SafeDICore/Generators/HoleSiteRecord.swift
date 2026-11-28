@@ -28,7 +28,6 @@ enum HoleSitePlaces {
 	/// - Parameters:
 	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - valuesBindings: The payloads the tree binds just before the site (`SeamHoles.CarrierSite.formations`).
-	///   - routeMembers: The member call each step of the site's route makes (`SeamHoles.routeMembers(at:)`).
 	///   - functionName: The name of the function the site builds a wrapper around, where it is renamed.
 	///   - lazilyInstantiatedInstanceProperties: The by-value properties whose labels the site's owner holds only as a
 	///     `LazilyInstantiated` property.
@@ -312,5 +311,5 @@ public struct HoleSiteRecordObservation: Sendable {
 	public let boundNames: [String]
 
 	/// Called with each hole's site as it is recorded, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (HoleSiteRecordObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void>?
 }

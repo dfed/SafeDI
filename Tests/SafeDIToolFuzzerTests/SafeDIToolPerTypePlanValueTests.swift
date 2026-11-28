@@ -563,7 +563,7 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 	/// pinned. Of seeds 0..<1,500, 65 graphs that receive a builder are accepted; the three whose code differs, 414, 692
 	/// and 1,423, spend the batch's traversals alike on both paths.
 	private static let pinnedSeeds: [UInt64] = [
-		190, 211, 335, 576, 1_100, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
+		190, 211, 335, 576, 1_100, 1_311, 1_321, 1_981, 2_394, 3_074, 3_930, 4_235, 4_574, 4_648, 6_607,
 		6_798, 8_112, 8_776, 9_172, 9_746, 10_419, 10_499, 11_225, 11_856, 13_584, 14_751, 15_247,
 		15_663, 17_599, 17_996, 18_272, 20_050, 20_842, 22_429,
 	]
@@ -578,8 +578,9 @@ struct SafeDIToolPerTypePlanValueTests: ~Copyable {
 /// some models, forwarding an `Int` about a third of the time and opening one to three screens, and one or two roots
 /// that build every service and open one or two screens, directly or through a type in between. A few graphs draw a
 /// lazily instantiated wrapper, a rename, a typealiased closure forwarded and received `@escaping` or a screen opened
-/// through an erased instantiator of a concrete existential or a builder received, which a plan lays out, or a `Sendable` wrapper or a value received only if
-/// available, which keep their roots on today's tree. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
+/// through an erased instantiator of a concrete existential or a builder received, which a plan lays out, a `Sendable`
+/// wrapper, which a plan lays out where no body is called both inside and outside a `@Sendable` function and whose graph
+/// declares its classes `Sendable`, or a value received only if available, which keeps its root on today's tree. The shape is the one the per-type plan's review drew its graphs from; its types are prefixed by
 /// the seed, so that a batch compiles many graphs side by side, and every class stores two counters' values: the
 /// creation stamp the comparator reads (`DifferentialValueCreationStamp`) and `creationOrder`, which it describes.
 struct PlanValueGraph {
@@ -597,7 +598,8 @@ struct PlanValueGraph {
 	/// (a root opens its screens through a type in between), `screenByValue` (a root holds a screen by value),
 	/// `twoRoots`, `renames` (a screen renames a service) `escapingName` (a screen forwards a typealiased closure
 	/// `@escaping`) `erases` (a screen opens another through an erased instantiator)
-	/// and `receivesBuilder` (a screen receives a builder the root declares).
+	/// `receivesBuilder` (a screen receives a builder the root declares) and `sendableWrapper` (a screen opens another
+	/// through a `SendableInstantiator`).
 	let shapes: [String]
 
 	/// A value of each forwarding type's forwarded properties, for the comparator to build its screens with.
@@ -636,7 +638,7 @@ struct PlanValueGraph {
 			let csv = directory.appendingPathComponent("sources.csv")
 			try fixture.path.write(to: csv, atomically: true, encoding: .utf8)
 			let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
-			let planCode = try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			let planCode = try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
@@ -718,6 +720,7 @@ struct PlanValueGraph {
 		// A few graphs have screens receive a builder of a leaf that the root declares.
 		let drawsReceivedBuilder = odd > 0.86 && odd < 0.93
 		var receivesBuilder = false
+		var holdsSendableWrapper = false
 		for screen in 0..<screenCount {
 			var properties = [Property]()
 			if forwardsClosure[screen] {
@@ -738,6 +741,7 @@ struct PlanValueGraph {
 				var wrapper = "Instantiator"
 				if odd < 0.08, random.chance(0.3) {
 					wrapper = "SendableInstantiator"
+					holdsSendableWrapper = true
 				}
 				if odd > 0.94, random.chance(0.2) {
 					wrapper = "LazilyInstantiated"
@@ -824,6 +828,12 @@ struct PlanValueGraph {
 			rootNames.append(name("Root\(root)"))
 			rootPropertyLabels[name("Root\(root)")] = properties.map(\.label)
 		}
+		if holdsSendableWrapper {
+			// A `Sendable` wrapper's builder function is `@Sendable` and captures the services, models and screens declared
+			// outside it, which an app declares `Sendable`; the graph's classes are, unchecked, since a screen stores
+			// instantiators. Declared after every draw, so a graph's other shapes draw as before.
+			declarations = declarations.map { $0.replacingOccurrences(of: ": Instantiable {", with: ": Instantiable, @unchecked Sendable {") }
+		}
 		random.shuffle(&declarations)
 		declarations.append(DifferentialValueCreationStamp.counterDeclaration(named: stampCounter))
 		declarations.append(DifferentialValueCreationStamp.counterDeclaration(named: orderCounter))
@@ -865,6 +875,9 @@ struct PlanValueGraph {
 		}
 		if receivesBuilder {
 			shapes.append("receivesBuilder")
+		}
+		if holdsSendableWrapper {
+			shapes.append("sendableWrapper")
 		}
 		self.shapes = shapes
 	}

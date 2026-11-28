@@ -25,7 +25,7 @@ public enum CallPlaceOrderObservation {
 	/// more children: the place's root type or property, the order today's tree builds its children in there, and the
 	/// order the place's scope builds them in where each child on a cycle is a call place, each as indices among the
 	/// scope's children.
-	@TaskLocal public static var observer: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void>?
 }
 
 extension DependencyTreeGenerator {
@@ -416,6 +416,9 @@ extension DependencyTreeGenerator {
 			var propertiesByTwinValue = [TwinValue: Set<Property>]()
 			for identifier in graph.nodes {
 				if let scope = scopeByIdentifier[identifier], let copy = copyByIdentifier[identifier] {
+					// A call that passes builders keeps its fills, whose trees are today's: such a call keeps its root per
+					// path (`buildsSeam`), and a comparison with today's tree builds the place as today's is.
+					copy.holeArguments = scope.holeArguments
 					for propertyToGenerate in scope.propertiesToGenerate {
 						switch propertyToGenerate {
 						case let .instantiated(property, childScope, erasedToConcreteExistential):
@@ -433,12 +436,21 @@ extension DependencyTreeGenerator {
 			}
 			self.copyByIdentifier = copyByIdentifier
 			copies = graph.nodes.compactMap { copyByIdentifier[$0] }
-			// A copy's children are copies or call places, so the copies reach no cycle: each copy is judged once its
-			// children are, in reverse of the order the root reaches them, which puts no copy before a copy it builds.
-			var scopesLeadingToCallPlaces = Set(callPlaceByIdentifier.values.map(ObjectIdentifier.init))
-			for copy in copies.reversed() {
-				for case let .instantiated(_, child, _) in copy.propertiesToGenerate where scopesLeadingToCallPlaces.contains(ObjectIdentifier(child)) {
-					scopesLeadingToCallPlaces.insert(ObjectIdentifier(copy))
+			// A copy's children are copies or call places: a copy leads to a call place where some child does. The order the
+			// root reaches the copies is no order to judge them in, since a copy reached late can build one reached early, as
+			// a builder held beside a value builds the value's type again: each copy that holds a scope found to lead to a
+			// call place is found from that scope.
+			var copiesHoldingChild = [ObjectIdentifier: [ObjectIdentifier]]()
+			for copy in copies {
+				for case let .instantiated(_, child, _) in copy.propertiesToGenerate {
+					copiesHoldingChild[ObjectIdentifier(child), default: []].append(ObjectIdentifier(copy))
+				}
+			}
+			var scopesToJudge = graph.nodes.compactMap { callPlaceByIdentifier[$0].map(ObjectIdentifier.init) }
+			var scopesLeadingToCallPlaces = Set(scopesToJudge)
+			while let scope = scopesToJudge.popLast() {
+				for copy in copiesHoldingChild[scope, default: []] where scopesLeadingToCallPlaces.insert(copy).inserted {
+					scopesToJudge.append(copy)
 				}
 			}
 			self.scopesLeadingToCallPlaces = scopesLeadingToCallPlaces

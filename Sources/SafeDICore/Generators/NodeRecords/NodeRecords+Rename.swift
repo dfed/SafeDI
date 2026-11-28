@@ -78,7 +78,13 @@ extension NodeRecords {
 		autoclosureCall: String? = nil,
 		wrapperName: String? = nil,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
-		guard let (property, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		guard let (declaredProperty, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
+		// A rename of a mock root's level whose label another value of the level binds is bound under the name the root gives
+		// it apart, which the root's construction reads and each receive of it beneath binds again under its label
+		// (`mockNamesReadApart(in:)`), as the walk binds it (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`).
+		// A rename beneath the root's level of a label the root names apart is refused (`refusalOfNamingApart(_:in:)`), so
+		// every rename with a name apart is of the root's level.
+		let property = world.mockRootNames.nameApart(of: declaredProperty).map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A rename of a wrapper a mock binds around an instance it takes reads the wrapper by name, as the walk reads it
 		// (`mockNamesReadApart(in:)`).
 		let fulfillingProperty = wrapperName.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty

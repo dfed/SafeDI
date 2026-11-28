@@ -23,7 +23,7 @@
 /// declarations of the labels the scope's tree receives and of the label it is built as: the answers a body is keyed by.
 public enum VariantBodyObservation {
 	/// Called with what the place is and the two sets of properties passed `nil`, each sorted.
-	@TaskLocal public static var observer: (@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ place: String, _ todaysUnavailableProperties: [String], _ bodysUnavailableProperties: [String]) -> Void>?
 }
 
 /// Lets a test see the bodies a production root's plan builds without today's tree: the root's own, then the body of
@@ -33,7 +33,7 @@ public enum PlanBodiesObservation {
 	/// Called for each root that reaches a cycle with the root's type, each body of a type on a cycle the plan builds, in
 	/// the order the plan first calls it, the bodies today's places of such types take that the plan does not build, and
 	/// the values two properties of the root's tree build as twins (`CallPlaceShadow.twinValues`), sorted.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ bodiesOfPlan: [String], _ todaysBodiesPlanLacks: [String], _ twinValues: [String]) -> Void>?
 }
 
 /// Lets a test see the calls each body of a production root's plan makes (`VariantBodies.calls(of:)`). Test only.
@@ -41,7 +41,7 @@ public enum PlanCallsObservation {
 	/// Called for each root that reaches a cycle with the root's type and a line per call of the root's body, then of
 	/// each body the plan builds, in the order the plan first calls it: the calling body's generator and position, the
 	/// call place's path and property, the position of the body called, and what answers each label that body is keyed by.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ calls: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ calls: [String]) -> Void>?
 }
 
 extension DependencyTreeGenerator {
