@@ -333,9 +333,62 @@ public final class Root: Instantiable { … }
 
 Each argument must be a string literal.
 
-In a module whose declarations default to the main actor (`-default-isolation MainActor`, which new Xcode 26 app targets use), give each type that conforms only to `Instantiable` `generatedAttributes: "@MainActor"`, because otherwise it is inferred `nonisolated` and its generated code cannot call its main-actor dependencies.
+In a module whose declarations default to the main actor, state each type’s isolation as [Modules that default to the main actor](#modules-that-default-to-the-main-actor) describes.
 
 When a type’s hand-written mock is in a separate [`mockOnly` declaration](#splitting-production-and-mock-declarations), put `mockAttributes` on the production declaration: the generated `mock()` takes its attributes from there.
+
+#### Modules that default to the main actor
+
+A module can default its declarations to the main actor: SwiftPM’s `.defaultIsolation(MainActor.self)`, the `-default-isolation MainActor` compiler flag, or Xcode’s Default Actor Isolation build setting, which new Xcode 26 app targets set. In such a module, write `@MainActor` on each `@Instantiable` type whose only conformance is `Instantiable`. `Instantiable` refines `SendableMetatype`, so Swift infers such a type to be `nonisolated` even there, and its generated `init()`, seam initializers and `mock()` could not call the main-actor initializers of the types its tree builds. `generatedAttributes: "@MainActor"` works too, and puts only the generated declarations on the main actor.
+
+A type already on the main actor needs nothing: one that conforms to a protocol its own module declares, which takes the module’s default, or to a main-actor protocol such as SwiftUI’s `View`, or that subclasses a main-actor class such as `UIViewController`.
+
+An actor’s generated `mock()` is not on the main actor. When its tree builds main-actor types, give the actor `mockAttributes: "@MainActor"`; its initializers stay the actor’s own.
+
+```swift
+public protocol Presenting {}
+
+@MainActor
+@Instantiable(isRoot: true, generateMock: true)
+public final class Root: Instantiable {
+    public init(presenter: Presenter, store: Store) {
+        self.presenter = presenter
+        self.store = store
+    }
+
+    @Instantiated private let presenter: Presenter
+    @Instantiated private let store: Store
+}
+
+/// On the main actor through `Presenting`, which this module declares.
+@Instantiable(generateMock: true)
+public final class Presenter: Instantiable, Presenting {
+    public init(title: String = "Home") {
+        self.title = title
+    }
+
+    private let title: String
+}
+
+@MainActor
+@Instantiable(generateMock: true)
+public final class Client: Instantiable {
+    public init(timeout: Int = 30) {
+        self.timeout = timeout
+    }
+
+    private let timeout: Int
+}
+
+@Instantiable(mockAttributes: "@MainActor", generateMock: true)
+public actor Store: Instantiable {
+    public init(client: Client) {
+        self.client = client
+    }
+
+    @Instantiated private let client: Client
+}
+```
 
 ### @Instantiated
 

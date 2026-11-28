@@ -45,6 +45,23 @@ struct SafeDIToolMockDefaultMainActorIsolationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_compilesManualsExample_whenModuleDefaultsToMainActor() async throws {
+		// "Modules that default to the main actor" is read from the Manual, so its example cannot stop compiling unnoticed:
+		// a root and a client spelled `@MainActor`, a presenter on the main actor through a protocol its module declares,
+		// and an actor whose `mock()` is `@MainActor`, each with a mock.
+		let blocks = try ManualCodeBlocks.swiftCodeBlocks(ofSectionTitled: "#### Modules that default to the main actor", in: ManualCodeBlocks.manual())
+		#expect(blocks.count == 1)
+		let example = try #require(blocks.first)
+		_ = try await executeSafeDIToolTest(
+			swiftFileContent: [example],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			verificationCompilerSettings: VerificationCompilerSettings(defaultIsolation: "MainActor"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_sendableInstantiatorBuilderCompiles_whenModuleDefaultsToMainActor() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
