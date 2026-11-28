@@ -641,34 +641,33 @@ extension TypeFactsGraph: TypeFactsWorld {
 			guard readByLabel[label].map({ isAnsweredByWrapper && !$0.isAnsweredByWrapper }) ?? true else { continue }
 			readByLabel[label] = (read, isAnsweredByWrapper)
 		}
-		let madeAgainParameters = madeAgainParameters(of: declaration)
+		let madeAgainParameters = madeAgainParameters(of: declaration, makingAgain: madeAgain(of: variant))
 		return parameterOrder(of: declaration).compactMap { label in
 			if let read = readByLabel[label] {
 				parameterType(of: variant, read.read, arrivals: arrivals)
 			} else {
-				madeAgainParameters[label].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
+				madeAgainParameters[labelTexts[Int(label)]].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
 			}
 		}
 	}
 
-	/// The loop mates the function of `declaration` takes as parameters where it would otherwise make them again at its
-	/// top, by label, each as the property its loop declares it as: a mate whose label a declaration between the
-	/// function and a call that closes a cycle on it declares. The function a cycle closes on then takes the mate, and
-	/// each call rebinds it before the call. A declaration is between where the function reaches it and it reaches the
-	/// function: one of the function's component. The member's own label is never one: a loop of one rebinds itself.
+	/// Of `mates`, the loop mates a variant of `declaration` makes again, those its function takes as parameters where it
+	/// would otherwise make them again at its top, by label, each as the property its loop declares it as: a mate whose
+	/// label a declaration between the function and a call that closes a cycle on it declares. The function a cycle
+	/// closes on then takes the mate, and each call rebinds it before the call. A declaration is between where the
+	/// function reaches it and it reaches the function: one of the function's component. The member's own label is never
+	/// one: a loop of one rebinds itself.
 	///
-	/// Read from the mates a declaration makes again whatever parent builds it (`madeAgain(from:)`), which is every
-	/// variant's set except for the declarations of `loopMembersSharedApart`.
-	private func madeAgainParameters(of declaration: DeclarationID) -> [WorldLabelID: Property] {
-		let mates = madeAgain(from: declaration)
+	/// The mates are a variant's (`madeAgain(of:)`), since two parents can have one declaration make other mates again;
+	/// the order of a declaration's parameters reads every mate any parent has it make again.
+	private func madeAgainParameters(of declaration: DeclarationID, makingAgain mates: ArraySlice<Int32>) -> [String: Property] {
 		guard !mates.isEmpty, isOnCycle(declaration) else { return [:] }
-		let mateLabels = madeAgainLabels(from: declaration)
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
 		let labelsDeclaredBetween = labelsDeclaredBetweenFunctionAndItsClosers(of: declaration)
-		var parameters = [WorldLabelID: Property]()
-		for (mate, label) in zip(mates, mateLabels) {
+		var parameters = [String: Property]()
+		for mate in mates {
 			if let property = graph.nodes[Int(mate)].property, property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
-				parameters[label] = property
+				parameters[property.label] = property
 			}
 		}
 		return parameters
@@ -694,16 +693,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 	private func parameterOrder(of declaration: DeclarationID, walking: Set<DeclarationID>) -> [WorldLabelID] {
 		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
-		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel }).union(madeAgainParameters(of: declaration).keys)
+		var labelIDs = [String: WorldLabelID]()
+		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
+			labelIDs[text] = WorldLabelID(index)
+		}
+		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
+			.union(madeAgainParameters(of: declaration, makingAgain: madeAgain?.targets(of: Int(declaration)) ?? []).keys.compactMap { labelIDs[$0] })
 		var order = [WorldLabelID]()
 		func meet(_ label: WorldLabelID) {
 			if unmet.remove(label) != nil {
 				order.append(label)
 			}
-		}
-		var labelIDs = [String: WorldLabelID]()
-		for (index, text) in labelTexts.enumerated() where labelIDs[text] == nil {
-			labelIDs[text] = WorldLabelID(index)
 		}
 		let walking = walking.union([declaration])
 		var visited = Set<Int>()
