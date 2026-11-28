@@ -890,7 +890,8 @@ enum TypeFactsChecks {
 		}.sorted()
 	}
 
-	private static func append(_ line: String, toFileAt path: String) {
+	/// Appends `line` to the file at `path`, creating it, for a sweep's log.
+	static func append(_ line: String, toFileAt path: String) {
 		let descriptor = open(path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
 		guard descriptor >= 0 else { return }
 		defer { close(descriptor) }

@@ -89,7 +89,7 @@ extension DependencyTreeGenerator {
 		// Which checks of each mock root's tree can find anything in it, by mocked type (`MockRootTreeChecks`).
 		var treeChecksByMockedType = [TypeDescription: MockRootTreeChecks]()
 		// Whether each mock root's world finds a `Sendable` capture, where a test compares it with the tree.
-		var worldFindsSendableCaptureByMockedType = [TypeDescription: Bool]()
+		var worldFindsSendableCaptureByMockedType = [TypeDescription: Bool?]()
 		// The public mocks the module's own files declare, whose plans its module info carries.
 		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
@@ -783,7 +783,7 @@ extension DependencyTreeGenerator {
 	private static func compareTreeChecks(
 		of mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
 		treeChecksByMockedType: [TypeDescription: MockRootTreeChecks],
-		worldFindsSendableCaptureByMockedType: [TypeDescription: Bool],
+		worldFindsSendableCaptureByMockedType: [TypeDescription: Bool?],
 		handingTo observer: @Sendable (MockRootTreeChecksComparison) -> Void,
 	) async {
 		for (instantiable, mockRoot) in mockRoots {
@@ -800,7 +800,7 @@ extension DependencyTreeGenerator {
 				root: instantiable.concreteInstantiable.asSource,
 				needingTree: needingTree,
 				findingInTreeWithoutNeed: findingInTreeWithoutNeed,
-				sendableCaptureFinding: (world: worldFindsSendableCaptureByMockedType[instantiable.concreteInstantiable] ?? false, tree: capturesWrapper),
+				sendableCaptureFinding: (world: worldFindsSendableCaptureByMockedType[instantiable.concreteInstantiable] ?? nil, tree: capturesWrapper),
 			))
 		}
 	}

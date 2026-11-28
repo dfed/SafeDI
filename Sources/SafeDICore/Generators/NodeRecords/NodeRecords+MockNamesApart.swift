@@ -169,7 +169,7 @@ extension NodeRecords {
 	}
 
 	/// The property the rename `declaration` reads, as its scope declares it.
-	private static func renamedProperty(of declaration: DeclarationID, in world: some NodeRecordSources) -> Property? {
+	static func renamedProperty(of declaration: DeclarationID, in world: some NodeRecordSources) -> Property? {
 		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
 			if case let .aliased(property, fulfillingProperty, _, _, _) = propertyToGenerate, property == world.property(of: declaration) {
 				fulfillingProperty

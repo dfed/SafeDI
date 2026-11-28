@@ -1,0 +1,354 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDIToolLibrary
+@testable import SafeDIToolTestSupport
+
+/// A mock root's world finds a capture of a wrapper that is not `Sendable` by a `@Sendable` function wherever its tree
+/// does (`DeclarationsAnsweringReads`), resolving each receive by label and type in the order the tree looks declarations
+/// up. These tests pin what the world and the tree find for the shapes where a lookup by spelling, by label alone, or
+/// before promotion is final would answer otherwise; the executors' oracle (`MockRootTreeChecksOracle`) holds every other
+/// test to the world finding each capture the tree finds.
+struct SafeDIToolMockSendableCaptureCheckTests: ~Copyable {
+	// MARK: Initialization
+
+	init() throws {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Tests
+
+	@Test
+	mutating func mock_findsNoCaptureOfForwardedValue_whenRootAlsoPromotesLazyWrapperOfItsLabelWhoseTypeSortsEitherSide() async throws {
+		// Each root forwards `x` by value and promotes a `LazilyInstantiated` of the same label and type for `Panel`; the
+		// worker built in a `@Sendable` function reads the forwarded value, which the tree looks up first, whichever way
+		// the type's name sorts against the wrapper's.
+		let findings = try await sendableCaptureFindingByRoot(of: ["Zeta", "Alpha"].flatMap(Self.forwardedValueBesideLazyWrapper(of:)))
+		#expect(findings == [
+			"ZetaRoot": SendableCaptureFinding(world: false, tree: false),
+			"AlphaRoot": SendableCaptureFinding(world: false, tree: false),
+		])
+	}
+
+	@Test
+	mutating func mock_findsCaptureAsTreeDoes_whenRootPromotesTwoLazyWrapperKindsOfOneLabelAndSendableFunctionReadsTheInstance() async throws {
+		let findings = try await sendableCaptureFindingByRoot(of: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(gauge: Gauge, panel: Panel, workerBuilder: SendableInstantiator<Worker>) {
+			        self.gauge = gauge
+			        self.panel = panel
+			        self.workerBuilder = workerBuilder
+			    }
+
+			    @Instantiated let gauge: Gauge
+			    @Instantiated let panel: Panel
+			    @Instantiated let workerBuilder: SendableInstantiator<Worker>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Gauge: Instantiable {
+			    public init(token: SendableLazilyInstantiated<Token>) {
+			        self.token = token
+			    }
+
+			    @Received let token: SendableLazilyInstantiated<Token>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Panel: Instantiable {
+			    public init(token: LazilyInstantiated<Token>) {
+			        self.token = token
+			    }
+
+			    @Received let token: LazilyInstantiated<Token>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Worker: Instantiable, Sendable {
+			    public init(token: Token) {
+			        self.token = token
+			    }
+
+			    @Received let token: Token
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Token: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(findings == ["Screen": SendableCaptureFinding(world: false, tree: false)])
+	}
+
+	@Test
+	mutating func mock_findsCaptureOnlyInWorld_whenSendableFunctionReceivesWrapperOnlyIfAvailableThatRequiredReceivePins() async throws {
+		// `Leaf`'s required receive of `token` pins its declaration to the value, which `Worker`'s receive of an
+		// `Instantiator` only if available cannot read: the tree passes it `nil`. The world does not judge pins, and keeps
+		// the tree: a capture only the world finds, which the oracle counts.
+		let findings = try await sendableCaptureFindingByRoot(of: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(workerBuilder: SendableInstantiator<Worker>) {
+			        self.workerBuilder = workerBuilder
+			    }
+
+			    @Instantiated let workerBuilder: SendableInstantiator<Worker>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Worker: Instantiable {
+			    public init(token: Instantiator<Token>?, leaf: Leaf) {
+			        self.token = token
+			        self.leaf = leaf
+			    }
+
+			    @Received(onlyIfAvailable: true) let token: Instantiator<Token>?
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable, Sendable {
+			    public init(token: Token) {
+			        self.token = token
+			    }
+
+			    @Received let token: Token
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Token: Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(findings == ["Screen": SendableCaptureFinding(world: true, tree: false)])
+	}
+
+	@Test
+	mutating func mock_findsNoCapture_whenAliasKeepingItsLabelInsideSendableFunctionAnswersChildBesideRootLazyWrapperOfAliasedType() async throws {
+		// `Middle`'s alias keeps the label `token` and answers `Leaf`'s receive of the protocol; the root's wrapper of the
+		// protocol answers nothing beneath the call, since `Middle` reads the concrete type from above.
+		let findings = try await sendableCaptureFindingByRoot(of: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(token: LazilyInstantiated<TokenProtocol>, middleBuilder: SendableInstantiator<Middle>) {
+			        self.token = token
+			        self.middleBuilder = middleBuilder
+			    }
+
+			    @Instantiated(fulfilledByType: "Token", erasedToConcreteExistential: true) let token: LazilyInstantiated<TokenProtocol>
+			    @Instantiated let middleBuilder: SendableInstantiator<Middle>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Middle: Instantiable, Sendable {
+			    public init(token: TokenProtocol, leaf: Leaf) {
+			        self.token = token
+			        self.leaf = leaf
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Token.self, erasedToConcreteExistential: true) let token: TokenProtocol
+			    @Instantiated let leaf: Leaf
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Leaf: Instantiable, Sendable {
+			    public init(token: TokenProtocol) {
+			        self.token = token
+			    }
+
+			    @Received let token: TokenProtocol
+			}
+			""",
+			"""
+			public protocol TokenProtocol: Sendable {}
+
+			@Instantiable(fulfillingAdditionalTypes: [TokenProtocol.self])
+			public final class Token: Instantiable, TokenProtocol {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(findings == ["Screen": SendableCaptureFinding(world: false, tree: false)])
+	}
+
+	@Test
+	mutating func mock_findsNoCapture_whenWrapperOnlyPublicMockCallReceivesInsideSendableFunctionIsLeftOutOfMock() async throws {
+		// Only `Cache`'s public mock receives `filter`, inside the `@Sendable` builder of `Wrapper`: promotion leaves it out of
+		// what the internal mock binds, so the call passes `nil` and nothing is captured.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Filter: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			package struct TokenCache: Instantiable {
+			    package init(filter: Instantiator<Filter>?) {
+			        self.filter = filter
+			    }
+
+			    @Received(onlyIfAvailable: true) let filter: Instantiator<Filter>?
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(tokenCache: TokenCache) {
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable
+			public struct Wrapper: Instantiable {
+			    public init(cache: Cache) {
+			        self.cache = cache
+			    }
+
+			    @Instantiated let cache: Cache
+			}
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(wrapperBuilder: SendableInstantiator<Wrapper>) {
+			        self.wrapperBuilder = wrapperBuilder
+			    }
+
+			    @Instantiated let wrapperBuilder: SendableInstantiator<Wrapper>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
+		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var findings = [String: SendableCaptureFinding]()
+		for await comparison in comparisons {
+			findings[comparison.root] = SendableCaptureFinding(world: comparison.sendableCaptureFinding.world, tree: comparison.sendableCaptureFinding.tree)
+		}
+		#expect(findings == ["Screen": SendableCaptureFinding(world: false, tree: false), "Cache": SendableCaptureFinding(world: false, tree: false)])
+	}
+
+	// MARK: Private
+
+	private struct SendableCaptureFinding: Equatable {
+		let world: Bool?
+		let tree: Bool
+	}
+
+	private var filesToDelete: [URL]
+
+	/// What each mock root's world and tree find of a `Sendable` capture, by mocked type, of a run over `swiftFileContent`.
+	private mutating func sendableCaptureFindingByRoot(of swiftFileContent: [String]) async throws -> [String: SendableCaptureFinding] {
+		let (comparisons, continuation) = AsyncStream.makeStream(of: MockRootTreeChecksComparison.self)
+		_ = try await MockRootTreeChecksObservation.$comparesTree.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: swiftFileContent,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var findings = [String: SendableCaptureFinding]()
+		for await comparison in comparisons {
+			findings[comparison.root] = SendableCaptureFinding(world: comparison.sendableCaptureFinding.world, tree: comparison.sendableCaptureFinding.tree)
+		}
+		return findings
+	}
+
+	/// A mock root named for `type` that forwards a value of it beside a promoted `LazilyInstantiated` of the same label,
+	/// and a worker built in a `@Sendable` function that reads the value.
+	private static func forwardedValueBesideLazyWrapper(of type: String) -> [String] {
+		[
+			"""
+			@Instantiable(generateMock: true)
+			public final class \(type)Root: Instantiable {
+			    public init(value: \(type), panel: \(type)Panel, workerBuilder: SendableInstantiator<\(type)Worker>) {
+			        self.value = value
+			        self.panel = panel
+			        self.workerBuilder = workerBuilder
+			    }
+
+			    @Forwarded let value: \(type)
+			    @Instantiated let panel: \(type)Panel
+			    @Instantiated let workerBuilder: SendableInstantiator<\(type)Worker>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class \(type)Panel: Instantiable {
+			    public init(value: LazilyInstantiated<\(type)>) {
+			        self.value = value
+			    }
+
+			    @Received let value: LazilyInstantiated<\(type)>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class \(type)Worker: Instantiable, Sendable {
+			    public init(value: \(type)) {
+			        self.value = value
+			    }
+
+			    @Received let value: \(type)
+			}
+			""",
+			"""
+			@Instantiable
+			public final class \(type): Instantiable, Sendable {
+			    public init() {}
+			}
+			""",
+		]
+	}
+}

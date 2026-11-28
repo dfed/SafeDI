@@ -498,15 +498,6 @@ extension DependencyTreeGenerator {
 		// The root of the mock root's world, which node records are made of
 		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
 		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
-		let worldFindsSendableCapture: Bool? = if MockRootTreeChecksObservation.comparesTree != nil {
-			DeclarationsAnsweringReads(
-				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
-				rootNonSendableWrapperLabels: Set((allReceived + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)).filter { !$0.propertyType.isConstant && !$0.propertyType.isSendable }.map(\.label)),
-				mockRootParameters: allReceived,
-			).sendableFunctionCapturesWrapper
-		} else {
-			nil
-		}
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
@@ -549,6 +540,27 @@ extension DependencyTreeGenerator {
 			if !instancesReadThroughWrapperParameters.isEmpty {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
+		}
+		// The world's capture check, compared with the tree's where a test asks, reads what the mock root binds once the tree
+		// is final: what it binds once the values only calls of public mocks receive inside `@Sendable` functions are left
+		// out, and the wrappers a public mock takes whose instances its tree reads, which the tree declares above its root.
+		let worldFindsSendableCapture: Bool? = if MockRootTreeChecksObservation.comparesTree != nil {
+			DeclarationsAnsweringReads(
+				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
+				rootNonSendableWrapperLabels: Set((allReceived + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)).filter { !$0.propertyType.isConstant && !$0.propertyType.isSendable }.map(\.label)),
+				mockRoot: DeclarationsAnsweringReads.MockRoot(
+					boundLabels: Set(allReceived.map(\.label)),
+					wrapperParameters: instancesReadThroughWrapperParameters.sorted().flatMap { instanceProperty in
+						allReceived.filter { property in
+							property.label == instanceProperty.label
+								&& property.propertyType.isLazilyInstantiated
+								&& property.asValidatedForDependencyCycles.asUnwrappedProperty == instanceProperty.asUnwrappedProperty
+						}.map { DeclarationsAnsweringReads.Declaration(property: $0.asUnwrappedProperty, instanceProperty: instanceProperty) }.sorted { $0.property < $1.property }
+					},
+				),
+			).sendableFunctionCapturesWrapper
+		} else {
+			nil
 		}
 		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
 		if treeChecks.needsTree(.cycleLabels) {
