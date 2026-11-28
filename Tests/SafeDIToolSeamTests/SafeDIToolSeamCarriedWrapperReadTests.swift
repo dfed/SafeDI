@@ -989,7 +989,7 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["WrapperReader.swift"]):8:2: error: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>`, which `Outer` builds where it calls `Inner`, but SafeDI hands the builder for `Inner`’s `service: any Service` (`service` of `serviceBuilder`) only its instance, `token: Token`, which `Inner`’s tree receives. Declare `@Received let token: SendableLazilyInstantiated<Token>` on `Inner`, so SafeDI hands it to the builder.
-			\(fixtures["Session"]!["Outer.swift"]): note: `Outer` declares `token: SendableLazilyInstantiated<Token>` here.
+			\(fixtures["Session"]!["Outer.swift"]):10:2: note: `Outer` declares `token: SendableLazilyInstantiated<Token>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.fillReadingValueAndWrapperModules(readsValue: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -1004,7 +1004,7 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["WrapperReader.swift"]):8:2: error: `WrapperReader` receives `token: LazilyInstantiated<Token>`, which `Outer` builds where it calls `Inner`, but SafeDI hands the builder for `Inner`’s `service: any Service` (`service` of `serviceBuilder`) only its instance, `token: Token`, which `Inner`’s tree receives. Declare `@Received let token: LazilyInstantiated<Token>` on `Inner`, so SafeDI hands it to the builder.
-			\(fixtures["Session"]!["Outer.swift"]): note: `Outer` declares `token: LazilyInstantiated<Token>` here.
+			\(fixtures["Session"]!["Outer.swift"]):10:2: note: `Outer` declares `token: LazilyInstantiated<Token>` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.fillReadingValueAndWrapperModules(isSendable: false, readsValue: false, readsValueInsideSendableInstantiator: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -1018,7 +1018,7 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["WrapperReader.swift"]):8:2: error: @Received property `token: SendableLazilyInstantiated<Token>` is hidden in chain: Top -> Outer -> Inner -> any Service -> WrapperReader. `Outer` declares `token: Token` with the same label, so the types below `Outer` receive `token: Token` instead. Give `token: Token` on `Outer` a different label to fix.
-			\(fixtures["Session"]!["Outer.swift"]): note: `token: Token` is declared here
+			\(fixtures["Session"]!["Outer.swift"]):10:2: note: `token: Token` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.fillReadingValueAndWrapperModules(outerDeclaresValueTopDeclaresWrapper: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -1206,8 +1206,8 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		// error, at `Inner`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""
@@ -1239,8 +1239,8 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		// `SendableLazilyInstantiated` finds either.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Token.swift"]): error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
-			\(fixtures["Core"]!["Token.swift"]): note: `Leaf` receives `token: Token` here.
+			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
 			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
 			"""

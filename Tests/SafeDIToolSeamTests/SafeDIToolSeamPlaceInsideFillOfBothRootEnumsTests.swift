@@ -51,7 +51,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["Helper.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `Helper`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -73,8 +73,8 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		// `Deep`'s `gadget`, the place the call passes up.
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Deep.swift"]): error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `Deep`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Deep.swift"]):7:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `Deep`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -99,7 +99,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["DefaultWidget.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `DefaultWidget`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -129,7 +129,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["DefaultThing.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `DefaultThing`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -161,7 +161,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["DefaultService.swift"]):11:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `DefaultService`’s `ownGadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -190,8 +190,8 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		// error names `SeamWidget`'s `gadget`.
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["SeamWidget.swift"]): error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `SeamWidget`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["SeamWidget.swift"]):7:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `SeamWidget`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -221,7 +221,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["SeamService.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `SeamService`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -245,7 +245,7 @@ struct SafeDIToolSeamPlaceInsideFillOfBothRootEnumsTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Middle", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["SeamWidget.swift"]):9:5: error: SafeDI fills every place of the builder for `Panel`’s `service: any Service` (`service` of `serviceBuilder`) with one function, whose tree builds `SeamWidget`’s `gadget: any Gadget`, which no type that module `Middle` can see fulfills. `Inner` builds `Panel` both inside and outside a `@Sendable` function, so that function would be handed the values of either build, and can be handed only one. To fill it, declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, or declare an @Instantiable type that fulfills `Service` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["Panel.swift"]):7:5: note: `Panel` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

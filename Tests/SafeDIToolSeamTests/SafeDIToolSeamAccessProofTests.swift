@@ -1959,18 +1959,10 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B4.6: `Theme` is `package` as far as SafeDI can tell, so `Service`'s `public` tier, the one `App` can call,
 		// omits `theme`, which `App`'s `Shell` provides: built inline, `Badge` would be handed it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)): note: `Badge` receives `theme: [3 of Int]?` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Other", hasUnreadableSpelling: true), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -1983,18 +1975,10 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// far as SafeDI can tell, so only `Service`'s `internal` tier takes `theme`, which no other module can call. Telling
 		// SafeDI a package would not help, so the error does not offer it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)): note: `Badge` receives `theme: [3 of Int]?` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Shop", badgeInitializerAccess: "", hasUnreadableSpelling: true), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -2009,7 +1993,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):11:5: error: `Holder` in module `Base` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: [3 of Int]?` here.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2166,18 +2150,10 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		case .instantiatedAfterSeam, .instantiatedRequiringSeam, .none: ("Root.swift", 13, "Root")
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)): note: `Service` receives `theme: Hub.Theme?` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):10:5: note: `Service` receives `theme: Hub.Theme?` here.
-				"""
-			}
+			"""
+			\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):10:5: note: `Service` receives `theme: Hub.Theme?` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: provider), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -2191,7 +2167,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Shell.swift"]):12:5: error: `Shell` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Service.swift"]): note: `Service` receives `theme: Hub.Theme?` here.
+			\(fixtures["Feature"]!["Service.swift"]):10:5: note: `Service` receives `theme: Hub.Theme?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .forwardedByCaller, badgeAccess: "package"), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -2350,7 +2326,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):13:5: error: `Root` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: Hub.Theme?` here.
+			\(fixtures["Feature"]!["Badge.swift"]):9:5: note: `Badge` receives `theme: Hub.Theme?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingProviderModules(themeReceive: nil), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -2423,7 +2399,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// construction reports `Inner`'s type, and `Outer` reports no omission of the `token` that call stands for.
 		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Inner.swift"]): error: `Inner` is `package`, so module `Mid`, in another package, cannot construct it in the code SafeDI generates. Make `Inner` `public` to fix.
+			\(fixtures["Feature"]!["Inner.swift"]):2:1: error: `Inner` is `package`, so module `Mid`, in another package, cannot construct it in the code SafeDI generates. Make `Inner` `public` to fix.
+			\(fixtures["Feature"]!["Inner.swift"]):2:1-2:8: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2457,7 +2434,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// every construction reports the type with its fix-it, never the initializer SafeDI generates.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]): error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1-2:8: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2643,7 +2621,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Holder.swift"]):12:5: error: `Holder` provides `theme: Hub.Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`’s dependency tree calls the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Base"]!["Badge.swift"]): note: `Badge` receives `theme: Hub.Theme?` here.
+			\(fixtures["Base"]!["Badge.swift"]):9:5: note: `Badge` receives `theme: Hub.Theme?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2801,7 +2779,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	private static func omissionError(provider: String, label: String, type: String, at location: String, _ fixtures: [String: FixturePaths]) -> String {
 		"""
 		\(location): error: `\(provider)` provides `\(label): \(type)`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `\(label)` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `\(label)` were it built inline. `\(type)` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:color:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:color:)` to `public`; mention `\(type)` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `\(label)` on this path.
-		\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `\(label): \(type)?` here.
+		\(fixtures["Feature"]!["Badge.swift"]):\(label == "theme" ? 8 : 9):5: note: `Badge` receives `\(label): \(type)?` here.
 		"""
 	}
 
@@ -2876,7 +2854,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			"""
 			\(fixtures["Mid"]!["Outer.swift"]):3:1: error: `Outer` takes `theme: [3 of Int]?` from its callers, but the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Base` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
 			\(fixtures["Mid"]!["Panel.swift"]):9:5: note: `Panel` receives `theme: [3 of Int]?` here.
-			\(fixtures["Base"]!["Badge.swift"]): note: `Badge` receives `theme: [3 of Int]?` here.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2904,8 +2882,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: [3 of Int]`, but no initializer SafeDI generated for `Shell` takes it: `Shell`’s dependency tree calls the `public` initializer SafeDI generated for `ServiceA` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Mid` or on a type that receives it is `package` (`Badge.init(theme:)`, `Tag.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Base"]!["Tag.swift"]): note: `Tag` receives `theme: [3 of Int]?` here.
-			\(fixtures["Base"]!["Badge.swift"]): note: `Badge` receives `theme: [3 of Int]?` here.
+			\(fixtures["Base"]!["Tag.swift"]):7:5: note: `Tag` receives `theme: [3 of Int]?` here.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2937,7 +2915,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: [3 of Int]`, but no initializer SafeDI generated for `Outer` takes it: `Outer`’s dependency tree calls the `public` initializer SafeDI generated for `Shell` in module `Mid`, the narrowest one module `Top` can call, which takes `theme` on none of its initializers, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Top` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Base"]!["Badge.swift"]): note: `Badge` receives `theme: [3 of Int]?` here.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2966,17 +2944,10 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `package`: `App`, in another package, is told to widen `Settings` rather than generating code that does not
 		// compile.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)): error: `Settings`, which encloses `Settings.Helper`, is `package`, so module `App`, in another package, cannot construct `Settings.Helper` in the code SafeDI generates. Make `Settings` `public` to fix.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1: error: `Settings`, which encloses `Settings.Helper`, is `package`, so module `App`, in another package, cannot construct `Settings.Helper` in the code SafeDI generates. Make `Settings` `public` to fix.
-				\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1-4:8: fixit: public
-				"""
-			}
+			"""
+			\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1: error: `Settings`, which encloses `Settings.Helper`, is `package`, so module `App`, in another package, cannot construct `Settings.Helper` in the code SafeDI generates. Make `Settings` `public` to fix.
+			\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1-4:8: fixit: public
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -3012,7 +2983,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// initializer, whose `package` level the check of every construction still reports.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]): error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):3:5-3:12: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3052,7 +3024,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):13:5: error: `Root` provides `theme: Hub.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Theme` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Theme` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Theme` in `Hub`’s body or at top level; mention `Hub.Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: Hub.Theme?` here.
+			\(fixtures["Feature"]!["Badge.swift"]):9:5: note: `Badge` receives `theme: Hub.Theme?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.mutualProviderModules(themeFirst: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -3801,21 +3773,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			case .swiftPackagePlugin:
 				"`Theme` is declared `package` in module `Core` and `public` in module `Other`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Other.Theme`), so that it names that module’s declaration;"
 			}
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-				\(corePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):10:5: note: `Badge` receives `theme: any Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-				\(corePath):1:1: note: `Theme` is declared `package` here.
-				\(corePath):1:1-1:8: fixit: public
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):10:5: note: `Badge` receives `theme: any Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(corePath):1:1: note: `Theme` is declared `package` here.
+			\(corePath):1:1-1:8: fixit: public
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):10:5: note: `Badge` receives `theme: any Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.themeInTwoModules(mention: "Theme"), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -4153,7 +4116,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let noteStoragePath = fixtures["Subproject"]!["NoteStorage.swift"]
 			return """
-			\(noteStoragePath): error: `NoteStorage` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `NoteStorage` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
+			\(noteStoragePath):4:1: error: `NoteStorage` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `NoteStorage` `package` to fix, which needs both modules compiled with one package name (`SWIFT_PACKAGE_NAME` in an Xcode project), or `public` if the two modules are in different packages.
+			\(noteStoragePath):4:1-4:1: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -4176,21 +4140,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// F4: `Core`'s `package` declaration of `Theme` proves it, and the text names the module that declares it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let corePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-				\(corePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):9:5: note: `Badge` receives `theme: any Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-				\(corePath):1:1: note: `Theme` is declared `package` here.
-				\(corePath):1:1-1:8: fixit: public
-				\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):9:5: note: `Badge` receives `theme: any Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(corePath):1:1: note: `Theme` is declared `package` here.
+			\(corePath):1:1-1:8: fixit: public
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):9:5: note: `Badge` receives `theme: any Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -4426,7 +4381,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Service.init(theme:badge:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Service.swift"]): note: `Service` receives `theme: [3 of Int]?` here.
+			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -4730,7 +4685,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `token: Rack.Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Token` is nested in `Rack`, which is declared `package` in module `Core`. Declare `Rack` `public` in module `Core`; declare `Service` `package`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-			\(fixtures["Core"]!["Rack.swift"]): note: `Rack` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):1:1: note: `Rack` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `token: Rack.Token` here.
 			"""
 		}) {
@@ -4755,7 +4711,8 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Service.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`’s `public` access requires, cannot take `bin: Rack.Bay.Bin`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Rack.Bay.Bin` is nested in `Rack.Bay`, which is declared `package` in module `Core`. Declare `Rack.Bay` `public` in module `Core`; declare `Service` `package`; build `bin` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
-			\(fixtures["Core"]!["Rack.swift"]): note: `Rack.Bay` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):2:5: note: `Rack.Bay` is declared `package` here.
+			\(fixtures["Core"]!["Rack.swift"]):2:5-2:12: fixit: public
 			\(fixtures["Feature"]!["Badge.swift"]):10:5: note: `Badge` receives `bin: Rack.Bay.Bin` here.
 			"""
 		}) {

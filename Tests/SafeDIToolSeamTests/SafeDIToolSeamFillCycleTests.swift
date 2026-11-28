@@ -131,7 +131,7 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultGizmo.swift"]):9:5: error: SafeDI cannot fill the builder for `RowB`’s `gizmo: any Gizmo` (`gizmo` of `gizmoBuilder`) in `Deep`’s dependency tree: `DefaultGizmo`, which fills it, instantiates `pane: any Pane`, which `Deep`’s tree is building where it builds `gizmo` (Deep -> pane -> PaneB -> rowMaker -> RowB -> gizmo -> DefaultGizmo -> pane). Code generated outside module `Feature` cannot refer to the function `Deep`’s initializer builds `Pane` with, and building it again would hand it other values than `Deep`’s tree holds. Instantiate `Deep` where `DefaultGizmo` builds `Pane` (`@Instantiated let deepBuilder: Instantiator<Deep>`), so the cycle re-enters through the initializer SafeDI generates for `Deep`, or declare an @Instantiable type that fulfills `Gizmo` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Deep.swift"]): note: `Deep` instantiates `pane: any Pane` here.
+			\(fixtures["Feature"]!["Deep.swift"]):7:5: note: `Deep` instantiates `pane: any Pane` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -167,7 +167,7 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `PaneA`, in modules `App` and `Feature`. Each type can be fulfilled by only one @Instantiable declaration a module can name. If `PaneA` names different types, rename one. If it names one type, keep one, and remove `PaneA` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
-			\(fixtures["Feature"]!["PaneA.swift"]): error: Found multiple @Instantiable types or extensions that fulfill `PaneA`, in modules `App` and `Feature`. Each type can be fulfilled by only one @Instantiable declaration a module can name. If `PaneA` names different types, rename one. If it names one type, keep one, and remove `PaneA` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+			\(fixtures["Feature"]!["PaneA.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `PaneA`, in modules `App` and `Feature`. Each type can be fulfilled by only one @Instantiable declaration a module can name. If `PaneA` names different types, rename one. If it names one type, keep one, and remove `PaneA` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -205,7 +205,7 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultGadget.swift"]):10:5: error: SafeDI cannot fill the builder for `DefaultWidget`’s `gadget: any Gadget` (`gadget` of `gadgetBuilder`) in `Host`’s dependency tree: `DefaultGadget`, which fills it, instantiates `panel: Panel`, which `Host`’s tree is building where it builds `gadget` (Host -> shell -> Shell -> inner -> Inner -> panel -> Panel -> rowMaker -> Row -> widget -> DefaultWidget -> gadget -> DefaultGadget -> panel). Code generated outside module `Upper` cannot refer to the function `Host`’s initializer builds `Panel` with, and building it again would hand it other values than `Host`’s tree holds. Instantiate `Host` where `DefaultGadget` builds `Panel` (`@Instantiated let hostBuilder: Instantiator<Host>`), so the cycle re-enters through the initializer SafeDI generates for `Host`, or declare an @Instantiable type that fulfills `Gadget` in module `Upper` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Inner.swift"]): note: `Inner` instantiates `panel: Panel` here.
+			\(fixtures["Feature"]!["Inner.swift"]):7:5: note: `Inner` instantiates `panel: Panel` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

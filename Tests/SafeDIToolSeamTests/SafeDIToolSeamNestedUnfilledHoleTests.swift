@@ -55,18 +55,10 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 					NormalizedFilePath(fixtures[module]!.compilerPath(of: file)).path
 				}
 			}
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(path("App", "Root.swift")):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(path("M1", "S1.swift")): note: `S1` instantiates `p: any P1` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(path("App", "Root.swift")):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(path("M1", "S1.swift")):9:5: note: `S1` instantiates `p: any P1` here.
-				"""
-			}
+			return """
+			\(path("App", "Root.swift")):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(path("M1", "S1.swift")):9:5: note: `S1` instantiates `p: any P1` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(depth: 2, app: [Self.root]),
@@ -89,18 +81,10 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 					NormalizedFilePath(fixtures[module]!.compilerPath(of: file)).path
 				}
 			}
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(path("App", "Root.swift")):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P2`, which @Instantiated property `p: any P2` instantiates in chain: Root -> S0 -> S1 -> S2. `S2` generates its dependency tree in module `M2`, which cannot see one either, so the initializer SafeDI generated for it takes `p2Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P2`, or an extension of it, with @Instantiable; list `P2` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(path("M2", "S2.swift")): note: `S2` instantiates `p: any P2` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(path("App", "Root.swift")):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P2`, which @Instantiated property `p: any P2` instantiates in chain: Root -> S0 -> S1 -> S2. `S2` generates its dependency tree in module `M2`, which cannot see one either, so the initializer SafeDI generated for it takes `p2Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P2`, or an extension of it, with @Instantiable; list `P2` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(path("M2", "S2.swift")):9:5: note: `S2` instantiates `p: any P2` here.
-				"""
-			}
+			return """
+			\(path("App", "Root.swift")):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P2`, which @Instantiated property `p: any P2` instantiates in chain: Root -> S0 -> S1 -> S2. `S2` generates its dependency tree in module `M2`, which cannot see one either, so the initializer SafeDI generated for it takes `p2Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P2`, or an extension of it, with @Instantiable; list `P2` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(path("M2", "S2.swift")):9:5: note: `S2` instantiates `p: any P2` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(depth: 3, app: [Self.root]),
@@ -122,7 +106,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `any P1`, which @Instantiated property `p: \(propertyType)` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `\(builder)`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `any P1`, or an extension of it, with @Instantiable; list `any P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M1"]!["S1.swift"]): note: `S1` instantiates `p: \(propertyType)` here.
+			\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `p: \(propertyType)` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -188,7 +172,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> Host -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M1"]!["S1.swift"]): note: `S1` instantiates `p: any P1` here.
+			\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `p: any P1` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -256,16 +240,16 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 			if nestedFirst {
 				"""
 				\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["M1"]!["S1.swift"]): note: `S1` instantiates `p: any P1` here.
+				\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `p: any P1` here.
 				\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> T. `T` generates its dependency tree in module `Base`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["Base"]!["T.swift"]): note: `T` instantiates `q: any Q` here.
+				\(fixtures["Base"]!["T.swift"]):7:5: note: `T` instantiates `q: any Q` here.
 				"""
 			} else {
 				"""
 				\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> T. `T` generates its dependency tree in module `Base`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["Base"]!["T.swift"]): note: `T` instantiates `q: any Q` here.
+				\(fixtures["Base"]!["T.swift"]):7:5: note: `T` instantiates `q: any Q` here.
 				\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-				\(fixtures["M1"]!["S1.swift"]): note: `S1` instantiates `p: any P1` here.
+				\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `p: any P1` here.
 				"""
 			}
 		}) {
@@ -517,7 +501,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `D`, which @Instantiated property `d: any D` instantiates in chain: \(firstLabel == "a" ? "Root -> S0 -> S1 -> S3" : "Root -> S0 -> S3"). `S3` generates its dependency tree in module `M3`, which cannot see one either, so the initializer SafeDI generated for it takes `dBuilder`, whose member `d` builds `d`, and the root `Root` must fill it. Decorate `D`, or an extension of it, with @Instantiable; list `D` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M3"]!["S3.swift"]): note: `S3` instantiates `d: any D` here.
+			\(fixtures["M3"]!["S3.swift"]):9:5: note: `S3` instantiates `d: any D` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -541,7 +525,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `P1`, which @Instantiated property `p: any P1` instantiates in chain: Root -> S0 -> Owner -> S1 -> Panel. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `p1Builder`, whose member `p` builds `p`, and the root `Root` must fill it. Decorate `P1`, or an extension of it, with @Instantiable; list `P1` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M1"]!["Panel.swift"]): note: `Panel` instantiates `p: any P1` here.
+			\(fixtures["M1"]!["Panel.swift"]):9:5: note: `Panel` instantiates `p: any P1` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -571,7 +555,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):13:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> S1. `S1` generates its dependency tree in module `M1`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["M1"]!["S1.swift"]): note: `S1` instantiates `q: any Q` here.
+			\(fixtures["M1"]!["S1.swift"]):9:5: note: `S1` instantiates `q: any Q` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -595,7 +579,7 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Q`, which @Instantiated property `q: any Q` instantiates in chain: Root -> X -> C -> F -> D. `D` generates its dependency tree in module `MD`, which cannot see one either, so the initializer SafeDI generated for it takes `qBuilder`, whose member `q` builds `q`, and the root `Root` must fill it. Decorate `Q`, or an extension of it, with @Instantiable; list `Q` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["MD"]!["D.swift"]): note: `D` instantiates `q: any Q` here.
+			\(fixtures["MD"]!["D.swift"]):9:5: note: `D` instantiates `q: any Q` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

@@ -813,7 +813,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `store: Store`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Store` is declared `package` in module `Kit`. Declare `Store` `public` in module `Kit`; declare `Screen` `package`; receive `store` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Kit"]!["Store.swift"]): note: `Store` is declared `package` here.
+			\(fixtures["Kit"]!["Store.swift"]):1:1: note: `Store` is declared `package` here.
+			\(fixtures["Kit"]!["Store.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `store: Store` here.
 			"""
 		}) {
@@ -1165,21 +1166,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// EX4: required on the public seam, `Space.Config` is reported as `Core` declares it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let extensionPath = Self.path(of: "SpaceExtension.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `package` in module `Core`. Declare `Space.Config` `public` in module `Core`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(extensionPath): note: The extension that declares `Space.Config` is `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Config` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `package` in module `Core`. Declare `Space.Config` `public` in module `Core`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(extensionPath):1:1: note: The extension that declares `Space.Config` is `package` here.
-				\(extensionPath):1:1-1:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Config` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `config: Space.Config`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Space.Config` is declared `package` in module `Core`. Declare `Space.Config` `public` in module `Core`; declare `Screen` `package`; receive `config` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(extensionPath):1:1: note: The extension that declares `Space.Config` is `package` here.
+			\(extensionPath):1:1-1:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `config: Space.Config` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.spaceInCoreModules(receives: ["@Received let config: Space.Config"]), integration: integration, filesToDelete: &filesToDelete)
 		}
@@ -1532,21 +1524,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let screenPath = Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)
 			let aliasPath = Self.path(of: "Token.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(aliasPath): note: `Token` is declared `package` here.
-				\(screenPath):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(aliasPath):1:1: note: `Token` is declared `package` here.
-				\(aliasPath):1:1-1:8: fixit: public
-				\(screenPath):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			}
+			return """
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(aliasPath):1:1: note: `Token` is declared `package` here.
+			\(aliasPath):1:1-1:8: fixit: public
+			\(screenPath):10:5: note: `Screen` receives `token: Token` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1640,7 +1623,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: Renderer.ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer.ID` is nested in `Renderer`, which is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Renderer.swift"]): note: `Renderer` is declared `package` here.
+			\(fixtures["Core"]!["Renderer.swift"]):1:1: note: `Renderer` is declared `package` here.
+			\(fixtures["Core"]!["Renderer.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `id: Renderer.ID` here.
 			"""
 		}) {
@@ -1748,7 +1732,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `result: Result`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Result` is declared `package` in module `Core`. Declare `Result` `public` in module `Core`; declare `Screen` `package`; receive `result` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Result.swift"]): note: `Result` is declared `package` here.
+			\(fixtures["Core"]!["Result.swift"]):1:1: note: `Result` is declared `package` here.
+			\(fixtures["Core"]!["Result.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `result: Result` here.
 			"""
 		}) {
@@ -1871,21 +1856,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			"`Theme` is declared `public` in module `Paints` and `package` in module `Shades`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Shades`; spell the type with its module where it is mentioned (`Paints.Theme`), so that it names that module’s declaration;"
 		}
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):11:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1: note: `Theme` is declared `package` here.
-				\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1-2:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):11:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(cause) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1: note: `Theme` is declared `package` here.
+			\(Self.path(of: "Theme.swift", in: "Shades", fixtures, integration)):2:1-2:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):11:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -2176,7 +2152,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `commented: Commented`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Commented` is declared `package` in module `Core`. Declare `Commented` `public` in module `Core`; declare `Screen` `package`; receive `commented` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Commented.swift"]): note: `Commented` is declared `package` here.
+			\(fixtures["Core"]!["Commented.swift"]):1:1: note: `Commented` is declared `package` here.
+			\(fixtures["Core"]!["Commented.swift"]):1:1-1:8: fixit: public
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `commented: Commented` here.
 			"""
 		}) {
@@ -2322,21 +2299,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// D3.1b: the receive is required, so the `public` tier cannot omit it, where the compiler rejected the generated
 		// initializer. The error names the type as its declaration spells it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)): note: ``Token`` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1: note: ``Token`` is declared `package` here.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1-1:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. ``Token`` is declared `package` in module `Core`. Declare ``Token`` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1: note: ``Token`` is declared `package` here.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):1:1-1:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.tokenModules(declaration: "package struct `Token` {}", receive: "@Received let token: Token"),
@@ -2488,21 +2456,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// B5: `Core`'s `package struct Token` inside a platform-conditioned block is read, from `Core`'s `.safedi` or its
 		// files, at its declared level.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)): note: `Token` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1: note: `Token` is declared `package` here.
-				\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1-2:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `token: Token`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Token` is declared `package` in module `Core`. Declare `Token` `public` in module `Core`; declare `Screen` `package`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1: note: `Token` is declared `package` here.
+			\(Self.path(of: "Token.swift", in: "Core", fixtures, integration)):2:1-2:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `token: Token` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -3288,21 +3247,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// S4: `Base` declares `Theme` `package`, and `Shades` declares it `package` inside an `#if` block, which SafeDI
 		// reads exactly too: the tie goes to the first declaration, `Base`'s, which the error points at.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Base`. Declare `Theme` `public` in module `Base`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Base`. Declare `Theme` `public` in module `Base`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1: note: `Theme` is declared `package` here.
-				\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1-1:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Base`. Declare `Theme` `public` in module `Base`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1: note: `Theme` is declared `package` here.
+			\(Self.path(of: "Theme.swift", in: "Base", fixtures, integration)):1:1-1:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -3416,21 +3366,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			case .swiftPackagePlugin:
 				"`Theme` is declared `public` in module `Ash`, `public` in module `Birch`, `package` in module `Cedar`, `public` in module `Dogwood`, `public` in module `Elm`, and `public` in module `Fir`, and SafeDI takes the narrowest. Declare `Theme` `public` in module `Cedar`; spell the type with its module where it is mentioned (`Ash.Theme`), so that it names that module’s declaration;"
 			}
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(cedarPath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):15:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(cedarPath):1:1: note: `Theme` is declared `package` here.
-				\(cedarPath):1:1-1:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):15:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):8:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(cedarPath):1:1: note: `Theme` is declared `package` here.
+			\(cedarPath):1:1-1:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):15:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: ["Elm", "Cedar", "Fir", "Ash", "Dogwood", "Birch"].map { name in
@@ -3455,21 +3396,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// exactly, with the note and fix-it at its declaration inside the block.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath):2:1: note: `Theme` is declared `package` here.
-				\(themePath):2:1-2:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(themePath):2:1: note: `Theme` is declared `package` here.
+			\(themePath):2:1-2:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.coreAndFeatureModules(coreTheme: "#if FLAG\npackage struct Theme {}\n#endif", receives: ["@Received let theme: Theme"], conditions: ["FLAG"]),
@@ -3940,24 +3872,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// each declaration.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath): note: `Theme` is declared `package` here.
-				\(themePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath):2:1: note: `Theme` is declared `package` here.
-				\(themePath):2:1-2:8: fixit: public
-				\(themePath):4:1: note: `Theme` is declared `package` here.
-				\(themePath):4:1-4:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(themePath):2:1: note: `Theme` is declared `package` here.
+			\(themePath):2:1-2:8: fixit: public
+			\(themePath):4:1: note: `Theme` is declared `package` here.
+			\(themePath):4:1-4:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.coreAndFeatureModules(coreTheme: "#if os(Linux)\npackage struct Theme {}\n#else\npackage struct Theme {}\n#endif", receives: ["@Received let theme: Theme"], conditions: []),
@@ -3974,21 +3896,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// declaration alone.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let themePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(themePath):2:1: note: `Theme` is declared `package` here.
-				\(themePath):2:1-2:8: fixit: public
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(themePath):2:1: note: `Theme` is declared `package` here.
+			\(themePath):2:1-2:8: fixit: public
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.coreAndFeatureModules(coreTheme: "#if os(Linux)\npackage struct Theme {}\n#else\npublic struct Theme {}\n#endif", receives: ["@Received let theme: Theme"], conditions: []),
@@ -4545,21 +4458,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// IFM18 (Probe D, required): IFM1 with a required receive gets the error any `package` type does, at the seam.
 		for isReleaseConfiguration in [false, true] {
 			await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-				switch integration {
-				case .moduleInfo:
-					"""
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)): note: `Theme` is declared `package` here.
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-					"""
-				case .swiftPackagePlugin:
-					"""
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1: note: `Theme` is declared `package` here.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1-13:8: fixit: public
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
-					"""
-				}
+				"""
+				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; declare `Screen` `package`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1: note: `Theme` is declared `package` here.
+				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1-13:8: fixit: public
+				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):10:5: note: `Screen` receives `theme: Theme` here.
+				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(
 					modules: Self.configured(Self.coreAndFeatureModules(
@@ -5074,21 +4978,12 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		// declares `package`, so generation fails, as for any `package` type.
 		for isReleaseConfiguration in [false, true] {
 			await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-				switch integration {
-				case .moduleInfo:
-					"""
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:29: error: SafeDI cannot generate the public mock of `Screen`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)): note: `Theme` is declared `package` here.
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):9:5: note: `Screen` receives `theme: Theme` here.
-					"""
-				case .swiftPackagePlugin:
-					"""
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:29: error: SafeDI cannot generate the public mock of `Screen`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1: note: `Theme` is declared `package` here.
-					\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1-13:8: fixit: public
-					\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):9:5: note: `Screen` receives `theme: Theme` here.
-					"""
-				}
+				"""
+				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:29: error: SafeDI cannot generate the public mock of `Screen`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
+				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1: note: `Theme` is declared `package` here.
+				\(Self.path(of: "Theme.swift", in: "Core", fixtures, integration)):13:1-13:8: fixit: public
+				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):9:5: note: `Screen` receives `theme: Theme` here.
+				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(
 					modules: Self.configured(Self.coreAndPublicMockFeatureModules(
@@ -5722,28 +5617,16 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let rendererPath = Self.path(of: "Renderer.swift", in: "Core", fixtures, integration)
 			let screenPath = Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `ID` is declared `package` in module `Core`. Declare `ID` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(rendererPath): note: `ID` is declared `package` here.
-				\(screenPath):12:5: note: `Screen` receives `id: ID` here.
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `renderer: any Renderer`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer` is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `renderer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(rendererPath): note: `Renderer` is declared `package` here.
-				\(screenPath):11:5: note: `Screen` receives `renderer: any Renderer` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `ID` is declared `package` in module `Core`. Declare `ID` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(rendererPath):3:1: note: `ID` is declared `package` here.
-				\(rendererPath):3:1-3:8: fixit: public
-				\(screenPath):12:5: note: `Screen` receives `id: ID` here.
-				\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `renderer: any Renderer`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer` is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `renderer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(rendererPath):2:1: note: `Renderer` is declared `package` here.
-				\(rendererPath):2:1-2:8: fixit: public
-				\(screenPath):11:5: note: `Screen` receives `renderer: any Renderer` here.
-				"""
-			}
+			return """
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `id: ID`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `ID` is declared `package` in module `Core`. Declare `ID` `public` in module `Core`; declare `Screen` `package`; receive `id` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(rendererPath):3:1: note: `ID` is declared `package` here.
+			\(rendererPath):3:1-3:8: fixit: public
+			\(screenPath):12:5: note: `Screen` receives `id: ID` here.
+			\(screenPath):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `renderer: any Renderer`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Renderer` is declared `package` in module `Core`. Declare `Renderer` `public` in module `Core`; declare `Screen` `package`; receive `renderer` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(rendererPath):2:1: note: `Renderer` is declared `package` here.
+			\(rendererPath):2:1-2:8: fixit: public
+			\(screenPath):11:5: note: `Screen` receives `renderer: any Renderer` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [

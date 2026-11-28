@@ -47,18 +47,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_namesBothModulesAndOffersRename_whenTwoModulesDeclareTypeOfOneName(integration: MultiModuleIntegration, accessLevel: String) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -77,20 +69,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_listsThreeModulesAndAsksToRenameAllButOne_whenThreeModulesDeclareTypeOfOneName(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `App`, `Core`, and `Feature`. SafeDI tells apart by name the @Instantiable types a module can name. Rename all but one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -118,7 +101,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 			let leadingModules = sortedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ")
 			let message = "error: `Store` is declared in modules \(leadingModules), and `\(sortedModuleNames[23])`. SafeDI tells apart by name the @Instantiable types a module can name. Rename all but one."
 			return moduleNames
-				.map { "\(fixtures[$0]!["Store.swift"]): \(message)" }
+				.map { "\(fixtures[$0]!["Store.swift"]):1:1: \(message)" }
 				.sorted()
 				.joined(separator: "\n")
 		}) {
@@ -142,18 +125,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// message gives the remedy for each.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, rename one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -175,20 +150,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// Renaming one of three declarations would leave two of one name.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells apart by name the @Instantiable types a module can name. Declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -207,20 +173,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_offersOneDeclarationOrDeclaringOnceThenRename_whenRepeatingDeclarationsAreAllInsidePlatformBlocks(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `App` and `Core`, and more than once in `App`. SafeDI tells apart by name the @Instantiable types a module can name, and reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`. If they are one type that differs by platform, declare it with one @Instantiable declaration, in one of these modules and outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If they are different types, declare it once in `App`, with any platform difference inside its body or its `instantiate(…)` method, then rename one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -284,7 +241,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Store.swift"]):1:1: \(Self.unknownModulesMessage(for: "Store", rename: "rename one"))
-			\(fixtures["Core"]!["Store.swift"]): \(Self.unknownModulesMessage(for: "Store", rename: "rename one"))
+			\(fixtures["Core"]!["Store.swift"]):1:1: \(Self.unknownModulesMessage(for: "Store", rename: "rename one"))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -508,18 +465,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// Each module builds alone, and SafeDI cannot tell one `Storing` from two.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`", rename: "rename one", for: "Storing")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Fulfiller.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Fulfiller.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Fulfiller.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Fulfiller.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Fulfiller.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Fulfiller.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			func fulfiller(named name: String) -> String {
 				"""
@@ -547,18 +496,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// Each module builds alone, and renaming one module's type and its extension resolves the error.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`", rename: "rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -577,18 +518,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_offersRenameAndKeepingOne_whenOneModuleExtendsTypeOfOneNameAndAnotherClaimsIt(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`", rename: "rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -610,18 +543,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// `App` may be extending `Core`'s `Store`, or a `Store` of its own that has nothing to do with it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`", rename: "rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -641,18 +566,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// `Replacement` may be claiming `Core`'s `Store`, or a `Store` of `App`'s own that has nothing to do with it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`", rename: "rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -672,20 +589,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 		// `App` fails on its own pair whichever type is renamed.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`, and more than once in `App`", rename: "\(Self.fulfillOnceInApp), then rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Replacement.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -704,20 +612,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_namesRepeatingModuleAndAsksToFulfillOnceThenRename_whenOneModuleDeclaresTypeInEachClauseBesideExtensionInAnother(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App` and `Core`, and more than once in `App`", rename: "\(Self.fulfillOnceInApp), then rename one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
+			\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -736,20 +635,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_offersOneDeclarationOrFulfillingOnceThenRename_whenRepeatingDeclarationsAndExtensionAreAllInsidePlatformBlocks(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: Found multiple @Instantiable types or extensions that fulfill `Store`, in modules `App` and `Core`, and more than once in `App`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If `Store` names one type that differs by platform, fulfill `Store` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If it names different types, \(Self.fulfillOnceInApp), then rename one. Otherwise, keep one, and remove `Store` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
-				\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):7:1: \(message)
+			\(Self.path(of: "Store+Instantiable.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -768,20 +658,11 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_asksToRenameAllButOneOrKeepOne_whenTwoModulesDeclareTypeBesideExtensionInAThird(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.claimsMessage(modules: "`App`, `Core`, and `Feature`", rename: "rename all but one")
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Feature", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -801,18 +682,10 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 	mutating func generate_offersOneDeclarationRenameAndKeepingOne_whenTypeAndExtensionInTwoModulesAreInsidePlatformBlocks(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: Found multiple @Instantiable types or extensions that fulfill `Store`, in modules `App` and `Core`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If `Store` names one type that differs by platform, fulfill `Store` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. If it names different types, rename one. Otherwise, keep one, and remove `Store` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
-				\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store+Instantiable.swift", in: "App", fixtures: fixtures, integration: integration)):2:1: \(message)
+			\(Self.path(of: "Store.swift", in: "Core", fixtures: fixtures, integration: integration)):2:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -839,7 +712,7 @@ struct SafeDIToolDuplicateTypeNameTests: ~Copyable {
 			let leadingModules = sortedModuleNames.dropLast().map { "`\($0)`" }.joined(separator: ", ")
 			let message = Self.claimsMessage(modules: "\(leadingModules), and `\(sortedModuleNames[23])`", rename: "rename all but one")
 			return moduleNames
-				.map { "\(fixtures[$0]!["Store.swift"]): \(message)" }
+				.map { "\(fixtures[$0]!["Store.swift"]):1:1: \(message)" }
 				.sorted()
 				.joined(separator: "\n")
 		}) {

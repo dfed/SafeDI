@@ -52,13 +52,13 @@ struct SafeDIToolSeamFillFindingOrderTests: ~Copyable {
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 				"""
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `P` builds only after `Home`’s tree calls the builder for `P`’s `api: any Api` (`api` of `apiSendableBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` declares `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` declares `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `api: any Api` (`api` of `apiSendableBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` instantiates `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` instantiates `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Q` builds only after `Home`’s tree calls the builder for `Q`’s `api: any Api` (`api` of `apiSendableBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `Q` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["Q.swift"]): note: `Q` declares `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["Q.swift"]):9:5: note: `Q` declares `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `api: any Api` (`api` of `apiSendableBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `Q` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["Q.swift"]): note: `Q` instantiates `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["Q.swift"]):9:5: note: `Q` instantiates `rBuilder: Instantiator<R>` here.
 				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -89,13 +89,13 @@ struct SafeDIToolSeamFillFindingOrderTests: ~Copyable {
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 				"""
 				\(fixtures["App"]!["Shared.swift"]):9:5: error: `Shared` receives `rBuilder: Instantiator<R>?`, which `P` builds only after `Home`’s tree calls the builder for `P`’s `first: any \(api)` (`first` of `\(api.lowercased())Builder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `\(api)` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` declares `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` declares `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["Shared.swift"]):9:5: error: `Shared` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `leaf: any \(api)` (`leaf` of `\(api.lowercased())Builder`). Inline, `Shared` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `\(api)` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` instantiates `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` instantiates `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["Shared.swift"]):9:5: error: `Shared` receives `rBuilder: Instantiator<R>?`, which `Q` builds only after `Home`’s tree calls the builder for `Q`’s `second: any Log` (`second` of `logBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `Q` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Log` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["Q.swift"]): note: `Q` declares `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["Q.swift"]):9:5: note: `Q` declares `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["Shared.swift"]):9:5: error: `Shared` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `leaf: any \(api)` (`leaf` of `\(api.lowercased())Builder`). Inline, `Shared` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `Q` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `\(api)` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["Q.swift"]): note: `Q` instantiates `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["Q.swift"]):9:5: note: `Q` instantiates `rBuilder: Instantiator<R>` here.
 				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(
@@ -144,15 +144,14 @@ struct SafeDIToolSeamFillFindingOrderTests: ~Copyable {
 				"@Instantiated let \(labelLetters[labelLetterIndices[typeIndex]])Builder: SendableInstantiator<\(typeNames[typeIndex])>"
 			}
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-				// Each type's two errors, in the order the types are declared in the file. `App`’s run reads `Feature`’s
-				// declarations from its `.safedi`, which keeps their order and no line, so each note names the file alone.
-				declarationOrder.map { typeIndex in
-					let type = typeNames[typeIndex]
+				// Each type's two errors, after where it is declared: the types are 11 lines apart in the file, from line 9.
+				declarationOrder.enumerated().map { position, typeIndex in
+					let (type, line) = (typeNames[typeIndex], 9 + 11 * position)
 					return """
 					\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `\(type)` builds only after `Home`’s tree calls the builder for `\(type)`’s `api: any Api` (`api` of `apiSendableBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `\(type)` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-					\(fixtures["Feature"]!["Builders.swift"]): note: `\(type)` declares `rBuilder: Instantiator<R>` here.
+					\(fixtures["Feature"]!["Builders.swift"]):\(line):5: note: `\(type)` declares `rBuilder: Instantiator<R>` here.
 					\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `api: any Api` (`api` of `apiSendableBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `\(type)` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-					\(fixtures["Feature"]!["Builders.swift"]): note: `\(type)` instantiates `rBuilder: Instantiator<R>` here.
+					\(fixtures["Feature"]!["Builders.swift"]):\(line):5: note: `\(type)` instantiates `rBuilder: Instantiator<R>` here.
 					"""
 				}.joined(separator: "\n")
 			}) {
@@ -197,9 +196,9 @@ struct SafeDIToolSeamFillFindingOrderTests: ~Copyable {
 			await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 				"""
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `P` builds only after `Home`’s tree calls the builder for `P`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` declares `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` declares `rBuilder: Instantiator<R>` here.
 				\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rBuilder: Instantiator<R>?`, which `Home`’s tree is building where it calls the builder for `R`’s `api: any Api` (`api` of `apiBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rBuilder` on a type above `Home`, and receive it on `P` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-				\(fixtures["Feature"]!["P.swift"]): note: `P` instantiates `rBuilder: Instantiator<R>` here.
+				\(fixtures["Feature"]!["P.swift"]):9:5: note: `P` instantiates `rBuilder: Instantiator<R>` here.
 				"""
 			}) {
 				try await executeSafeDIToolMultiModuleTest(

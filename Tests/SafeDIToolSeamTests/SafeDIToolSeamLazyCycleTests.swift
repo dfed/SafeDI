@@ -972,7 +972,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Mid.swift"]):11:5: error: `Mid` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1018,7 +1018,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Mid.swift"]):11:5: error: `Mid` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]): note: `TokenCache` receives `filter: [3 of Int]?` here.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2446,7 +2446,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	private static func hubSpaceThemeTierOmissionError(provider: String, _ fixtures: [String: FixturePaths]) -> String {
 		"""
 		\(fixtures["App"]!["\(provider).swift"]):12:5: error: `\(provider)` provides `theme: any Hub.Space.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Space.Theme` is nested in `Hub.Space`, which is `internal` as far as SafeDI can tell: it is declared inside an extension of `Hub` that spells no access level, which SafeDI counts as `internal`, since it reads `Hub`’s access only from a declaration of `Hub` in the same module that is outside every extension, or inside an extension of a type it reads the same way. If `Hub` can be `public`, spell the extension’s access level (`public extension Hub { … }`, dropping the modifier on `Space` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`’s), or declare `Space` in `Hub`’s body or at top level; mention `Hub.Space` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-		\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: (any Hub.Space.Theme)?` here.
+		\(fixtures["Feature"]!["Badge.swift"]):9:5: note: `Badge` receives `theme: (any Hub.Space.Theme)?` here.
 		"""
 	}
 
@@ -2455,7 +2455,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	private static func tierOmissionError(provider: String, _ fixtures: [String: FixturePaths]) -> String {
 		"""
 		\(fixtures["App"]!["\(provider).swift"]):11:5: error: `\(provider)` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
-		\(fixtures["Feature"]!["Badge.swift"]): note: `Badge` receives `theme: [3 of Int]?` here.
+		\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 		"""
 	}
 

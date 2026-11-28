@@ -118,21 +118,12 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		// declaration, which a note with a fix-it points at.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let corePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `theme: Theme`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive `theme` with `onlyIfAvailable: true` and an optional type; build `theme` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(corePath): note: `Theme` is declared `package` here.
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures, integration)):9:5: note: `Store` receives `theme: Theme` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `theme: Theme`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive `theme` with `onlyIfAvailable: true` and an optional type; build `theme` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
-				\(corePath):1:1: note: `Theme` is declared `package` here.
-				\(corePath):1:1-1:8: fixit: public
-				\(Self.path(of: "Store.swift", in: "Feature", fixtures, integration)):9:5: note: `Store` receives `theme: Theme` here.
-				"""
-			}
+			return """
+			\(Self.path(of: "Screen.swift", in: "Feature", fixtures, integration)):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `theme: Theme`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`; receive `theme` with `onlyIfAvailable: true` and an optional type; build `theme` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(corePath):1:1: note: `Theme` is declared `package` here.
+			\(corePath):1:1-1:8: fixit: public
+			\(Self.path(of: "Store.swift", in: "Feature", fixtures, integration)):9:5: note: `Store` receives `theme: Theme` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -182,7 +173,7 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `storage: Storage`, which `Store` receives, and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Storage`’s own `@Instantiable` declaration is `package`. Declare `Storage` `public`; receive `storage` with `onlyIfAvailable: true` and an optional type; build `storage` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
-			\(fixtures["Core"]!["Store.swift"]): note: `Store` receives `storage: Storage` here.
+			\(fixtures["Core"]!["Store.swift"]):7:5: note: `Store` receives `storage: Storage` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

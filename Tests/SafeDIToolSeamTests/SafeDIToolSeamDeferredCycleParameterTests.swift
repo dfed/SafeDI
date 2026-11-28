@@ -741,7 +741,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) only as `tag: Tag?`, since `A`’s builder function takes it as a parameter, because a cycle inside `A`’s tree passes it, and no type `Hub`’s tree builds in that function requires `tag: Tag`. Receive it on `LiveApi` with `@Received(onlyIfAvailable: true) let tag: Tag?`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["TagReader.swift"]): note: `TagReader` receives `tag: Tag?` here.
+			\(fixtures["Feature"]!["TagReader.swift"]):7:5: note: `TagReader` receives `tag: Tag?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1133,7 +1133,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag`, which `A`’s builder function takes as a parameter on the path where `Hub` calls `Inner`, because a cycle inside `A`’s tree passes it, but `Hub` passes the builder for `Inner`’s `api: any Api` (`api` of `apiBuilder`) on from its own caller, which cannot hand it that value. Declare `@Received let tag: Tag` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Hub` fills the builder itself.
-			\(fixtures["Feature"]!["TagReader.swift"]): note: `TagReader` receives `tag: Tag` here.
+			\(fixtures["Feature"]!["TagReader.swift"]):9:5: note: `TagReader` receives `tag: Tag` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

@@ -117,7 +117,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		// the run's integration.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]): error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
+			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -141,7 +141,8 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func multiModuleTest_offersRemedyOfReadingAnotherModule_whenFileThatInstantiatesUnfulfilledTypeIsAbsentDependencyFile() async {
 		// Bazel's sandbox gives `App`'s action `Middle`'s `.safedi` but none of `Middle`'s files, so SafeDI cannot read
-		// what the file that instantiates `Engine` imports, and must not advise decorating `Engine` alone.
+		// what the file that instantiates `Engine` imports, and must not advise decorating `Engine` alone. Nor can it read
+		// the file's line, which `Middle`'s `.safedi` does not keep.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["Middle"]!["Pump.swift"]): error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable, or list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Engine", integration: .moduleInfo))
@@ -988,18 +989,10 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				"error: `Haptics` is declared in modules `App` and `Core`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 			}
 			let line = declaresInPlatformBlocks ? 2 : 1
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
-				\(path(of: "Haptics.swift", in: "Core")): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
-				\(path(of: "Haptics.swift", in: "Core")):\(line):1: \(message)
-				"""
-			}
+			return """
+			\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
+			\(path(of: "Haptics.swift", in: "Core")):\(line):1: \(message)
+			"""
 		}) {
 			func haptics(inBlockOf condition: String) -> String {
 				let declaration = """

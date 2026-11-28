@@ -1250,7 +1250,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsDuplicateDeclaration_whenListingEveryModuleThatDeclaresOneType() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.duplicateDeclarationMessage(of: "Clock", inModules: "`Deep` and `Left`")
-			return "\(fixtures["Deep"]!["Clock.swift"]): \(message)\n\(fixtures["Left"]!["Clock.swift"]): \(message)"
+			return "\(fixtures["Deep"]!["Clock.swift"]):1:1: \(message)\n\(fixtures["Left"]!["Clock.swift"]):1:1: \(message)"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.twoModulesDeclaringClock(appDependencies: ["Deep", "Left", "Right"]),
@@ -2294,7 +2294,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsDuplicateDeclaration_whenTheModuleBeneathASeamNeedsCollidesWithTheSeamsModule(seamModuleDependencies: [String], passesSet: Bool) async {
 		await assertThrowsMultiModuleError(inModule: "SeamModule", diagnostics: { fixtures in
 			let message = Self.duplicateDeclarationMessage(of: "Helper", inModules: "`Deep` and `SeamModule`")
-			return "\(fixtures["SeamModule"]!["Helper.swift"]):1:1: \(message)\n\(fixtures["Deep"]!["Helper.swift"]): \(message)"
+			return "\(fixtures["SeamModule"]!["Helper.swift"]):1:1: \(message)\n\(fixtures["Deep"]!["Helper.swift"]):1:1: \(message)"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -2380,7 +2380,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsDuplicateDeclaration_whenARootOfAModuleReadFromBeneathNeedsAModuleThatCollides(appDependencies: [String], passesSet: Bool) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.duplicateDeclarationMessage(of: "Helper", inModules: "`App` and `Deep`")
-			return "\(fixtures["App"]!["Helper.swift"]):1:1: \(message)\n\(fixtures["Deep"]!["Helper.swift"]): \(message)"
+			return "\(fixtures["App"]!["Helper.swift"]):1:1: \(message)\n\(fixtures["Deep"]!["Helper.swift"]):1:1: \(message)"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -2408,7 +2408,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsTheTypeUnfulfilled_whenOnlyAModuleItListsDeclaresARootAndThatRootNeedsAModuleBeneath(passesSet: Bool) async {
 		// A module with no tree of its own asks for nothing, whatever the trees of the modules it lists need.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"\(fixtures["Middle"]!["MiddleRoot.swift"]): error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. Decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Clock", integration: .moduleInfo))"
+			"\(fixtures["Middle"]!["MiddleRoot.swift"]):9:5: error: No @Instantiable type or extension fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. Decorate `Clock`, or an extension of it, with @Instantiable, or list `Clock` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it. \(fulfillingDeclarationInModuleNotReadRemedy(for: "Clock", integration: .moduleInfo))"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -2461,7 +2461,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	mutating func generate_reportsDuplicateDeclaration_whenTwoModulesBeneathDeclareTheTypeARootBuilds() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = Self.duplicateDeclarationMessage(of: "Clock", inModules: "`DeepLeft` and `DeepRight`")
-			return "\(fixtures["DeepLeft"]!["Clock.swift"]): \(message)\n\(fixtures["DeepRight"]!["Clock.swift"]): \(message)"
+			return "\(fixtures["DeepLeft"]!["Clock.swift"]):1:1: \(message)\n\(fixtures["DeepRight"]!["Clock.swift"]):1:1: \(message)"
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -2495,7 +2495,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 				remedy: "Rename all but one",
 			)
 			return moduleIndices
-				.map { "\(fixtures["Deep\($0)"]!["Helper.swift"]): \(message)" }
+				.map { "\(fixtures["Deep\($0)"]!["Helper.swift"]):1:1: \(message)" }
 				.joined(separator: "\n")
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2820,7 +2820,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable type or extension that module `App` can see fulfills `Tracker`, which @Instantiated property `tracker: any Tracker` instantiates in chain: Root -> Feature. `Feature` generates its dependency tree in module `SeamModule`, which cannot see one either, so the initializer SafeDI generated for it takes `trackerBuilder`, whose member `tracker` builds `tracker`, and the root `Root` must fill it. Decorate `Tracker`, or an extension of it, with @Instantiable; list `Tracker` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
-			\(fixtures["SeamModule"]!["Feature.swift"]): note: `Feature` instantiates `tracker: any Tracker` here.
+			\(fixtures["SeamModule"]!["Feature.swift"]):9:5: note: `Feature` instantiates `tracker: any Tracker` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

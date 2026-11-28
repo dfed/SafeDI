@@ -165,12 +165,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinSites == [
-				GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let database: Database"),
-				GraphFuzzerDiagnosticSite(severity: "note", file: "FeatureModule/FeatureModuleTypes.swift", line: 12, declaration: "@Instantiated public let database: Database"),
-			])
-		}
+		#expect(result.twinSites == [
+			GraphFuzzerDiagnosticSite(severity: "error", file: "Tests/TestsTypes.swift", line: 8, declaration: "@Received let database: Database"),
+			GraphFuzzerDiagnosticSite(severity: "note", file: "FeatureModule/FeatureModuleTypes.swift", line: 12, declaration: "@Instantiated public let database: Database"),
+		])
 		Self.expectMirrorsTwin(result)
 	}
 
@@ -230,12 +228,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinSites == [
-				GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
-				GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"Feed\") private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
-			])
-		}
+		#expect(result.twinSites == [
+			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
+			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"Feed\") private let feedBuilder: ErasedInstantiator<(), any FeedPage>"),
+		])
 		Self.expectMirrorsTwin(result)
 	}
 
@@ -311,12 +307,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinSites == [
-				GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received let logger: Logger"),
-				GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 20, declaration: "@Instantiated let logger: Logger"),
-			])
-		}
+		#expect(result.twinSites == [
+			GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received let logger: Logger"),
+			GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 20, declaration: "@Instantiated let logger: Logger"),
+		])
 		#expect(result.twinDiagnostics.map(GraphFuzzerCallingMockCheck.reportsOnlySeamBuiltAgain) == true)
 		#expect(result.mockSites == nil)
 		#expect(result.passUps.isEmpty)
@@ -397,12 +391,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
 
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinSites == [
-				GraphFuzzerDiagnosticSite(severity: "error", file: "FeatureModule/FeatureModuleTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
-			])
-			Self.expectMirrorsTwin(result)
-		}
+		#expect(result.twinSites == [
+			GraphFuzzerDiagnosticSite(severity: "error", file: "FeatureModule/FeatureModuleTypes.swift", line: 14, declaration: "@Received let innerBuilder: Instantiator<Inner>"),
+		])
+		Self.expectMirrorsTwin(result)
 	}
 
 	/// Expects the twin to give the graph's intended outcome and the calling mock to mirror it.
@@ -812,11 +804,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillConstructsTypeCallerModuleCannotReach])
 		#expect(sitesByShape.values.allSatisfy { $0.allSatisfy { $0 != nil } })
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			for (shape, sites) in sitesByShape {
-				for (otherShape, otherSites) in sitesByShape where otherShape != shape {
-					#expect(Set(sites).isDisjoint(with: otherSites))
-				}
+		for (shape, sites) in sitesByShape {
+			for (otherShape, otherSites) in sitesByShape where otherShape != shape {
+				#expect(Set(sites).isDisjoint(with: otherSites))
 			}
 		}
 	}
@@ -1092,15 +1082,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				Issue.record("No result for seed \(seed)")
 				continue
 			}
-			// A graph whose diagnostics locate a site by its file alone counts toward its cell, so that the cells' floor
-			// below still judges every other cell.
-			let readsUnlocatedSite = Self.holdsUnlocatedDiagnostic(result.twinDiagnostics) || Self.holdsUnlocatedDiagnostic(result.failure?.details)
-			if let drawingDefect = result.drawingDefect, readsUnlocatedSite {
-				withKnownIssue("\(Self.unlocatedSiteReason)") {
-					Issue.record("Drawing defect: \(drawingDefect)")
-				}
-				intendedGraphsByCell[draw.cell, default: 0] += 1
-			} else if let drawingDefect = result.drawingDefect {
+			if let drawingDefect = result.drawingDefect {
 				Issue.record("Drawing defect: \(drawingDefect)")
 			} else {
 				intendedGraphsByCell[draw.cell, default: 0] += 1
@@ -1125,10 +1107,6 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				// A mock that does not compile shows only where the run compiles it.
 				if compileVerificationIsEnabled || !knownIssue.signatures.allSatisfy({ $0 == .callingMockDoesNotCompile }) {
 					Issue.record("Stale known issue: calling-mock seed \(seed) (\(draw.cell)) passes, so remove it from the entry “\(knownIssue.reason)”")
-				}
-			case let (failure?, nil) where readsUnlocatedSite:
-				withKnownIssue("\(Self.unlocatedSiteReason)") {
-					Issue.record("Calling-mock seed \(seed) (\(draw.cell)): \(failure.kind.rawValue). \(failure.details)")
 				}
 			case let (failure?, nil):
 				Issue.record("Calling-mock seed \(seed) (\(draw.cell)): \(failure.kind.rawValue). \(failure.details)\n\(Self.description(of: draw.graph))")
@@ -1582,9 +1560,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillConstructsTypeCallerModuleCannotReach, caller: .internal, place: .plain))
 		#expect(draw.mockBuild == .compilesGeneratedMocks)
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
-		}
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
@@ -1603,9 +1579,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillConstructsTypeCallerModuleCannotReach, caller: .internal, place: .deferred))
 		#expect(draw.graph.mockSkipsTwinsError)
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
-		}
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.mockSites == nil)
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
 		#expect(result.passUps.map(\.reason) == [.mockConditionIsInactive])
@@ -1631,10 +1605,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(draw.unreachableConstruction?.access == .internalMockInCallersPackage)
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.twinSites == nil)
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.mockSites?.map(\.declaration) == draw.unreachableConstruction?.mockMethodLine.map { [$0] })
-			#expect(result.failure == nil, "\(result.failure?.details ?? "")")
-		}
+		#expect(result.mockSites?.map(\.declaration) == draw.unreachableConstruction?.mockMethodLine.map { [$0] })
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
 	/// The graphs of the shape whose fill constructs a type the caller's module cannot reach draw each declaration of the
@@ -1890,9 +1862,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 850)
 
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillRequiresValueCalledTypeReceivesInOptionalWrapper, caller: .internal, place: .plain))
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
-		}
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
@@ -1911,9 +1881,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 858)
 
 		#expect(draw.optionalWrapperValue?.calledTypeReceivesBesideSibling == true)
-		withKnownIssue("\(Self.unlocatedSiteReason)") {
-			#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
-		}
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
@@ -2368,12 +2336,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: seed, comparesValues: false)
 
 			#expect(draw.cell.shape == .appOnlyScreenInLoop && draw.cell.place == .plain)
-			withKnownIssue("\(Self.unlocatedSiteReason)") {
-				#expect(result.twinSites == [
-					GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let \(feedBuilder)"),
-					GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"\(feed)\") private let \(feedBuilder)"),
-				], "seed \(seed)")
-			}
+			#expect(result.twinSites == [
+				GraphFuzzerDiagnosticSite(severity: "error", file: "App/AppTypes.swift", line: 7, declaration: "@Received private let \(feedBuilder)"),
+				GraphFuzzerDiagnosticSite(severity: "note", file: "Feature/FeatureTypes.swift", line: 22, declaration: "@Instantiated(fulfilledByType: \"\(feed)\") private let \(feedBuilder)"),
+			], "seed \(seed)")
 		}
 	}
 
@@ -2942,14 +2908,4 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// One entry per cell that fails, with the cell's seeds: none fails.
 	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = []
-
-	/// Why an expectation about where a twin or a calling mock reports an error fails for now: the check runs both through
-	/// the module-info flow, whose run reads another module's declarations from its `.safedi`, which keeps no line, so a
-	/// diagnostic at one names its file alone, and `GraphFuzzerDiagnosticSite` finds no site for it.
-	static let unlocatedSiteReason = "A twin or calling mock’s diagnostic at a declaration of another module than the run’s is located by its file alone, since a `.safedi` keeps no line, so the check finds no site for it (callingMock_reportsTwinsError_whenFillReceivesSiblingThatReceivesInnerSeamsBuilder: `Tests`’ run reports `FeatureModule`’s `@Received let innerBuilder: Instantiator<Inner>` as `FeatureModule/FeatureModuleTypes.swift: error:`). The locator, which gives such a diagnostic its line back where the declaring module’s files are readable, owns the fix"
-
-	/// Whether `text` holds a diagnostic located by its file alone, `<path>.swift: <severity>: `.
-	static func holdsUnlocatedDiagnostic(_ text: String?) -> Bool {
-		text?.range(of: #"\.swift: (error|warning|note): "#, options: .regularExpression) != nil
-	}
 }

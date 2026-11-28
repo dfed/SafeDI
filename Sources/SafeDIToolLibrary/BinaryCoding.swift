@@ -1046,6 +1046,17 @@ struct BinaryReader {
 	/// - Throws: `rangeWithoutOwner` where the range was written without its lines and columns and `unlocated` is `nil`:
 	///   no declaration location says where it belongs.
 	mutating func readRange(unlocatedAs unlocated: Dependency.SourceRange?) throws(BinaryDecodingError) -> Dependency.SourceRange {
+		let range = try readRangeAsWritten(unlocatedAs: unlocated)
+		rangesRead?.append(range)
+		return range
+	}
+
+	/// Where set, every range read, in the order read (``readRange(unlocatedAs:)``): two reads of one value's bytes,
+	/// written once with ranked locations and once with lines and columns, pair each declaration's part with its lines
+	/// and columns (`DiagnosticLocator`).
+	var rangesRead: [Dependency.SourceRange]?
+
+	private mutating func readRangeAsWritten(unlocatedAs unlocated: Dependency.SourceRange?) throws(BinaryDecodingError) -> Dependency.SourceRange {
 		let startLineOffset = offset
 		let startLine: Int = try read()
 		guard startLine < 0 else {

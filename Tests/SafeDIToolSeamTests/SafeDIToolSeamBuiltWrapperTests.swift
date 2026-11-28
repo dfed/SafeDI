@@ -2662,7 +2662,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		let wrapper = type.prefix { $0 != "<" }
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]): error: The first generic argument of `part: \(type)` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `\(wrapper)<String, any Gadget>`.
+			\(fixtures["Feature"]!["Host.swift"]):8:5: error: The first generic argument of `part: \(type)` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `\(wrapper)<String, any Gadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2766,7 +2766,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	mutating func generate_throwsMismatchAtHole_whenHoleOwnersModuleIsNotSeamsModule() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Owner.swift"]): error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `Owner` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
+			\(fixtures["Feature"]!["Owner.swift"]):7:5: error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `Owner` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2787,7 +2787,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	mutating func generate_throwsMismatchAtHole_whenSeamsModuleQualifiesAnotherTypeThanForwardedProperty() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]): error: The first generic argument of `part: ErasedInstantiator<Feature.OtherLabel, AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
+			\(fixtures["Feature"]!["Host.swift"]):8:5: error: The first generic argument of `part: ErasedInstantiator<Feature.OtherLabel, AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2809,7 +2809,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	mutating func generate_throwsMismatchAtHole_whenAModuleDeclaresTypeNamedAsSeamsModule() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]): error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
+			\(fixtures["Feature"]!["Host.swift"]):8:5: error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2834,7 +2834,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	mutating func generate_throwsMismatchAtHole_whenFillersModuleDeclaresItsOwnTypeOfQualifiedName(firstGeneric: String, forwardedType: String, spellingToDeclare: String) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Host.swift"]): error: The first generic argument of `part: ErasedInstantiator<\(firstGeneric), AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<\(spellingToDeclare), AnyGadget>`.
+			\(fixtures["Feature"]!["Host.swift"]):8:5: error: The first generic argument of `part: ErasedInstantiator<\(firstGeneric), AnyGadget>` on `Host` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<\(spellingToDeclare), AnyGadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2856,7 +2856,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 	mutating func generate_throwsMismatchAtHole_whenAnotherSeamPassesHoleUp(moduleDeclaresItsOwnType: Bool) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["InnerSeam.swift"]): error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `InnerSeam` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
+			\(fixtures["Feature"]!["InnerSeam.swift"]):7:5: error: The first generic argument of `part: ErasedInstantiator<Label, AnyGadget>` on `InnerSeam` must be the @Forwarded properties of `NamedGadget`, which it builds. Declare it as `ErasedInstantiator<Feature.Label, AnyGadget>`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

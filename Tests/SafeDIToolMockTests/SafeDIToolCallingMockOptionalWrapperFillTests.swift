@@ -52,8 +52,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		let graph = Self.graph(caller: caller, wrapper: wrapper, fill: .requiresValue(buildsCalledTypeAgain: true))
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: \(wrapper.name)<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: \(wrapper.name)<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -61,8 +61,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -78,8 +78,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		let graph = Self.graph(caller: caller, wrapper: wrapper, fill: .requiresValue(buildsCalledTypeAgain: false))
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: \(wrapper.name)<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: \(wrapper.name)<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -87,8 +87,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: \(wrapper.name)<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: \(wrapper.name)<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: \(wrapper.name)<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -122,8 +122,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		let readerReceive = receivesThroughAlias ? "session: LazilyInstantiated<Session>" : "session: LazilyInstantiated<Session>?"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `\(readerReceive)` on `Reader` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Reader` receives `\(readerReceive)` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `\(readerReceive)` on `Reader` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):28:5: note: `Reader` receives `\(readerReceive)` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -131,8 +131,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `\(readerReceive)` on `Reader` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Reader` receives `\(readerReceive)` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `\(readerReceive)` on `Reader` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):28:5: note: `Reader` receives `\(readerReceive)` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -149,8 +149,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		let graph = Self.graph(caller: .internal, wrapper: .lazilyInstantiated, fill: .requiresValue(buildsCalledTypeAgain: true), receiver: .screenAndReader)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):22:5: note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -158,8 +158,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):22:5: note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -173,8 +173,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		let graph = Self.graph(caller: .internal, wrapper: .lazilyInstantiated, fill: .requiresValue(buildsCalledTypeAgain: true), isolation: "@MainActor ")
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot fill the builder for `Screen`’s `holeBuilder: ErasedInstantiator<Int, AnyHole>` (`holeBuilder` of `fill_AnyHoleBuilder`) in a call of `Screen`’s mock: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, so the mock hands the builder only `session: LazilyInstantiated<Session>?`, which holds no value where its caller passes none. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {
@@ -182,8 +182,8 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feed"]!["FeedTypes.swift"]): error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
-			\(fixtures["Feed"]!["FeedTypes.swift"]): note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):14:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `session` as `session: LazilyInstantiated<Session>?` on `Screen` and `session: Session` on `Fill`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `session` the same way in every type of the tree, or declare it on `Screen` as the form that provides the others: `@Received let session: LazilyInstantiated<Session>`.
+			\(fixtures["Feed"]!["FeedTypes.swift"]):21:5: note: `Screen` receives `session: LazilyInstantiated<Session>?` here.
 			\(fixtures["App"]!["AppTypes.swift"]):13:5: note: `Fill` receives `session: Session` here.
 			"""
 		}) {

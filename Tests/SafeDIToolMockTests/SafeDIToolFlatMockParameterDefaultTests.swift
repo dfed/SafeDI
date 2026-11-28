@@ -982,7 +982,8 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Screen.swift"]):3:29: error: SafeDI cannot generate the public mock of `Screen`: its `public` tier, which `generateMock: .public` requires, cannot take `service: Service`, which `Screen` forwards, and cannot pass `nil` for it, since it is required. `Service` is declared `package` in module `Feature`. Declare `Service` `public` in module `Feature`; give `Service` a `mockOnly` mock; or use `generateMock: .internal`.
-			\(fixtures["Feature"]!["Service.swift"]): note: `Service` is declared `package` here.
+			\(fixtures["Feature"]!["Service.swift"]):1:1: note: `Service` is declared `package` here.
+			\(fixtures["Feature"]!["Service.swift"]):1:1-1:8: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

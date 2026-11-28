@@ -639,15 +639,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// `[3 of Int]`, so SafeDI proves the type `package` and `Service`'s `public` tier omits `theme`. `App`, in another
 		// package, reads `Badge` from `Feed`'s view when it lists `Feed` alone: its `Screen`, which provides `theme`, gets the
 		// error a run that reads `Core`'s own file reports, and no error names a module info `App` was not given. A view
-		// carries no locations, so the note at `Badge`'s receive names its file only once `App` lists `Core` too, and its line
-		// under the SwiftPM plugin alone, since a `.safedi` keeps none.
+		// carries no positions, so the note at `Badge`'s receive names no line until `App` lists `Core` too.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let screenPath: String
 			let badgeNoteLocation: String
 			switch integration {
 			case .moduleInfo:
 				screenPath = fixtures["App"]!["Screen.swift"]
-				badgeNoteLocation = listsCore ? "\(fixtures["Core"]!["Badge.swift"]): " : ""
+				badgeNoteLocation = listsCore ? "\(fixtures["Core"]!["Badge.swift"]):7:5: " : ""
 			case .swiftPackagePlugin:
 				screenPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Screen.swift")).path
 				badgeNoteLocation = "\(NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Badge.swift")).path):7:5: "

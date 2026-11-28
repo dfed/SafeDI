@@ -50,16 +50,20 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 	mutating func generate_reportsTwinsAccessErrors_whenFillConstructsInternalTypeOfAnotherModuleOfSamePackage(caller: CallingMockCallerKind, calledTypes: CalledTypeDeclaration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:1: fixit: package\(" ")
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: calledTypes.attribute, meter: .internalInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:1: fixit: package\(" ")
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: .internalInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -71,16 +75,20 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 	mutating func generate_reportsTwinsAccessErrors_whenFillConstructsPackageTypeOfAnotherPackage(caller: CallingMockCallerKind, calledTypes: CalledTypeDeclaration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Meter` `public` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Meter` `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:8: fixit: public
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:12: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: calledTypes.attribute, meter: .packageInAnotherPackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Meter` `public` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Meter` `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:8: fixit: public
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:12: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: .packageInAnotherPackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -94,16 +102,20 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		// the fill, where the twin reports it too.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:1: fixit: package\(" ")
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: Self.twinCalledTypes, meter: .internalInSamePackage, clockIsBeneathFill: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:1: fixit: package\(" ")
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: .internalInSamePackage, clockIsBeneathFill: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -118,8 +130,10 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		// once, naming `Screen`, the mock declared first, which neither name order nor an unordered pick would name.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):6:1-6:1: fixit: package\(" ")
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5: error: `Meter`’s initializer is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: .internal, callee: Self.twinCalledTypes, meter: .internalInSamePackage, declaresOtherMockRoots: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
@@ -135,7 +149,8 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: .publicWithInternalMockInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["CoreTypes.swift"]): error: `Meter.mock()` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `Meter.mock()` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):8:5: error: `Meter.mock()` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `Meter.mock()` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):8:5-8:5: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: Self.twinCalledTypes, meter: .publicWithInternalMockInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)

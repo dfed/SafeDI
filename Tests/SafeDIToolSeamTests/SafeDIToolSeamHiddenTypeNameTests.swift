@@ -80,18 +80,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// `SeamN` names `ModA`'s `package` type, which the app, in another package, cannot. SafeDI spells with a module's name
 		// only the declaring module's own mentions, so a module of `ModA`'s package that mentions the name keeps it whole.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -113,18 +105,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// The duplicate error, which a rename settles, comes before the check beneath `SeamN`'s mention, which the renamed
 		// build then reports.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -426,16 +410,9 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsMissingDependency_whenTypeTheAppCannotNameFulfillsPublicProtocolAndReceivesIt(integration: MultiModuleIntegration) async {
 		// The tree beneath the fulfiller is still checked, though the name it claims is left as written.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "ALogger.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ALogger"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "ALogger.swift", in: "ModA", fixtures: fixtures, integration: integration)):7:5: \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ALogger"))
-				"""
-			}
+			"""
+			\(Self.path(of: "ALogger.swift", in: "ModA", fixtures: fixtures, integration: integration)):7:5: \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ALogger"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -501,18 +478,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenModuleThatMentionsNameReadsPublicTypeBesidePackageTypeOfIt(integration: MultiModuleIntegration) async {
 		// `Detail` means `Lib`'s `Store`; only another file of `Feature` imports `ModA`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -533,18 +502,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenModuleThatMentionsNameReadsPublicTypeBesidePackageProtocolOfIt(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -567,18 +528,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// `Feature` reads `Lib`'s files through `additionalDirectoriesToInclude`, so SafeDI knows no module of the `Store` its
 		// `Detail` means.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -610,18 +563,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// SafeDI is not told that `Feature` cannot name `ModA`'s `package` `Store`; the Swift package plugin reads `ModA` for
 		// `Feature`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -644,18 +589,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// `Mid` can name `Other`'s `Store` and means `Base`'s. Its run under module info reports the name it cannot tell apart;
 		// under the Swift package plugin, `Mid` generates nothing, and the app reports it.
 		await assertThrowsMultiModuleError(inModule: integration == .moduleInfo ? "Mid" : "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
-				\(Self.path(of: "Store.swift", in: "Other", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
-				\(Self.path(of: "Store.swift", in: "Other", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
+			\(Self.path(of: "Store.swift", in: "Other", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `Other`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -683,18 +620,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenModuleThatMentionsNameReadsTwoPackageTypesOfIt(integration: MultiModuleIntegration, readOrder: [String]) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -718,18 +647,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// Under the Swift package plugin, `ModN` can name `ModA`'s `package` type, and only `ModA`'s own mentions are spelled
 		// with its name.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -750,18 +671,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenThirdModuleOfPackageAlsoReadsModuleWithoutTypeOfName(integration: MultiModuleIntegration) async {
 		// `ModN` can name `ModA`'s `package` type, whatever else it reads.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -783,18 +696,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenThirdModuleOfPackageMentionsItsPackagesNestedType(integration: MultiModuleIntegration) async {
 		let message = "error: `Outer.Store` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:5: \(message)
-				\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:5: \(message)
-				"""
-			}
+			"""
+			\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:5: \(message)
+			\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:5: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -815,18 +720,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenModuleThatMentionsNestedNameReadsPublicTypeBesidePackageTypeOfIt(integration: MultiModuleIntegration) async {
 		let message = "error: `Outer.Store` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:5: \(message)
-				\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:5: \(message)
-				"""
-			}
+			"""
+			\(Self.path(of: "Outer.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:5: \(message)
+			\(Self.path(of: "Outer.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:5: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -875,18 +772,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// tell which one it means.
 		let message = Self.duplicateNameMessage(for: mention.unreadModule.typeName)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			"""
+			\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "\(mention.unreadModule.typeName).swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(for: mention, secondTypeName: mention.unreadModule.typeName), integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
@@ -956,18 +845,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// `Feature` can name `ModA`'s `package` fulfiller of `Lib`'s `Store`, so what its instantiation of `Store` fulfills is
 		// undetermined.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: "Store", featureFiles: ["SeamF.swift": "import Lib\nimport ModA\n\n" + Self.seam("SeamF")], appHolds: ["seamF: SeamF"]),
@@ -1020,18 +901,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		}
 		"""
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(Self.claimedNameMessage(modules: "`ModA` and `ModB`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modulesBesideThirdModuleOfFulfillersPackage(secondProtocolName: "Store", featureFiles: ["DiskMock.swift": diskMock], appHolds: []),
@@ -1096,8 +969,8 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		let thirdModuleNames = (0..<6).map { "Third\($0)" }
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: .moduleInfo)): \(Self.duplicateNameMessage)
-			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: .moduleInfo)): \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: .moduleInfo)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: .moduleInfo)):1:1: \(Self.duplicateNameMessage)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1131,18 +1004,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolAThirdModuleReceives(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1161,18 +1026,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolAThirdModuleProvidesAMockOf(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1226,18 +1083,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenAppsTypeSharesNameOfPublicProtocolItsFulfillersModuleReceives(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1263,18 +1112,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenModuleTheAppReadsDeclaresPublicTypeOfNameOfPublicProtocol(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModZ", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModZ", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModZ", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`Base` and `ModZ`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1293,18 +1134,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenAppsTypeClaimsAppsOwnProtocolOfNameOfPublicProtocol(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Cloud.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)): \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Cloud.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Cloud.swift", in: "App", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			\(Self.path(of: "Disk.swift", in: "Base", fixtures: fixtures, integration: integration)):1:1: \(Self.claimedNameMessage(modules: "`App` and `Base`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1338,16 +1171,9 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsMissingDependencyThroughModuleQualifiedName_whenSeamReachesHiddenTypeThroughForm(integration: MultiModuleIntegration, form: HiddenReachForm) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ModA.Store"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):4:5: \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ModA.Store"))
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):4:5: \(Self.missingDatabaseMessage(chain: "Root -> SeamA -> ModA.Store"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1366,22 +1192,12 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsCycleThroughHiddenType_whenAppClosesCycle(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): error: Dependency cycle: `Thing` -> `SeamA` -> `ModA.Store` -> `Thing`. `ModA.Store` receives `thing: Thing`, which is still being built when `ModA.Store` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				\(Self.path(of: "Impl.swift", in: "ModT", fixtures: fixtures, integration: integration)): note: `Thing` is part of the cycle
-				\(Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration)): note: `SeamA` is part of the cycle
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): note: `ModA.Store` is part of the cycle
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):6:5: error: Dependency cycle: `Thing` -> `SeamA` -> `ModA.Store` -> `Thing`. `ModA.Store` receives `thing: Thing`, which is still being built when `ModA.Store` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				\(Self.path(of: "Impl.swift", in: "ModT", fixtures: fixtures, integration: integration)):4:1: note: `Thing` is part of the cycle
-				\(Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `SeamA` is part of the cycle
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `ModA.Store` is part of the cycle
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):6:5: error: Dependency cycle: `Thing` -> `SeamA` -> `ModA.Store` -> `Thing`. `ModA.Store` receives `thing: Thing`, which is still being built when `ModA.Store` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(Self.path(of: "Impl.swift", in: "ModT", fixtures: fixtures, integration: integration)):4:1: note: `Thing` is part of the cycle
+			\(Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `SeamA` is part of the cycle
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: note: `ModA.Store` is part of the cycle
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1581,18 +1397,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsUnfilledHole_whenOnlyTypesAppCannotNameClaimTheHolesType(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Root.swift", in: "App", fixtures: fixtures, integration: integration)):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Storing`, which @Instantiated property `store: Storing` instantiates in chain: Root -> SeamS. `SeamS` generates its dependency tree in module `ModS`, which cannot see one either, so the initializer SafeDI generated for it takes `storingBuilder`, whose member `store` builds `store`, and the root `Root` must fill it. Decorate `Storing`, or an extension of it, with @Instantiable; list `Storing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
-				\(Self.path(of: "SeamS.swift", in: "ModS", fixtures: fixtures, integration: integration)): note: `SeamS` instantiates `store: Storing` here.
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Root.swift", in: "App", fixtures: fixtures, integration: integration)):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Storing`, which @Instantiated property `store: Storing` instantiates in chain: Root -> SeamS. `SeamS` generates its dependency tree in module `ModS`, which cannot see one either, so the initializer SafeDI generated for it takes `storingBuilder`, whose member `store` builds `store`, and the root `Root` must fill it. Decorate `Storing`, or an extension of it, with @Instantiable; list `Storing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
-				\(Self.path(of: "SeamS.swift", in: "ModS", fixtures: fixtures, integration: integration)):9:5: note: `SeamS` instantiates `store: Storing` here.
-				"""
-			}
+			"""
+			\(Self.path(of: "Root.swift", in: "App", fixtures: fixtures, integration: integration)):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Storing`, which @Instantiated property `store: Storing` instantiates in chain: Root -> SeamS. `SeamS` generates its dependency tree in module `ModS`, which cannot see one either, so the initializer SafeDI generated for it takes `storingBuilder`, whose member `store` builds `store`, and the root `Root` must fill it. Decorate `Storing`, or an extension of it, with @Instantiable; list `Storing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target’s `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target’s `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target’s `SafeDI.preCompileScript` under Tuist.
+			\(Self.path(of: "SeamS.swift", in: "ModS", fixtures: fixtures, integration: integration)):9:5: note: `SeamS` instantiates `store: Storing` here.
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1631,22 +1439,12 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// Widening both types, as a fix-it on each would, makes them compete in the app, which is the error this change
 		// removes. The seam's initializer is an error of its own, as it is whatever the type is named.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration), seam: "SeamA", module: "ModA", integration: integration))
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.hiddenStoreMockMessage(subject: "`ModA.Store`", module: "ModA", seam: "SeamA", fixed: "`ModA.Store`"))
-				\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamB.swift", in: "ModB", fixtures: fixtures, integration: integration), seam: "SeamB", module: "ModB", integration: integration))
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.hiddenStoreMockMessage(subject: "`ModB.Store`", module: "ModB", seam: "SeamB", fixed: "`ModB.Store`"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration), seam: "SeamA", module: "ModA", integration: integration))
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:1: \(Self.hiddenStoreMockMessage(subject: "`ModA.Store`", module: "ModA", seam: "SeamA", fixed: "`ModA.Store`"))
-				\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamB.swift", in: "ModB", fixtures: fixtures, integration: integration), seam: "SeamB", module: "ModB", integration: integration))
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:1: \(Self.hiddenStoreMockMessage(subject: "`ModB.Store`", module: "ModB", seam: "SeamB", fixed: "`ModB.Store`"))
-				"""
-			}
+			"""
+			\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamA.swift", in: "ModA", fixtures: fixtures, integration: integration), seam: "SeamA", module: "ModA"))
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:1: \(Self.hiddenStoreMockMessage(subject: "`ModA.Store`", module: "ModA", seam: "SeamA", fixed: "`ModA.Store`"))
+			\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "SeamB.swift", in: "ModB", fixtures: fixtures, integration: integration), seam: "SeamB", module: "ModB"))
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:1: \(Self.hiddenStoreMockMessage(subject: "`ModB.Store`", module: "ModB", seam: "SeamB", fixed: "`ModB.Store`"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1667,20 +1465,11 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			func diagnostics(module moduleName: String, seam seamName: String) -> String {
 				let storePath = Self.path(of: "Store.swift", in: moduleName, fixtures: fixtures, integration: integration)
-				return switch integration {
-				case .moduleInfo:
-					"""
-					\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "\(seamName).swift", in: moduleName, fixtures: fixtures, integration: integration), seam: seamName, module: moduleName, integration: integration))
-					\(storePath): \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store`"))
-					\(storePath): \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store.instantiate()`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store.instantiate()`"))
-					"""
-				case .swiftPackagePlugin:
-					"""
-					\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "\(seamName).swift", in: moduleName, fixtures: fixtures, integration: integration), seam: seamName, module: moduleName, integration: integration))
-					\(storePath):1:1: \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store`"))
-					\(storePath):7:5: \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store.instantiate()`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store.instantiate()`"))
-					"""
-				}
+				return """
+				\(Self.seamInitializerMockDiagnostics(atPath: Self.path(of: "\(seamName).swift", in: moduleName, fixtures: fixtures, integration: integration), seam: seamName, module: moduleName))
+				\(storePath):1:1: \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store`"))
+				\(storePath):7:5: \(Self.hiddenStoreMockMessage(subject: "`\(moduleName).Store.instantiate()`", module: moduleName, seam: seamName, fixed: "`\(moduleName).Store.instantiate()`"))
+				"""
 			}
 			return diagnostics(module: "ModA", seam: "SeamA") + "\n" + diagnostics(module: "ModB", seam: "SeamB")
 		}) {
@@ -1703,18 +1492,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsDuplicateName_whenAppCanNameBothTypes(integration: MultiModuleIntegration, accessLevel: String) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(Self.duplicateNameMessage)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
-				"""
-			}
+			"""
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(Self.duplicateNameMessage)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1758,18 +1539,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	mutating func generate_reportsDuplicateName_whenHiddenTypesOfOneNameAreSeams(integration: MultiModuleIntegration) async {
 		let message = "error: `Inner` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name, and every type declared with `generateDependencyTree: true` or `generateMock: .public` that a run reads. Rename one."
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Inner.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Inner.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Inner.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Inner.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			"""
+			\(Self.path(of: "Inner.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Inner.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1790,18 +1563,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// `ModA.Store` already names a type, so nothing can tell `ModA`'s `Store` apart from it by that spelling.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `ModA` and `ModB`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):1:1: \(message)
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):1:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1823,18 +1588,10 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		// A `fulfillingAdditionalTypes` entry can be spelled so that no module's name can be put before it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: Found multiple @Instantiable types or extensions that fulfill `[Storing]`, in modules `ModA` and `ModB`. Each type can be fulfilled by only one @Instantiable declaration a module can name. If `[Storing]` names different types, rename one. If it names one type, keep one, and remove `[Storing]` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message)
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message)
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(message)
-				\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(message)
-				"""
-			}
+			return """
+			\(Self.path(of: "Disk.swift", in: "ModA", fixtures: fixtures, integration: integration)):3:1: \(message)
+			\(Self.path(of: "Memory.swift", in: "ModB", fixtures: fixtures, integration: integration)):3:1: \(message)
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1861,34 +1618,17 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 			}
 			func initializerDiagnostics(module moduleName: String, parent parentName: String) -> String {
 				let path = Self.path(of: "\(parentName).swift", in: moduleName, fixtures: fixtures, integration: integration)
-				return switch integration {
-				case .moduleInfo:
-					"""
-					\(path): error: `\(parentName)`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `\(parentName)` with `generateDependencyTree: true`, so that module `\(moduleName)` generates its tree and this module calls the initializer it generates.
-					"""
-				case .swiftPackagePlugin:
-					"""
-					\(path):3:5: error: `\(parentName)`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `\(parentName)` with `generateDependencyTree: true`, so that module `\(moduleName)` generates its tree and this module calls the initializer it generates.
-					\(path):3:5-3:5: fixit: public\u{20}
-					"""
-				}
-			}
-			return switch integration {
-			case .moduleInfo:
-				"""
-				\(initializerDiagnostics(module: "ModA", parent: "ParentA"))
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)): \(message(module: "ModA", parent: "ParentA"))
-				\(initializerDiagnostics(module: "ModB", parent: "ParentB"))
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)): \(message(module: "ModB", parent: "ParentB"))
-				"""
-			case .swiftPackagePlugin:
-				"""
-				\(initializerDiagnostics(module: "ModA", parent: "ParentA"))
-				\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:1: \(message(module: "ModA", parent: "ParentA"))
-				\(initializerDiagnostics(module: "ModB", parent: "ParentB"))
-				\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:1: \(message(module: "ModB", parent: "ParentB"))
+				return """
+				\(path):3:5: error: `\(parentName)`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `\(parentName)` with `generateDependencyTree: true`, so that module `\(moduleName)` generates its tree and this module calls the initializer it generates.
+				\(path):3:5-3:5: fixit: public\u{20}
 				"""
 			}
+			return """
+			\(initializerDiagnostics(module: "ModA", parent: "ParentA"))
+			\(Self.path(of: "Store.swift", in: "ModA", fixtures: fixtures, integration: integration)):2:1: \(message(module: "ModA", parent: "ParentA"))
+			\(initializerDiagnostics(module: "ModB", parent: "ParentB"))
+			\(Self.path(of: "Store.swift", in: "ModB", fixtures: fixtures, integration: integration)):2:1: \(message(module: "ModB", parent: "ParentB"))
+			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -1915,7 +1655,7 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let message = "error: `Store` is declared in modules `Module09` and `Module14`. SafeDI tells apart by name the @Instantiable types a module can name. Rename one."
 			return visibleModuleNames
-				.map { "\(fixtures[$0]!["Store.swift"]): \(message)" }
+				.map { "\(fixtures[$0]!["Store.swift"]):1:1: \(message)" }
 				.joined(separator: "\n")
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2405,18 +2145,11 @@ struct SafeDIToolSeamHiddenTypeNameTests: ~Copyable {
 	}
 
 	/// The error at an `internal` seam initializer a root mock would call, with its fix-it.
-	private static func seamInitializerMockDiagnostics(atPath path: String, seam seamName: String, module moduleName: String, integration: MultiModuleIntegration) -> String {
-		switch integration {
-		case .moduleInfo:
-			"""
-			\(path): error: `\(seamName)`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `\(moduleName)` generates instead.
-			"""
-		case .swiftPackagePlugin:
-			"""
-			\(path):3:5: error: `\(seamName)`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `\(moduleName)` generates instead.
-			\(path):3:5-3:5: fixit: public\u{20}
-			"""
-		}
+	private static func seamInitializerMockDiagnostics(atPath path: String, seam seamName: String, module moduleName: String) -> String {
+		"""
+		\(path):3:5: error: `\(seamName)`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `\(seamName)` a public mock: `generateMock: .public`, or a hand-written public `mock`: mocks build the tree of a type with `generateDependencyTree: true` inline, and this mock would call the mock `\(moduleName)` generates instead.
+		\(path):3:5-3:5: fixit: public\u{20}
+		"""
 	}
 
 	private static func store(_ access: String, named name: String = "Store") -> String {

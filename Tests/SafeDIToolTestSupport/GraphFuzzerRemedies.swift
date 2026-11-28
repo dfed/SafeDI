@@ -216,9 +216,6 @@ enum GraphFuzzerRemedies {
 			}
 		}
 
-		/// `nil` for an error printed with no line, as `path: error: message`: one at a declaration of another module,
-		/// read from its `.safedi`, which keeps no line, has no site until the locator gives it its line back
-		/// (`remedyUnlocatedErrorHasNoSiteReason`).
 		init?(_ diagnosticLine: Substring) {
 			guard let errorMarker = diagnosticLine.range(of: ": error: ") else { return nil }
 			let location = diagnosticLine[..<errorMarker.lowerBound].split(separator: ":", omittingEmptySubsequences: false)

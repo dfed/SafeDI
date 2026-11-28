@@ -968,28 +968,26 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedyUnlocatedErrorHasNoSiteReason)") {
-			#expect(runs.map(\.remedy.kind) == [.instantiateOnRoot])
-			#expect(runs.first?.remedy.fixture.swiftFileContent == [
-				"""
-				// module: FuzzApp
-				import FuzzFeature
+		#expect(runs.map(\.remedy.kind) == [.instantiateOnRoot])
+		#expect(runs.first?.remedy.fixture.swiftFileContent == [
+			"""
+			// module: FuzzApp
+			import FuzzFeature
 
-				@Instantiable(isRoot: true)
-				public final class S1_Root0: Instantiable {
-					public init(t1: S1_T1, t2: S1_T2) {
-						self.t1 = t1
-						self.t2 = t2
-					}
-
-					@Instantiated let t1: S1_T1
-					@Instantiated let t2: S1_T2
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1: S1_T1, t2: S1_T2) {
+					self.t1 = t1
+					self.t2 = t2
 				}
-				""",
-			] + fixture.swiftFileContent.dropFirst())
-			#expect(runs.first?.remedy.fixture.modules?.map(\.name) == fixture.modules?.map(\.name))
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+
+				@Instantiated let t1: S1_T1
+				@Instantiated let t2: S1_T2
+			}
+			""",
+		] + fixture.swiftFileContent.dropFirst())
+		#expect(runs.first?.remedy.fixture.modules?.map(\.name) == fixture.modules?.map(\.name))
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test

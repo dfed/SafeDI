@@ -697,7 +697,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { _ in
 				"""
-				\(dependentModuleOutput.fixtures["File.swift"]): error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
+				\(dependentModuleOutput.fixtures["File.swift"]):3:5: error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
 				"""
 			},
 		) {
@@ -773,7 +773,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { _ in
 				"""
-				\(mockModuleOutput.fixtures["File.swift"]): error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
+				\(mockModuleOutput.fixtures["File.swift"]):3:5: error: `MyService` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it, or remove `MyService` from `additionalMocksToGenerate`.
 				"""
 			},
 		) {

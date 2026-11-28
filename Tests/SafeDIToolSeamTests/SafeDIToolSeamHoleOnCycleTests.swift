@@ -48,7 +48,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):11:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `count`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `count: Int` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -69,7 +69,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `tag`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let tag: Tag` on `A`, so each `A` receives the `tag` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `tag: Tag` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `tag: Tag` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -91,7 +91,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `tag: Tag`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `tag`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let tag: Tag` on `A`, so each `A` receives the `tag` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `tag: Tag` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `tag: Tag` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -112,7 +112,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `a: LazilyInstantiated<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `count`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `count: Int` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -138,7 +138,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B` declares between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again. Inline, the `A` built again receives `B`’s `count`, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["B.swift"]): note: `B` declares `count: Int` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -168,7 +168,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, \(throughSecondCycle
 				? "which `U`’s builder function takes as a parameter between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed,"
 				: "which `P` declares between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `P` instantiates it again. Inline, the `W` built again receives `P`’s `l`,") but SafeDI hands the builder for `Hub`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `Hub`, so each `W` passes its `Hub` the `l` of its own level, which the builder is then handed, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `l: L` here.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -204,7 +204,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `P` declares between where `Shell` instantiates `wBuilder: Instantiator<W>` and where `P` instantiates it again. Inline, the `W` built again receives `P`’s `l`, but SafeDI hands the builder for `Hub`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `Hub`, so each `W` passes its `Hub` the `l` of its own level, which the builder is then handed, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `l: L` here.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -274,7 +274,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`’s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`’s tree passes it (`C` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["C.swift"]): note: `C` declares `count: Int` here.
+			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -304,7 +304,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `count: Int?`, which `B`’s builder function takes as a parameter between where `Hub` instantiates `aBuilder: Instantiator<A>` and where `B` instantiates it again, because a cycle inside `B`’s tree passes it (`D` declares `count: Int`). Inline, the `A` built again receives the `count` that parameter is passed, but SafeDI hands the builder for `A`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let count: Int?` on `A`, so each `A` receives the `count` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["D.swift"]): note: `D` declares `count: Int` here.
+			\(fixtures["Feature"]!["D.swift"]):8:5: note: `D` declares `count: Int` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -337,7 +337,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `mark: Mark?`, which `C` declares between where `Hub` instantiates `tBuilder: Instantiator<T>` and where `C` instantiates it again. Inline, the `T` built again receives `C`’s `mark`, but SafeDI hands the builder for `T`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received(onlyIfAvailable: true) let mark: Mark?` on `T`, so each `T` receives the `mark` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["C.swift"]): note: `C` declares `mark: Mark` here.
+			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `mark: Mark` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -361,7 +361,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `l: L` here.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -385,7 +385,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `l: L` here.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -416,7 +416,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `C` declares between where `Hub` instantiates `wBuilder: Instantiator<W>` and where `C` instantiates it again. Inline, the `W` built again receives `C`’s `l`, but SafeDI hands the builder for `W`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let l: L` on `W`, so each `W` receives the `l` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["C.swift"]): note: `C` declares `l: L` here.
+			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -447,7 +447,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `l: L`, which `U`’s builder function takes as a parameter between where `Hub` instantiates `wBuilder: SendableInstantiator<W>` and where `U` instantiates it again, because a cycle inside `U`’s tree passes it (`P` declares `l: L`). Inline, the `W` built again receives the `l` that parameter is passed, but SafeDI hands the builder for `V`’s `api: any Api` (`api` of `apiSendableBuilder`) the same values at every level of that cycle. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["P.swift"]): note: `P` declares `l: L` here.
+			\(fixtures["Feature"]!["P.swift"]):8:5: note: `P` declares `l: L` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

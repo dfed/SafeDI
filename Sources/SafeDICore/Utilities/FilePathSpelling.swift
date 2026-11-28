@@ -98,6 +98,21 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable {
 	}
 }
 
+/// The directory `realpath(3)` resolves the relative `path` of an existing file under: its resolution with the path's own
+/// components taken off its end, or `nil` where `path` is absolute, names no file, or resolves to a path that does not end
+/// in those components. A sandboxed Bazel action's inputs are symbolic links to the files of the execution root, which holds
+/// every module's sources at the paths their `.safedi` files record, so another module's file opens under the root of one
+/// of the action's inputs.
+public func resolvedRoot(ofRelativePath path: String) -> String? {
+	guard !path.hasPrefix("/"), let resolvedFilePath = realpath(path, nil) else { return nil }
+	defer { free(resolvedFilePath) }
+	let resolvedPath = String(cString: resolvedFilePath)
+	// The path's components, normalized, after a `/`.
+	let ownComponents = NormalizedFilePath(path, relativeTo: "/").path
+	guard resolvedPath.hasSuffix(ownComponents) else { return nil }
+	return String(resolvedPath.dropLast(ownComponents.count))
+}
+
 /// A file path as one project's `ProjectFilePaths` spells it for comparison: normalized, with the project root's
 /// reported spelling replaced by its resolved one. Only `ProjectFilePaths` creates one, so a comparison between two
 /// `ProjectFilePath`s type-checks only when both went through the same rule.

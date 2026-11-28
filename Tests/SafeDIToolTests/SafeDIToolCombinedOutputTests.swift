@@ -667,8 +667,8 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesCombinedOutput_whenPassedPositionsInOwnFileAndWarningsMayBeReplayedWithoutModuleInfoOutput() async throws {
 		// A `.safedi` file holds no line or column whatever a build passes, so `--module-info-positions-in-own-file` is
-		// accepted and changes nothing, even with no `.safedi` file to write; so is the Bazel rule's
-		// `--warnings-may-be-replayed-from-cache`.
+		// accepted and changes nothing, even with no `.safedi` file to write; the Bazel rule's
+		// `--warnings-may-be-replayed-from-cache` changes nothing a run without another module's declarations prints.
 		let tempDir = TestTemporaryDirectory.root
 			.appendingPathComponent("SafeDIToolIgnoredFlagsTest-\(UUID().uuidString)", isDirectory: true)
 		try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)

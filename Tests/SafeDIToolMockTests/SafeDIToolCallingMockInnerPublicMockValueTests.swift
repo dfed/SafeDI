@@ -184,7 +184,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `Live` receives `db: Db`, which SafeDI hands the builder for `F`’s `api: any Api` (`api` of `apiBuilder`) only as `db: Db?`, since `F`’s tree receives it only if available. Declare `@Received let db: Db` on `F`, or receive it on `Live` with `@Received(onlyIfAvailable: true) let db: Db?`.
-			\(fixtures["Feat"]!["FeatTypes.swift"]): note: `K` receives `db: Db?` here.
+			\(fixtures["Feat"]!["FeatTypes.swift"]):24:5: note: `K` receives `db: Db?` here.
 			"""
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: diagnostics) {

@@ -3821,7 +3821,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `Other`, which @Instantiated property `service: any Other` instantiates in chain: Root -> X -> Y -> X -> Y -> Z. `Z` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `otherBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Other`, or an extension of it, with @Instantiable; list `Other` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["Feature"]!["Z.swift"]): note: `Z` instantiates `service: any Other` here.
+			\(fixtures["Feature"]!["Z.swift"]):9:5: note: `Z` instantiates `service: any Other` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: feature, app: Self.ringPassingUpPlaceOfOutsideSeamApp), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -3844,7 +3844,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable type or extension that module `App` can see fulfills `Other`, which @Instantiated property `service: any Other` instantiates in chain: Root -> X -> X -> X -> Z. `Z` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `otherBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Other`, or an extension of it, with @Instantiable; list `Other` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["Feature"]!["Z.swift"]): note: `Z` instantiates `service: any Other` here.
+			\(fixtures["Feature"]!["Z.swift"]):9:5: note: `Z` instantiates `service: any Other` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: feature, app: Self.ringPassingUpPlaceOfOutsideSeamApp), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -3872,9 +3872,9 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Service`, which @Instantiated property `service: any Service` instantiates in chain: Root -> A -> B -> C. `C` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `serviceBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Service`, or an extension of it, with @Instantiable; list `Service` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["Feature"]!["C.swift"]): note: `C` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["C.swift"]):7:5: note: `C` instantiates `service: any Service` here.
 			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension that module `App` can see fulfills `Service`, which @Instantiated property `service: any Service` instantiates in chain: Root -> A -> B. `B` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes `serviceBuilder`, whose member `service` builds `service`, and the root `Root` must fill it. Decorate `Service`, or an extension of it, with @Instantiable; list `Service` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
-			\(fixtures["Feature"]!["B.swift"]): note: `B` instantiates `service: any Service` here.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `B` instantiates `service: any Service` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: feature, app: [Self.root(["@Instantiated public let a: A"])]), integration: .moduleInfo, filesToDelete: &filesToDelete)
@@ -4388,7 +4388,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["DefaultService.swift"]):11:5: error: `DefaultService` receives `user: User`, which `Mid` builds where it calls `Helper`, but `Mid` passes the builder for `Helper`’s `gadget: any Gadget` (`gadget` of `gadgetBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Declare `@Received let user: User` on `Helper`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
-			\(fixtures["Middle"]!["Mid.swift"]): note: `Mid` declares `user: User` here.
+			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `user: User` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.placeInsideAFillModules(helperDeclarations: []), integration: .moduleInfo, filesToDelete: &filesToDelete)

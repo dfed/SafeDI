@@ -2394,15 +2394,15 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		// fill only what the caller’s scope holds, while inline the `DefaultService` that `Book`’s builder builds reads the
 		// declaration of the called mocks’ side: the mock reports the twin’s error, where it would otherwise build another
 		// value than inline.
-		let (appLine, declaringType, declaringModule, calledType, calledTypeModule) = switch hiddenToken {
+		let (appLine, declaringType, declaringModule, declarationLine, calledType, calledTypeModule) = switch hiddenToken {
 		case .calledMockBeforeBuilder:
-			(15, "Book", "Mid", "Book", "Mid")
+			(15, "Book", "Mid", 7, "Book", "Mid")
 		case .calledMockAfterBuilder:
-			(15, "Book", "Mid", "Book", "Mid")
+			(15, "Book", "Mid", 8, "Book", "Mid")
 		case .typeInsideCalledMock:
-			(15, "Inner", "Mid", "Book", "Mid")
+			(15, "Inner", "Mid", 13, "Book", "Mid")
 		case .calledMockOfFourthModule:
-			(16, "Library", "Top", "Library", "Top")
+			(16, "Library", "Top", 8, "Library", "Top")
 		}
 		let boundOnPath = declaringType == calledType
 			? "which `\(calledType)` builds where it calls `Page`"
@@ -2411,7 +2411,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):\(appLine):5: error: `DefaultService` receives `token: Token`, \(boundOnPath), but `\(calledType)` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it \(handed). Declare `@Received let token: Token` on `Page`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `\(calledTypeModule)` or a module it lists among its SafeDI dependencies, so `\(calledType)` fills the builder itself.
-			\(fixtures[declaringModule]!["\(declaringModule)Types.swift"]): note: `\(declaringType)` declares `token: Token` here.
+			\(fixtures[declaringModule]!["\(declaringModule)Types.swift"]):\(declarationLine):5: note: `\(declaringType)` declares `token: Token` here.
 			"""
 		}
 		let graph = Self.hiddenTokenGraph(caller: caller, hiddenToken: hiddenToken)
@@ -2687,7 +2687,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):21:5: error: `DefaultStore` receives `token: Token`, which `Book` builds where it calls `Page`, but `Book` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it `Book`’s values. Declare `@Received let token: Token` on `Page`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `Mid` or a module it lists among its SafeDI dependencies, so `Book` fills the builder itself.
-			\(fixtures["Mid"]!["MidTypes.swift"]): note: `Book` declares `token: Token` here.
+			\(fixtures["Mid"]!["MidTypes.swift"]):7:5: note: `Book` declares `token: Token` here.
 			"""
 		}
 		let graph = Self.nestedCallGraph(caller: caller, pageReceivesToken: false)
@@ -3642,7 +3642,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):7:5: error: `Live` receives `log: Log`, which `F`’s dependency tree builds after `api`, since `Log` requires `other`, which carries another builder, so SafeDI does not hand it to the builder for `F`’s `api: any Api` (`api` of `apiBuilder`). Declare `log` before `api` in `F`, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feat"]!["FeatTypes.swift"]): note: `F` declares `log: Log` here.
+			\(fixtures["Feat"]!["FeatTypes.swift"]):18:5: note: `F` declares `log: Log` here.
 			"""
 		}
 		let graph = Self.valueBuiltAfterPlaceGraph(caller: caller)
@@ -3663,7 +3663,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
 			\(fixtures["App"]!["AppTypes.swift"]):7:5: error: @Received property `log: LazilyInstantiated<Log>` is hidden in chain: Root -> F -> B -> A -> Live. `B` declares `log: Log` with the same label, so the types below `B` receive `log: Log` instead. Give `log: Log` on `B` a different label to fix.
-			\(fixtures["Feat"]!["FeatTypes.swift"]): note: `log: Log` is declared here
+			\(fixtures["Feat"]!["FeatTypes.swift"]):19:5: note: `log: Log` is declared here
 			"""
 		}
 		let graph = Self.levelBindsValueByValueGraph(caller: caller)

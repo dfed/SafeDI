@@ -1954,16 +1954,9 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		await assertThrowsMultiModuleError(
 			inModule: "App",
 			diagnostics: { fixtures in
-				switch integration {
-				case .moduleInfo:
-					"""
-					\(Self.path(of: "DefaultUserService.swift", in: "Core", fixtures: fixtures, integration: integration)): error: \(Self.message(clause: "#if FEATURE"))
-					"""
-				case .swiftPackagePlugin:
-					"""
-					\(Self.path(of: "DefaultUserService.swift", in: "Core", fixtures: fixtures, integration: integration)):3:5: error: \(Self.message(clause: "#if FEATURE"))
-					"""
-				}
+				"""
+				\(Self.path(of: "DefaultUserService.swift", in: "Core", fixtures: fixtures, integration: integration)):3:5: error: \(Self.message(clause: "#if FEATURE"))
+				"""
 			},
 		) {
 			try await executeSafeDIToolMultiModuleTest(

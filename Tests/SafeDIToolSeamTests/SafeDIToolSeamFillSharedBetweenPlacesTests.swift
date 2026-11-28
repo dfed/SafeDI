@@ -82,9 +82,9 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rowBuilder: Instantiator<Row>?`, which `Panel` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Instantiate `rowBuilder` on a type above `Home`, and receive it on `Panel` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` declares `rowBuilder: Instantiator<Row>` here.
+			\(fixtures["Feature"]!["Panel.swift"]):9:5: note: `Panel` declares `rowBuilder: Instantiator<Row>` here.
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `rowBuilder: Instantiator<Row>?`, which `Home`’s tree is building where it calls the builder for `Row`’s `api: any Api` (`api` of `apiBuilder`). Inline, `LiveApi` can get an instantiator of its own, made from the function `Home`’s initializer declares for `rowBuilder`, which code generated outside module `Feature` cannot refer to. Instantiate `rowBuilder` on a type above `Home`, and receive it on `Panel` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Panel.swift"]): note: `Panel` instantiates `rowBuilder: Instantiator<Row>` here.
+			\(fixtures["Feature"]!["Panel.swift"]):9:5: note: `Panel` instantiates `rowBuilder: Instantiator<Row>` here.
 			"""
 		}) {
 			if let error {
@@ -120,11 +120,11 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `First`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
-			\(fixtures["Feature"]!["First.swift"]): note: `rowBuilder: Instantiator<Row>` is declared here
+			\(fixtures["Feature"]!["First.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
 			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `Second`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
-			\(fixtures["Feature"]!["Second.swift"]): note: `rowBuilder: Instantiator<Row>` is declared here
+			\(fixtures["Feature"]!["Second.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
 			\(fixtures["App"]!["Worker.swift"]):9:5: error: @Received property `rowBuilder: Instantiator<Row>` cannot be received inside a `@Sendable` function in chain: Root -> Home -> LiveApi -> Worker. SafeDI builds `workerBuilder: SendableInstantiator<Worker>` on `LiveApi` in a `@Sendable` function, which cannot capture `rowBuilder: Instantiator<Row>` on `Third`, because `Instantiator<Row>` is not `Sendable`. Declare `rowBuilder` on `First`, `Second`, and `Third`, and this property, as `SendableInstantiator<Row>` to fix. `SendableInstantiator<Row>` builds `Row` in a `@Sendable` function, so what the tree of `Row` receives from outside that function must be `Sendable` too.
-			\(fixtures["Feature"]!["Third.swift"]): note: `rowBuilder: Instantiator<Row>` is declared here
+			\(fixtures["Feature"]!["Third.swift"]):8:5: note: `rowBuilder: Instantiator<Row>` is declared here
 			"""
 		}) {
 			if let error {
@@ -168,11 +168,11 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> a -> A -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]): note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> b -> B -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]): note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> c -> C -> mid -> Mid -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]): note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["Feature"]!["Home.swift"]):7:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			"""
 		}) {
 			if let error {
@@ -214,7 +214,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: SafeDI cannot fill the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) in `Home`’s dependency tree: `LiveApi`, which fills it, instantiates `shellBuilder: Instantiator<Shell>`, which `Home`’s tree is building where it builds `api` (Home -> shellBuilder -> Shell -> panel -> Panel -> api -> LiveApi -> shellBuilder). Code generated outside module `Feature` cannot refer to the function `Home`’s initializer builds `Shell` with, and building it again would hand it other values than `Home`’s tree holds. Instantiate `Home` where `LiveApi` builds `Shell` (`@Instantiated let homeBuilder: Instantiator<Home>`), so the cycle re-enters through the initializer SafeDI generates for `Home`, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Home.swift"]): note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
+			\(fixtures["Feature"]!["Home.swift"]):11:5: note: `Home` instantiates `shellBuilder: Instantiator<Shell>` here.
 			"""
 		}) {
 			if let error {
@@ -346,7 +346,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `token: Token?`, which `Third` builds only after `Home`’s tree calls the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
-			\(fixtures["Feature"]!["Third.swift"]): note: `Third` declares `token: Token` here.
+			\(fixtures["Feature"]!["Third.swift"]):9:5: note: `Third` declares `token: Token` here.
 			"""
 		}) {
 			if let error {

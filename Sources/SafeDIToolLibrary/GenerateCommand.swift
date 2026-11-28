@@ -191,33 +191,26 @@ public struct Generate: AsyncParsableCommand {
 		var errorOfDiscardedRunThatReadStoredBlocks: (any Error)?
 		// Locating diagnostics. Every diagnostic the run reports passes through here: its warnings, and the error it throws,
 		// with their notes and fix-its. A `.safedi` file stores each location as its file and rank, never its line or
-		// column, so a diagnostic about another module's declaration prints its file without a line
-		// (`SourceDiagnostic.printsUnlocatedPosition`); a locator that reads the declaration's file again replaces the two
-		// functions below.
+		// column, so a diagnostic about another module's declaration is located by reading that declaration's file again
+		// (`DiagnosticLocator`), and prints its file without a line where the file cannot be read or has changed. Under
+		// `--warnings-may-be-replayed-from-cache` no warning is located: Bazel replays a cached action's warnings, which
+		// would print the lines of a file that has changed since.
+		var locatorInputs: DiagnosticLocator.Inputs?
 		do {
-			var output = try await generateReadingStoredBlocksFirst(buildLog: buildLog, readsStoredBlocks: true, errorOfDiscardedRunThatReadStoredBlocks: &errorOfDiscardedRunThatReadStoredBlocks)
-			output.warnings = locatingUnlocatedPositions(inWarnings: output.warnings)
+			var output = try await generateReadingStoredBlocksFirst(buildLog: buildLog, readsStoredBlocks: true, errorOfDiscardedRunThatReadStoredBlocks: &errorOfDiscardedRunThatReadStoredBlocks, locatorInputs: &locatorInputs)
+			var locator = DiagnosticLocator(inputs: locatorInputs)
+			output.warnings = warningsMayBeReplayedFromCache ? output.warnings : locator.locating(output.warnings)
 			return output
 		} catch {
-			throw locatingUnlocatedPositions(inError: error)
+			var locator = DiagnosticLocator(inputs: locatorInputs)
+			throw locator.locating(error)
 		}
-	}
-
-	/// `warnings`, for now unchanged: see "Locating diagnostics" in `generate(buildLog:)`. Under
-	/// `--warnings-may-be-replayed-from-cache` a locator leaves a warning's unlocated position as it is.
-	private func locatingUnlocatedPositions(inWarnings warnings: [SourceDiagnostic]) -> [SourceDiagnostic] {
-		warnings
-	}
-
-	/// `error`, for now unchanged: see "Locating diagnostics" in `generate(buildLog:)`.
-	private func locatingUnlocatedPositions(inError error: any Error) -> any Error {
-		error
 	}
 
 	/// See `generate(buildLog:)`: the run that reads the seam signatures and public mock plans module infos carry, where
 	/// `readsStoredBlocks`, and that computes them where it throws, recording what it threw in
 	/// `errorOfDiscardedRunThatReadStoredBlocks`, which the output carries.
-	private func generateReadingStoredBlocksFirst(buildLog: BuildLog, readsStoredBlocks: Bool, errorOfDiscardedRunThatReadStoredBlocks: inout (any Error)?) async throws -> Output {
+	private func generateReadingStoredBlocksFirst(buildLog: BuildLog, readsStoredBlocks: Bool, errorOfDiscardedRunThatReadStoredBlocks: inout (any Error)?, locatorInputs: inout DiagnosticLocator.Inputs?) async throws -> Output {
 		// A module info carries the signatures of its module's seams without positions, which the code a run generates
 		// never reads. An error can: one about a declaration inside another module's seam is located only where this run
 		// reads that declaration from its module's own file. So a run that read a stored signature and then throws runs
@@ -225,20 +218,21 @@ public struct Generate: AsyncParsableCommand {
 		// other build reads the signatures. Warnings come from the inlined trees, which read no signature.
 		var readStoredSeamSignatures = false
 		do {
-			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: readsStoredBlocks, readStoredSeamSignatures: &readStoredSeamSignatures)
+			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: readsStoredBlocks, readStoredSeamSignatures: &readStoredSeamSignatures, locatorInputs: &locatorInputs)
 			output.errorOfDiscardedRunThatReadStoredBlocks = errorOfDiscardedRunThatReadStoredBlocks
 			return output
 		} catch where readStoredSeamSignatures {
 			errorOfDiscardedRunThatReadStoredBlocks = error
-			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures)
+			var output = try await generate(buildLog: buildLog, readsStoredSeamSignatures: false, readStoredSeamSignatures: &readStoredSeamSignatures, locatorInputs: &locatorInputs)
 			output.errorOfDiscardedRunThatReadStoredBlocks = error
 			return output
 		}
 	}
 
 	/// See `generate(buildLog:)`. Reads the seam signatures module infos carry when `readsStoredSeamSignatures`, and sets
-	/// `readStoredSeamSignatures` once it reads one.
-	private func generate(buildLog: BuildLog, readsStoredSeamSignatures: Bool, readStoredSeamSignatures: inout Bool) async throws -> Output {
+	/// `readStoredSeamSignatures` once it reads one, and `locatorInputs` once it has read the module info files whose
+	/// declarations its diagnostics can name.
+	private func generate(buildLog: BuildLog, readsStoredSeamSignatures: Bool, readStoredSeamSignatures: inout Bool, locatorInputs: inout DiagnosticLocator.Inputs?) async throws -> Output {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
@@ -407,6 +401,7 @@ public struct Generate: AsyncParsableCommand {
 			ownModule: parsedModuleInfo,
 			referenceResolver: referenceResolver,
 		)
+		locatorInputs = DiagnosticLocator.Inputs(moduleInfoFiles: dependentModuleInfoFiles.map(\.file), evaluator: evaluator, inputFilePaths: inputFilePaths)
 		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
 		// modules whose module info this run reads are ones this module depends on, directly as the build system lists
 		// them or beneath those for what its trees need, named as each file records its module, however this run learns
