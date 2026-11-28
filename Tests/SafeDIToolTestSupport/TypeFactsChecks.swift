@@ -701,10 +701,8 @@ enum TypeFactsChecks {
 	///     edge (`requiredIncludingFills`), in a production world, outside a fill, and where no cycle explains a
 	///     difference (34 and 35 are other lanes' checks).
 	/// 37. Each fill a place passes builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction(ofFill:)`)
-	///     exactly where the seam it is passed to takes it `@Sendable`, the one input of that mark the graph holds
-	///     (`TypeFactsFill.holeIsSendable`). A finding is a fill the tree marks for a `@Sendable` function that refers to it
-	///     or a `@Sendable`-family dispatcher that reaches it, read from the calls inside the call's fills in their context,
-	///     or a fill of a place whose case another place's fill generates: what a column of the mark must answer.
+	///     exactly where the facts' fold says so (`TypeFactsFill.buildsInSendableFunction`, `TypeFactsFillSendability`),
+	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property.
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
@@ -789,10 +787,10 @@ enum TypeFactsChecks {
 				}
 				// Check 37.
 				for fillChild in fillChildren {
-					guard let fillNode = places[fillChild].node, let edge = zip(facts.edges, facts.edgeFacts).first(where: { $0.1.isFill && $0.0 == fillNode })?.1 else { continue }
+					guard let fillKey = places[fillChild].fillKey, let edge = facts.edgeFacts.first(where: { $0.isFill && $0.fillKey == fillKey }) else { continue }
 					count(37)
-					if places[fillChild].fillBuildsInSendableFunction != edge.fillHoleIsSendable {
-						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the seam it is passed to takes it `@Sendable` \(edge.fillHoleIsSendable)")
+					if places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
+						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillBuildsInSendableFunction) (the seam takes it `@Sendable` \(edge.fillHoleIsSendable))")
 					}
 				}
 			}
