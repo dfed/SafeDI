@@ -323,7 +323,9 @@ def _safedi_compile_impl(ctx):
         _default_isolation_from_copts(ctx.attr.copts, ""),
     )
     if default_isolation:
-        arguments += ["--build-default-isolation", default_isolation]
+        # The `=` form keeps a value that starts with `-` from parsing as
+        # an option, as the `SafeDIGenerator` plugin passes its options.
+        arguments.append("--build-default-isolation=" + default_isolation)
 
     # The module and package that declare this module's `@Instantiable`
     # types, which SafeDITool records in the `.safedi` artifact.

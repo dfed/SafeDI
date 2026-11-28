@@ -475,7 +475,16 @@ Text you write in a field wins for that field, and SafeDI never reads it: any te
 | nonisolated | `MainActor.self` | As if each empty attribute field held `"@MainActor"`. Code that calls these initializers and mocks runs on the main actor. |
 | main actor | `nil` | Generated code is inferred `nonisolated` where it spells nothing, and fails to compile where it builds a main-actor type. Declare the setting. |
 
-Where the build reports its default isolation to SafeDI, SafeDI warns when it disagrees with `defaultIsolation`: a module compiled with `-default-isolation MainActor` whose configuration doesn’t declare `MainActor.self`, or has no `#SafeDIConfiguration` at all, and a module compiled with `-default-isolation nonisolated` that declares `MainActor.self`. The warning never changes the generated code. A package built by Swift Build (opened in Xcode, or built with `swift build --build-system swiftbuild`) reports the `-default-isolation` flag SwiftPM derives from `.defaultIsolation(…)`; SwiftPM’s native build system (plain `swift build`) reports nothing, so there SafeDI cannot warn.
+Where the build reports its default isolation to SafeDI, SafeDI warns when it disagrees with `defaultIsolation`: a module compiled with `-default-isolation MainActor` whose configuration doesn’t declare `MainActor.self`, or has no `#SafeDIConfiguration` at all, and a module compiled with `-default-isolation nonisolated` that declares `MainActor.self`. The warning never changes the generated code. What each integration reports:
+
+- A Swift package built by Swift Build (opened in Xcode, or built with `swift build --build-system swiftbuild`) reports the `-default-isolation` flag SwiftPM derives from `.defaultIsolation(…)`, in the target’s expanded `OTHER_SWIFT_FLAGS`.
+- SwiftPM’s native build system (plain `swift build`) reports nothing.
+- [Bazel](#bazel) reports the last `-default-isolation` flag among the library’s `copts` and `--@rules_swift//swift:copt`.
+- [Tuist](#tuist) reports Xcode’s “Default Actor Isolation” build setting, and a `-default-isolation` flag in `OTHER_SWIFT_FLAGS`, when the SafeDITool it pins has the option that takes the setting.
+- An [Xcode project](#xcode-project) target reports a `-default-isolation` flag written in `OTHER_SWIFT_FLAGS`, which the plugin passes, but not the “Default Actor Isolation” build setting, which is how new Xcode 26 app targets get the main actor, so SafeDI does not warn there.
+- A [custom build](#custom-build-system-integration) reports what it passes `generate` as `--build-default-isolation`.
+
+Elsewhere SafeDI cannot warn.
 
 What the setting cannot fix:
 - A `Sendable` wrapper (`SendableInstantiator`, `SendableErasedInstantiator`) cannot build a main-actor type: its builder runs off the main actor.
@@ -1506,6 +1515,8 @@ These limits also apply, under every integration, to a type declared in a file r
 
 Seams that generate their own trees, holes in a seam’s tree, and generated calls of public mocks need a build that knows each type’s module: the Swift package plugin, Bazel, or Tuist. (A public mock’s hole builders do work under the Xcode project plugin.) A multi-module Xcode project gets them by moving its modules into a local Swift package that the app target depends on, declaring the root there, and calling the root’s `init()` from the app; the package then adopts SafeDI as [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) describes.
 
+SafeDI also cannot warn about a target that gets the main actor from Xcode’s “Default Actor Isolation” build setting, which the plugin does not pass; see [Default isolation](#default-isolation).
+
 ##### Installing the prebuilt SafeDITool binary
 
 If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."**, install the prebuilt tool: in Xcode, right-click your project in the navigator, choose **SafeDI → Safedi Release Install**, and approve the network-access and write-to-package-directory prompts. The command downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`, and the build plugin picks it up on later builds. If the download’s SHA-256 differs from the one SafeDI’s release recorded, the command deletes it and fails, printing both hashes; run the command again to retry.
@@ -1687,6 +1698,7 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | --- | --- |
 | `--active-compilation-conditions` | The target’s active compilation conditions, so SafeDITool scans the `#if` clauses the compiler compiles ([Conditional compilation](#conditional-compilation)). |
 | `--build-setting-active-compilation-conditions`, `--build-setting-other-swift-flags` | Instead of the above, the target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings. |
+| `--build-default-isolation` | The default isolation the build compiles the module with apart from `OTHER_SWIFT_FLAGS`, `MainActor` or `nonisolated`, so SafeDI can warn when the module’s `defaultIsolation` disagrees ([Default isolation](#default-isolation)). A `-default-isolation` flag in an expanded `--build-setting-other-swift-flags` wins. |
 | `--module-name` | The Swift module that compiles the files the input CSV and `--include` name, such as an Xcode target’s `PRODUCT_MODULE_NAME`. `--module-info-output` requires it. |
 | `--package-name` | That module’s package, exactly as the compiler’s `-package-name` names it, such as an Xcode target’s `SWIFT_PACKAGE_NAME`. Omit it when the compiler receives no `-package-name`. |
 | `--module-info-output` | Where to write this module’s `.safedi` file, for the modules that list it. |
