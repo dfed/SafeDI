@@ -209,7 +209,7 @@ struct GraphFuzzerFixture: Equatable {
 	/// other draw reads, so every graph it leaves alone is drawn as before.
 	private static let mainActorDefaultIsolationRandomSeedMask: UInt64 = 0x6D61696E41637472
 
-	/// `contents` with modules declaring the main actor their default isolation, for one graph in eight: a graph in one
+	/// `contents` with modules declaring the main actor their default isolation, for 12 graphs in 100: a graph in one
 	/// module declares it in that module; a graph split across modules declares it in one module drawn from those it
 	/// spans and in every module that depends on that one, since a module above a declared one calls its `@MainActor`
 	/// generated initializers and mocks, which a caller that is not main-actor itself cannot (the design’s “Other
@@ -225,8 +225,8 @@ struct GraphFuzzerFixture: Equatable {
 	///   may conform to it, so only a `@Sendable` builder or a `Sendable` wrapper leaves the graph as drawn, and the
 	///   draw's defaults enum (`<prefix>Defaults`), whose main-actor members a type that conforms only to `Instantiable`,
 	///   and so is nonisolated, cannot read as a default value (seed 135), nor build as one, as the spelling draw's
-	///   `= <prefix>SpellConformer()` does (seed 294). That corpus draws the declaration in one graph
-	///   in three, since it leaves most of its graphs as drawn.
+	///   `= <prefix>SpellConformer()` does (seed 294). That corpus draws the declaration in 33 graphs
+	///   in 100, since it leaves most of its graphs as drawn.
 	static func declaringMainActorDefaultIsolation(seed: UInt64, leavesSendableConformances: Bool = false, in contents: [String]) -> [String] {
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed ^ mainActorDefaultIsolationRandomSeedMask)
 		let compileRejectsFixture: (String) -> Bool = leavesSendableConformances
@@ -12596,6 +12596,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.formsUserDeclaredAfterSeam)
 			}
 		}
+		if !fixture.modulesDefaultingToMainActor.isEmpty {
+			features.insert(.mainActorDefaultIsolation)
+		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture)).union(cycleParameterDrawFeatures(of: fixture))
 			.union(forwardedLabelAcrossSeamCallDrawFeatures(of: fixture)).union(retentionDrawFeatures(of: fixture)).union(fixedSeamCallDefectDrawFeatures(of: fixture)).union(carrierDrawFeatures(of: fixture))
 			.union(optionalPlaceDrawFeatures(of: fixture))
@@ -12807,9 +12810,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule)
 				}
 			}
-		}
-		if !fixture.modulesDefaultingToMainActor.isEmpty {
-			features.insert(.mainActorDefaultIsolation)
 		}
 		return features
 	}
