@@ -36,7 +36,13 @@ enum UnpassableCycleLabelChecks {
 			}
 			enclosingObserver?(root, detectorFires, todaysTreeReports)
 		}) {
-			try await operation()
+			try await UnpassableCycleLabelObservation.$factsObserver.withValue({ root, factsLabels, todaysTreeLabels in
+				if factsLabels != todaysTreeLabels {
+					Issue.record(Comment(rawValue: "UNPASSABLE-FACTS The facts of \(root) find \(factsLabels) where its tree reports \(todaysTreeLabels)."))
+				}
+			}) {
+				try await operation()
+			}
 		}
 	}
 }

@@ -639,14 +639,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 		guard !mates.isEmpty, isOnCycle(declaration) else { return [:] }
 		let mateLabels = madeAgainLabels(from: declaration)
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
-		var labelsDeclaredBetween = Set<String>()
-		for other in 0..<Int32(declarationCount) where other != declaration && isOnCycle(other) && component(of: other) == component(of: declaration) {
-			for child in edges(from: other) {
-				if let label = graph.nodes[Int(child)].property?.label {
-					labelsDeclaredBetween.insert(label)
-				}
-			}
-		}
+		let labelsDeclaredBetween = labelsDeclaredBetweenFunctionAndItsClosers(of: declaration)
 		var parameters = [WorldLabelID: Property]()
 		for (mate, label) in zip(mates, mateLabels) {
 			if let property = graph.nodes[Int(mate)].property, property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
@@ -654,6 +647,47 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 		}
 		return parameters
+	}
+
+	/// The labels a declaration between the function of `declaration` and a call that closes a cycle on it declares: those
+	/// of the children of the other declarations of its component, each of which the function reaches and which reaches
+	/// the function.
+	private func labelsDeclaredBetweenFunctionAndItsClosers(of declaration: DeclarationID) -> Set<String> {
+		var labels = Set<String>()
+		for other in 0..<Int32(declarationCount) where other != declaration && isOnCycle(other) && component(of: other) == component(of: declaration) {
+			for child in edges(from: other) {
+				if let label = graph.nodes[Int(child)].property?.label {
+					labels.insert(label)
+				}
+			}
+		}
+		return labels
+	}
+
+	/// The labels the function a cycle closes on receives from above it, which a declaration between the function and
+	/// the closing call declares again, in forms no one parameter can pass (`UnpassableCycleLabel`), each with the
+	/// declaration whose function it is, in declaration order then label order.
+	func unpassableCycleLabels() -> [(declaration: DeclarationID, label: String)] {
+		var unpassable = [(declaration: DeclarationID, label: String)]()
+		for declaration in 0..<Int32(declarationCount) where isOnCycle(declaration) {
+			let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
+			let labelsDeclaredBetween = labelsDeclaredBetweenFunctionAndItsClosers(of: declaration)
+			var formsByLabel = [String: Set<Property>]()
+			for received in receives.received.columns(inRow: Int(declaration)) {
+				let property = propertyTable[Int(received)]
+				if property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
+					formsByLabel[property.label, default: []].insert(property)
+				}
+			}
+			var requiredForms = Set<Property>()
+			for required in receives.required.columns(inRow: Int(declaration)) {
+				requiredForms.insert(propertyTable[Int(required)])
+			}
+			for (label, forms) in formsByLabel.sorted(by: { $0.key < $1.key }) where CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) == nil {
+				unpassable.append((declaration, label))
+			}
+		}
+		return unpassable
 	}
 
 	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
