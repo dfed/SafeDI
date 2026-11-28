@@ -808,11 +808,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
-			var instancePropertyByLabel = [String: Property]()
-			let labelsReadOnlyAsPlaceField = fillLabelsReadOnlyAsPlaceField[key] ?? []
-			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
-				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
-			}
+			let instancePropertyByLabel = FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo: fill.fillLabelsHandedAsMemo, labelsReadOnlyAsPlaceField: fillLabelsReadOnlyAsPlaceField[key] ?? [], among: built.receivedProperties)
 			if !instancePropertyByLabel.isEmpty {
 				fillSendableWrapperReads[key] = instancePropertyByLabel
 			}
@@ -2399,6 +2395,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 			return handedMemosByKey
+		}
+
+		/// The `SendableLazilyInstantiated` a fill's tree, which receives `receivedProperties`, reads of each label among
+		/// `labelsHandedAsMemo` (the labels some route hands it a memo of) but those it reads only as the place's own field
+		/// (`labelsReadOnlyAsPlaceField`), by that wrapper's instance property: the `readingSendableWrapper` of
+		/// `memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`. The optional
+		/// wrapper only if available is left out (`ScopeGenerator.fillSendableWrapperReads` says why); of two wrappers of one
+		/// label, the one that sorts first. One rule for the tree, which finds these reads on the pass before, and the
+		/// per-type facts, which find them in the fill target's received fold.
+		static func sendableWrapperReads(ofLabelsHandedAsMemo labelsHandedAsMemo: Set<String>, labelsReadOnlyAsPlaceField: Set<String>, among receivedProperties: Set<Property>) -> [String: Property] {
+			var instancePropertyByLabel = [String: Property]()
+			for property in receivedProperties.sorted() where labelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
+			}
+			return instancePropertyByLabel
 		}
 
 		/// Whether a fill that takes `field`, a memo some route hands it, reads its label only as the place's own field of it,

@@ -10415,9 +10415,90 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		try await expectCreationOrderEqualsOneModuleBuild(output, modules: modules, seams: ["seamB"])
 	}
 
+	// MARK: What the per-type facts hold of a memo handed on a carried route
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_holdFillsLazilyInstantiatedMemo_whenCarriedRouteHandsSeamsPlainMemo() async throws {
+		// `Seam`'s level, on the carried route to `thing`, hands the fill `Seam`'s `LazilyInstantiated` memo of `chainToken`,
+		// and `TopRoot`'s own route hands its declaration: the fill takes a `LazilyInstantiated`.
+		let edges = try await handedMemoFacts(modules: Self.chainTokenModules())
+
+		#expect(edges == [
+			"TopRoot: Mid as mid: Mid -> ThingImpl as thing: any ThingService fill: facts [\"chainToken: ChainToken, deferred(isSendable: false)\"], tree [\"chainToken: ChainToken, deferred(isSendable: false)\"]",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_holdFillsSendableMemo_whenTreeReadsValueAndSendableWrapperAndEveryRouteHandsSendableMemo() async throws {
+		// `ThingImpl`'s tree reads `chainToken` and `TopRoot`'s `SendableLazilyInstantiated`, and the only route that hands a
+		// memo hands `SeamB`'s `SendableLazilyInstantiated`: the fill takes that wrapper, which `TopRoot`'s own route hands as
+		// its declaration, so the facts hold a `@Sendable` deferral, as the tree's fill takes it.
+		let edges = try await handedMemoFacts(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken, midWorkerBuilder: true, outerHoldsOnlySeamB: true))
+
+		#expect(edges == [
+			"TopRoot: Mid as mid: Mid -> ThingImpl as thing: any ThingService fill: facts [\"chainToken: ChainToken, deferred(isSendable: true)\"], tree [\"chainToken: ChainToken, deferred(isSendable: true)\"]",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_holdFillsLazilyInstantiatedMemo_whenOneRouteHandsPlainMemoBesideSendableWrapperRead() async throws {
+		// `SeamB` hands a `SendableLazilyInstantiated` and `Seam` a `LazilyInstantiated`, which validation then rejects
+		// (`sendableWrapperReadBesidePlainMemo`): the tree is built, and its facts made, before the rejection, and the fill
+		// takes a `LazilyInstantiated`, which no `@Sendable` function captures, in the facts as in the tree, so a reader of
+		// the facts sees that the memo serves no read of the `SendableLazilyInstantiated`.
+		let edges = try await handedMemoFacts(modules: Self.chainTokenModules(thingImpl: Self.thingImplReadingValueAndSendableWrapper, topChainToken: Self.rootSendableChainToken, outerHoldsSeamB: true), throwsSendableWrapperReadBesidePlainMemo: true)
+
+		#expect(edges == [
+			"TopRoot: Mid as mid: Mid -> ThingImpl as thing: any ThingService fill: facts [\"chainToken: ChainToken, deferred(isSendable: false)\"], tree [\"chainToken: ChainToken, deferred(isSendable: false)\"]",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Each fill edge of the per-type facts of every production tree `modules` generate that hands a fill a memo, in the
+	/// order the trees' roots are first reported, then node and edge order: its source and target, the facts' column (`TypeFactsFill.handedMemoStart`), and the memos the
+	/// tree's generator hands the fill at each of its places.
+	private mutating func handedMemoFacts(modules: [ModuleFixture], throwsSendableWrapperReadBesidePlainMemo: Bool = false) async throws -> [String] {
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		do {
+			_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+			}
+			#expect(!throwsSendableWrapperReadBesidePlainMemo)
+		} catch {
+			#expect(throwsSendableWrapperReadBesidePlainMemo && "\(error)".contains("only as `chainToken: LazilyInstantiated<ChainToken>`"), "\(error)")
+		}
+		continuation.finish()
+		// A tree built again reports again: each root's last report, in the order the roots are first reported.
+		var reportByRoot = [String: TypeFactsReport]()
+		var roots = [String]()
+		for await report in stream where !report.forMockGeneration {
+			if reportByRoot.updateValue(report, forKey: report.root) == nil {
+				roots.append(report.root)
+			}
+		}
+		var lines = [String]()
+		for report in roots.compactMap({ reportByRoot[$0] }) {
+			var treeByKey = [String: [[String]]]()
+			for place in report.places {
+				if let fillKey = place.fillKey, let memos = place.fillHandedMemos, !(treeByKey[fillKey]?.contains(memos) ?? false) {
+					treeByKey[fillKey, default: []].append(memos)
+				}
+			}
+			for node in report.nodes {
+				for (target, edge) in zip(node.edges, node.edgeFacts) where edge.isFill && (!edge.fillHandedMemos.isEmpty || (edge.fillKey.flatMap { treeByKey[$0] } ?? []).contains { !$0.isEmpty }) {
+					let tree = (edge.fillKey.flatMap { treeByKey[$0] } ?? []).map { "\($0)" }.joined(separator: " and ")
+					lines.append("\(report.root): \(node.description) -> \(report.nodes[target].description): facts \(edge.fillHandedMemos), tree \(tree)")
+				}
+			}
+		}
+		return lines
+	}
 
 	/// `Outer`, a seam, builds `Seam` and `SeamB`, each of which holds `holeService`, defers `chainToken` for `ChainLeaf` (`Seam`
 	/// in an `Instantiator`, `SeamB` in a `SendableInstantiator`), and passes it to `Mid`. `Other` fills both places with
