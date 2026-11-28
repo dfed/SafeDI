@@ -30,11 +30,11 @@ enum SeamCallersViewChecks {
 	/// Runs `operation` while observing every callers' view a run computes, handing each to `enclosingObserver` too, then
 	/// records an issue for each whose computation again decides otherwise, also where `operation` throws, as a run does
 	/// that reports the callers' view's error at a seam: the view was computed before the error was thrown.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (SeamCallersView) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (SeamCallersView) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (views, continuation) = AsyncStream.makeStream(of: SeamCallersView.self)
 		let result: Swift.Result<Result, any Error>
 		do {
-			result = try await .success(SeamCallersViewObservation.$comparesProducers.withValue({ view in
+			result = try await .success(SeamCallersViewObservation.$comparesProducers.withValue(TaskLocalFunction { view in
 				continuation.yield(view)
 				enclosingObserver?(view)
 			}) {

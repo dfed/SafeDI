@@ -2755,7 +2755,7 @@ public enum SeamCallersViewObservation {
 	/// Called, when set, for each run that computes the signatures of the seams it generates over the declarations their
 	/// callers see (`computeSeamRoots`), with what the run decided of each seam from them and a function that computes
 	/// it again, which a test calls under another producer of the callers' view: the two must decide alike.
-	@TaskLocal public static var comparesProducers: (@Sendable (SeamCallersView) -> Void)?
+	@TaskLocal public static var comparesProducers: TaskLocalFunction<@Sendable (SeamCallersView) -> Void>?
 }
 
 /// What one run decided of the seams it generates from the declarations their callers see, as
