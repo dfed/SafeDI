@@ -283,6 +283,151 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// The root builds `Other` before `aBuilder`, so the body that names `Leaf`’s `aBuilder` apart is read before the body
+	/// that keeps its name: the function takes the name apart in both, in whichever order the bodies are read.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTheBodyThatNamesAVariantsFunctionApartIsReadBeforeTheOneThatKeepsItsName() async throws {
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable, Marked {
+				    public init(other: Other, aBuilder: Instantiator<A>) {
+				        self.other = other
+				        self.aBuilder = aBuilder
+				    }
+				    @Instantiated let other: Other
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public var marker = ""
+				}
+				""",
+				"A.swift": """
+				@Instantiable
+				public final class A: Instantiable, Marked {
+				    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<Leaf>) {
+				        self.bBuilder = bBuilder
+				        self.aBuilder = aBuilder
+				    }
+				    @Instantiated let bBuilder: Instantiator<B>
+				    @Instantiated let aBuilder: Instantiator<Leaf>
+				    public var marker = ""
+				}
+				""",
+				"B.swift": """
+				@Instantiable
+				public final class B: Instantiable, Marked {
+				    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<A>
+				    public var marker = ""
+				}
+				""",
+				"Other.swift": """
+				@Instantiable
+				public final class Other: Instantiable, Marked {
+				    public init(aBuilder: Instantiator<Leaf>) { self.aBuilder = aBuilder }
+				    @Instantiated let aBuilder: Instantiator<Leaf>
+				    public var marker = ""
+				}
+				""",
+				"Leaf.swift": """
+				@Instantiable
+				public final class Leaf: Instantiable, Marked {
+				    public init() {}
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock().other.aBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().aBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().aBuilder.instantiate()"),
+				DifferentialValueProbe("Root.mock().aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.other", expression: "Root.mock(safeDIOverrides: .init(other: .init(aBuilder: { marked(Leaf(), \"other.leaf\") }, { marked(Other(aBuilder: $0), \"other\") }), aBuilder: .init(bBuilder: .init({ marked(B(aBuilder: $0), \"a.b\") }), aBuilder: { marked(Leaf(), \"a.leaf\") }, { marked(A(bBuilder: $0, aBuilder: $1), \"a\") }))).other"),
+				DifferentialValueProbe(name: "overridden.other.aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(other: .init(aBuilder: { marked(Leaf(), \"other.leaf\") }, { marked(Other(aBuilder: $0), \"other\") }), aBuilder: .init(bBuilder: .init({ marked(B(aBuilder: $0), \"a.b\") }), aBuilder: { marked(Leaf(), \"a.leaf\") }, { marked(A(bBuilder: $0, aBuilder: $1), \"a\") }))).other.aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(other: .init(aBuilder: { marked(Leaf(), \"other.leaf\") }, { marked(Other(aBuilder: $0), \"other\") }), aBuilder: .init(bBuilder: .init({ marked(B(aBuilder: $0), \"a.b\") }), aBuilder: { marked(Leaf(), \"a.leaf\") }, { marked(A(bBuilder: $0, aBuilder: $1), \"a\") }))).aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().aBuilder.instantiate()"),
+				DifferentialValueProbe(name: "overridden.aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate()", expression: "Root.mock(safeDIOverrides: .init(other: .init(aBuilder: { marked(Leaf(), \"other.leaf\") }, { marked(Other(aBuilder: $0), \"other\") }), aBuilder: .init(bBuilder: .init({ marked(B(aBuilder: $0), \"a.b\") }), aBuilder: { marked(Leaf(), \"a.leaf\") }, { marked(A(bBuilder: $0, aBuilder: $1), \"a\") }))).aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate()"),
+			],
+			markers: ["a", "a.b", "a.leaf", "other", "other.leaf"],
+		)
+	}
+
+	/// `A`’s body names `Leaf`’s `aBuilder` apart, `__safeDI_aBuilder_Leaf`, which is the name of the function `Other`’s body,
+	/// which keeps `Leaf`’s under its label, declares for its `aBuilder_Leaf`: one place cannot take the name apart in
+	/// both, so the walk writes the mock (`cycleBuilderNameShared`).
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_isWrittenByTheWalk_whenANameApartMeetsAnotherFunctionOfTheBodyThatKeepsTheVariantsName() async throws {
+		var fixture = [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable, Marked {
+			    public init(aBuilder: Instantiator<A>, other: Other) {
+			        self.aBuilder = aBuilder
+			        self.other = other
+			    }
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let other: Other
+			    public var marker = ""
+			}
+			""",
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable, Marked {
+			    public init(bBuilder: Instantiator<B>, aBuilder: Instantiator<Leaf>) {
+			        self.bBuilder = bBuilder
+			        self.aBuilder = aBuilder
+			    }
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let aBuilder: Instantiator<Leaf>
+			    public var marker = ""
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable, Marked {
+			    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+			    @Instantiated let aBuilder: Instantiator<A>
+			    public var marker = ""
+			}
+			""",
+			"Other.swift": """
+			@Instantiable
+			public final class Other: Instantiable, Marked {
+			    public init(aBuilder: Instantiator<Leaf>, aBuilder_Leaf: Instantiator<Twig>) {
+			        self.aBuilder = aBuilder
+			        self.aBuilder_Leaf = aBuilder_Leaf
+			    }
+			    @Instantiated let aBuilder: Instantiator<Leaf>
+			    @Instantiated let aBuilder_Leaf: Instantiator<Twig>
+			    public var marker = ""
+			}
+			""",
+			"Twig.swift": """
+			@Instantiable
+			public final class Twig: Instantiable, Marked {
+			    public init() {}
+			    public var marker = ""
+			}
+			""",
+			"Leaf.swift": """
+			@Instantiable
+			public final class Leaf: Instantiable, Marked {
+			    public init() {}
+			    public var marker = ""
+			}
+			""",
+		]
+		fixture["Marked.swift"] = Self.markedFile
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { [fixture] filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.everyRefusal) == [["cycleBuilderNameShared"]])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
 	/// `Screen`'s function takes `session`, which `Step` declares again before the call that closes the cycle: `Root` and
 	/// `Hub`, which takes no places, each enter the cycle handing their own, and `Mid`, between `Screen` and `Step`, reads
 	/// the one its `Screen` took, on every lap from either entry.

@@ -292,7 +292,10 @@ extension NodeRecords {
 	/// innermost function of that name in scope, so a body between the two that declares a function of that name renames
 	/// it `<name>_<type identifier>` (`ScopeGenerator.identifierSafeNames`), and the bodies beneath refer to the renamed
 	/// function by its new name. A variant's place is one record wherever a body holds it, so a variant two bodies name
-	/// differently, or whose body two paths hand different names, is refused (`cycleBuilderNameShared`).
+	/// differently, or whose body two paths hand different names, is refused (`cycleBuilderNameShared`). A mock's place
+	/// serves every body that holds it (`mockPlace`), so there a function one body names apart and another does not takes
+	/// the name apart in both, whichever is read first, and is refused only where that name meets another function of a
+	/// body that did not give it, or where two bodies give two names apart.
 	struct CycleFunctionNames {
 		/// - Parameters:
 		///   - entries: What each variant's body holds (`BodyEntry`), by variant.
@@ -324,15 +327,12 @@ extension NodeRecords {
 					callee
 				}
 			}
-			var bodies: [VariantID] = [0]
-			while let variant = bodies.popLast() {
-				let enclosing = enclosingFunctionNames[Int(variant)]
-				let body = entries[Int(variant)]
-				// The functions a call in the body closes a cycle on, by the names the body sees them by, each with the variants
-				// it names: those enclosing the body, and, in a mock's world, the place of the body itself that a call beneath a
-				// place of another variant closes on (`mockPlace`), which no function of the body shadows.
+			// The functions a call in the body of `variant` closes a cycle on, by the names the body sees them by, each with
+			// the variants it names: those enclosing the body, and, in a mock's world, the place of the body itself that a
+			// call beneath a place of another variant closes on (`mockPlace`), which no function of the body shadows.
+			func variantsReferenced(inBodyOf variant: VariantID, enclosing: [VariantID: String]) -> [String: Set<VariantID>] {
 				var variantsByReferencedName = [String: Set<VariantID>]()
-				for entry in body {
+				for entry in entries[Int(variant)] {
 					for closedOnVariant in closedOn(entry) {
 						let closedOnDeclaration = world.declaration(of: closedOnVariant)
 						if let property = world.property(of: closedOnDeclaration) {
@@ -340,10 +340,13 @@ extension NodeRecords {
 						}
 					}
 				}
-				let referencedNames = Set(variantsByReferencedName.keys)
-				// Every entry built as a property declares or calls a function by its label: an alias or a hole has none.
+				return variantsByReferencedName
+			}
+			// Every entry of the body of `variant` built as a property declares or calls a function by its label: an alias or
+			// a hole has none.
+			func functionCandidates(inBodyOf variant: VariantID) -> [(index: Int, property: Property, name: String)] {
 				var candidates = [(index: Int, property: Property, name: String)]()
-				for (index, entry) in body.enumerated() {
+				for (index, entry) in entries[Int(variant)].enumerated() {
 					let declaration = world.declaration(of: callee(of: entry))
 					switch world.kind(of: declaration) {
 					case .constant, .instantiator, .sendableInstantiator, .erasedInstantiator, .sendableErasedInstantiator, .lazy, .sendableLazy:
@@ -354,6 +357,17 @@ extension NodeRecords {
 						break
 					}
 				}
+				return candidates
+			}
+			// Whether a mock's variant took a name apart that only some of the bodies that hold its place give it.
+			var isNamedApartByOnlySomeBodies = false
+			var bodies: [VariantID] = [0]
+			while let variant = bodies.popLast() {
+				let enclosing = enclosingFunctionNames[Int(variant)]
+				let body = entries[Int(variant)]
+				let variantsByReferencedName = variantsReferenced(inBodyOf: variant, enclosing: enclosing)
+				let referencedNames = Set(variantsByReferencedName.keys)
+				let candidates = functionCandidates(inBodyOf: variant)
 				// A call that closes a cycle declares no function.
 				let renamed = candidates.filter { candidate in
 					switch body[candidate.index] {
@@ -384,14 +398,40 @@ extension NodeRecords {
 						childEnclosing[child] = declaredName
 					}
 					if isNamed[Int(child)] {
-						guard isMockWorld || functionNames[Int(child)] == functionName, enclosingFunctionNames[Int(child)] == childEnclosing else {
+						// A mock's place serves every body that holds it, so its function takes the name apart that any of them
+						// gives it, in whatever order the bodies are read; today's tree, which production's records are compared
+						// with, names the function in each body.
+						let takesNameApart = isMockWorld && functionNames[Int(child)] != functionName && (functionNames[Int(child)] == nil || functionName == nil)
+						guard functionNames[Int(child)] == functionName || takesNameApart, enclosingFunctionNames[Int(child)] == childEnclosing else {
 							throw .cycleBuilderNameShared
+						}
+						if takesNameApart {
+							functionNames[Int(child)] = functionNames[Int(child)] ?? functionName
+							isNamedApartByOnlySomeBodies = true
 						}
 					} else {
 						isNamed[Int(child)] = true
 						functionNames[Int(child)] = functionName
 						enclosingFunctionNames[Int(child)] = childEnclosing
 						bodies.append(child)
+					}
+				}
+			}
+			// A name apart that a body did not give must meet no other function that body declares, and none it refers to.
+			if isNamedApartByOnlySomeBodies {
+				for variant in 0..<VariantID(world.variantCount) where isNamed[Int(variant)] {
+					let variantsByReferencedName = variantsReferenced(inBodyOf: variant, enclosing: enclosingFunctionNames[Int(variant)])
+					var declaredNames = Set<String>()
+					for candidate in functionCandidates(inBodyOf: variant) {
+						switch entries[Int(variant)][candidate.index] {
+						case let .place(child):
+							let name = functionNames[Int(child)] ?? candidate.name
+							guard declaredNames.insert(name).inserted, variantsByReferencedName[name].map({ $0 == [child] }) ?? true else {
+								throw .cycleBuilderNameShared
+							}
+						case .closer:
+							break
+						}
 					}
 				}
 			}
