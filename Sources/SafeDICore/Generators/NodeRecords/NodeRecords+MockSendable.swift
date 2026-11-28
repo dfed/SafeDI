@@ -147,7 +147,9 @@ extension NodeRecords {
 	/// root's node built in one (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// and `nil` for any other record: the field of its parent's overrides under its label, built in place.
 	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> BuiltPlaceRecord? {
-		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world), slots?.hasConfigurationByDeclaration[Int(declaration)] ?? true else { return nil }
+		// A function that takes the places entered is handed its configuration with them, which a body that takes none binds
+		// to the local itself (`mockEnteredConfigurationLocal(of:labeled:handedBy:in:slots:)`).
+		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world), slots.map({ $0.hasConfigurationByDeclaration[Int(declaration)] && !takesMockEnteredPlaces(declaration, in: $0) }) ?? true else { return nil }
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = isConfigured(declaration, in: world)
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil

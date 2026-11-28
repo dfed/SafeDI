@@ -1669,12 +1669,69 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_compilesAndBuildsTheWalksValues_whenMockedTypeReceivesSendableBuilderOfItself() async throws {
+		// `Screen`'s mock builds the `screenBuilder` it receives, a `@Sendable` function on the cycle through `Screen`,
+		// whose override the root's body reads into one local before it.
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sendableSelfBuilderFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.sendableSelfBuilderFixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter { $0.isMockRoot && $0.root == "Screen" }.map(\.isLaidOutFromNodeRecords) == [true])
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: Self.sendableSelfBuilderFixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.sendableSelfBuilderFixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe(name: "screen", expression: "Screen.mock()"),
+				DifferentialValueProbe(name: "screen built again", expression: "Screen.mock().screenBuilder.instantiate().anyScreenBuilder.instantiate()"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// A root that builds a parent, which builds a child, which builds a parent again: a cycle of two builders. Each
 	/// type carries a marker an override’s closure sets.
+	private static let sendableSelfBuilderFixture: [String: String] = [
+		"Root.swift": """
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(screenBuilder: SendableInstantiator<Screen>) {
+		        self.screenBuilder = screenBuilder
+		    }
+
+		    @Instantiated let screenBuilder: SendableInstantiator<Screen>
+		}
+		""",
+		"Screen.swift": """
+		@Instantiable(generateMock: true)
+		public final class Screen: Instantiable, Sendable {
+		    public init(anyScreenBuilder: SendableErasedInstantiator<(), AnyScreen>, screenBuilder: SendableInstantiator<Screen>) {
+		        self.anyScreenBuilder = anyScreenBuilder
+		        self.screenBuilder = screenBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let anyScreenBuilder: SendableErasedInstantiator<(), AnyScreen>
+		    @Received let screenBuilder: SendableInstantiator<Screen>
+		}
+
+		public final class AnyScreen: Sendable {
+		    public init(_ value: Screen) {
+		        self.value = value
+		    }
+
+		    public let value: Screen
+		}
+		""",
+	]
+
 	private static let ringFixture: [String: String] = [
 		"Marked.swift": markedFile,
 		"Root.swift": """
