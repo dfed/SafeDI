@@ -22,8 +22,9 @@
 /// share (`MockWorldsTable.sharedRecords`) and handed to each root's layout (`TypeKeyBody.statements(ofRootBody:…)`), which
 /// reads a node's facts here rather than working them out again for each root that holds the node.
 ///
-/// It holds each shared node's domain (`TypeKeyLayout.Domain`) for as long as the worlds that share the nodes are held:
-/// from the build of the module's mock worlds until its last mock root is lowered.
+/// It holds each shared node's domain (`TypeKeyLayout.Domain`), structural key facts, declared statements and, for a node
+/// whose tree is closed, its view's reads, for as long as the worlds that share the nodes are held: from the build of the
+/// module's mock worlds until its last mock root is lowered.
 final class NodeLayoutFacts: Sendable {
 	/// The domain of each plan node of the shared records and the nodes beneath them, where every place beneath records
 	/// what it builds.
@@ -33,12 +34,19 @@ final class NodeLayoutFacts: Sendable {
 	let keyFactsByNode: [PlanNode: NodeKeyFacts]
 	/// The ids of the parts `keyFactsByNode` holds, which every root's key reads first.
 	let keyParts: FrozenStructuralKeyParts?
+	/// What each shared node's body declares of its statements, which every root's walk declares in the node's view
+	/// (`TypeKeyLayout.read(_:)`).
+	let declaredChildrenByNode: [PlanNode: TypeKeyLayout.DeclaredChildren]
+	/// What a view of each shared node whose tree is closed reads (`TypeKeyLayout.readsOfClosedViews(ofNode:nodeFacts:)`),
+	/// which every root's view of the node starts with (`TypeKeyLayout.computeReads()`).
+	let readsByNode: [PlanNode: NodeReads]
 
 	/// The facts of `records`' nodes, each computed once.
-	init(records: some Sequence<BuiltPlaceRecord>) {
+	init(records: [BuiltPlaceRecord]) {
 		var layout = TypeKeyLayout()
 		var parts = StructuralKeyParts()
 		var keyFactsByNode = [PlanNode: NodeKeyFacts]()
+		var declaredChildrenByNode = [PlanNode: TypeKeyLayout.DeclaredChildren]()
 		// The type key lays out a body for a place that declares a function alone, and a shared record's children are shared
 		// records too.
 		for record in records where record.hasFunction {
@@ -46,15 +54,85 @@ final class NodeLayoutFacts: Sendable {
 			var facts = TypeKeyLayout.keyFacts(of: record, parts: &parts)
 			// A body's statements are its children's places, one each (`TypeKeyLayout.read(_:)`), and a body with a child that
 			// records nothing is never laid out.
-			let statementPartIDs = TypeKeyLayout.statementCodes(of: record.children).compactMap(TypeKeyLayout.record(of:)).map { childRecord in
+			let statements = TypeKeyLayout.statementCodes(of: record.children)
+			declaredChildrenByNode[record.node] = TypeKeyLayout.DeclaredChildren(declaringStatementsOf: statements)
+			let statementPartIDs = statements.compactMap(TypeKeyLayout.record(of:)).map { childRecord in
 				parts.id(of: TypeKeyLayout.statementPart(of: childRecord, parts: &parts))
 			}
 			facts.statementPartIDs = statementPartIDs
 			keyFactsByNode[record.node] = facts
 		}
-		domainsByNode = layout.domainsByNode
+		let facts = NodeLayoutFacts(
+			domainsByNode: layout.domainsByNode,
+			keyFactsByNode: keyFactsByNode,
+			keyParts: parts.frozenIDs,
+			declaredChildrenByNode: declaredChildrenByNode,
+			readsByNode: [:],
+		)
+		domainsByNode = facts.domainsByNode
 		self.keyFactsByNode = keyFactsByNode
-		keyParts = parts.frozenIDs
+		self.declaredChildrenByNode = declaredChildrenByNode
+		keyParts = facts.keyParts
+		readsByNode = Self.readsByNode(of: records, facts: facts)
+	}
+
+	/// The reads of the views of `records`' nodes whose trees are closed, each node's laid out once: a walk from the records
+	/// no other record holds, each record before the records beneath it, lays out the highest node of each closed tree,
+	/// whose layout holds every closed node beneath it, and lays out no node it holds again. A node beneath one the type key
+	/// cannot lay out is left to each root, as that node is.
+	private static func readsByNode(of records: [BuiltPlaceRecord], facts: NodeLayoutFacts) -> [PlanNode: NodeReads] {
+		func childRecords(of record: BuiltPlaceRecord) -> [BuiltPlaceRecord] {
+			TypeKeyLayout.statementCodes(of: record.children).compactMap { code -> BuiltPlaceRecord? in
+				guard case let .built(child) = TypeKeyLayout.record(of: code), child.hasFunction else { return nil }
+				return child
+			}
+		}
+		var heldByAnother = Set<PlanNode>()
+		for record in records where record.hasFunction {
+			heldByAnother.formUnion(childRecords(of: record).map(\.node))
+		}
+		var readsByNode = [PlanNode: NodeReads]()
+		// The nodes beneath one the type key could not lay out.
+		var isLeftToEachRoot = Set<PlanNode>()
+		var isReached = Set<PlanNode>()
+		var queue = records.filter { $0.hasFunction && !heldByAnother.contains($0.node) }
+		var next = 0
+		isReached.formUnion(queue.map(\.node))
+		while next < queue.count {
+			let record = queue[next]
+			next += 1
+			let children = childRecords(of: record)
+			if isLeftToEachRoot.contains(record.node) {
+				isLeftToEachRoot.formUnion(children.map(\.node))
+			} else if readsByNode[record.node] == nil, facts.domainsByNode[record.node]?.isClosed == true {
+				// A node whose tree closes on a function outside it reads what its context reads; a node beneath it may be closed.
+				if let views = TypeKeyLayout.readsOfClosedViews(ofNode: record, nodeFacts: facts) {
+					for view in views where readsByNode[view.node] == nil {
+						readsByNode[view.node] = view.reads
+					}
+				} else {
+					isLeftToEachRoot.formUnion(children.map(\.node))
+				}
+			}
+			for child in children where isReached.insert(child.node).inserted {
+				queue.append(child)
+			}
+		}
+		return readsByNode
+	}
+
+	private init(
+		domainsByNode: [PlanNode: TypeKeyLayout.Domain],
+		keyFactsByNode: [PlanNode: NodeKeyFacts],
+		keyParts: FrozenStructuralKeyParts?,
+		declaredChildrenByNode: [PlanNode: TypeKeyLayout.DeclaredChildren],
+		readsByNode: [PlanNode: NodeReads],
+	) {
+		self.domainsByNode = domainsByNode
+		self.keyFactsByNode = keyFactsByNode
+		self.keyParts = keyParts
+		self.declaredChildrenByNode = declaredChildrenByNode
+		self.readsByNode = readsByNode
 	}
 
 	/// The facts of no node, for a layout that shares none. Made without a layout, whose own facts default to these.
@@ -63,6 +141,8 @@ final class NodeLayoutFacts: Sendable {
 	private init() {
 		domainsByNode = [:]
 		keyFactsByNode = [:]
+		declaredChildrenByNode = [:]
+		readsByNode = [:]
 		keyParts = nil
 	}
 }

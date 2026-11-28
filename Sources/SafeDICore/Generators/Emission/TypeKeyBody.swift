@@ -236,6 +236,15 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// Whether a closer of the node's body, or of a body beneath it, calls a variant of the per-type plan, whose body is
+		/// outside the node's.
+		var callsVariant = false
+
+		/// Whether every closer of the node's body and the bodies beneath it calls a function of the node's tree, so what the
+		/// node's view reads depends on its tree alone.
+		var isClosed: Bool {
+			closedOnFunctionNames.isEmpty && !callsVariant
+		}
 	}
 
 	/// What tells two places of one plan node apart (`Body`).
