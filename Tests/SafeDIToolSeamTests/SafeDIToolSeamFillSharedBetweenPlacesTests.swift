@@ -390,6 +390,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		// draws no edge, and then beneath the fill of `Office`'s, where it fills `gadget` itself: the declaration's column is
 		// the second, so the unfolded DOT graph draws the fill edge where the tree does. `Home`'s `lamp`, which is no hole,
 		// is drawn in neither: a graph draws only the holes of a seam it calls, whose own children its module's graph draws.
+		// The fill of `Home`'s `gadget` beneath that `homeBuilder` draws its own `homeBuilder`, where the fill above it is of
+		// `Office`'s hole, another call's, which closes no cycle on it.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol Gadget {}",
@@ -413,10 +415,16 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		}
 		let report = try #require(reports.last)
 
-		let fillEdge = "    \"homeBuilder: Instantiator<Home>\" -- \"gadget: any Gadget\""
-		#expect(report.dot.drawnByTree.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.drawnByTree)")
-		#expect(report.dot.unfolded.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.unfolded)")
-		#expect(!report.dot.drawnByTree.contains("lamp: Lamp"), "\(report.dot.drawnByTree)")
+		#expect(report.dot.drawnByTree == """
+		    Root -- "home: Home"
+		    Root -- "office: Office"
+		    "home: Home" -- "gadget: any Gadget"
+		    "gadget: any Gadget" -- "homeBuilder: Instantiator<Home>"
+		    "office: Office" -- "gadget: any Gadget"
+		    "gadget: any Gadget" -- "homeBuilder: Instantiator<Home>"
+		    "homeBuilder: Instantiator<Home>" -- "gadget: any Gadget"
+		    "gadget: any Gadget" -- "homeBuilder: Instantiator<Home>"
+		""")
 		#expect(report.dot.unfolded == report.dot.drawnByTree)
 	}
 
