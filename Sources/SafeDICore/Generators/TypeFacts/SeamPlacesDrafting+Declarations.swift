@@ -22,8 +22,9 @@
 // list holds it, before any next property, and each signature parameter as the root's list holds it.
 
 struct SeamPlacesDeclarationDrafter {
-	init(drafts: SeamPlacesDrafts, parameters: [SeamSignature.Parameter]) {
+	init(drafts: SeamPlacesDrafts, parameters: [SeamSignature.Parameter], access: SeamPlacesFieldAccess? = nil) {
 		self.drafts = drafts
+		self.access = access
 		let world = drafts.world
 		rootVariant = world.rootVariant(0)
 		let rootForwardedLabels = world.worldBindings(of: Int(world.declaration(of: rootVariant))).filter(\.isForwarded).map { world.propertyTable[Int($0.property)].label }
@@ -38,6 +39,9 @@ struct SeamPlacesDeclarationDrafter {
 	}
 
 	let drafts: SeamPlacesDrafts
+	/// What proves each field's access, where the drafts are assembled into a signature's graph; `nil` for a report, whose
+	/// fields keep `internal`.
+	let access: SeamPlacesFieldAccess?
 	let rootVariant: VariantID
 	let receivedLabels: Set<String>
 	let seam: Instantiable
@@ -131,11 +135,14 @@ struct SeamPlacesDeclarationDrafter {
 		let child = childFacts(ofBinding: property, atVariant: variant)
 		let targets = world.edges(from: world.declaration(of: variant))
 		let aliasNode = targets.lazy.map { world.graph.nodes[Int($0)] }.first { $0.property == property && $0.alias != nil }
+		let declaringType = world.typeTable[Int(binding.declaringType)]
+		let fieldAccess = access?.access(of: property, declaredBy: declaringType)
 		let declaration = SeamSignature.Places.Declaration(
 			field: SeamSignature.Hole.Field(
 				property: property,
-				access: .internal,
-				declaringType: world.typeTable[Int(binding.declaringType)],
+				access: fieldAccess?.level ?? .internal,
+				accessCause: fieldAccess?.cause,
+				declaringType: declaringType,
 				declarationLocation: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)],
 				isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable,
 				parameterTakingType: binding.parameterTakingType < 0 ? nil : world.typeTable[Int(binding.parameterTakingType)],
@@ -204,4 +211,24 @@ enum SeamPlacesPlaceInTree: Hashable, Sendable {
 	case hole(owner: VariantID, hole: DeclarationID)
 	/// A hole of a called seam the call passes up, by the call's node and the hole's position among its pass-ups.
 	case passedUp(call: DeclarationID, passUpIndex: Int32)
+}
+
+/// What proves the access of the fields a seam's graph lists: the type access proof of the seam's module, capped at the
+/// access of the seam's generated initializer, as the walk proves it (`SeamBuilderParameters.holes(of:)`).
+struct SeamPlacesFieldAccess {
+	let proof: TypeAccessProof
+	let seam: Instantiable
+	let instantiables: [TypeDescription: Instantiable]
+
+	/// The access of the seam's generated initializer, which caps every field's.
+	var seamTypeAccess: AccessLevel {
+		DependencyTreeGenerator.parameterAccess(seam.effectiveTypeAccess)
+	}
+
+	/// The access of a field of `property` that `declaringType` declares, and what proves it.
+	func access(of property: Property, declaredBy declaringType: TypeDescription?) -> (level: AccessLevel, cause: TypeAccessProof.Cause?) {
+		let declaringModuleName = declaringType.flatMap { instantiables[$0]?.moduleName }
+		let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName, declaringModuleName]))
+		return (min(access.level, seamTypeAccess), access.cause)
+	}
 }

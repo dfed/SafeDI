@@ -44,8 +44,8 @@ extension SeamPlacesDrafts {
 	/// each way its next edge is entered: built in line, and closing a cycle on an entry above, where some route to it does
 	/// each. Levels alike in everything but their parents are one level with every parent. A level's parents are the levels
 	/// whose next edge builds its scope in line, since a call that closes a cycle enters no body.
-	func assembledLevels(parameters: [SeamSignature.Parameter]) -> SeamPlacesLevelAssembly {
-		let drafter = SeamPlacesDeclarationDrafter(drafts: self, parameters: parameters)
+	func assembledLevels(parameters: [SeamSignature.Parameter], access: SeamPlacesFieldAccess? = nil) -> SeamPlacesLevelAssembly {
+		let drafter = SeamPlacesDeclarationDrafter(drafts: self, parameters: parameters, access: access)
 		let rootVariant = drafter.rootVariant
 		let closesOn = Dictionary(closedOnEntries().map { ($0.level, $0.entry) }, uniquingKeysWith: { first, _ in first })
 		let draftByLevel = Dictionary((levels + closingLevels).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -168,7 +168,7 @@ extension SeamPlacesDrafts {
 			var labels = Set<String>()
 			for uncarried in hole.uncarriedDeclarations where labels.insert(uncarried.property.label).inserted {
 				declarations.append(SeamSignature.Places.Declaration(
-					field: SeamSignature.Hole.Field(property: uncarried.property, access: .internal, declaringType: uncarried.declaringType, declarationLocation: uncarried.declarationLocation, parameterTakingType: uncarried.parameterTakingType),
+					field: SeamSignature.Hole.Field(property: uncarried.property, access: access?.seamTypeAccess ?? .internal, declaringType: uncarried.declaringType, declarationLocation: uncarried.declarationLocation, parameterTakingType: uncarried.parameterTakingType),
 					isBoundBeforeNextProperty: false,
 					builtAfter: uncarried.builtAfter,
 					reason: uncarried.reason,
@@ -187,10 +187,12 @@ extension SeamPlacesDrafts {
 			let uncarriedOnSomeRoute = Set(hole.uncarriedDeclarations.map(\.property.label).filter { !fieldLabels.contains($0) })
 			let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && world.constructions[Int(world.declaration(of: entry.call.variant))] != .publicMockCall
 			for field in hole.fields where (!field.isDeferredParameter || readsDeferredFieldsFromStruct) && !uncarriedOnSomeRoute.contains(field.property.label) {
+				let fieldAccess = access?.access(of: field.property, declaredBy: field.declaringType)
 				declarations.append(SeamSignature.Places.Declaration(
 					field: SeamSignature.Hole.Field(
 						property: field.property,
-						access: .internal,
+						access: fieldAccess?.level ?? .internal,
+						accessCause: fieldAccess?.cause,
 						declaringType: field.declaringType,
 						declarationLocation: field.declarationLocation,
 						isReceivedOnlyIfAvailable: field.isReceivedOnlyIfAvailable,

@@ -1151,6 +1151,7 @@ extension DependencyTreeGenerator {
 					let seamRoot = try Self.seamRoot(
 						of: seam,
 						generator: generator,
+						rootScope: tree.rootScope,
 						proof: proof,
 						instantiables: instantiables,
 						ownScopeEnums: ownScopeEnums,
@@ -2146,7 +2147,7 @@ extension DependencyTreeGenerator {
 	///   them: what `shapedBuilders` reads an enum the seam's builders reach from, never a copy another seam carries.
 	/// - Parameter generatesPlainInitializers: Whether the seam's tiers have plain initializers, which a hand-written
 	///   initializer callable with their labels would collide with: the module's `SeamResolution.generatesPlainDependencyTreeInitializers`.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, rootScope: ConstructionScope? = nil, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable], ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum], generatesPlainInitializers: Bool, declaredTypeNames: DeclaredTypeNames) throws -> ScopeGenerator.SeamRoot? {
 		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
@@ -2335,7 +2336,15 @@ extension DependencyTreeGenerator {
 			}
 			return SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, deferral: parameter.deferral, internalName: internalName, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
-		let holesAndPlaces = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
+		var holesAndPlaces = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
+		// Where a test turns the switch on, the place graph is the one the facts drafts assemble, and each own site keeps
+		// the case it matched in the walk's graph.
+		if NodeRecordsObservation.assemblesPlacesFromFacts, !holesAndPlaces.places.cases.isEmpty, let rootScope {
+			let drafts = SeamPlacesDrafts(world: TypeFactsGraph(root: rootScope, forMockGeneration: false))
+			let (places, assembledIndexOfStoredCase) = drafts.assembledPlaces(parameters: parameters, access: SeamPlacesFieldAccess(proof: proof, seam: seam, instantiables: instantiables), replacing: holesAndPlaces.places)
+			holesAndPlaces.places = places
+			holesAndPlaces.caseIndexBySite = holesAndPlaces.caseIndexBySite.compactMapValues { assembledIndexOfStoredCase.indices.contains($0) ? assembledIndexOfStoredCase[$0] : nil }
+		}
 		let shapedBuilders = Self.shapedBuilders(
 			of: seam,
 			generator: generator,

@@ -30,6 +30,10 @@ public enum NodeRecordsObservation {
 	/// plan before it is turned on for every run, or generate time doubles.
 	@TaskLocal public static var laysOutRoots = false
 
+	/// Whether a seam's place graph is the one its facts drafts assemble (`SeamPlacesDrafts.assembledPlaces`), rather than
+	/// the walk's, where the walk drafts one. Off unless a test turns it on: the oracle of the places from facts.
+	@TaskLocal public static var assemblesPlacesFromFacts = false
+
 	/// The nodes a test claims as a kind would (`NodeRecords.claim(of:in:)`), by their concrete type's name, each
 	/// with the raw values of the refusals the claim discharges. Only a test sets it.
 	@TaskLocal public static var claimsForTesting = [String: [String]]()

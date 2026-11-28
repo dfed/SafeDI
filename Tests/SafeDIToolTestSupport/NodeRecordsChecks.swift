@@ -54,8 +54,16 @@ enum NodeRecordsChecks {
 			}
 			enclosingSeamCallObserver?(call)
 		}
+		// Where `SAFEDI_PLACES_FROM_FACTS` is `1`, each seam's place graph is the one its facts drafts assemble: the oracle of
+		// the places from facts. The switch is set only then, so a default run sets no more task-local values.
+		let assemblesPlacesFromFacts = ProcessInfo.processInfo.environment["SAFEDI_PLACES_FROM_FACTS"] == "1"
 		return try await SeamCallRecordObservation.$observer.withValue(seamCallObserver) {
-			try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			guard assemblesPlacesFromFacts else {
+				return try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			}
+			return try await NodeRecordsObservation.$assemblesPlacesFromFacts.withValue(true) {
+				try await checkingNodeRecords(laysOutRoots: laysOutRoots, reportPath: reportPath, testName: testName, enclosingObserver: enclosingObserver, body)
+			}
 		}
 	}
 

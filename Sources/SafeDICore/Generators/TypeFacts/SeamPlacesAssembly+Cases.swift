@@ -166,29 +166,32 @@ extension SeamPlacesLevelAssembly {
 		return current
 	}
 
+	/// Each case of a graph spelled by its kind, family and owner level's key, its naming route's keys, and the first case
+	/// presenting the same places: what tells cases of two graphs of one seam apart, whatever their levels' indices.
+	static func spellings(of cases: [SeamSignature.Places.Case], levels: [SeamSignature.Places.Level]) -> [String] {
+		func spelledKey(_ key: SeamSignature.Places.LevelKey) -> String {
+			"\(key.builtType?.asSource ?? "fill") before \(key.nextProperty?.label ?? "none")"
+		}
+		func head(of placeCase: SeamSignature.Places.Case) -> String {
+			let kind = placeCase.passedUp.map { "passed up \($0.seamType.asSource)\($0.isPublicMock ? " (public mock)" : "") case \($0.caseIndex)" } ?? "own"
+			let family = "\(placeCase.isBuiltInSendableFunction ? "sendable" : "plain")\(placeCase.siteOpensSendableFunction ? ", site opening" : "")"
+			return "\(kind), \(family), owner \(levels.indices.contains(placeCase.ownerLevel) ? spelledKey(levels[placeCase.ownerLevel].key) : "out of range")"
+		}
+		return cases.map { placeCase in
+			let route = placeCase.namingRoute.map { levels.indices.contains($0) ? spelledKey(levels[$0].key) : "out of range" }.joined(separator: " / ")
+			let first = placeCase.firstCasePresentingSamePlaces.map { cases.indices.contains($0) ? head(of: cases[$0]) : "out of range" } ?? "none"
+			return "\(head(of: placeCase)); route \(route); first presenting \(first)"
+		}
+	}
+
 	/// How the assembled cases differ from the cases of `places`, a seam's stored graph: each case's kind, family, owner
 	/// level and naming route, spelled by the levels' keys, and the first case presenting the same places by its spelling;
 	/// then whether the order agrees. The first line is a count report. Test only.
 	func caseDifferences(of drafts: SeamPlacesDrafts, from places: SeamSignature.Places) -> [String] {
 		let caseAssembly = cases(of: drafts)
 		let (assembledCases, unassembled) = (caseAssembly.cases, caseAssembly.unassembled)
-		func spelledKey(_ key: SeamSignature.Places.LevelKey) -> String {
-			"\(key.builtType?.asSource ?? "fill") before \(key.nextProperty?.label ?? "none")"
-		}
-		func spellings(of cases: [SeamSignature.Places.Case], levels: [SeamSignature.Places.Level]) -> [String] {
-			func head(of placeCase: SeamSignature.Places.Case) -> String {
-				let kind = placeCase.passedUp.map { "passed up \($0.seamType.asSource)\($0.isPublicMock ? " (public mock)" : "") case \($0.caseIndex)" } ?? "own"
-				let family = "\(placeCase.isBuiltInSendableFunction ? "sendable" : "plain")\(placeCase.siteOpensSendableFunction ? ", site opening" : "")"
-				return "\(kind), \(family), owner \(levels.indices.contains(placeCase.ownerLevel) ? spelledKey(levels[placeCase.ownerLevel].key) : "out of range")"
-			}
-			return cases.map { placeCase in
-				let route = placeCase.namingRoute.map { levels.indices.contains($0) ? spelledKey(levels[$0].key) : "out of range" }.joined(separator: " / ")
-				let first = placeCase.firstCasePresentingSamePlaces.map { cases.indices.contains($0) ? head(of: cases[$0]) : "out of range" } ?? "none"
-				return "\(head(of: placeCase)); route \(route); first presenting \(first)"
-			}
-		}
-		let stored = spellings(of: places.cases, levels: places.levels)
-		let assembled = spellings(of: assembledCases, levels: levels)
+		let stored = Self.spellings(of: places.cases, levels: places.levels)
+		let assembled = Self.spellings(of: assembledCases, levels: levels)
 		var storedCounts = [String: Int]()
 		for spelling in stored {
 			storedCounts[spelling, default: 0] += 1
