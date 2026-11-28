@@ -920,6 +920,67 @@ struct TypeKeyBodyValuePathTests {
 		""")
 	}
 
+	func statements_handsAFunctionTheRenameAboveIt_whenItsBodyKeepsTheLabelInARenameOfIt() throws {
+		// A label-keeping rename reads its label before binding it, so the read reaches the function, which takes the
+		// enclosing function's rename rather than the root's `id`.
+		func rename(to type: TypeDescription, from fulfillingType: TypeDescription) -> GeneratedCode {
+			let text = "let id: \(type.asSource) = id"
+			return .place(PlacePlan(code: .text(text), record: .alias(AliasPlaceRecord(property: Property(label: "id", typeDescription: type), fulfillingProperty: Property(label: "id", typeDescription: fulfillingType), text: text, reads: []))))
+		}
+		let optionalId = TypeDescription.optional(.simple(name: "Int"))
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true, children: [rename(to: .optional(optionalId), from: optionalId)]) { _ in }
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [
+				rename(to: optionalId, from: .simple(name: "Int")),
+				.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
+			],
+		) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c(id: Int?) -> C {
+		            let id: Int?? = id
+		            return C()
+		        }
+		        func __safeDI_b() -> B {
+		            let id: Int? = id
+		            let c: C = __safeDI_c(id: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
+	@Test
+	func statements_handsAFunctionTheValueItsRenameReadsAsDeclared_whenNothingInTheFunctionRequiresIt() throws {
+		// A rename only if available, `let id: Int? = id`, reads the optional form of the non-optional `id` its function is
+		// passed. Nothing in the function requires `id`, but the function takes it as its declaration types it, `Int`,
+		// which is the type the rename reads in the path key's body, never `Int?`.
+		let text = "let id: Int? = id"
+		let rename = AliasPlaceRecord(property: Property(label: "id", typeDescription: .optional(.simple(name: "Int"))), fulfillingProperty: Property(label: "id", typeDescription: .optional(.simple(name: "Int"))), text: text, reads: [])
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true, children: [.place(PlacePlan(code: .text(text), record: .alias(rename)))]) { _ in }
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [
+				.place(PlacePlan(code: .text("let id = 2"), record: .alias(AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 2", reads: [])))),
+				.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
+			],
+		) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c(id: Int) -> C {
+		            let id: Int? = id
+		            return C()
+		        }
+		        func __safeDI_b() -> B {
+		            let id = 2
+		            let c: C = __safeDI_c(id: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
 	@Test
 	func statements_handsEachPlaceTheDeclarationItsClosingCallReads_whenTwoPlacesOfATypeCloseOnTheirFunctionPassingALabelDeclaredApart() throws {
 		func cWithCloser() -> BuiltPlaceRecord {
@@ -1044,6 +1105,40 @@ struct TypeKeyBodyValuePathTests {
 		return record
 	}
 
+	func statements_typesTheParameterByItsDeclarationForEveryRead_whenARenamesFunctionAlsoReadsTheLabelOptionally() throws {
+		// Beside the rename, a place of the function reads `id` optionally. The function takes `id` once, as its declaration
+		// types it, and every read in it reads that one parameter: the forms are never mixed.
+		let text = "let renamed: Int? = id"
+		let rename = AliasPlaceRecord(property: Property(label: "renamed", typeDescription: .optional(.simple(name: "Int"))), fulfillingProperty: Property(label: "id", typeDescription: .optional(.simple(name: "Int"))), text: text, reads: [])
+		let optionalIdRead = PlaceRead(argumentLabel: "id", label: "id", property: Property(label: "id", typeDescription: .optional(.simple(name: "Int"))), source: .binding(label: "id"))
+		let d = Self.builtRecord(label: "d", typeName: "D", hasFunction: false, arguments: [optionalIdRead]) { _ in }
+		let c = Self.builtRecord(label: "c", typeName: "C", hasFunction: true, children: [
+			.place(PlacePlan(code: .text(text), record: .alias(rename))),
+			.place(PlacePlan(code: .text("let d = D(id: id)"), record: .built(d))),
+		]) { _ in }
+		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.rootBody(
+			arguments: [Self.cRead],
+			children: [
+				.place(PlacePlan(code: .text("let id = 2"), record: .alias(AliasPlaceRecord(property: Property(label: "id", typeDescription: .simple(name: "Int")), fulfillingProperty: nil, text: "let id = 2", reads: [])))),
+				.place(PlacePlan(code: .text("let c = C()"), record: .built(c))),
+			],
+		) { _ in }))
+		#expect(GeneratedCode.lines(statements).spelled() == """
+		        let id = 1
+		        func __safeDI_c(id: Int) -> C {
+		            let renamed: Int? = id
+		            let d = D(id: id)
+		            return C()
+		        }
+		        func __safeDI_b() -> B {
+		            let id = 2
+		            let c: C = __safeDI_c(id: id)
+		            return B(c: c)
+		        }
+		        let b: B = __safeDI_b()
+		""")
+	}
+
 	private static let cRead = PlaceRead(
 		argumentLabel: "c",
 		label: "c",
@@ -1051,15 +1146,15 @@ struct TypeKeyBodyValuePathTests {
 		source: .binding(label: "c"),
 	)
 
-	/// A place `<label>: <typeName>` constructed with `id`, in a function of its own where `hasFunction`, as `configure` records it.
-	private static func builtRecord(label: String, typeName: String, hasFunction: Bool, _ configure: (inout BuiltPlaceRecord) -> Void) -> BuiltPlaceRecord {
+	/// A place `<label>: <typeName>` constructed with `arguments` (`id` by default), in a function of its own where `hasFunction`, whose body builds `children`, as `configure` records it.
+	private static func builtRecord(label: String, typeName: String, hasFunction: Bool, arguments: [PlaceRead]? = nil, children: [GeneratedCode] = [], _ configure: (inout BuiltPlaceRecord) -> Void) -> BuiltPlaceRecord {
 		var record = BuiltPlaceRecord(
 			property: Property(label: label, typeDescription: .simple(name: typeName)),
 			isErased: false,
 			concreteType: .simple(name: typeName),
 			isExtension: false,
 			target: .initializer(.simple(name: typeName)),
-			arguments: hasFunction ? [] : [idRead],
+			arguments: arguments ?? (hasFunction ? [] : [idRead]),
 			forwardedProperties: [],
 			cycleParameters: [],
 			callCycleArguments: [],
@@ -1068,7 +1163,7 @@ struct TypeKeyBodyValuePathTests {
 			typesDeclaredEscaping: [],
 			lineEnd: "",
 			hasFunction: hasFunction,
-			children: [],
+			children: children,
 			node: PlanNode(),
 		)
 		configure(&record)
