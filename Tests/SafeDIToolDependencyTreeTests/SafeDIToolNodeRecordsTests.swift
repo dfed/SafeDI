@@ -1480,6 +1480,78 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsWhatAFillRequiresOfTheCallerBeforeTheCall_whenTheCallerDeclaresItAfterTheCallsParent() async throws {
+		// `LiveApi`, which fills `Screen`'s hole, receives `logger`, which only `Root` declares, after `outer`, whose tree makes the
+		// call two places down: the root builds `logger` first, as the tree does, so the fill's function can capture it.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			], dependencies: []),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outer: Outer", "@Instantiated let logger: Logger"]),
+				"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+				"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+				"""
+				import Feature
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Api, Instantiable {
+				    public init(logger: Logger) {
+				        self.logger = logger
+				    }
+
+				    @Received let logger: Logger
+				}
+				""",
+			], dependencies: ["Feature"]),
+		]
+		let (output, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				// Under the plugin, as `generate_laysOutAFilledSeamCallsDispatchersAsTheTreeDoes_whenTheCallIsTwoPlacesBelowTheRoot`.
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let logger = Logger()
+		        func __safeDI_inner() -> Inner {
+		            func __safeDI_screen() -> Screen {
+		                _ = Screen.__safeDI_Screen_AD974FF4533A0485.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+		                func __safeDI_apiBuilder_Screen() -> Screen.__safeDI_ApiCarrier<any Api> {
+		                    .init(api: {
+		                        let api: any Api = LiveApi(logger: logger)
+		                        return api
+		                    })
+		                }
+		                return Screen(__safeDI_apiBuilder: __safeDI_apiBuilder_Screen())
+		            }
+		            let screen: Screen = __safeDI_screen()
+		            return Inner(screen: screen)
+		        }
+		        func __safeDI_outer() -> Outer {
+		            let inner: Inner = __safeDI_inner()
+		            return Outer(inner: inner)
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer, logger: logger)
+		    }
+		}
+		"""])
+		let rootReports = reports.filter { $0.root == "Root" }
+		#expect(rootReports.map(\.refusal) == [nil])
+		#expect(rootReports.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
