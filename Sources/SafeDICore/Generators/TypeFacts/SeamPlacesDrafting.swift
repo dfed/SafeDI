@@ -367,6 +367,7 @@ struct SeamPlacesDrafts: Sendable {
 		namingWork = naming.work
 		self.buildsInLine = buildsInLine
 		self.closesCycle = closesCycle
+		self.holdsPlace = holdsPlace
 		self.levels = levels.map(withParents)
 		self.closingLevels = closingLevels.map(withParents)
 		self.sites = sites
@@ -395,6 +396,8 @@ struct SeamPlacesDrafts: Sendable {
 	/// A call can do both, where routes with and without the callee's cycle identity above reach it.
 	let buildsInLine: [Bool]
 	let closesCycle: [Bool]
+	/// Whether each variant holds a place beneath it on a route: a hole, or a call that passes places up.
+	let holdsPlace: [Bool]
 
 	/// Whether some route builds the level's edge in line, and whether some route closes a cycle at it.
 	func buildsInLine(_ level: SeamPlacesLevelID) -> Bool {

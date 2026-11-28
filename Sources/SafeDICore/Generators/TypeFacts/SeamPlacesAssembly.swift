@@ -30,6 +30,13 @@ struct SeamPlacesLevelAssembly {
 	let declarationLists: [[SeamSignature.Places.Declaration]]
 	/// For each level, the drafted level it was assembled from.
 	let draftedLevels: [SeamPlacesLevelID]
+	/// The level each drafted level is built in line as.
+	let inLineLevelByDraft: [SeamPlacesLevelID: Int]
+	/// For each drafted level whose next edge is a call that passes up places, the level of the called seam that owns their
+	/// cases.
+	let passingUpLevelByCall: [SeamPlacesLevelID: Int]
+	/// For each drafted level whose next edge is a fill, the fill's entry level for the hole that edge fills.
+	let entryLevelByCall: [SeamPlacesLevelID: Int]
 }
 
 extension SeamPlacesDrafts {
@@ -37,7 +44,7 @@ extension SeamPlacesDrafts {
 	/// each way its next edge is entered: built in line, and closing a cycle on an entry above, where some route to it does
 	/// each. Levels alike in everything but their parents are one level with every parent. A level's parents are the levels
 	/// whose next edge builds its scope in line, since a call that closes a cycle enters no body.
-	func assembledLevelsOutsideFills(parameters: [SeamSignature.Parameter]) -> SeamPlacesLevelAssembly {
+	func assembledLevels(parameters: [SeamSignature.Parameter]) -> SeamPlacesLevelAssembly {
 		let drafter = SeamPlacesDeclarationDrafter(drafts: self, parameters: parameters)
 		let rootVariant = drafter.rootVariant
 		let closesOn = Dictionary(closedOnEntries().map { ($0.level, $0.entry) }, uniquingKeysWith: { first, _ in first })
@@ -217,6 +224,7 @@ extension SeamPlacesDrafts {
 		}
 		// Each fill's entry level: no type of its own, its next property the hole's, built beneath the filled seam's path.
 		var entryLevelsByFillVariant = [VariantID: [Int]]()
+		var entryLevelByCall = [SeamPlacesLevelID: Int]()
 		for (variant, entry) in fillEntriesByVariant.sorted(by: { $0.key < $1.key }).flatMap({ variant, entries in entries.map { (variant, $0) } }) {
 			guard let callDraft = draftByLevel[entry.call] else { continue }
 			let hole = entry.hole
@@ -227,8 +235,10 @@ extension SeamPlacesDrafts {
 			let levelKey = LevelKey(declarationList: list, key: key, nextPosition: -1, nextLoop: -1, closesOn: nil)
 			if let known = levelIndexByKey[levelKey] {
 				entryLevelsByFillVariant[variant, default: []].append(known)
+				entryLevelByCall[entry.call] = known
 				continue
 			}
+			entryLevelByCall[entry.call] = assembled.count
 			levelIndexByKey[levelKey] = assembled.count
 			entryLevelsByFillVariant[variant, default: []].append(assembled.count)
 			assembled.append(AssembledLevel(
@@ -297,7 +307,7 @@ extension SeamPlacesDrafts {
 		// A call that passes up places of the seam it calls owns their cases at a level of the called seam with no next
 		// property and no declarations, enclosed by the level whose next edge is the call.
 		var passingUpLevelByCall = [SeamPlacesLevelID: Int]()
-		for draft in levels where !node(of: draft.id.variant).key.isFill && buildsInLine(draft.id) && !world.passUps(of: Int(target(of: draft.id))).isEmpty {
+		for draft in levels where buildsInLine(draft.id) && !world.passUps(of: Int(target(of: draft.id))).isEmpty {
 			let call = world.graph.nodes[Int(target(of: draft.id))]
 			let calledType = world.typeTable[Int(world.builtTypes[Int(target(of: draft.id))])]
 			let opened: SeamSignature.Places.SendableFunctionOpened? = switch draft.opens {
@@ -397,6 +407,9 @@ extension SeamPlacesDrafts {
 			},
 			declarationLists: lists,
 			draftedLevels: assembled.map(\.draft.id),
+			inLineLevelByDraft: inLineLevelByDraft,
+			passingUpLevelByCall: passingUpLevelByCall,
+			entryLevelByCall: entryLevelByCall,
 		)
 	}
 }

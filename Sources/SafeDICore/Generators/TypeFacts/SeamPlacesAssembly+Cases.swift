@@ -1,0 +1,183 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// The cases of a seam's place graph assembled from its facts drafts: the seam's own cases, then the cases its calls pass
+// up, each naming its owner level and naming route by the assembled levels. Test only, until the assembled graph replaces
+// the walk's under a test switch.
+
+extension SeamPlacesLevelAssembly {
+	/// The assembled levels of a drafted route, root first: each drafted level as it is built in line, and after a call
+	/// whose next edge is a fill, the fill's entry level. `nil` where a level of the route was not assembled.
+	func assembledRoute(_ route: [SeamPlacesLevelID]) -> [Int]? {
+		var assembledRoute = [Int]()
+		for level in route {
+			guard let index = inLineLevelByDraft[level] else { return nil }
+			assembledRoute.append(index)
+			if let entryLevel = entryLevelByCall[level] {
+				assembledRoute.append(entryLevel)
+			}
+		}
+		return assembledRoute
+	}
+
+	/// The cases of `drafts`, whose levels these are: its own cases in builder-label order, then the cases its calls pass
+	/// up, in the order of the calls. A passed-up case is owned by the level of the called seam its call encloses. Cases
+	/// that present the same places, those whose references lead to one own case of one seam (`origin(of:through:)`),
+	/// name the first of them, and only that first one has a naming route: the least route to its owner. The cases whose
+	/// levels were not assembled are left out, and named in `unassembled`.
+	func cases(of drafts: SeamPlacesDrafts) -> (cases: [SeamSignature.Places.Case], unassembled: [String]) {
+		var cases = [SeamSignature.Places.Case]()
+		var unassembled = [String]()
+		for draftCase in drafts.cases {
+			guard let owner = inLineLevelByDraft[draftCase.owner], let namingRoute = assembledRoute(draftCase.namingRoute) else {
+				unassembled.append("own case of level \(draftCase.owner.variant).\(draftCase.owner.edge)")
+				continue
+			}
+			cases.append(SeamSignature.Places.Case(
+				ownerLevel: owner,
+				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
+				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
+				passedUp: nil,
+				namingRoute: namingRoute,
+			))
+		}
+		let passedUp = drafts.passedUpCases()
+		let naming = SeamPlacesDrafts.namingRoutes(
+			to: passedUp.map { draftCase in ([draftCase.owner], draftCase.siteOpensSendableFunction ? .either : draftCase.isBuiltInSendableFunction ? .opensSendableFunction : .plain) },
+			in: drafts.world,
+			buildsInLine: drafts.buildsInLine,
+			holdsPlace: drafts.holdsPlace,
+		)
+		let world = drafts.world
+		let seamType = world.graph.nodes[Int(world.declaration(of: world.rootVariant(0)))].scope.instantiable.concreteInstantiable
+		// The builders each passed-up case's call passes, by the case's index: where its reference leads.
+		var calledBuildersByCase = [Int: CalledBuilders]()
+		for (draftCase, route) in zip(passedUp, naming.routes) {
+			let targets = world.edges(from: world.declaration(of: draftCase.owner.variant))
+			let call = world.graph.nodes[Int(targets[targets.startIndex + Int(draftCase.owner.edge)])]
+			guard let owner = passingUpLevelByCall[draftCase.owner], let callRoute = assembledRoute(route), let calledCase = draftCase.passedUp, let calledBuilders = call.scope.calledBuilders else {
+				unassembled.append("passed-up case of level \(draftCase.owner.variant).\(draftCase.owner.edge)")
+				continue
+			}
+			calledBuildersByCase[cases.count] = calledBuilders
+			cases.append(SeamSignature.Places.Case(
+				ownerLevel: owner,
+				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
+				siteOpensSendableFunction: draftCase.siteOpensSendableFunction,
+				passedUp: calledCase,
+				namingRoute: callRoute + [owner],
+			))
+		}
+		// The cases that present the same places, those whose references lead to one own case of one seam, name the first of
+		// them, and only that first one keeps its naming route.
+		var firstCaseByOrigin = [SeamSignature.Places.CalledCase: Int]()
+		for index in cases.indices {
+			let origin = Self.origin(ofCaseAt: index, in: cases, calledBuildersByCase: calledBuildersByCase, seamType: seamType)
+			guard let first = firstCaseByOrigin[origin] else {
+				firstCaseByOrigin[origin] = index
+				continue
+			}
+			let placeCase = cases[index]
+			cases[index] = SeamSignature.Places.Case(
+				ownerLevel: placeCase.ownerLevel,
+				isBuiltInSendableFunction: placeCase.isBuiltInSendableFunction,
+				siteOpensSendableFunction: placeCase.siteOpensSendableFunction,
+				passedUp: placeCase.passedUp,
+				firstCasePresentingSamePlaces: first,
+			)
+		}
+		return (cases, unassembled)
+	}
+
+	/// The own case of the seam that holds the places the case at `index` of `cases`, a seam's graph, presents: the case
+	/// itself where it is the seam's own, else the called seam's case its reference names, or the first case presenting the
+	/// same places there, followed through the references of the seams beneath, and of the seam's own graph where a ring of
+	/// seams leads back to it, until a case of a seam's own places. Each step is a lookup, and a case seen twice ends the
+	/// walk, so it is bounded by the cases of the seams beneath.
+	static func origin(ofCaseAt index: Int, in cases: [SeamSignature.Places.Case], calledBuildersByCase: [Int: CalledBuilders], seamType: TypeDescription) -> SeamSignature.Places.CalledCase {
+		var current = SeamSignature.Places.CalledCase(seamType: seamType, isPublicMock: false, caseIndex: index)
+		var seen = Set<SeamSignature.Places.CalledCase>()
+		// The graph `current` is a case of, and how its seams beneath are found: `nil` for the seam's own.
+		var calledBuilders: CalledBuilders?
+		var places: SeamSignature.Places?
+		while seen.insert(current).inserted {
+			let next: SeamSignature.Places.CalledCase
+			if current.seamType == seamType, !current.isPublicMock {
+				guard cases.indices.contains(current.caseIndex), let passedUp = cases[current.caseIndex].passedUp, let builders = calledBuildersByCase[current.caseIndex] else { return current }
+				next = passedUp
+				calledBuilders = builders
+				places = builders.places
+			} else {
+				guard let calledPlaces = places, calledPlaces.cases.indices.contains(current.caseIndex) else { return current }
+				let firstIndex = calledPlaces.cases[current.caseIndex].firstCasePresentingSamePlaces ?? current.caseIndex
+				guard calledPlaces.cases.indices.contains(firstIndex), let passedUp = calledPlaces.cases[firstIndex].passedUp else {
+					return SeamSignature.Places.CalledCase(seamType: current.seamType, isPublicMock: current.isPublicMock, caseIndex: firstIndex)
+				}
+				next = passedUp
+				places = calledBuilders?.placesOfSeamsBeneath(passedUp)?.places
+			}
+			current = next
+		}
+		return current
+	}
+
+	/// How the assembled cases differ from the cases of `places`, a seam's stored graph: each case's kind, family, owner
+	/// level and naming route, spelled by the levels' keys, and the first case presenting the same places by its spelling;
+	/// then whether the order agrees. The first line is a count report. Test only.
+	func caseDifferences(of drafts: SeamPlacesDrafts, from places: SeamSignature.Places) -> [String] {
+		let (assembledCases, unassembled) = cases(of: drafts)
+		func spelledKey(_ key: SeamSignature.Places.LevelKey) -> String {
+			"\(key.builtType?.asSource ?? "fill") before \(key.nextProperty?.label ?? "none")"
+		}
+		func spellings(of cases: [SeamSignature.Places.Case], levels: [SeamSignature.Places.Level]) -> [String] {
+			func head(of placeCase: SeamSignature.Places.Case) -> String {
+				let kind = placeCase.passedUp.map { "passed up \($0.seamType.asSource)\($0.isPublicMock ? " (public mock)" : "") case \($0.caseIndex)" } ?? "own"
+				let family = "\(placeCase.isBuiltInSendableFunction ? "sendable" : "plain")\(placeCase.siteOpensSendableFunction ? ", site opening" : "")"
+				return "\(kind), \(family), owner \(levels.indices.contains(placeCase.ownerLevel) ? spelledKey(levels[placeCase.ownerLevel].key) : "out of range")"
+			}
+			return cases.map { placeCase in
+				let route = placeCase.namingRoute.map { levels.indices.contains($0) ? spelledKey(levels[$0].key) : "out of range" }.joined(separator: " / ")
+				let first = placeCase.firstCasePresentingSamePlaces.map { cases.indices.contains($0) ? head(of: cases[$0]) : "out of range" } ?? "none"
+				return "\(head(of: placeCase)); route \(route); first presenting \(first)"
+			}
+		}
+		let stored = spellings(of: places.cases, levels: places.levels)
+		let assembled = spellings(of: assembledCases, levels: levels)
+		var storedCounts = [String: Int]()
+		for spelling in stored {
+			storedCounts[spelling, default: 0] += 1
+		}
+		var assembledCounts = [String: Int]()
+		for spelling in assembled {
+			assembledCounts[spelling, default: 0] += 1
+		}
+		let alike = storedCounts.reduce(0) { $0 + min($1.value, assembledCounts[$1.key] ?? 0) }
+		// What the stored cases carry beyond these fields, which the assembly does not give yet.
+		let withAdditions = places.cases.count { placeCase in
+			placeCase.isPassedOnSendable || !placeCase.calledCopyDeclarations.isEmpty || !placeCase.uncarriedReplacedOnPathsToCalls.isEmpty || !placeCase.reenteringCallDeclarations.isEmpty || !placeCase.reenteringPlaceFields.isEmpty
+		}
+		let order = stored == assembled ? "same order" : Set(stored) == Set(assembled) && stored.count == assembled.count ? "order differs" : "cases differ"
+		var differences = ["report: assembled cases: \(places.cases.count) stored, \(assembledCases.count) assembled, \(alike) alike, \(unassembled.count) unassembled, \(withAdditions) stored with additions, \(order)"]
+		differences += unassembled.map { "assembled cases: unassembled: \($0)" }
+		differences += storedCounts.keys.filter { storedCounts[$0] != assembledCounts[$0] }.sorted().map { "assembled cases: stored \(storedCounts[$0] ?? 0), assembled \(assembledCounts[$0] ?? 0): \($0)" }
+		differences += assembledCounts.keys.filter { storedCounts[$0] == nil }.sorted().map { "assembled cases: only assembled \(assembledCounts[$0] ?? 0): \($0)" }
+		return differences
+	}
+}
