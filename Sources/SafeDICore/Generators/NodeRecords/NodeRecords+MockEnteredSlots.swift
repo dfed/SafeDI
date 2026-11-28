@@ -178,9 +178,28 @@ struct MockEnteredSlots: Sendable {
 	/// By declaration: whether its function takes and hands on the entered places.
 	let takesEnteredPlacesByDeclaration: [Bool]
 
+	/// Whether some function on no cycle enters the nearest place of its type alone, and whether some function only hands
+	/// the places on: the two functions `mock()` declares for them only where one is called
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`).
+	var use: MockEnteredPlacesUse {
+		MockEnteredPlacesUse(
+			entersNearest: nearestEnteredByDeclaration.contains { $0 != nil },
+			passes: takesEnteredPlacesByDeclaration.indices.contains { takesEnteredPlacesByDeclaration[$0] && slotIndexByDeclaration[$0] < 0 && nearestEnteredByDeclaration[$0] == nil },
+		)
+	}
+
 	/// A configuration a new place may read: a concrete type, built the one way.
 	private struct Configuration: Hashable {
 		let type: TypeDescription
 		let isBuiltWithHandWrittenMock: Bool
 	}
+}
+
+/// Which of the functions a mock root declares for the places its cycles enter its calls use, beside the one that looks
+/// a slot up.
+struct MockEnteredPlacesUse: Hashable, Sendable {
+	/// Whether some call enters the nearest place of its function's type alone.
+	let entersNearest: Bool
+	/// Whether some call only hands the places on.
+	let passes: Bool
 }

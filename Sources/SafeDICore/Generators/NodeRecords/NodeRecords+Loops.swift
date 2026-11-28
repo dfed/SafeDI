@@ -77,7 +77,7 @@ extension NodeRecords {
 		// The overrides are compared as the paths each level reads them by, which agree only because every level's
 		// function takes its overrides under one name (`ReservedName.mockOverridesParameterName`): a level whose
 		// configuration were named apart would be refused here.
-		let overrides = mockOverridesOfChildren(of: level, in: world)
+		let overrides = mockOverridesOfChildren(of: level, in: world, slots: nil)
 		var componentByMember = [DeclarationID: Set<DeclarationID>]()
 		var edgesByLevel = [DeclarationID: Set<DeclarationID>]()
 		for member in members where world.madeAgain(from: member) != [member] {
@@ -92,7 +92,7 @@ extension NodeRecords {
 			}
 			for parent in world.parents(of: member) {
 				guard parent.parent == 0 || !world.isOnCycle(parent.parent),
-				      mockOverridesOfChildren(of: parent.parent, in: world) == overrides
+				      mockOverridesOfChildren(of: parent.parent, in: world, slots: nil) == overrides
 				else { return false }
 				let edges = edgesByLevel[parent.parent] ?? Set(world.edges(from: parent.parent))
 				edgesByLevel[parent.parent] = edges
@@ -151,7 +151,7 @@ extension NodeRecords {
 		var takingLevel = Set<DeclarationID>()
 		/// The level whose overrides' type each member taking its level's overrides takes them as: the first of the levels
 		/// that build a member of its loop (`mockLoopComponent(of:in:)`), so that every member of a loop takes one type,
-		/// which another level hands a value of made of its own overrides' fields (`mockLoopLevelArgument(of:in:levels:)`).
+		/// which another level hands a value of made of its own overrides' fields (`mockLoopLevelArgument(of:in:levels:slots:)`).
 		var homeLevelByMember = [DeclarationID: DeclarationID]()
 		/// The members of each member's loop, for the fields another level hands.
 		var componentByMember = [DeclarationID: [DeclarationID]]()
@@ -170,7 +170,7 @@ extension NodeRecords {
 		var changed = true
 		while changed {
 			changed = false
-			// A member that makes again only itself hands its rebinding its own overrides (`loopRebindings(of:in:mockLoopLevels:)`),
+			// A member that makes again only itself hands its rebinding its own overrides (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`),
 			// so it takes no level, whichever levels build it.
 			for member in members where !levels.takingLevel.contains(member) && world.madeAgain(from: member) != [member] {
 				let makesAgainMemberTakingOverrides = world.madeAgain(from: member).contains { madeAgain in
@@ -205,7 +205,7 @@ extension NodeRecords {
 	/// the configuration its level's children read, or `mock()`'s own at the root, read where the level builds the member.
 	/// `nil` where `member` makes again no member that takes overrides (`MockLoopLevels.takingLevel`), whose function then
 	/// reads its override as the root's body does.
-	static func mockLoopLevelArgument(of member: DeclarationID, in world: some NodeRecordSources, levels: MockLoopLevels) -> PassedArgument? {
+	static func mockLoopLevelArgument(of member: DeclarationID, in world: some NodeRecordSources, levels: MockLoopLevels, slots: MockEnteredSlots?) -> PassedArgument? {
 		guard levels.takingLevel.contains(member),
 		      let home = levels.homeLevelByMember[member],
 		      let parameterName = levels.parameterNameByLevel[home]
@@ -213,7 +213,7 @@ extension NodeRecords {
 		let type = mockLoopLevelType(of: home, in: world)
 		let parents = world.parents(of: member)
 		// Every level that builds the member reads these overrides alike (`mockLoopRefusesNothing(ofMember:in:)`).
-		let overrides = mockOverridesOfChildren(of: parents.first?.parent ?? 0, in: world)
+		let overrides = mockOverridesOfChildren(of: parents.first?.parent ?? 0, in: world, slots: slots)
 		// One value serves every call of the member's function, and every level builds every member of the loop, so where
 		// any level is of another type, the home level too hands the value made of its fields rather than its overrides.
 		let value: ValuePath
@@ -243,7 +243,7 @@ extension NodeRecords {
 	}
 
 	/// What a rebinding of `member` inside another member's function hands `member`'s function, where the members take
-	/// their level's overrides (`mockLoopLevelArgument(of:in:levels:)`): `member`'s own overrides, its field of the level's,
+	/// their level's overrides (`mockLoopLevelArgument(of:in:levels:slots:)`): `member`'s own overrides, its field of the level's,
 	/// where its function takes them, then the level's, where its function takes that.
 	private static func mockLoopRebindingArguments(of member: DeclarationID, level: PassedArgument, in world: some NodeRecordSources, levels: MockLoopLevels) -> [PassedArgument] {
 		var arguments = [PassedArgument]()
@@ -251,7 +251,7 @@ extension NodeRecords {
 			arguments.append(PassedArgument(
 				parameterName: ReservedName.mockOverridesParameterName,
 				type: type,
-				value: .member(property.label.spelledAsMemberDeclarationName, of: .passedArgument(level.parameterName)),
+				value: .member(property.label, of: .passedArgument(level.parameterName)),
 				staysOutsideSendableFunctions: true,
 			))
 		}
@@ -289,9 +289,9 @@ extension NodeRecords {
 	/// every variant of `declaration` rebinds alike (oracle B, check 32 of the per-type facts' checks).
 	/// - Parameter ownFunctionArguments: What a call of `declaration`'s own function hands it, which a member that makes only
 	///   itself again hands its rebinding of itself, under the names its function takes them by.
-	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels(), ownFunctionArguments: [PassedArgument] = []) -> [GeneratedCode] {
+	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels(), ownFunctionArguments: [PassedArgument] = [], enteredSlots: MockEnteredSlots? = nil) -> [GeneratedCode] {
 		// In a mock, each rebinding hands the member's function what the member's level hands it.
-		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels)
+		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels, slots: enteredSlots)
 		return world.madeAgain(from: declaration).compactMap { member in
 			guard let property = world.property(of: member) else { return nil }
 			let instantiable = world.scope(of: member).instantiable

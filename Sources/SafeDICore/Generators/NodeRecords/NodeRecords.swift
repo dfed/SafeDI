@@ -302,7 +302,7 @@ struct NodeRecords: Sendable {
 			// A place of a seam's own mock is bound from its builder before the node's children, which read it.
 			let builtChildren = children
 			func childrenRebindingItself(with ownFunctionArguments: [PassedArgument]) -> [GeneratedCode] {
-				Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels, ownFunctionArguments: ownFunctionArguments) + builtChildren
+				Self.mockPlaceBuilderBindings(of: declaration, in: world).map(\.place) + Self.loopRebindings(of: declaration, in: world, mockLoopLevels: mockLoopLevels, ownFunctionArguments: ownFunctionArguments, enteredSlots: enteredSlots) + builtChildren
 			}
 			// What a receive by value reads as a wrapper's instance, which every record of a construction passes its arguments.
 			let instanceProperties = Self.lazilyInstantiatedInstanceProperties(of: declaration, variant: variant, in: world)
@@ -340,18 +340,18 @@ struct NodeRecords: Sendable {
 				case .mockUnavailableDependency:
 					try .alias(Self.mockUnavailableDependencyRecord(of: declaration, in: world))
 				case .publicMockCall:
-					try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], typesDeclaredEscaping: escaping, children: children))
+					try .built(Self.publicMockCallRecord(of: declaration, variant: variant, in: world, receivesBoundAgain: mockNamesReadApart.receivesBoundAgain[Int(variant)], enteredSlots: enteredSlots, typesDeclaredEscaping: escaping, children: children))
 				}
 			}
 			var madeRecord = try makeRecord(children: childrenRebindingItself(with: []))
 			// A member that makes only itself again rebinds itself with what its own function takes, which the record says
-			// once it is made (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:)`).
-			if world.madeAgain(from: declaration).contains(declaration), Self.mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels) == nil, case let .built(built) = madeRecord, !built.passedArguments.isEmpty {
+			// once it is made (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`).
+			if world.madeAgain(from: declaration).contains(declaration), Self.mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels, slots: enteredSlots) == nil, case let .built(built) = madeRecord, !built.passedArguments.isEmpty {
 				madeRecord = try makeRecord(children: childrenRebindingItself(with: built.passedArguments))
 			}
 			var record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
 			// A mock's member of a loop of builders is handed its level's overrides after its own (`NodeRecords+Loops.swift`).
-			if case var .built(built) = record, let level = Self.mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels) {
+			if case var .built(built) = record, let level = Self.mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels, slots: enteredSlots) {
 				built.passedArguments.append(level)
 				record = .built(built)
 			}
@@ -370,7 +370,7 @@ struct NodeRecords: Sendable {
 				.place(PlacePlan(code: .empty, record: record))
 			}
 			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
-			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world).map { GeneratedCode.place(PlacePlan(code: .empty, record: .built($0))) }
+			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots).map { GeneratedCode.place(PlacePlan(code: .empty, record: .built($0))) }
 			// A member of a loop of builders calls the functions of the others, which capture their locals, so its level
 			// binds every member's local before the first member (`mockLoopOverridesBindings`).
 			let loopOverridesBinding = Self.isMockLoopMember(declaration, in: world) ? binding : nil
@@ -602,7 +602,8 @@ struct NodeRecords: Sendable {
 		}
 		self.rootBody = rootBody
 		self.records = records
-		mockEnteredSlots = enteredSlots?.slots ?? []
+		mockEnteredPlacesUse = enteredSlots.flatMap { $0.slots.isEmpty ? nil : $0.use }
+		mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable = enteredSlots.flatMap { Self.mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in: world, slots: $0) }
 		declarationByVariant = (0..<Int32(world.variantCount)).map(world.declaration(of:))
 	}
 
@@ -615,10 +616,15 @@ struct NodeRecords: Sendable {
 	/// statements are.
 	let rootBody: [GeneratedCode]
 
-	/// The slots of the places a mock root's cycles enter, in the order its struct declares them
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(slots:isSendable:)`); empty for a world with no cycle and for a
-	/// production root's.
-	let mockEnteredSlots: [MockEnteredSlot]
+	/// Which functions a mock root's calls enter the places of its cycles with, which decides what `mock()` declares for
+	/// them (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:)`); `nil` for a world with no
+	/// cycle and for a production root's.
+	let mockEnteredPlacesUse: MockEnteredPlacesUse?
+
+	/// The types of the configurations a mock root's functions that take the places entered are handed, where an actor
+	/// is sent a value such a function builds (`mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable(in:slots:)`);
+	/// `nil` where none is, and for a world with no cycle and a production root's.
+	let mockConfigurationTypeNamesHandedWithPlacesThatMustBeSendable: MockConfigurationTypeNamesThatMustBeSendable?
 
 	/// How many variants have a record, which is every variant but the root's.
 	var recordCount: Int {

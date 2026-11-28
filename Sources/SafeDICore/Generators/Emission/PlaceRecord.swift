@@ -106,12 +106,15 @@ struct BuiltPlaceRecord: Sendable {
 	/// builds in a function of its own whatever its body holds (`NodeRecords+MockConstruction.swift`). Every other
 	/// function writes it only after statements (`BuilderBody.returnKeyword`).
 	var functionAlwaysWritesReturn = false
+	/// Whether a wrapper built around a call of the place's function that is handed arguments spells its closure on one
+	/// line, `Instantiator<T> { f(…) }`, rather than the call on a line of its own between the braces.
+	var wrapsCallOnOneLine = false
 	/// Whether the place declares its builder function and binds its value nowhere: other places call the function, and
 	/// nothing reads the value.
 	var declaresOnlyItsFunction = false
 
 	/// The statement the place's builder function begins with, before its children.
-	var leadingStatement: LeadingStatement? {
+	var leadingStatement: CallGuard? {
 		callFields?.leadingStatement
 	}
 
@@ -307,6 +310,11 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// A call of the implicit member `name` of the type the value is passed as, spelled `.<name>(<label>: <source>, …)`:
 	/// each argument a read the engine checks.
 	case implicitMemberCall(String, arguments: [PlaceRead])
+	/// A call of the member `name` of a value that hands it another value, spelled
+	/// `<value>.<name>("<literal>", <handed>, <flag>: true, …)`: the string literal first where `literal` is set, and `true`
+	/// under each label of `flags` last. It reads what its two values read, so where neither reads a declaration it is the
+	/// same text wherever its function is called.
+	case callHanding(String, of: ValuePath, literal: String?, value: ValuePath, flags: [String])
 	/// A new value of a type made by its initializer that takes no argument, spelled `<type>()`: it reads no declaration,
 	/// so it is a value of every call alike, and keyed as itself.
 	case emptyInitialization(TypeDescription)
