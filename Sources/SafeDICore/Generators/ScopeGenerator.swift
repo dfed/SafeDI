@@ -1851,16 +1851,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return properties
 	}
 
-	/// What a fill of `hole` that a call passes declares for its tree, as the walk of what the call receives reads it: the
-	/// forms of the fields it binds from the site's scope struct, and the property it builds. A public mock takes no
-	/// deferred parameter, so its fill binds every field, but one that a level of an inner seam's enum holds on some route
-	/// to the place and not on another, which the fill reads of the caller's scope on that other route
-	/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). A seam's fill reads a field bound from a deferred parameter of
-	/// the caller's scope too (`fillUnderConstruction`).
-	static func propertiesDeclared(byFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?) -> Set<Property> {
+	/// What a fill of `hole` that a call passes binds from the site's scope struct, and of that what hides the fill's
+	/// reads from the caller's scope, as the walk of what the call receives reads it.
+	struct FillStructBindings: Sendable {
+		/// The forms of the fields the fill binds from the struct, and the property it builds.
+		let bound: Set<Property>
+		/// `bound` but for the fields of a label a level of an inner seam's enum holds on some route to the place and not
+		/// on another, which the fill reads of the caller's scope on that other route
+		/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`).
+		let hiddenFromCaller: Set<Property>
+	}
+
+	/// What a fill of `hole` binds from the site's scope struct (`FillStructBindings`). A public mock takes no deferred
+	/// parameter, so its fill binds every field. A seam's fill reads a field bound from a deferred parameter of the
+	/// caller's scope, but for a place a seam passes up from a seam it calls, whose deferred fields hold the memo of what
+	/// that call passed, which the fill binds from the struct (`fillUnderConstruction`).
+	static func structBindings(ofFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?) -> FillStructBindings {
 		let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
-		let boundLabels = Set(hole.fields.filter { passedByPublicMockCall || !$0.isDeferredParameter }.map(\.property.label))
-		return fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(propertiesBeingBuilt(byFillOf: hole))
+		let readsDeferredFieldsFromStruct = passedByPublicMockCall || hole.innerSeamType != nil
+		let boundLabels = Set(hole.fields.filter { readsDeferredFieldsFromStruct || !$0.isDeferredParameter }.map(\.property.label))
+		let beingBuilt = propertiesBeingBuilt(byFillOf: hole)
+		return FillStructBindings(
+			bound: fieldForms(of: hole, boundLabels: boundLabels).union(beingBuilt),
+			hiddenFromCaller: fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(beingBuilt),
+		)
 	}
 
 	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels` (see `fieldForms(of:boundLabels:)`).

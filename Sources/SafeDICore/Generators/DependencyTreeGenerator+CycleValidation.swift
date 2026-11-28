@@ -1200,7 +1200,7 @@ extension DependencyTreeGenerator {
 			if scope.publicMockCall != nil || walksSeamCallFills && scope.seamCall != nil {
 				let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 				for case let .fill(hole, fillScope) in scope.holeArguments {
-					fills.append((fillScope, ScopeGenerator.propertiesDeclared(byFillOf: hole, passedByPublicMockCall: scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders)))
+					fills.append((fillScope, ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: scope.publicMockCall != nil, innerScopeReaders: innerScopeReaders).hiddenFromCaller))
 				}
 			}
 			self.fills = fills
