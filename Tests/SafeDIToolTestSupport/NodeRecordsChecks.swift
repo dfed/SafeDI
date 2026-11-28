@@ -301,10 +301,12 @@ private final class LevelFunctionTexts: Sendable {
 		var records = [(root: String, projection: String)]()
 	}
 
-	private let state = Mutex(State())
+	// An `NSLock` rather than a `Mutex`, which needs macOS 15: this target compiles for the package’s `platforms`.
+	private let lock = NSLock()
+	nonisolated(unsafe) private var state = State()
 
 	func add(_ observation: LevelFunctionRecordsObservation) {
-		state.withLock { state in
+		lock.withLock {
 			if let root = observation.root {
 				state.records.append((root, observation.projection))
 			} else {
@@ -314,13 +316,13 @@ private final class LevelFunctionTexts: Sendable {
 	}
 
 	func mismatches() -> [String] {
-		state.withLock { state in
+		lock.withLock {
 			state.records.filter { !state.tree.contains($0.projection) }.map { "Root \($0.root)’s call of a public mock has, from node records, the level functions\n\($0.projection)\nwhich the tree records nowhere" }
 		}
 	}
 
 	var summary: String {
-		state.withLock { state in
+		lock.withLock {
 			"\(state.records.filter { state.tree.contains($0.projection) }.count)/\(state.records.count)"
 		}
 	}
