@@ -1121,32 +1121,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// label that some route of the inner seam's enum holds and another does not: on that other route inline reads the
 			// caller's declaration, as for a label one place of the case carries and another does not.
 			let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
-			// The call holds one place per case of the called seam's place graph, and reads what every route to the case
-			// hands from the graph (`SeamSignature.placesHandedToCallers`), a place the call passes up from the graph of the
-			// seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the place, whose lists are its
-			// first route's only. A call whose graph was not built, or whose run does not hold the graph of a seam on the way
-			// to a place it passes up, reads its places.
-			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: $0.places, calledPlaces: { [placesOfSeamsBeneath = $0.placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places }) }
+			let placesQuery = scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : $0.placesQuery }
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
-				var holdingCases = [SeamSignature.Places.Query.ResolvedCase]()
-				var holdingCasesSeen = Set<HoldingCaseKey>()
-				var readsEveryPlaceFromGraph = placesQuery != nil
-				if let placesQuery, let calledBuilders = scope.calledBuilders {
-					for place in places {
-						guard let holding = calledBuilders.holdingCase(ofSite: place.site, in: placesQuery) else {
-							readsEveryPlaceFromGraph = false
-							break
-						}
-						if holdingCasesSeen.insert(HoldingCaseKey(graph: ObjectIdentifier(holding.query), caseIndex: holding.caseIndex)).inserted {
-							holdingCases.append(holding)
-						}
-					}
-				}
-				var caseFields = if readsEveryPlaceFromGraph, let firstPlace = places.first {
-					ScopeGenerator.caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
-				} else {
-					ScopeGenerator.caseFields(of: places)
-				}
+				var caseFields = ScopeGenerator.caseFields(of: places, calledBuilders: scope.calledBuilders, placesQuery: placesQuery)
 				if let innerScopeReaders {
 					let fieldLabels = Set(caseFields.fields.map(\.property.label))
 					for place in places {

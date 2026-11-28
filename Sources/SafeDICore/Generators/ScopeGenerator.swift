@@ -1776,6 +1776,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// label no level holds on any route keeps its deferred parameter's field, which the fill reads from the caller's
 	/// scope directly. Forms of one label that differ in more than optionality are left to `validateFills`
 	/// (`FillFinding.Kind.fieldFormsDifferBetweenPlaces`), which `irreconcilableFields(of:)` finds.
+	/// What one fill binds for every place of `places`, the places of one case nested by type in builder order, of a call
+	/// whose called seam's graphs `calledBuilders` hold. The call holds one place per case of the called seam's place graph,
+	/// and reads what every route to the case hands from the graph (`SeamSignature.placesHandedToCallers`), a place the call
+	/// passes up from the graph of the seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the
+	/// place, whose lists are its first route's only (`caseFields(ofResolvedCases:hole:)`). A call whose graph was not built,
+	/// whose `placesQuery` is `nil`, or whose run does not hold the graph of a seam on the way to a place it passes up, reads
+	/// its places (`caseFields(of:)`).
+	static func caseFields(of places: [SeamSignature.Hole], calledBuilders: CalledBuilders?, placesQuery: SeamSignature.Places.Query?) -> CaseFields {
+		guard let calledBuilders, let placesQuery, let firstPlace = places.first, let holdingCases = calledBuilders.holdingCases(ofSites: places.map(\.site), in: placesQuery) else {
+			return caseFields(of: places)
+		}
+		return caseFields(ofResolvedCases: holdingCases, hole: firstPlace)
+	}
+
 	static func caseFields(of places: [SeamSignature.Hole]) -> CaseFields {
 		var caseFields = CaseFields()
 		guard let firstPlace = places.first else { return caseFields }

@@ -161,12 +161,32 @@ extension SeamPlacesDrafts {
 		// A fill's entry level, beneath the call level whose edge passes it: the declarations on the paths of the places it
 		// stands for that their structs do not carry, each label once, then the fields it binds from the struct, which are
 		// those no such declaration's label hides, and of a deferred parameter only where the place is passed up.
+		// A fill of a case nested by type stands for every place of the case the call fills, the first such fill of the call:
+		// it binds the fields every route to the case hands (`ScopeGenerator.caseFields(of:calledBuilders:placesQuery:)`), and
+		// the declarations any of the places leaves uncarried. Every other fill stands for its hole alone.
+		var caseHolesByKeyByCall = [VariantID: [String: [SeamSignature.Hole]]]()
+		func standsFor(_ entry: FillEntry) -> (places: [SeamSignature.Hole], fields: [SeamSignature.Hole.Field]) {
+			let hole = entry.hole
+			guard hole.enumPlace != nil else { return ([hole], hole.fields) }
+			let scope = node(of: entry.call.variant).scope
+			let caseHolesByKey = caseHolesByKeyByCall[entry.call.variant] ?? {
+				var caseHolesByKey = [String: [SeamSignature.Hole]]()
+				for case let .fill(fillHole, _, _) in scope.holeArguments where fillHole.enumPlace != nil {
+					caseHolesByKey[ScopeGenerator.fillCaseKey(of: fillHole), default: []].append(fillHole)
+				}
+				caseHolesByKeyByCall[entry.call.variant] = caseHolesByKey
+				return caseHolesByKey
+			}()
+			guard let places = caseHolesByKey[ScopeGenerator.fillCaseKey(of: hole)], places.first?.site == hole.site else { return ([hole], hole.fields) }
+			return (places, ScopeGenerator.caseFields(of: places, calledBuilders: scope.calledBuilders, placesQuery: scope.calledBuilders.flatMap { $0.places.cases.isEmpty ? nil : $0.placesQuery }).fields)
+		}
 		func entryDeclarations(of entry: FillEntry) -> [SeamSignature.Places.Declaration] {
 			let hole = entry.hole
 			let calledType = world.typeTable[Int(entry.fill.calledType)]
+			let (places, fields) = standsFor(entry)
 			var declarations = [SeamSignature.Places.Declaration]()
 			var labels = Set<String>()
-			for uncarried in hole.uncarriedDeclarations where labels.insert(uncarried.property.label).inserted {
+			for uncarried in places.flatMap(\.uncarriedDeclarations) where labels.insert(uncarried.property.label).inserted {
 				declarations.append(SeamSignature.Places.Declaration(
 					field: SeamSignature.Hole.Field(property: uncarried.property, access: access?.seamTypeAccess ?? .internal, declaringType: uncarried.declaringType, declarationLocation: uncarried.declarationLocation, parameterTakingType: uncarried.parameterTakingType),
 					isBoundBeforeNextProperty: false,
@@ -183,10 +203,12 @@ extension SeamPlacesDrafts {
 					buildability: nil,
 				))
 			}
-			let fieldLabels = Set(hole.fields.map(\.property.label))
-			let uncarriedOnSomeRoute = Set(hole.uncarriedDeclarations.map(\.property.label).filter { !fieldLabels.contains($0) })
+			let uncarriedOnSomeRoute = Set(places.flatMap { place in
+				let fieldLabels = Set(place.fields.map(\.property.label))
+				return place.uncarriedDeclarations.map(\.property.label).filter { !fieldLabels.contains($0) }
+			})
 			let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && world.constructions[Int(world.declaration(of: entry.call.variant))] != .publicMockCall
-			for field in hole.fields where (!field.isDeferredParameter || readsDeferredFieldsFromStruct) && !uncarriedOnSomeRoute.contains(field.property.label) {
+			for field in fields where (!field.isDeferredParameter || readsDeferredFieldsFromStruct) && !uncarriedOnSomeRoute.contains(field.property.label) {
 				let fieldAccess = access?.access(of: field.property, declaredBy: field.declaringType)
 				declarations.append(SeamSignature.Places.Declaration(
 					field: SeamSignature.Hole.Field(
