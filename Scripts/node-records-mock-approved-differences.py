@@ -1221,7 +1221,64 @@ def e19_reads(text,walk=None):
         text=re.sub(r'(?<![\w.])'+re.escape(stand_in)+r'\.(\w+)',read,text)
         if re.search(r'(?<![\w.])'+re.escape(stand_in)+r'(?!\w)',text): raise SystemExit('the loop stand-in is left in the text')
     return text
-REWRITES=[('20',e20),('19',e19),('16',e16_init),('1+2',unhoist),('19 reads',e19_reads),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21),('18',e18),('26',e26)]
+def e28(text,walk=None):
+    """entry 28 (lead, 11-28 08:00Z): one builder function for several properties of one type. The records declare
+    the function once, before the first property that reads it and under that property's name, and the later
+    properties of the level call it; the walk declares a copy before each, under that property's name. A copy
+    of the function, renamed, is written before each later property that calls it, only where the walk declares
+    a function of that property's name at that depth, only where the first statement that calls the function
+    is the one it is named for, and only where no declaration of the level between the function and the copy
+    is a name the function's text holds (the copy would read that declaration where the one function reads
+    what was declared above). The copies then stand in the byte comparison, so a walk whose copies differ by
+    more than their name stays different."""
+    if walk is None: return text
+    declared_by_walk=set()
+    for line in walk.split('\n'):
+        f=FUNC.match(line)
+        if f: declared_by_walk.add((len(f.group(1)),f.group(3)))
+    lines=text.split('\n');i=0
+    declared_by_records=set((len(g.group(1)),g.group(3)) for g in (FUNC.match(x) for x in lines) if g)
+    # a copy is written only under a name the walk declares at a depth where the records do not
+    wanted_depths=set(depth for depth,_ in declared_by_walk-declared_by_records)
+    if not wanted_depths: return text
+    while i<len(lines):
+        f=FUNC.match(lines[i])
+        if not f or len(f.group(1)) not in wanted_depths: i+=1; continue
+        indent=len(f.group(1));name=f.group(3);end=block_end(lines,i)
+        block=lines[i:end+1]
+        calls=re.compile(r'(?<![\w.`])'+re.escape(name)+r'(?![\w`])')
+        here=set(g.group(3) for g in (FUNC.match(x) for x in lines) if g and len(g.group(1))==indent)
+        between=[];first=True;j=end+1
+        while j<len(lines):
+            line=lines[j]
+            if line.strip() and len(line)-len(line.lstrip())<indent: break
+            if len(line)-len(line.lstrip())!=indent or line.strip().startswith('}'): j+=1; continue
+            k=j+1
+            while k<len(lines) and (not lines[k].strip() or len(lines[k])-len(lines[k].lstrip())>indent or (len(lines[k])-len(lines[k].lstrip())==indent and lines[k].strip().startswith('}'))): k+=1
+            statement=lines[j:k]
+            bound=re.match(r'\s*let `?(\w+)`?(?::| =)',line)
+            other=FUNC.match(line)
+            if bound and any(calls.search(x) for x in statement):
+                copy_name='__safeDI_'+bound.group(1)
+                if first:
+                    first=False
+                    # the kept name is the first property's; a function named for another is not this entry's
+                    if copy_name!=name: break
+                elif copy_name!=name and (indent,copy_name) in declared_by_walk and copy_name not in here:
+                    if any(re.search(r'(?<![\w.`])'+re.escape(n)+r'(?![\w`])',x) for n in between for x in block):
+                        raise SystemExit('a declaration between a shared function and a property that calls it is a name the function holds')
+                    copy=[calls.sub(copy_name,x) for x in block]
+                    statement=[calls.sub(copy_name,x) for x in statement]
+                    lines[j:k]=copy+statement
+                    here.add(copy_name)
+                    k=j+len(copy)+len(statement)
+                    between.append(copy_name)
+            if bound: between.append(bound.group(1))
+            if other: between.append(other.group(3))
+            j=k
+        i+=1
+    return '\n'.join(lines)
+REWRITES=[('20',e20),('19',e19),('16',e16_init),('1+2',unhoist),('19 reads',e19_reads),('28',e28),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21),('18',e18),('26',e26)]
 
 
 def rewritten(text, walk):
@@ -1269,6 +1326,9 @@ AWAITING_CELLS = {
     # in a mock; the test is on claude/mock-cycle-twin-parameters a2858a1a4 (merge request 1128-0436)
     # in a mock (lead, 11-28 08:00Z): counts once the kinds integrator names the value cell
     '24': [],
+    # one builder function for several properties of one type (lead, 11-28 08:00Z): the cell (20 properties
+    # of one type with shuffled labels, compiled and value-compared, plus seed 1080) is not named yet
+    '28': [],
     '18': ['SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenEveryCallPassesNilForLabelBuiltAfterTheCycle'],
     '26': ['SafeDIToolMockKindsLazyCycleValueTests/mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel'],
     '21 per function': [

@@ -1,0 +1,55 @@
+extension A1080_Root0 {
+    public convenience init() {
+        func __safeDI_t2() -> Z1080_T0 {
+            func __safeDI_lazyT2() -> A1080_T2 {
+                func __safeDI_anyT1Builder(anyT1Builder: ErasedInstantiator<(), A1080_AnyT2>) -> Z1080_T1 {
+                    Z1080_T1(anyT1Builder: anyT1Builder)
+                }
+                let anyT1Builder = ErasedInstantiator<ErasedInstantiator<(), A1080_AnyT2>, A1080_AnyT1> {
+                    A1080_AnyT1(__safeDI_anyT1Builder(anyT1Builder: $0))
+                }
+                return A1080_T2(anyT1Builder: anyT1Builder)
+            }
+            let lazyT2 = LazilyInstantiated<A1080_T2>(__safeDI_lazyT2)
+            return Z1080_T0(lazyT2: lazyT2)
+        }
+        let t2: Z1080_T0 = __safeDI_t2()
+        func __safeDI_anyT0Builder() -> Z1080_T0 {
+            func __safeDI_lazyT2() -> A1080_T2 {
+                func __safeDI_anyT1Builder(anyT1Builder: ErasedInstantiator<(), A1080_AnyT2>) -> Z1080_T1 {
+                    Z1080_T1(anyT1Builder: anyT1Builder)
+                }
+                let anyT1Builder = ErasedInstantiator<ErasedInstantiator<(), A1080_AnyT2>, A1080_AnyT1> {
+                    A1080_AnyT1(__safeDI_anyT1Builder(anyT1Builder: $0))
+                }
+                return A1080_T2(anyT1Builder: anyT1Builder)
+            }
+            let lazyT2 = LazilyInstantiated<A1080_T2>(__safeDI_lazyT2)
+            return Z1080_T0(lazyT2: lazyT2)
+        }
+        let anyT0Builder = ErasedInstantiator<(), Z1080_AnyT0> {
+            Z1080_AnyT0(__safeDI_anyT0Builder())
+        }
+        func __safeDI_t0() -> Z1080_T0 {
+            func __safeDI_lazyT2() -> A1080_T2 {
+                func __safeDI_anyT1Builder(anyT1Builder: ErasedInstantiator<(), A1080_AnyT2>) -> Z1080_T1 {
+                    Z1080_T1(anyT1Builder: anyT1Builder)
+                }
+                let anyT1Builder = ErasedInstantiator<ErasedInstantiator<(), A1080_AnyT2>, A1080_AnyT1> {
+                    A1080_AnyT1(__safeDI_anyT1Builder(anyT1Builder: $0))
+                }
+                return A1080_T2(anyT1Builder: anyT1Builder)
+            }
+            let lazyT2 = LazilyInstantiated<A1080_T2>(__safeDI_lazyT2)
+            return Z1080_T0(lazyT2: lazyT2)
+        }
+        let t0: Z1080_T0 = __safeDI_t0()
+        func __safeDI_t7Builder() -> A1080_T7 {
+            let t7Builder = Instantiator<A1080_T7>(__safeDI_t7Builder)
+            let t8 = A1080_T8(t7Builder: t7Builder)
+            return A1080_T7(t8: t8)
+        }
+        let t7Builder = Instantiator<A1080_T7>(__safeDI_t7Builder)
+        self.init(t2: t2, anyT0Builder: anyT0Builder, t0: t0, t7Builder: t7Builder)
+    }
+}

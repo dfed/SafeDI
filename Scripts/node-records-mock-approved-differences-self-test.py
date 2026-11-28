@@ -179,6 +179,14 @@ CASES = [
      once('@Sendable nonisolated func __safeDI_bBuilder(', '@Sendable func __safeDI_bBuilder(')),
     ('24', 'the moved function is isolated to the main actor',
      once('@Sendable nonisolated func __safeDI_bBuilder(', '@MainActor func __safeDI_bBuilder(')),
+    ('28', 'the one function is named for a later property of the level',
+     lambda text: text.replace('__safeDI_t2()', '__safeDI_t0()')),
+    ('28', 'a copy of the walk differs from the function by more than its name',
+     once('            return Z1080_T0(lazyT2: lazyT2)\n        }\n        let t0', '            return Z1080_T0(lazyT2: lazyT2 )\n        }\n        let t0'), 'walk'),
+    ('28', 'a declaration between the function and a later property is a name the function reads',
+     once('        let t2: Z1080_T0 = __safeDI_t2()\n', '        let t2: Z1080_T0 = __safeDI_t2()\n        let lazyT2 = 0\n'), 'both'),
+    ('28', 'a later property calls another function',
+     once('        let t0: Z1080_T0 = __safeDI_t2()', '        let t0: Z1080_T0 = __safeDI_t7Builder()')),
 ]
 
 
@@ -212,9 +220,9 @@ for entry in sorted(set(case[0] for case in CASES)):
         failures += 1
     for case in [case for case in CASES if case[0] == entry]:
         name, edit = case[1], case[2]
-        if len(case) == 4:  # the edit is of the walk's text
+        if len(case) == 4:  # the edit is of the walk's text, or ('both') of both texts
             other_walk = edited_walk(walk_path, edit)
-            still_equal = equal_after_rewrite(records, other_walk)
+            still_equal = equal_after_rewrite(edit(records) if case[3] == 'both' else records, other_walk)
             os.unlink(other_walk)
         else:
             still_equal = equal_after_rewrite(edit(records), walk_path)
