@@ -388,8 +388,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 	mutating func generate_unfoldsFillEdgesOfACall_whenItsFirstPlaceIsBeneathAFillOfItsOwnHole() async throws {
 		// `LiveGadget`'s `homeBuilder` is first drawn beneath the fill of `Home`'s `gadget`, where it passes that fill on and
 		// draws no edge, and then beneath the fill of `Office`'s, where it fills `gadget` itself: the declaration's column is
-		// the second, so the unfolded DOT graph draws the fill edge where the tree does. `Home`'s `lamp`, which is no fill,
-		// draws in both columns.
+		// the second, so the unfolded DOT graph draws the fill edge where the tree does. `Home`'s `lamp`, which is no hole,
+		// is drawn in neither: a graph draws only the holes of a seam it calls, whose own children its module's graph draws.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol Gadget {}",
@@ -416,8 +416,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		let fillEdge = "    \"homeBuilder: Instantiator<Home>\" -- \"gadget: any Gadget\""
 		#expect(report.dot.drawnByTree.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.drawnByTree)")
 		#expect(report.dot.unfolded.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.unfolded)")
-		let lampEdge = "    \"homeBuilder: Instantiator<Home>\" -- \"lamp: Lamp\""
-		#expect(report.dot.unfolded.split(separator: "\n").contains { $0 == lampEdge }, "\(report.dot.unfolded)")
+		#expect(!report.dot.drawnByTree.contains("lamp: Lamp"), "\(report.dot.drawnByTree)")
+		#expect(report.dot.unfolded == report.dot.drawnByTree)
 	}
 
 	@Test
