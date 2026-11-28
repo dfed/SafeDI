@@ -331,11 +331,264 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 		#expect(report.worldValue(of: "uncoveredDependencies") == "engine: Engine instantiates Engine hidden: false sendable: false creatingTypes: [Root, Child]")
 	}
 
+	// MARK: Answered on a cycle
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesNames_whenEveryTypeOfRingOfSixIsMocked() async throws {
+		// Each `Ring<i>` builds the next through an `Instantiator`. `Ring3` instantiates an `Engine` no declaration
+		// fulfills, and `Ring1` declares an `engine` of its own, which hides the parameter on the paths through it.
+		var fixture = [String]()
+		for index in 0..<6 {
+			let next = (index + 1) % 6
+			var properties = ["@Instantiated let ring\(next)Builder: Instantiator<Ring\(next)>"]
+			var parameters = ["ring\(next)Builder: Instantiator<Ring\(next)>"]
+			if index == 1 {
+				properties.append("@Instantiated let engine: Toolbox")
+				parameters.append("engine: Toolbox")
+			}
+			if index == 3 {
+				properties.append("@Instantiated let engine: Engine")
+				parameters.append("engine: Engine")
+			}
+			let initializerParameters = parameters.joined(separator: ", ")
+			let propertyLines = properties.joined(separator: "\n    ")
+			fixture.append("""
+			@Instantiable(generateMock: true)
+			public final class Ring\(index): Instantiable {
+			    public init(\(initializerParameters)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    \(propertyLines)
+			}
+			""")
+		}
+		fixture.append("""
+		public final class Engine {}
+
+		@Instantiable
+		public final class Toolbox: Instantiable {
+		    public init() {}
+		}
+		""")
+		let reports = try await observingReports { filesToDelete in
+			_ = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.root).sorted() == (0..<6).map { "Ring\($0)" })
+		#expect(reports.filter { $0.refusal != nil }.map(\.root) == [])
+		#expect(reports.filter { !$0.differences.isEmpty }.map(\.root) == [])
+		let uncoveredByRoot = Dictionary(grouping: reports, by: \.root).mapValues { $0.map { $0.worldValue(of: "uncoveredDependencies") } }
+		#expect(uncoveredByRoot["Ring0"] == ["engine: Engine instantiates Engine hidden: true sendable: false creatingTypes: [Ring3]"])
+		#expect(uncoveredByRoot["Ring2"] == ["engine: Engine instantiates Engine hidden: false sendable: false creatingTypes: [Ring3]"])
+		#expect(uncoveredByRoot["Ring3"] == ["engine: Engine instantiates Engine hidden: true sendable: false creatingTypes: [Ring3]"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesNames_whenRingClosesThroughLazilyInstantiatedEdge() async throws {
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(bBuilder: Instantiator<B>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(c: LazilyInstantiated<C>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let c: LazilyInstantiated<C>
+			}
+			""",
+			"""
+			public final class Engine {}
+
+			@Instantiable
+			public final class C: Instantiable {
+			    public init(bBuilder: Instantiator<B>, engine: Engine) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let engine: Engine
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences == [])
+		#expect(report.worldValue(of: "uncoveredDependencies") == "engine: Engine instantiates Engine hidden: false sendable: false creatingTypes: [C]")
+		#expect(report.worldValue(of: "builderFunctionNames") == "__safeDI_bBuilder, __safeDI_c")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesNames_whenLabelIsDeclaredOnLoopAndNotOnShortPathToCreator() async throws {
+		// `A` builds `B`, which builds `A` again, and `N`, which instantiates an `Engine` nothing fulfills. `B` declares an
+		// `engine` of its own, but `N` is built only beneath `A`, on no path through `B`.
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, n: N) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let n: N
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(aBuilder: Instantiator<A>, engine: Toolbox) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			    @Instantiated let engine: Toolbox
+			}
+			""",
+			"""
+			public final class Engine {}
+
+			@Instantiable
+			public final class N: Instantiable {
+			    public init(engine: Engine) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let engine: Engine
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Toolbox: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences == [])
+		#expect(report.worldValue(of: "uncoveredDependencies") == "engine: Engine instantiates Engine hidden: false sendable: false creatingTypes: [N]")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesNames_whenLabelDeclaredOnCycleHidesCreatorOnPathTheWalkDoesNotTakeFirst() async throws {
+		// `One` and `Two` build each other, and `Two` instantiates an `Engine` nothing fulfills, which `One` declares. The
+		// walk first reaches `One` through `Two`, but the root also builds `One` through `Three`, beneath which `One`'s
+		// builder function declares `engine` around `Two`.
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(two: Instantiator<Two>, three: Instantiator<Three>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let two: Instantiator<Two>
+			    @Instantiated let three: Instantiator<Three>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class One: Instantiable {
+			    public init(two: Instantiator<Two>, engine: Toolbox) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let two: Instantiator<Two>
+			    @Instantiated let engine: Toolbox
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Three: Instantiable {
+			    public init(one: Instantiator<One>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let one: Instantiator<One>
+			}
+			""",
+			"""
+			public final class Engine {}
+
+			@Instantiable
+			public final class Two: Instantiable {
+			    public init(one: Instantiator<One>, engine: Engine) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let one: Instantiator<One>
+			    @Instantiated let engine: Engine
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Toolbox: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences == [])
+		#expect(report.worldValue(of: "uncoveredDependencies") == "engine: Engine instantiates Engine hidden: true sendable: false creatingTypes: [Two]")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesNames_whenEveryTypeOfRingOfSixtyIsMocked() async throws {
+		// Every seventh type declares an `engine` of its own, and every eleventh instantiates one nothing fulfills.
+		let count = 60
+		let fixture = Self.ring(count: count, declaringEngineEvery: 7, instantiatingUnfulfilledEngineEvery: 11)
+		let reports = try await observingReports { filesToDelete in
+			_ = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.root).sorted() == (0..<count).map { "Orbit\($0)" }.sorted())
+		#expect(reports.filter { $0.refusal != nil }.map(\.root) == [])
+		#expect(reports.filter { !$0.differences.isEmpty }.map(\.root) == [])
+		#expect(reports.contains { $0.worldValue(of: "uncoveredDependencies")?.contains("hidden: true") == true })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_visitsDeclarationsLinearlyInRingSize_whenEveryTypeOfRingIsMocked() async throws {
+		for count in [8, 16, 32] {
+			let fixture = Self.ring(count: count, declaringEngineEvery: nil, instantiatingUnfulfilledEngineEvery: nil)
+			let reports = try await observingReports { filesToDelete in
+				_ = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+			#expect(reports.filter { $0.refusal != nil || !$0.differences.isEmpty }.map(\.root) == [])
+			// Each root's world holds the mocked type and a declaration of each type of the ring, which the reach visits
+			// once each and the walk in generation order and the walk in declaration order once each but the root.
+			#expect(reports.map(\.declarationVisits) == Array(repeating: 3 * count + 1, count: count))
+		}
+	}
+
 	// MARK: Refused
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func treeNames_refuses_whenTreeClosesLazyCycle() async throws {
+	mutating func treeNames_refuses_whenLazyWrapperClosesCycleOnValueOfItsLabelAndType() async throws {
 		let report = try await report(of: "Root", in: [
 			"""
 			@Instantiable(generateMock: true)
@@ -360,6 +613,45 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 			"""
 			@Instantiable
 			public final class B: Instantiable {
+			    public init(a: LazilyInstantiated<A>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let a: LazilyInstantiated<A>
+			}
+			""",
+		])
+		#expect(report.refusal == "twin")
+		#expect(report.fields == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_refuses_whenSendableInstantiatorIsOnCycle() async throws {
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: SendableInstantiator<B>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let bBuilder: SendableInstantiator<B>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class B: Instantiable {
 			    public init(aBuilder: Instantiator<A>) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
@@ -368,8 +660,71 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(report.refusal == "cycle")
-		#expect(report.fields == [])
+		#expect(report.refusal == "sendableCycle")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_refuses_whenLabelDeclaredOnCycleReachesCreatorOnlyThroughDeclarationOnItsPath() async throws {
+		// `Two` declares an `engine` and reaches `One`, which instantiates one nothing fulfills, only through `Three`;
+		// the root reaches `Two` only through `One` or `Three`, so no path through `Two` to `One` repeats nothing, which
+		// the world's bounds cannot tell.
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(one: Instantiator<One>, three: Instantiator<Three>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let one: Instantiator<One>
+			    @Instantiated let three: Instantiator<Three>
+			}
+			""",
+			"""
+			public final class Engine {}
+
+			@Instantiable
+			public final class One: Instantiable {
+			    public init(two: Instantiator<Two>, engine: Engine) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let two: Instantiator<Two>
+			    @Instantiated let engine: Engine
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Three: Instantiable {
+			    public init(one: Instantiator<One>, two: Instantiator<Two>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let one: Instantiator<One>
+			    @Instantiated let two: Instantiator<Two>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Two: Instantiable {
+			    public init(two: Instantiator<Two>, three: Instantiator<Three>, engine: Toolbox) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let two: Instantiator<Two>
+			    @Instantiated let three: Instantiator<Three>
+			    @Instantiated let engine: Toolbox
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Toolbox: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+		#expect(report.refusal == "hiddenOnCycle")
 	}
 
 	@Test
@@ -440,6 +795,45 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A ring of `count` types, `Orbit<i>`, each mocked and building the next through an `Instantiator`; every
+	/// `declaringEngineEvery`th type declares an `engine` of its own, and every `instantiatingUnfulfilledEngineEvery`th
+	/// type instantiates an `Engine` nothing fulfills.
+	private static func ring(count: Int, declaringEngineEvery: Int?, instantiatingUnfulfilledEngineEvery: Int?) -> [String] {
+		var fixture = ["""
+		public final class Engine {}
+
+		@Instantiable
+		public final class Toolbox: Instantiable {
+		    public init() {}
+		}
+		"""]
+		for index in 0..<count {
+			let next = (index + 1) % count
+			var properties = ["@Instantiated let orbit\(next)Builder: Instantiator<Orbit\(next)>"]
+			var parameters = ["orbit\(next)Builder: Instantiator<Orbit\(next)>"]
+			if let instantiatingUnfulfilledEngineEvery, index % instantiatingUnfulfilledEngineEvery == 0 {
+				properties.append("@Instantiated let engine: Engine")
+				parameters.append("engine: Engine")
+			} else if let declaringEngineEvery, index % declaringEngineEvery == 0 {
+				properties.append("@Instantiated let engine: Toolbox")
+				parameters.append("engine: Toolbox")
+			}
+			let initializerParameters = parameters.joined(separator: ", ")
+			let propertyLines = properties.joined(separator: "\n    ")
+			fixture.append("""
+			@Instantiable(generateMock: true)
+			public final class Orbit\(index): Instantiable {
+			    public init(\(initializerParameters)) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    \(propertyLines)
+			}
+			""")
+		}
+		return fixture
+	}
 
 	/// The report of the mock root `root` of the module of `fixture`, which must be reported once.
 	private mutating func report(of root: String, in fixture: [String]) async throws -> MockTreeNamesReport {

@@ -24,14 +24,36 @@
 /// (`MockTreeNamesObservation`); `mock()` still reads the tree's.
 ///
 /// The world's sibling order (`TypeFactsEdge.buildPosition`) is the order the tree generates each declaration's children
-/// in. Where the world holds no cycle, the tree is the world unfolded along its built edges, so:
-/// - "first met in a walk of the tree in generation order" is the order a depth-first walk in generation order first
-///   visits each declaration, since the walk of a tree visits a declaration's whole subtree on its first visit;
-/// - a fact that holds "on some path" (a dependency hidden by a builder function around its creator, or created inside a
-///   `@Sendable` builder function) is a fold over each declaration's parents in topological order, or a walk of
-///   (declaration, inside-`@Sendable`) states;
-/// - the types that create a dependency, in the order of their creators' paths sorted by declaration index, then
-///   generation index, are the order a depth-first walk in that order first visits each creator.
+/// in. The tree is the world unfolded along its built edges from the root, each path cut where it would repeat a
+/// declaration on it: a node whose declaration is an ancestor's closes a cycle (`isPropertyCycle`), refers to that
+/// ancestor's builder function, and builds nothing. So every path of the tree is a path of the world that repeats no
+/// declaration, and every such path is a path of the tree. A declaration whose cycle identity another shares (`twins`)
+/// is refused: the tree closes on it where the world holds no edge back. Field by field:
+/// - Which declarations the tree builds: those the root reaches, since the shortest path to one repeats nothing.
+///   `builderFunctionNames` and `namesDeclaredInBuilderFunctions` are what the built declarations and the closers
+///   declare, and a closer repeats a built declaration, so each is one visit per reached declaration.
+/// - "First met in a walk of the tree in generation order" (the uncovered dependencies, and the `nil`-bound ones outside
+///   every `@Sendable` function) is the order a depth-first walk in generation order with a visited set first visits each
+///   declaration: the tree's walk meets a declaration again either as a closer, which the walk skips as visited, or
+///   beneath a declaration already visited, whose subtree's first meetings are behind it.
+/// - Inside a `@Sendable` builder function: a walk of (declaration, inside-`@Sendable`) states gives the states some
+///   path of the world reaches. Where no `Sendable` wrapper is on a cycle, a path that reaches a state reaches it
+///   without repeating a declaration (cutting a repeated stretch removes no `Sendable` edge, which would be on a cycle),
+///   and a builder function is `@Sendable` exactly where its wrapper is (a closer can make one `@Sendable` only from
+///   inside a `@Sendable` function on its cycle). A `Sendable` wrapper on a cycle is refused (`sendableCycle`).
+/// - Hidden by a builder function around its creator: whether a path from the root through a declaration of the label
+///   to the creator repeats nothing. Through a declaration on no cycle every path does, so a fold over the components
+///   in topological order hands each such declaration's labels to every declaration it reaches. Through one on a
+///   cycle the world bounds it: from above, the declaration reaches the creator without passing a declaration that
+///   dominates it (every path from the root to it passes those); from below, a path shown to repeat nothing (the walk's
+///   first path to the declaration, then any path on from it that avoids that path; or the path on to the creator, and a
+///   path from the root to the declaration that avoids it). The bounds differing is refused (`hiddenOnCycle`).
+/// - The types that create a dependency, in the order of their creators' paths sorted by declaration index, then
+///   generation index, are the order a depth-first walk in that order with a visited set first visits each creator, by
+///   the argument for first meetings.
+///
+/// Each walk visits a declaration a bounded number of times, but the bounds for a declaration on a cycle, which walk
+/// the declarations once for each declaration of an uncovered label on a cycle and each creator it reaches.
 ///
 /// It refuses a root it cannot answer exactly (`Refusal`).
 enum MockTreeNamesFromWorld {
@@ -43,11 +65,16 @@ enum MockTreeNamesFromWorld {
 		/// A call of another module's public mock or of a seam, a fill it passes, or a hole's site: the places and passed-up
 		/// builders the tree reads from its generator, which the world does not hold.
 		case callOrPlace
-		/// A declaration on a cycle, or one whose cycle identity another declaration of the world shares (a value and a
-		/// lazy wrapper of one label and type): the tree closes a cycle at a path-dependent place, which a world holds no
-		/// edge for where the two declarations are built from different records, and a closer can make the builder
-		/// functions around it `@Sendable`.
-		case cycle
+		/// A declaration whose cycle identity another declaration of the world shares (a value and a lazy wrapper of one
+		/// label and type): the tree closes a cycle on the other declaration, which the world holds no edge to.
+		case twin
+		/// A `Sendable` wrapper on a cycle: a cycle-closing node beneath it makes the builder functions it refers to
+		/// `@Sendable` on some paths and not on others (`ScopeGenerator.buildsInSendableFunction`).
+		case sendableCycle
+		/// An uncovered dependency that a declaration on a cycle may hide: whether a path of the tree runs from the root
+		/// through that declaration to the dependency's creator without repeating a declaration, which the world bounds
+		/// from below and above and the two bounds differ.
+		case hiddenOnCycle
 	}
 
 	/// The world's answer for one mock root: its tree's names, or why it refuses.
@@ -69,7 +96,9 @@ enum MockTreeNamesFromWorld {
 
 	/// The names of `instantiable`'s mock's tree, read from the world whose root is `worldRoot`
 	/// (`MockRootPlan.freezingRoot()`).
-	static func treeNames(of instantiable: Instantiable, worldRoot: ConstructionScope) -> Answer {
+	/// - Parameter declarationVisits: Incremented once for each declaration a walk visits, which a test reads to show the
+	///   work grows with the world rather than with the tree's paths.
+	static func treeNames(of instantiable: Instantiable, worldRoot: ConstructionScope, declarationVisits: inout Int) -> Answer {
 		guard instantiable.generateMock != .public else { return .refused(.publicMockRoot) }
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true)
 		let declarationCount = world.declarationCount
@@ -118,6 +147,7 @@ enum MockTreeNamesFromWorld {
 		var pending: [DeclarationID] = [0]
 		isReached[0] = true
 		while let declaration = pending.popLast() {
+			declarationVisits += 1
 			reached.append(declaration)
 			for edge in world.edgeFacts(from: declaration) {
 				guard !edge.isFill, world.kind(of: edge.child) != .hole, !isCall(world.construction(of: edge.child)) else { return .refused(.callOrPlace) }
@@ -125,8 +155,7 @@ enum MockTreeNamesFromWorld {
 			let declarationChildren = children(of: declaration, declaredBy: dependencies(of: declaration))
 			childrenByDeclaration[Int(declaration)] = declarationChildren
 			for child in declarationChildren.built where !isReached[Int(child.declaration)] {
-				// A twin of another record closes a cycle the world does not hold; one of the same record is on a cycle.
-				guard !world.isOnCycle(child.declaration), world.twins[Int(child.declaration)] < 0 else { return .refused(.cycle) }
+				guard world.twins[Int(child.declaration)] < 0 else { return .refused(.twin) }
 				isReached[Int(child.declaration)] = true
 				pending.append(child.declaration)
 			}
@@ -138,6 +167,14 @@ enum MockTreeNamesFromWorld {
 		func uncoveredDependencies(of declaration: DeclarationID) -> [Dependency] {
 			let labels = childrenOf(declaration).labels
 			return dependencies(of: declaration).filter { $0.source.isInstantiated && !labels.contains($0.property.label) }
+		}
+
+		// The built edges alone, whose components are the tree's cycles; a node of it is named by its position.
+		let built = OrderedGraph<DeclarationID>(root: 0) { childrenOf($0).built.map(\.declaration) }
+		for node in built.nodes.indices {
+			for (target, child) in zip(built.edges(from: node), childrenOf(built.nodes[node]).built) where child.property.propertyType.isSendable {
+				guard built.componentByNode[Int(target)] != built.componentByNode[node] else { return .refused(.sendableCycle) }
+			}
 		}
 
 		// The mocked type's own, in its declaration order, which its root's children and their instances cover.
@@ -180,6 +217,7 @@ enum MockTreeNamesFromWorld {
 					unavailableProperties.append(property)
 				}
 			}
+			declarationVisits += 1
 			if let property = world.property(of: visit.declaration) {
 				builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
@@ -200,9 +238,8 @@ enum MockTreeNamesFromWorld {
 			})
 		}
 
-		// Whether a builder function around a creator declares the dependency's label on some path: a fold over the
-		// creators' ancestors in topological order, of the labels each type declares that are no dependency it leaves
-		// uncovered. The root's level declares in no builder function. Only the labels of uncovered dependencies are kept.
+		// Whether a builder function around a creator declares the dependency's label on some path that repeats no
+		// declaration. The root's level declares in no builder function. Only the labels of uncovered dependencies are kept.
 		var uncoveredLabels = Set<String>()
 		for declaration in reached where declaration != 0 {
 			for dependency in uncoveredDependencies(of: declaration) {
@@ -211,19 +248,11 @@ enum MockTreeNamesFromWorld {
 		}
 		var hiddenProperties = Set<Property>()
 		if !uncoveredLabels.isEmpty {
-			var declaredAround = [Set<String>](repeating: [], count: declarationCount)
-			for declaration in topologicalOrder(from: 0, childrenOf: { childrenOf($0).built.map(\.declaration) }, count: declarationCount) where declaration != 0 {
-				let uncovered = Set(uncoveredDependencies(of: declaration).map(\.property.label))
-				for dependency in uncoveredDependencies(of: declaration) where declaredAround[Int(declaration)].contains(dependency.property.label) {
-					hiddenProperties.insert(dependency.property)
-				}
-				var handedDown = declaredAround[Int(declaration)]
-				for dependency in dependencies(of: declaration) where uncoveredLabels.contains(dependency.property.label) && !uncovered.contains(dependency.property.label) {
-					handedDown.insert(dependency.property.label)
-				}
-				for child in childrenOf(declaration).built {
-					declaredAround[Int(child.declaration)].formUnion(handedDown)
-				}
+			switch hidden(in: built, uncoveredLabels: uncoveredLabels, dependenciesOf: dependencies(of:), uncoveredDependenciesOf: uncoveredDependencies(of:), declarationVisits: &declarationVisits) {
+			case let .some(hidden):
+				hiddenProperties = hidden
+			case .none:
+				return .refused(.hiddenOnCycle)
 			}
 		}
 
@@ -241,6 +270,7 @@ enum MockTreeNamesFromWorld {
 		while let declaration = creators.popLast() {
 			guard !visitedInDeclarationOrder[Int(declaration)] else { continue }
 			visitedInDeclarationOrder[Int(declaration)] = true
+			declarationVisits += 1
 			let type = world.scope(of: declaration).instantiable.concreteInstantiable
 			for dependency in uncoveredDependencies(of: declaration) where !(creatingTypesByProperty[dependency.property]?.contains(type) ?? false) {
 				creatingTypesByProperty[dependency.property, default: []].append(type)
@@ -270,27 +300,100 @@ enum MockTreeNamesFromWorld {
 		return .names(ScopeGenerator.TreeNames(names: names, mockedTypeUncoveredProperties: Set(mockedTypeUncoveredDependencies.map(\.property))))
 	}
 
-	/// The declarations `root` reaches through `childrenOf`, each before every declaration it reaches: the reverse of a
-	/// depth-first walk's finishing order, on an explicit stack. The graph it walks holds no cycle.
-	private static func topologicalOrder(from root: DeclarationID, childrenOf: (DeclarationID) -> [DeclarationID], count: Int) -> [DeclarationID] {
-		var finished = [DeclarationID]()
-		var isStarted = [Bool](repeating: false, count: count)
-		var frames = [(declaration: root, children: childrenOf(root), next: 0)]
-		isStarted[Int(root)] = true
-		while let frame = frames.last {
-			if frame.next < frame.children.count {
-				frames[frames.count - 1].next += 1
-				let child = frame.children[frame.next]
-				if !isStarted[Int(child)] {
-					isStarted[Int(child)] = true
-					frames.append((declaration: child, children: childrenOf(child), next: 0))
+	/// The uncovered dependencies a builder function around their creators hides, over `built`, the world's built edges:
+	/// exact where the labels are declared on no cycle, and `nil` where a declaration on a cycle hides one on some
+	/// bound of the paths that repeat no declaration and not on the other.
+	private static func hidden(
+		in built: OrderedGraph<DeclarationID>,
+		uncoveredLabels: Set<String>,
+		dependenciesOf: (DeclarationID) -> [Dependency],
+		uncoveredDependenciesOf: (DeclarationID) -> [Dependency],
+		declarationVisits: inout Int,
+	) -> Set<Property>? {
+		let nodeCount = built.nodes.count
+		/// The labels of uncovered dependencies the node's type declares, which hide a parameter beneath it.
+		func declaredLabels(of node: Int) -> Set<String> {
+			let uncovered = Set(uncoveredDependenciesOf(built.nodes[node]).map(\.property.label))
+			return Set(dependenciesOf(built.nodes[node]).lazy.map(\.property.label).filter { uncoveredLabels.contains($0) && !uncovered.contains($0) })
+		}
+		var hidden = Set<Property>()
+
+		// The labels declared on no cycle, folded over the components, each before every component it reaches: a
+		// component's number is lower than that of every component that reaches it.
+		var membersByComponent = [[Int]](repeating: [], count: built.componentCount)
+		for node in 0..<nodeCount {
+			membersByComponent[Int(built.componentByNode[node])].append(node)
+		}
+		var declaredAroundByComponent = [Set<String>](repeating: [], count: built.componentCount)
+		for component in membersByComponent.indices.reversed() {
+			for node in membersByComponent[component] {
+				declarationVisits += 1
+				for dependency in uncoveredDependenciesOf(built.nodes[node]) where declaredAroundByComponent[component].contains(dependency.property.label) {
+					hidden.insert(dependency.property)
 				}
-			} else {
-				finished.append(frame.declaration)
-				frames.removeLast()
+				var handedDown = declaredAroundByComponent[component]
+				if node != 0, !built.isOnCycle(node) {
+					handedDown.formUnion(declaredLabels(of: node))
+				}
+				for target in built.edges(from: node) where Int(built.componentByNode[Int(target)]) != component {
+					declaredAroundByComponent[Int(built.componentByNode[Int(target)])].formUnion(handedDown)
+				}
 			}
 		}
-		return finished.reversed()
+
+		// The labels declared on a cycle, bounded.
+		var hiddenOnlyAbove = Set<Property>()
+		let dominators = TypeFactsGraph.immediateDominators(of: built, followsEdge: { _ in true })
+		/// The node each node `start` reaches avoiding `avoided` was first reached from (`start`'s is itself), -1 for one it
+		/// does not reach.
+		func reached(from start: Int, avoiding avoided: Set<Int>) -> [Int] {
+			var parentByNode = [Int](repeating: -1, count: nodeCount)
+			parentByNode[start] = start
+			var pending = [start]
+			while let node = pending.popLast() {
+				declarationVisits += 1
+				for target in built.edges(from: node) where !avoided.contains(Int(target)) && parentByNode[Int(target)] < 0 {
+					parentByNode[Int(target)] = node
+					pending.append(Int(target))
+				}
+			}
+			return parentByNode
+		}
+		for declarer in 1..<nodeCount where built.isOnCycle(declarer) {
+			let labels = declaredLabels(of: declarer)
+			guard !labels.isEmpty else { continue }
+			var dominatorsAbove = Set<Int>()
+			var dominator = dominators[declarer]
+			while dominator != 0 {
+				dominatorsAbove.insert(dominator)
+				dominator = dominators[dominator]
+			}
+			dominatorsAbove.insert(0)
+			let reachedAbove = reached(from: declarer, avoiding: dominatorsAbove)
+			let reachedPastFirstRoute = reached(from: declarer, avoiding: Set(built.firstRoute(to: declarer).dropLast()))
+			for creator in 0..<nodeCount where creator != declarer && reachedAbove[creator] >= 0 {
+				let hiddenByDeclarer = uncoveredDependenciesOf(built.nodes[creator]).filter { labels.contains($0.property.label) && !hidden.contains($0.property) }
+				guard !hiddenByDeclarer.isEmpty else { continue }
+				var isShownToRepeatNothing = reachedPastFirstRoute[creator] >= 0
+				if !isShownToRepeatNothing {
+					var routeOn = Set<Int>()
+					var node = creator
+					while node != declarer {
+						routeOn.insert(node)
+						node = reachedAbove[node]
+					}
+					isShownToRepeatNothing = reached(from: 0, avoiding: routeOn)[declarer] >= 0
+				}
+				for dependency in hiddenByDeclarer {
+					if isShownToRepeatNothing {
+						hidden.insert(dependency.property)
+					} else {
+						hiddenOnlyAbove.insert(dependency.property)
+					}
+				}
+			}
+		}
+		return hiddenOnlyAbove.isSubset(of: hidden) ? hidden : nil
 	}
 }
 
@@ -330,11 +433,13 @@ public enum MockTreeNamesObservation {
 
 	/// The report of the mocked type `instantiable`, whose tree's names are `tree`, against its world's answer.
 	static func report(of instantiable: Instantiable, tree: ScopeGenerator.TreeNames, worldRoot: ConstructionScope) -> MockTreeNamesReport {
-		switch MockTreeNamesFromWorld.treeNames(of: instantiable, worldRoot: worldRoot) {
+		var declarationVisits = 0
+		let answer = MockTreeNamesFromWorld.treeNames(of: instantiable, worldRoot: worldRoot, declarationVisits: &declarationVisits)
+		return switch answer {
 		case let .names(world):
-			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: nil, fields: fields(of: tree, besideThoseOf: world))
+			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: nil, fields: fields(of: tree, besideThoseOf: world), declarationVisits: declarationVisits)
 		case let .refused(refusal):
-			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: refusal.rawValue, fields: [])
+			MockTreeNamesReport(root: instantiable.concreteInstantiable.asSource, refusal: refusal.rawValue, fields: [], declarationVisits: declarationVisits)
 		}
 	}
 }
@@ -354,6 +459,8 @@ public struct MockTreeNamesReport: Sendable {
 	public let refusal: String?
 	/// Every field compared, in a fixed order, empty where the world refused.
 	public let fields: [Field]
+	/// How many declarations the world's walks visited (`MockTreeNamesFromWorld.treeNames(of:worldRoot:declarationVisits:)`).
+	public let declarationVisits: Int
 
 	/// The fields whose two values differ.
 	public var differences: [Field] {
