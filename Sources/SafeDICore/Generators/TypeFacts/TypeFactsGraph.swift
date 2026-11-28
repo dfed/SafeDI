@@ -2132,7 +2132,7 @@ struct FillsOfCall {
 			for (_, hole) in fillEdges where hole.enumPlace != nil {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
-			let placesQuery = calledBuilders.placesQuery
+			let placesQuery = calledBuilders.builtPlacesQuery
 			var emittedCaseKeys = Set<String>()
 			for (edge, hole) in fillEdges {
 				let caseKey = ScopeGenerator.fillCaseKey(of: hole)

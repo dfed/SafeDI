@@ -900,7 +900,7 @@ extension ScopeRecord {
 extension CalledBuilders {
 	/// The query of the call's place graph, which reads what every route to a case hands (`SeamSignature.placesHandedToCallers`),
 	/// and the graphs of the seams on the way to a place it passes up; `nil` for a call whose graph was not built.
-	var placesQuery: SeamSignature.Places.Query? {
+	var builtPlacesQuery: SeamSignature.Places.Query? {
 		places.cases.isEmpty ? nil : SeamSignature.Places.Query(of: places, calledPlaces: { [placesOfSeamsBeneath] in placesOfSeamsBeneath($0)?.places })
 	}
 
@@ -1263,7 +1263,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// seam whose tree holds it (`CalledBuilders.holdingCase(ofSite:in:)`), never from the place, whose lists are its
 			// first route's only. A call whose graph was not built, or whose run does not hold the graph of a seam on the way
 			// to a place it passes up, reads its places.
-			let placesQuery = scope.calledBuilders?.placesQuery
+			let placesQuery = scope.calledBuilders?.builtPlacesQuery
 			var caseFieldsByCaseKey = placesByCaseKey.mapValues { places in
 				CalledBuilders.caseFields(of: places, calledBuilders: scope.calledBuilders, in: placesQuery, innerScopeReaders: innerScopeReaders)
 			}
