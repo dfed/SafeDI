@@ -692,8 +692,9 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 
-		// The fills each call passes, with their fill paths and whether each builds in a `@Sendable` function.
-		let fillBuildsInSendableFunction = TypeFactsFillSendability.buildsInSendableFunction(
+		// The fills each call passes, with their fill paths and whether each builds in a `@Sendable` function, and whether
+		// each node does.
+		let sendability = TypeFactsFillSendability.buildsInSendableFunction(
 			in: graph,
 			edgeIsFill: edgeIsFill,
 			opensSendableFunction: nodes.map { node in
@@ -730,7 +731,7 @@ struct TypeFactsGraph: Sendable {
 				stackStart: stackStart,
 				stackCount: Int32(fillPathEntries.count) - stackStart,
 				holeIsSendable: hole.isSendable,
-				buildsInSendableFunction: fillBuildsInSendableFunction[Int(edge)],
+				buildsInSendableFunction: sendability.fillBuildsInSendableFunction[Int(edge)],
 				key: fillKeys.id(of: ScopeGenerator.fillKey(of: hole)),
 				handedMemoStart: handedMemoStart,
 				handedMemoCount: Int32(fillHandedMemos.count) - handedMemoStart,
@@ -827,6 +828,7 @@ struct TypeFactsGraph: Sendable {
 		self.bindings = bindings
 		self.bindingOffsets = bindingOffsets
 		self.twins = twins
+		buildsInSendableFunction = sendability.nodeBuildsInSendableFunction
 		self.receives = receives
 		self.typesBeneath = typesBeneath
 		self.typesDeclaredEscaping = typesDeclaredEscaping
@@ -1421,6 +1423,10 @@ struct TypeFactsGraph: Sendable {
 	let bindingOffsets: [Int32]
 	/// Each node's twin, the first other node of its cycle identity, or -1.
 	let twins: [Int32]
+	/// Whether each node's builder function is `@Sendable` (`ScopeGenerator.buildsInSendableFunction`): its property is a
+	/// `Sendable` wrapper's, or a cycle-closing scope beneath it refers to it from inside a `@Sendable` builder function
+	/// that does not enclose it (`TypeFactsFillSendability.Columns.nodeBuildsInSendableFunction`).
+	let buildsInSendableFunction: [Bool]
 	/// What each node's subtree receives from above it.
 	let receives: TypeFactsReceives
 	/// The types each node's subtree builds, the node's own included, by the world's type ID.
@@ -1519,7 +1525,7 @@ struct TypeFactsGraph: Sendable {
 	var columnElementCount: Int {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
-		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
+		count += cycleIDs.count + twins.count + buildsInSendableFunction.count + parentOffsets.count + 3 * parents.count
 		count += 12 * fills.count + 2 * fillPathEntries.count + 3 * fillHandedMemos.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)

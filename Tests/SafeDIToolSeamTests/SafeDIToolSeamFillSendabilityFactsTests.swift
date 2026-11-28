@@ -110,7 +110,149 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 		#expect(work == [64, 256])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_marksNodeSendable_whenFillBuildsFunctionCycleClosedInsideSendableInstantiatorRefersTo() async throws {
+		// `Desk`'s fill of `parcel` builds `Alpha` through a plain `alphaBuilder`, whose function a cycle closing inside
+		// `Beta`'s `SendableInstantiator` refers to, which makes it `@Sendable`: the edge into `Alpha` opens no `@Sendable`
+		// function, the node's column says it builds in one.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Parcel {}",
+				seamFixtureType(named: "Desk", isSeam: true, declarations: ["@Instantiated let parcel: any Parcel"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (Self.sendableCycleDeclarations + [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultParcel", fulfilling: "Parcel", declarations: ["@Instantiated let credential: Credential", "@Instantiated let alphaBuilder: Instantiator<Alpha>"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let desk: Desk"]),
+			]).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+		let report = try await Self.report(ofRoot: "Root") {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+
+		#expect(Self.nodeSendability(of: report) == [
+			"Root: column false, tree false",
+			"Desk as desk: Desk: column false, tree false",
+			"DefaultParcel as parcel: any Parcel fill: column false, tree false",
+			"Credential as credential: Credential: column false, tree false",
+			"Alpha as alphaBuilder: Instantiator<Alpha>: column true, tree true",
+			"Beta as betaBuilder: SendableInstantiator<Beta>: column true, tree true",
+		])
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[40] == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_marksNodeSendable_whenRootBuildsFunctionCycleClosedInsideSendableInstantiatorRefersTo() async throws {
+		// As above, with no seam: `Root` builds `Alpha` through a plain `alphaBuilder`, which the cycle closing inside
+		// `Beta`'s `SendableInstantiator` makes `@Sendable`.
+		let types = Self.sendableCycleDeclarations + [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let credential: Credential", "@Instantiated let alphaBuilder: Instantiator<Alpha>"]),
+		]
+		let report = try await Self.report(ofRoot: "Root") {
+			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(Self.nodeSendability(of: report) == [
+			"Root: column false, tree false",
+			"Credential as credential: Credential: column false, tree false",
+			"Alpha as alphaBuilder: Instantiator<Alpha>: column true, tree true",
+			"Beta as betaBuilder: SendableInstantiator<Beta>: column true, tree true",
+		])
+		#expect(TypeFactsChecks.findings(of: report).findingsByCheck[40] == nil)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func typeFacts_foldsNodeSendabilityInWorkLinearInChain_whenEachMadeSendableBuilderClosesCycleOnTheOneAbove() async throws {
+		// `Link0` to `Link<n-1>` build each other in a chain of plain `Instantiator`s, each closing a cycle on the one above,
+		// and the last builds `Tail` in a `SendableInstantiator`, whose cycle on the last makes its function `@Sendable`,
+		// which makes the one above `@Sendable`, and so on up the chain: each node is finished once, each edge visited once
+		// and each closed cycle judged once, so the fold's work grows with n. A judgment per path, or a cycle judged again
+		// at each `@Sendable` function above it, would grow with n².
+		var work = [Int]()
+		for length in [8, 32] {
+			var types = [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let link0Builder: Instantiator<Link0>"])]
+			for index in 0..<length {
+				var declarations = index > 0 ? ["@Instantiated let link\(index - 1)Builder: Instantiator<Link\(index - 1)>"] : []
+				declarations.append(index + 1 < length ? "@Instantiated let link\(index + 1)Builder: Instantiator<Link\(index + 1)>" : "@Instantiated let tailBuilder: SendableInstantiator<Tail>")
+				types.append(seamFixtureType(named: "Link\(index)", isFinalClass: true, declarations: declarations))
+			}
+			types.append(seamFixtureType(named: "Tail", isFinalClass: true, declarations: ["@Instantiated let link\(length - 1)Builder: Instantiator<Link\(length - 1)>"]))
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			let report = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+				try await Self.report(ofRoot: "Root") {
+					try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: length != 8)
+				}
+			}
+			continuation.finish()
+			var count = 0
+			for await step in stream where step.step == .foldingFillSendability {
+				count += step.elementCount
+			}
+			work.append(count)
+			let links = (0..<length).map { "Link\($0) as link\($0)Builder: Instantiator<Link\($0)>: column true, tree true" }
+			#expect(Self.nodeSendability(of: report) == ["Root: column false, tree false"] + links + ["Tail as tailBuilder: SendableInstantiator<Tail>: column true, tree true"])
+			#expect(TypeFactsChecks.findings(of: report).findingsByCheck[40] == nil)
+		}
+		#expect(work == [116, 452])
+	}
+
 	// MARK: Private
+
+	/// `Alpha`, which receives `credential` and builds `Beta` in a `SendableInstantiator`; `Beta` declares `credential`
+	/// and builds `Alpha` again through `alphaBuilder`, closing a cycle on the function that built it.
+	private static let sendableCycleDeclarations = [
+		"""
+		@Instantiable
+		public final class Alpha: Instantiable, Sendable {
+		    public init(credential: Credential, betaBuilder: SendableInstantiator<Beta>) { self.credential = credential; self.betaBuilder = betaBuilder }
+		    @Received public let credential: Credential
+		    @Instantiated public let betaBuilder: SendableInstantiator<Beta>
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Beta: Instantiable {
+		    public init(credential: Credential, alphaBuilder: Instantiator<Alpha>) { self.credential = credential; self.alphaBuilder = alphaBuilder }
+		    @Instantiated public let credential: Credential
+		    @Instantiated public let alphaBuilder: Instantiator<Alpha>
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Credential: Instantiable, Sendable {
+		    public init() {}
+		}
+		""",
+	]
+
+	/// The report of the whole production tree of `root` the memo oracle observes while `generate` runs.
+	private static func report(ofRoot root: String, generate: () async throws -> some Any) async throws -> TypeFactsReport {
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }, operation: generate)
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == root && !report.forMockGeneration {
+			reports.append(report)
+		}
+		// The memo oracle observes a tree of the root for each body generated from it; the whole tree has the most places.
+		return try #require(reports.max { $0.places.count < $1.places.count })
+	}
+
+	/// Each node that is no leaf, in node order: the column, and what the tree decided at its places that close no cycle.
+	private static func nodeSendability(of report: TypeFactsReport) -> [String] {
+		var treeByNode = [Int: Set<Bool>]()
+		for place in report.places where !place.closesCycle {
+			if let node = place.node, let generator = place.generator {
+				treeByNode[node, default: []].insert(generator.buildsInSendableFunction)
+			}
+		}
+		return report.nodes.enumerated().filter { !$0.element.isLeaf }.map { index, node in
+			let tree = (treeByNode[index] ?? []).sorted { !$0 && $1 }.map(String.init).joined(separator: " and ")
+			return "\(node.description): column \(node.buildsInSendableFunction), tree \(tree)"
+		}
+	}
 
 	private var filesToDelete: [URL]
 

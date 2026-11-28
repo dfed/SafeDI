@@ -218,6 +218,7 @@ public struct TypeFactsReport: Sendable {
 				cycleKey: graph.cycleKey(ofNode: index),
 				cycleKeyID: Int(graph.cycleIDs[index]),
 				twin: Int(graph.twins[index]),
+				buildsInSendableFunction: graph.buildsInSendableFunction[index],
 				edges: graph.graph.edges(from: index).map(Int.init),
 				edgeFacts: zip(graph.graph.edgeIndices(from: index), edgeFacts).map { edgeIndex, edge in
 					Edge(
@@ -381,6 +382,8 @@ public struct TypeFactsReport: Sendable {
 		public let cycleKeyID: Int
 		/// The first other node of its cycle identity, or -1.
 		public let twin: Int
+		/// Whether the node's builder function is `@Sendable` (`TypeFactsGraph.buildsInSendableFunction`).
+		public let buildsInSendableFunction: Bool
 		/// The positions of the nodes its edges lead to, in edge order.
 		public let edges: [Int]
 		/// Each edge's facts, parallel to `edges`.
