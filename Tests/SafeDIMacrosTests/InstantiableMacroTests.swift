@@ -10485,6 +10485,121 @@ import Testing
 		}
 
 		@Test
+		func extension_fixit_spellsParameterTypeWithAny_whenInstantiateDependencyParameterIsOpaque() {
+			// Generated code spells a dependency’s type, in mocks and seams, and only this declaration can spell `some`.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Consumer: Instantiable {
+				    public static func instantiate(service: some Service) -> Consumer { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Consumer: Instantiable {
+				    public static func instantiate(service: some Service) -> Consumer { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`some Service` names an opaque type, which only this declaration can spell, but SafeDI spells each dependency’s type in the code it generates. Write `any Service`, which takes the same values.",
+						line: 3,
+						column: 45,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Replace `some Service` with `any Service`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `some Service` with `any Service`"],
+				fixedSource: """
+				@Instantiable
+				extension Consumer: Instantiable {
+				    public static func instantiate(service: any Service) -> Consumer { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_spellsParameterTypeWithAny_whenInstantiateDependencyParameterNamesOpaqueTypeInsideArray() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Consumer: Instantiable {
+				    public static func instantiate(services: [some Service]) -> Consumer { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Consumer: Instantiable {
+				    public static func instantiate(services: [some Service]) -> Consumer { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`[some Service]` names an opaque type, which only this declaration can spell, but SafeDI spells each dependency’s type in the code it generates. Write `[any Service]`, which takes the same values.",
+						line: 3,
+						column: 46,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Replace `[some Service]` with `[any Service]`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `[some Service]` with `[any Service]`"],
+				fixedSource: """
+				@Instantiable
+				extension Consumer: Instantiable {
+				    public static func instantiate(services: [any Service]) -> Consumer { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_spellsPropertyTypeWithAny_whenReceivedPropertyIsOpaque() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Consumer: Instantiable {
+				    public init(service: some Service) {
+				        self.service = service
+				    }
+
+				    @Received let service: some Service
+				}
+				""",
+				expandedSource: """
+				public final class Consumer: Instantiable {
+				    public init(service: some Service) {
+				        self.service = service
+				    }
+
+				    let service: some Service
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`some Service` names an opaque type, which only this declaration can spell, but SafeDI spells each dependency’s type in the code it generates. Write `any Service`, which takes the same values.",
+						line: 7,
+						column: 28,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Replace `some Service` with `any Service`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `some Service` with `any Service`"],
+				fixedSource: """
+				@Instantiable
+				public final class Consumer: Instantiable {
+				    public init(service: some Service) {
+				        self.service = service
+				    }
+
+				    @Received let service: any Service
+				}
+				""",
+			)
+		}
+
+		@Test
 		func extension_fixit_namesEachParameterAfterItsArgumentLabel_whenTwoInstantiateDependencyParametersAreNamedUnderscore() {
 			assertMacroExpansion(
 				"""

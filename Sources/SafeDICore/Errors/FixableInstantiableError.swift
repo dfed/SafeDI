@@ -80,6 +80,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// An `instantiate(…)` parameter without a default value, which is a dependency, is named `_`, which names no
 	/// dependency. `argumentLabel` is the name a fix-it gives the parameter, when one is offered.
 	case unnamedInstantiateDependency(argumentLabel: String)
+	/// The type of a dependency, `spelling`, names an opaque type (`some P`), which generated code cannot spell.
+	/// `existentialSpelling` spells each `some` of it as `any`, which takes the same values.
+	case opaqueDependencyType(spelling: String, existentialSpelling: String)
 	/// Two names of one declaration that SafeDI matches by name, `earlierName` and `laterName`, are equal as `String`s
 	/// but differ in their UTF-8 bytes: Swift reads them as two names, and SafeDI as one.
 	case namesEncodedDifferently(earlierName: String, laterName: String)
@@ -288,6 +291,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			}
 		case let .namesEncodedDifferently(earlierName, laterName):
 			"The names `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them."
+		case let .opaqueDependencyType(spelling, existentialSpelling):
+			"`\(spelling)` names an opaque type, which only this declaration can spell, but SafeDI spells each dependency’s type in the code it generates. Write `\(existentialSpelling)`, which takes the same values."
 		case .unnamedInstantiateDependency:
 			"This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value."
 		case let .nestedTypeSpelledThroughSelf(typeNames):
@@ -361,6 +366,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .calleeScopeReferenceInDefaultExpression,
 			     .reservedName,
 			     .unnamedInstantiateDependency,
+			     .opaqueDependencyType,
 			     .namesEncodedDifferently,
 			     .renameOfRename,
 			     .renameOfItself,
@@ -468,6 +474,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				}
 			case let .unnamedInstantiateDependency(argumentLabel):
 				"Name the parameter `\(argumentLabel)`"
+			case let .opaqueDependencyType(spelling, existentialSpelling):
+				"Replace `\(spelling)` with `\(existentialSpelling)`"
 			case let .namesEncodedDifferently(_, laterName):
 				"Rename `\(laterName)`"
 			case let .nestedTypeSpelledThroughSelf(typeNames):

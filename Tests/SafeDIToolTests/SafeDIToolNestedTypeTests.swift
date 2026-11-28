@@ -1047,19 +1047,19 @@ struct SafeDIToolNestedTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_qualifiesOpaqueType_whenExtensionReceivesOpaqueTypeOfUnqualifiedNestedProtocol() async throws {
+	mutating func mock_qualifiesExistentialType_whenExtensionReceivesExistentialOfUnqualifiedNestedProtocol() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				public final class Consumer {
 				    public protocol ServiceProtocol {}
 
-				    public init(service: some ServiceProtocol) {}
+				    public init(service: any ServiceProtocol) {}
 				}
 
 				@Instantiable(generateMock: true)
 				extension Consumer: Instantiable {
-				    public static func instantiate(service: some ServiceProtocol) -> Consumer {
+				    public static func instantiate(service: any ServiceProtocol) -> Consumer {
 				        Consumer(service: service)
 				    }
 				}
