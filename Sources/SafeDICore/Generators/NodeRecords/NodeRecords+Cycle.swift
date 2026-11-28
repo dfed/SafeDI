@@ -72,8 +72,10 @@ extension NodeRecords {
 
 	/// Refuses `world`, which holds a cycle, where one of its types receives a builder, plainly, only if available or
 	/// through a rename.
-	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
+	/// - Throws: `cycleReceivesBuilder` where a type of a production world receives a builder. A mock root's world lays
+	///   out its loops of builders from the records (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:enteredSlots:)`).
 	static func refuseReceivedBuilders(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) {
+		guard !world.isMockWorld else { return }
 		for declaration in 0..<Int32(world.declarationCount) {
 			for dependency in world.scope(of: declaration).instantiable.dependencies {
 				let read: Property? = switch dependency.source {

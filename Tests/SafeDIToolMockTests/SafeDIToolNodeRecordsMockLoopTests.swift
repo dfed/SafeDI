@@ -979,8 +979,9 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 	}
 
 	/// Each member's override at a loop's level, set in turn and then all together, is read on every lap: the values
-	/// equal the walk's after the loop is walked twice.
-	@Test(arguments: ["level", "root", "twoLevels", "twoTypes"])
+	/// equal the walk's after the loop is walked twice. In `cycle`, a type of a world with a cycle receives a builder the
+	/// cycle builds, whose loop the records rebind.
+	@Test(arguments: ["level", "root", "twoLevels", "twoTypes", "cycle"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenEveryMemberOfLoopIsOverriddenOnEveryLap(name: String) async throws {
 		let fixture = try #require(Self.valueFixtures[name])
@@ -1222,6 +1223,64 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 
 	/// The fixtures of the value cells: a loop at a level below the root, and one at the root with a configured member.
 	private static let valueFixtures: [String: [String: String]] = [
+		"cycle": [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public struct Root: Instantiable {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated public let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Types.swift": """
+			public protocol Marked {
+			    var marker: String { get set }
+			}
+
+			func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
+			    var value = value
+			    value.marker = marker
+			    return value
+			}
+
+			@Instantiable
+			public struct Screen: Instantiable, Marked {
+			    public init(stepBuilder: Instantiator<Step>, detail: Detail) {
+			        self.stepBuilder = stepBuilder
+			        self.detail = detail
+			    }
+
+			    @Instantiated public let stepBuilder: Instantiator<Step>
+			    @Instantiated public let detail: Detail
+
+			    public var marker = "built"
+			}
+
+			@Instantiable
+			public struct Detail: Instantiable, Marked {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Received public let screenBuilder: Instantiator<Screen>
+
+			    public var marker = "built"
+			}
+
+			@Instantiable
+			public struct Step: Instantiable, Marked {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated public let screenBuilder: Instantiator<Screen>
+
+			    public var marker = "built"
+			}
+			""",
+		],
 		"level": [
 			"Root.swift": """
 			@Instantiable(generateMock: true)
@@ -1511,6 +1570,21 @@ struct SafeDIToolNodeRecordsMockLoopTests: ~Copyable {
 
 	/// What each value cell evaluates, and the markers its overrides set.
 	private static let valueProbes: [String: (probes: [DifferentialValueProbe], markers: [String])] = [
+		"cycle": (
+			[
+				DifferentialValueProbe("Root.mock().screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().detail.screenBuilder.instantiate().detail"),
+				DifferentialValueProbe(name: "detail overridden, lap 1", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(detail: { marked(Detail(screenBuilder: $0), \"detail\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().detail.screenBuilder.instantiate().detail"),
+				DifferentialValueProbe(name: "stepBuilder overridden, lap 1", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(stepBuilder: .init({ marked(Step(screenBuilder: $0), \"stepBuilder\") })))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().detail.screenBuilder.instantiate().detail"),
+				DifferentialValueProbe(name: "screenBuilder overridden, lap 1", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init({ marked(Screen(stepBuilder: $0, detail: $1), \"screenBuilder\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().detail.screenBuilder.instantiate().detail"),
+				DifferentialValueProbe(name: "all overridden, lap 1", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(stepBuilder: .init({ marked(Step(screenBuilder: $0), \"stepBuilder\") }), detail: { marked(Detail(screenBuilder: $0), \"detail\") }, { marked(Screen(stepBuilder: $0, detail: $1), \"screenBuilder\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().detail.screenBuilder.instantiate().detail"),
+				DifferentialValueProbe("Root.mock().screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()"),
+				DifferentialValueProbe(name: "detail overridden, lap 2", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(detail: { marked(Detail(screenBuilder: $0), \"detail\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()"),
+				DifferentialValueProbe(name: "stepBuilder overridden, lap 2", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(stepBuilder: .init({ marked(Step(screenBuilder: $0), \"stepBuilder\") })))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()"),
+				DifferentialValueProbe(name: "screenBuilder overridden, lap 2", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init({ marked(Screen(stepBuilder: $0, detail: $1), \"screenBuilder\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()"),
+				DifferentialValueProbe(name: "all overridden, lap 2", expression: "Root.mock(safeDIOverrides: .init(screenBuilder: .init(stepBuilder: .init({ marked(Step(screenBuilder: $0), \"stepBuilder\") }), detail: { marked(Detail(screenBuilder: $0), \"detail\") }, { marked(Screen(stepBuilder: $0, detail: $1), \"screenBuilder\") }))).screenBuilder.instantiate().stepBuilder.instantiate().screenBuilder.instantiate().stepBuilder.instantiate()"),
+			],
+			["detail", "stepBuilder", "screenBuilder"],
+		),
 		"level": (
 			[
 				DifferentialValueProbe("Root.mock().holder.aBuilder.instantiate().bBuilder.instantiate().aBuilder.instantiate().bBuilder.instantiate()"),
