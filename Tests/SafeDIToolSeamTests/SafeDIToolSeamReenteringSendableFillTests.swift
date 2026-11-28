@@ -28,8 +28,9 @@ import Testing
 /// `SendableInstantiator`, and whose tree, through that re-entry or beside it, instantiates a type no declaration the
 /// seam’s module sees fulfills. The fill is built in the `@Sendable` function of that builder, so the seam takes a
 /// `@Sendable` builder of the type; the level of the fill that makes the call is of the plain family, and its member
-/// for that call returns the third module’s `@Sendable` family’s struct, so its no-scope initializer, and that of each
-/// level that hands it its builder, takes a `@Sendable` builder, as the root’s does.
+/// for that call returns the third module’s `@Sendable` family’s struct, so the local function `Screen`’s plain
+/// initializer builds that level in, and that of each level that hands it its builder, takes a `@Sendable` builder, as
+/// the root’s does.
 struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 	// MARK: Initialization
 
@@ -50,8 +51,8 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 	mutating func generate_takesSendableBuilderOfWhatNothingFulfills_whenReenteringBuilderIsSendableInstantiator(layout: ReenteringFillLayout) async throws {
 		// `Screen` fills `Page`’s place with a type whose tree builds `Book`, whose `SendableInstantiator` of `Page` re-enters
 		// that fill, and instantiates `analytics: any Analytics`, which nothing `App` sees fulfills. `Screen` takes
-		// `analyticsSendableBuilder`, and the generated code compiles and builds, for a builder handed through the
-		// generated-only initializer’s no-scope struct, what the same types built inline build.
+		// `analyticsSendableBuilder`, and the generated code compiles and builds, for a builder handed to its plain
+		// initializer, what the same types built inline build.
 		let modules = Self.modules(of: layout, analyticsIsInstantiable: false)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 
@@ -68,7 +69,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			let probe = DifferentialValueProbe(
 				name: "(Screen, the re-entered Page)",
-				expression: ReenteringFillFixtures.screenAndReenteredPage(of: layout, screen: "App.Screen(__safeDI_analyticsSendableBuilder: .init(__safeDI_noScope: { App.LiveAnalytics() }))"),
+				expression: ReenteringFillFixtures.screenAndReenteredPage(of: layout, screen: "App.Screen(analyticsSendableBuilder: { App.LiveAnalytics() })"),
 				knownRightExpression: ReenteringFillFixtures.screenAndReenteredPage(of: layout, screen: "App.Screen()"),
 			)
 			let comparison = try #require(try await DifferentialValueOracle.compare(
@@ -88,7 +89,8 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The modules of `layout` with `Book`, and `DefaultService` where it holds `Page` itself, holding `Page` in a
-	/// `SendableInstantiator`: `Page`, `Chapter` and `Book` seams that keep their public mocks, and `Screen` a seam of `App`.
+	/// `SendableInstantiator`: `Page`, `Chapter` and `Book` seams that keep their public mocks, and `Screen` a seam of `App`,
+	/// which generates its seams’ plain initializers.
 	/// Where `analyticsIsInstantiable`, `LiveAnalytics` is an `Instantiable` that fulfills `Analytics`, else a plain class a
 	/// probe hands `Screen`’s builder.
 	private static func modules(of layout: ReenteringFillLayout, analyticsIsInstantiable: Bool) -> [ModuleFixture] {
@@ -96,7 +98,7 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 		return [
 			ModuleFixture(name: "Core", packageName: GraphFuzzerCallingMockGraph.packageName, swiftFileContentByFilePath: ["CoreTypes.swift": ReenteringFillFixtures.core(of: layout, attribute: attribute)]),
 			ModuleFixture(name: "Mid", packageName: GraphFuzzerCallingMockGraph.packageName, swiftFileContentByFilePath: ["MidTypes.swift": ReenteringFillFixtures.mid(of: layout, attribute: attribute, builder: .sendableInstantiator)], dependencies: ["Core"]),
-			ModuleFixture(name: "App", packageName: GraphFuzzerCallingMockGraph.packageName, swiftFileContentByFilePath: ["AppTypes.swift": ReenteringFillFixtures.app(of: layout, callerAttribute: "@Instantiable(generateDependencyTree: true)", access: "public ", analyticsIsInstantiable: analyticsIsInstantiable, builder: .sendableInstantiator)], dependencies: ["Core", "Mid"]),
+			ModuleFixture(name: "App", packageName: GraphFuzzerCallingMockGraph.packageName, swiftFileContentByFilePath: ["AppTypes.swift": ReenteringFillFixtures.app(of: layout, callerAttribute: "@Instantiable(generateDependencyTree: true)", access: "public ", analyticsIsInstantiable: analyticsIsInstantiable, builder: .sendableInstantiator)].merging(plainDependencyTreeInitializersConfiguration) { first, _ in first }, dependencies: ["Core", "Mid"]),
 		]
 	}
 
@@ -138,10 +140,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -210,10 +208,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			        public init(logger: @escaping (any Service) -> __safeDI_Built) {
 			            self.logger = logger
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(logger: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -222,10 +216,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -317,10 +307,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			        public init(store: @escaping () -> __safeDI_Built) {
 			            self.store = store
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(store: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -342,10 +328,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			        public init(service: @escaping () -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { __safeDI_builder() })
 			        }
 			    }
 
@@ -462,10 +444,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			        public init(pageBuilder: @escaping @Sendable () -> Page.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.pageBuilder = pageBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(pageBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -551,10 +529,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			        public init(pageBuilder: @escaping @Sendable () -> Page.__safeDI_LoggerCarrier<__safeDI_Built>) {
 			            self.pageBuilder = pageBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(pageBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -563,10 +537,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			        public init(pageBuilder: @escaping @Sendable () -> Page.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.pageBuilder = pageBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(pageBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -672,10 +642,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			        public init(pageBuilder: @escaping @Sendable () -> Page.__safeDI_ServiceCarrier<__safeDI_Built>) {
 			            self.pageBuilder = pageBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(pageBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -684,10 +650,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			        public init(store: @escaping (SendableInstantiator<Page>) -> __safeDI_Built) {
 			            self.store = store
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(store: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -817,10 +779,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                    self.analytics = analytics
 			                    self.book_serviceSendableBuilder = book_serviceSendableBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			                }
 			            }
 			        }
 			    }
@@ -835,15 +793,28 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            public init(page_serviceBuilder: @escaping @Sendable (page_serviceBuilder_Values) -> Page.__safeDI_ServiceCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.page_serviceBuilder = page_serviceBuilder
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Service(__safeDI_builder) })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableScope_Analytics.page_serviceBuilder_Values())
@@ -903,10 +874,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                public init(analytics: @escaping (analytics_Values) -> __safeDI_Built) {
 			                    self.analytics = analytics
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 
@@ -923,10 +890,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                public init(book_loggerSendableBuilder: @escaping (book_loggerSendableBuilder_Values) -> Book.__safeDI_LoggerSendableCarrier<SafeDIScope_Analytics.DefaultLogger_Scope.__safeDI_Builder<__safeDI_Built>>, book_serviceSendableBuilder: @escaping (book_serviceSendableBuilder_Values) -> Book.__safeDI_ServiceSendableCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                    self.book_loggerSendableBuilder = book_loggerSendableBuilder
 			                    self.book_serviceSendableBuilder = book_serviceSendableBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(book_loggerSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -946,15 +909,37 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                self.page_loggerBuilder = page_loggerBuilder
 			                self.page_serviceBuilder = page_serviceBuilder
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_loggerBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_loggerBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Logger({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultLogger_Scope(__safeDI_builder) }) }, page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Logger<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_LoggerCarrier<__safeDI_Built> {
+			            .init(logger: { _ in __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultLogger_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultLogger_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(book_loggerSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Logger({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultLogger_Scope(__safeDI_builder) }) }, book_serviceSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Logger<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_LoggerSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Logger(__safeDI_builder) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Service(__safeDI_builder) })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_loggerBuilder = __safeDI_analyticsSendableBuilder.page_loggerBuilder(SafeDISendableScope_Analytics.page_loggerBuilder_Values())
@@ -1033,10 +1018,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                    self.book_serviceSendableBuilder = book_serviceSendableBuilder
 			                    self.book_storeBuilder = book_storeBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, book_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			                }
 			            }
 			        }
 
@@ -1049,10 +1030,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			                public init(analytics: @escaping (analytics_Values) -> __safeDI_Built) {
 			                    self.analytics = analytics
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1068,15 +1045,34 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            public init(page_serviceBuilder: @escaping @Sendable (page_serviceBuilder_Values) -> Page.__safeDI_ServiceCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.page_serviceBuilder = page_serviceBuilder
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(book_serviceSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) }, book_storeBuilder: { _ in __safeDI_noScope_Book_SafeDICarrierScope_Store({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Service(__safeDI_builder) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDICarrierScope_Store<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Book.__safeDI_StoreCarrier<__safeDI_Built> {
+			            .init(store: { _ in __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultStore_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableScope_Analytics.page_serviceBuilder_Values())
@@ -1147,10 +1143,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                public init(chapter_storeBuilder: @escaping (chapter_storeBuilder_Values) -> Chapter.__safeDI_StoreCarrier<SafeDIScope_Analytics.DefaultStore_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                    self.chapter_storeBuilder = chapter_storeBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(chapter_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			                }
 			            }
 			        }
 
@@ -1170,10 +1162,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                    self.analytics = analytics
 			                    self.book_serviceSendableBuilder = book_serviceSendableBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			                }
 			            }
 			        }
 			    }
@@ -1188,15 +1176,34 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            public init(page_serviceBuilder: @escaping @Sendable (page_serviceBuilder_Values) -> Page.__safeDI_ServiceCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.page_serviceBuilder = page_serviceBuilder
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(chapter_storeBuilder: { _ in __safeDI_noScope_Chapter_SafeDICarrierScope_Store({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Chapter_SafeDICarrierScope_Store<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Chapter.__safeDI_StoreCarrier<__safeDI_Built> {
+			            .init(store: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultStore_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() }, book_serviceSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Service(__safeDI_builder) })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableScope_Analytics.page_serviceBuilder_Values())
@@ -1278,10 +1285,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                    self.analytics = analytics
 			                    self.chapter_storeBuilder = chapter_storeBuilder
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() }, chapter_storeBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			                }
 			            }
 			        }
 
@@ -1294,10 +1297,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 
 			                public init(book_serviceSendableBuilder: @escaping (book_serviceSendableBuilder_Values) -> Book.__safeDI_ServiceSendableCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                    self.book_serviceSendableBuilder = book_serviceSendableBuilder
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(book_serviceSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1313,15 +1312,34 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			            public init(page_serviceBuilder: @escaping @Sendable (page_serviceBuilder_Values) -> Page.__safeDI_ServiceCarrier<SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
 			                self.page_serviceBuilder = page_serviceBuilder
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() }, chapter_storeBuilder: { _ in __safeDI_noScope_Chapter_SafeDICarrierScope_Store({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Chapter_SafeDICarrierScope_Store<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Chapter.__safeDI_StoreCarrier<__safeDI_Built> {
+			            .init(store: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultStore_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultStore_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(book_serviceSendableBuilder: { _ in __safeDI_noScope_Book_SafeDISendableCarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Book_SafeDISendableCarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Book.__safeDI_ServiceSendableCarrier<__safeDI_Built> {
+			            .init(pageBuilder: { __safeDI_noScope_Page_SafeDICarrierScope_Service(__safeDI_builder) })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableScope_Analytics.page_serviceBuilder_Values())
@@ -1399,10 +1417,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                public init(analytics: @escaping (analytics_Values) -> __safeDI_Built) {
 			                    self.analytics = analytics
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.init(analytics: { _ in __safeDI_builder() })
-			                }
 			            }
 			        }
 			    }
@@ -1426,10 +1440,6 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                    self.pageBuilder_serviceBuilder = pageBuilder_serviceBuilder
 			                    self.pageBuilder_serviceBuilder_Sendable = pageBuilder_serviceBuilder_Sendable
 			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.init(pageBuilder_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, pageBuilder_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			                }
 			            }
 			        }
 
@@ -1442,15 +1452,28 @@ struct SafeDIToolSeamReenteringSendableFillTests: ~Copyable {
 			                self.page_serviceBuilder = page_serviceBuilder
 			                self.page_serviceBuilder_Sendable = page_serviceBuilder_Sendable
 			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.init(page_serviceBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, page_serviceBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			            }
 			        }
 			    }
 
+			    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+			    public convenience init(analyticsSendableBuilder: @escaping @Sendable () -> any Analytics) {
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.__safeDI_Builder<__safeDI_Built> {
+			            .init(page_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) }, page_serviceBuilder_Sendable: { _ in __safeDI_noScope_Screen_SafeDISendableScope_Analytics_DefaultService_Scope(__safeDI_builder) })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Page_SafeDICarrierScope_Service<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Page.__safeDI_ServiceCarrier<__safeDI_Built> {
+			            .init(service: { __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.SafeDIScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(analytics: { _ in __safeDI_builder() })
+			        }
+			        @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableScope_Analytics_DefaultService_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.SafeDISendableScope_Analytics.DefaultService_Scope.__safeDI_Builder<__safeDI_Built> {
+			            .init(pageBuilder_serviceBuilder: { _ in __safeDI_noScope_Page_SafeDICarrierScope_Service({ __safeDI_noScope_Screen_SafeDIScope_Analytics_DefaultService_Scope(__safeDI_builder) }) }, pageBuilder_serviceBuilder_Sendable: { _ in __safeDI_noScope_Screen_SafeDISendableScope_Analytics_DefaultService_Scope(__safeDI_builder) })
+			        }
+			        self.init(__safeDI_analyticsSendableBuilder: __safeDI_noScope_Screen_SafeDISendableScope_Analytics(analyticsSendableBuilder))
+			    }
+
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
-			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    /// From code you write, call the initializer above instead.
 			    public convenience init(__safeDI_analyticsSendableBuilder: SafeDISendableScope_Analytics.__safeDI_Builder<any Analytics>) {
 			        @inline(never) func __safeDI_page() -> Page {
 			            let __safeDI_analyticsSendableBuilder_page_serviceBuilder = __safeDI_analyticsSendableBuilder.page_serviceBuilder(SafeDISendableScope_Analytics.page_serviceBuilder_Values())

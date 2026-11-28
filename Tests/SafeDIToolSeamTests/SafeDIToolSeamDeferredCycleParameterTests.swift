@@ -159,10 +159,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -171,10 +167,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -257,10 +249,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(aBuilder: @escaping (LazilyInstantiated<Tag?>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -269,10 +257,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(api: @escaping (Tag?, TagReader, Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -354,10 +338,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        public init(a: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.a = a
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(a: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -366,10 +346,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 		        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
 		            self.api = api
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _, _, _ in __safeDI_builder() })
 		        }
 		    }
 
@@ -454,10 +430,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(api: @escaping (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -466,10 +438,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(aBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -552,10 +520,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -564,10 +528,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -651,10 +611,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(api: @escaping (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built) {
 			            self.api = api
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -663,10 +619,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(aBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -768,10 +720,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -780,10 +728,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -1002,10 +946,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 			            self.aBuilder = aBuilder
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1014,10 +954,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
 			            self.api = api
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -1165,10 +1101,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
 		            self.aBuilder = aBuilder
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
-		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1177,10 +1109,6 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 
 		        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
 		            self.inner = inner
-		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 

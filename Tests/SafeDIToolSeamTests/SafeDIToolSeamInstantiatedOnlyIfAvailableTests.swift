@@ -67,10 +67,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			        public init(detail: __safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built>) {
 			            self.detail = detail
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -79,10 +75,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 			        public init(analytics: @escaping () -> __safeDI_Built) {
 			            self.analytics = analytics
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analytics: { __safeDI_builder() })
 			        }
 			    }
 
@@ -161,7 +153,15 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_CFA799E24BD6A85E.self\(Self.callComment(integration, seam: "Screen", module: "Feature"))
-			            return Screen(__safeDI_analyticsOptionalBuilder: .init(__safeDI_noScope: { nil }))
+			            return Screen(__safeDI_analyticsOptionalBuilder: {
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built> {
+			                    .init(detail: __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope(__safeDI_builder))
+			                }
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built> {
+			                    .init(analytics: { __safeDI_builder() })
+			                }
+			                return __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional({ nil })
+			            }())
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
@@ -223,10 +223,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			        public init(analytics: @escaping () -> __safeDI_Built) {
 			            self.analytics = analytics
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analytics: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -256,7 +252,12 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_5069BC58D77A6CC3.self\(Self.callComment(integration, seam: "Screen", module: "Feature"))
-			            return Screen(__safeDI_analyticsOptionalBuilder: .init(__safeDI_noScope: { nil }))
+			            return Screen(__safeDI_analyticsOptionalBuilder: {
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built> {
+			                    .init(analytics: { __safeDI_builder() })
+			                }
+			                return __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional({ nil })
+			            }())
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
@@ -303,10 +304,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 			        public init(screenBuilder: Screen.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built>) {
 			            self.screenBuilder = screenBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(screenBuilder: .init(__safeDI_noScope: __safeDI_builder))
 			        }
 			    }
 
@@ -378,7 +375,18 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    public init() {
 			        func __safeDI_shell() -> Shell {
 			            _ = Shell.__safeDI_Shell_669BF07F20D367DE.self\(Self.callComment(integration, seam: "Shell", module: "Mid"))
-			            return Shell(__safeDI_analyticsOptionalBuilder: .init(__safeDI_noScope: { nil }))
+			            return Shell(__safeDI_analyticsOptionalBuilder: {
+			                @Sendable nonisolated func __safeDI_noScope_Shell_SafeDICarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Shell.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built> {
+			                    .init(screenBuilder: __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional(__safeDI_builder))
+			                }
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built> {
+			                    .init(detail: __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope(__safeDI_builder))
+			                }
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built> {
+			                    .init(analytics: { __safeDI_builder() })
+			                }
+			                return __safeDI_noScope_Shell_SafeDICarrierScope_AnalyticsOptional({ nil })
+			            }())
 			        }
 			        let shell: Shell = __safeDI_shell()
 			        self.init(shell: shell)
@@ -470,10 +478,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			        public init(analyticsOptional: @escaping (Analytics?) -> __safeDI_Built) {
 			            self.analyticsOptional = analyticsOptional
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analyticsOptional: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -482,10 +486,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 			        public init(analytics: @escaping () -> __safeDI_Built) {
 			            self.analytics = analytics
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analytics: { __safeDI_builder() })
 			        }
 			    }
 
@@ -529,7 +529,15 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_CFA799E24BD6A85E.self
-			            return Screen(__safeDI_analyticsOptionalBuilder: .init(__safeDI_noScope: { nil }))
+			            return Screen(__safeDI_analyticsOptionalBuilder: {
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier<__safeDI_Built> {
+			                    .init(detail: __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope(__safeDI_builder))
+			                }
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built> {
+			                    .init(analytics: { __safeDI_builder() })
+			                }
+			                return __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional({ nil })
+			            }())
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
@@ -544,10 +552,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			        public init(detail: __safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built>) {
 			            self.detail = detail
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(detail: .init(__safeDI_noScope: __safeDI_builder))
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -556,10 +560,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 			        public init(analytics: @escaping () -> __safeDI_Built) {
 			            self.analytics = analytics
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analytics: { __safeDI_builder() })
 			        }
 			    }
 
@@ -659,10 +659,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			        public init(analytics: @escaping () -> __safeDI_Built) {
 			            self.analytics = analytics
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(analytics: { __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -671,10 +667,6 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 
 			        public init(detailBuilder: @escaping @Sendable () -> __safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built>) {
 			            self.detailBuilder = detailBuilder
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			            self.init(detailBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
@@ -711,7 +703,15 @@ struct SafeDIToolSeamInstantiatedOnlyIfAvailableTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            _ = Screen.__safeDI_Screen_D65A6032F5C64155.self\(Self.callComment(.moduleInfo, seam: "Screen", module: "Feature"))
-			            return Screen(__safeDI_analyticsOptionalSendableBuilder: .init(__safeDI_noScope: { nil }))
+			            return Screen(__safeDI_analyticsOptionalSendableBuilder: {
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDISendableCarrierScope_AnalyticsOptional<__safeDI_Built>(_ __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalSendableCarrier<__safeDI_Built> {
+			                    .init(detailBuilder: { __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope(__safeDI_builder) })
+			                }
+			                @Sendable nonisolated func __safeDI_noScope_Screen_SafeDICarrierScope_AnalyticsOptional_Detail_Scope<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Screen.__safeDI_AnalyticsOptionalCarrier_Detail<__safeDI_Built> {
+			                    .init(analytics: { __safeDI_builder() })
+			                }
+			                return __safeDI_noScope_Screen_SafeDISendableCarrierScope_AnalyticsOptional({ nil })
+			            }())
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(screen: screen)
