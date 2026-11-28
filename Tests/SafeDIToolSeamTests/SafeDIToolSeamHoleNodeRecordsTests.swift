@@ -45,7 +45,9 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenEachHoleIsReachedAlongOnePath() async throws {
 		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: Panel", "@Instantiated let panelBuilder: Instantiator<Other>"])
-		#expect(reports.map(\.refusal) == [nil])
+		// Under the sweep's switch (`SAFEDI_NODE_RECORDS_LAY_OUT`) the run lays roots out, and the seam's own root, which keeps
+		// its tree, is counted as `ownSeamRoot`; the places are what this test checks.
+		#expect(reports.map(\.refusal) == [NodeRecordsChecks.laysOutRoots ? "ownSeamRoot" : nil])
 		#expect(reports.map(\.differences) == [[]])
 		// `panel`, `panelBuilder`, the hole beneath each, and the payload the tree binds before each, a place of its own.
 		#expect(reports.map(\.treePlaceCount) == [6])
