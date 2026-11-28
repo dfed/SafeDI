@@ -232,6 +232,10 @@ struct TypeKeyLayout {
 		/// Whether a closer beneath the node's own body, rather than one of its own statements, calls a function declared
 		/// outside it.
 		var closesBeneathItsBody = false
+		/// The names among `closedOnFunctionNames` that a member of a loop of builders calls, rebinding a sibling
+		/// (`ClosingPlaceRecord.rebindsLoopMember`): the only names a statement's function can answer. A node whose domain
+		/// holds none resolves each name to an enclosing place's function, with no look-up among statements.
+		var loopMemberFunctionNames = Set<String>()
 	}
 
 	/// What tells two places of one plan node apart (`Body`).

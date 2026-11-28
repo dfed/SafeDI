@@ -167,6 +167,25 @@ public enum NodeRecordsObservation {
 		return differences
 	}
 
+	/// Whether each argument of `nodeRecords` is `tree`'s, or reads the optional parameter of one function that serves a
+	/// call that answers a read only if available and a call that does not: the nearest declaration of its label where
+	/// `tree`'s, the same argument otherwise, reads `nil`, by value or, where the declaration is a lazily instantiated
+	/// wrapper, as its instance (a wrapper still being built where `tree` reads `nil`, which the facts key as the wrapper);
+	/// or, where the parameter is a lazily instantiated wrapper some call passes `nil` (rule 3), the wrapper's instance
+	/// through the optional where `tree`'s reads `nil` or the instance.
+	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
+		guard tree.count == nodeRecords.count else { return false }
+		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
+			let readsValue = treeRead.source == .nil
+				&& (nodeRecordsRead.source == .binding(label: treeRead.label) || nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+			let readsWrappersInstance = (treeRead.source == .nil || treeRead.source == .lazyInstance(label: treeRead.label, throughOptional: false))
+				&& nodeRecordsRead.source == .lazyInstance(label: treeRead.label, throughOptional: true)
+			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: nodeRecordsRead.source, staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			guard readsValue || readsWrappersInstance, treeReadWithRecordsSource == nodeRecordsRead else { return false }
+		}
+		return true
+	}
+
 	/// The fields of `nodeRecords` that differ from `tree`'s, children aside.
 	private static func fieldDifferences(between tree: BuiltPlaceRecord, and nodeRecords: BuiltPlaceRecord) -> [String] {
 		var differences = [String]()
@@ -179,7 +198,11 @@ public enum NodeRecordsObservation {
 		compare("concreteType", tree.concreteType, nodeRecords.concreteType)
 		compare("isExtension", tree.isExtension, nodeRecords.isExtension)
 		compare("target", tree.target, nodeRecords.target)
-		compare("arguments", tree.arguments, nodeRecords.arguments)
+		// Where one function serves a call that answers a read only if available and a call that does not, its record
+		// reads the declaration at each argument the tree's place at the second call reads `nil` at, and the two write the
+		// same code, the call passing `nil`: such a difference has a name of its own, which a test may approve where the
+		// two texts are equal. Any other difference of the arguments keeps the plain name.
+		compare(differOnlyWhereTreeReadsNilOfLabel(tree.arguments, nodeRecords.arguments) ? NodeRecordsReport.argumentsOfOptionalParameterDifferenceName : "arguments", tree.arguments, nodeRecords.arguments)
 		compare("forwardedProperties", tree.forwardedProperties, nodeRecords.forwardedProperties)
 		compare("cycleParameters", tree.cycleParameters, nodeRecords.cycleParameters)
 		compare("callCycleArguments", tree.callCycleArguments, nodeRecords.callCycleArguments)
@@ -197,6 +220,11 @@ public enum NodeRecordsObservation {
 
 /// One production root's node records, beside its tree's places (`NodeRecordsObservation`).
 public struct NodeRecordsReport: Sendable {
+	/// The name, in a line of `differences`, of a place's arguments where they differ only as one function with an
+	/// optional parameter makes them differ: the tree's place reads `nil` where the records read the nearest declaration
+	/// of the argument's label.
+	public static let argumentsOfOptionalParameterDifferenceName = "arguments of an optional parameter"
+
 	/// The root's concrete type.
 	public let root: String
 	/// Why node records refused the root's world (`NodeRecordRefusal`), or `nil` where they made its records.
@@ -218,4 +246,18 @@ public struct NodeRecordsReport: Sendable {
 	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
 	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
 	public var isMockRoot = false
+	/// The root's code as its tree spells it and as it is laid out from node records, where both were laid out: what a
+	/// test rewrites by the approved differences before it reports the root as differing.
+	public var comparedTexts: NodeRecordsComparedTexts?
+	/// The differences among `differences` that no text shows, a capture or a label only the tree's checks see: no
+	/// approved difference of the texts accounts for one.
+	public var differencesNoTextShows = [String]()
+}
+
+/// One root's code, spelled from its tree and laid out from its node records (`NodeRecordsReport.comparedTexts`).
+public struct NodeRecordsComparedTexts: Sendable {
+	/// The code the tree's places spell.
+	public let tree: String
+	/// The code laid out from node records.
+	public let nodeRecords: String
 }
