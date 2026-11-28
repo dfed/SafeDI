@@ -652,13 +652,17 @@ struct SeamPlacesDrafts: Sendable {
 			/// The same, of the fills above alone, which the route beneath a fill starts again from.
 			var someFills = Set<CycleID>()
 			var everyFill: Set<CycleID>?
+			/// The fills that a call above every route takes beneath one of its fills: a call there that takes one of them
+			/// takes the fill the call above built, which it enters again, never builds (`nil` before any route arrives).
+			var fillsTakenAbove: Set<DeclarationID>?
 
-			mutating func meet(some: Set<CycleID>, every: Set<CycleID>, someFills: Set<CycleID>, everyFill: Set<CycleID>) -> Bool {
+			mutating func meet(some: Set<CycleID>, every: Set<CycleID>, someFills: Set<CycleID>, everyFill: Set<CycleID>, fillsTakenAbove: Set<DeclarationID>) -> Bool {
 				let before = self
 				self.some.formUnion(some)
 				self.every = self.every.map { $0.intersection(every) } ?? every
 				self.someFills.formUnion(someFills)
 				self.everyFill = self.everyFill.map { $0.intersection(everyFill) } ?? everyFill
+				self.fillsTakenAbove = self.fillsTakenAbove.map { $0.intersection(fillsTakenAbove) } ?? fillsTakenAbove
 				return self != before
 			}
 		}
@@ -667,7 +671,7 @@ struct SeamPlacesDrafts: Sendable {
 		var closesCycle = [Bool](repeating: false, count: callCount)
 		var above = [Above](repeating: Above(), count: world.variantCount)
 		let rootVariant = world.rootVariant(0)
-		_ = above[Int(rootVariant)].meet(some: [], every: [], someFills: [], everyFill: [])
+		_ = above[Int(rootVariant)].meet(some: [], every: [], someFills: [], everyFill: [], fillsTakenAbove: [])
 		var pending = [rootVariant]
 		var isPending = [Bool](repeating: false, count: world.variantCount)
 		isPending[Int(rootVariant)] = true
@@ -677,7 +681,13 @@ struct SeamPlacesDrafts: Sendable {
 			let own = world.cycle(of: declaration)
 			let state = above[Int(variant)]
 			let callOffset = world.variants.callOffset(of: Int(variant))
-			for (index, (edge, callee)) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)).enumerated() {
+			let fillsTakenAbove = state.fillsTakenAbove ?? []
+			// The fills this variant takes, which the routes beneath any of them take above.
+			var fillsTakenBeneathFills = fillsTakenAbove
+			for (edge, callee) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)) where edge.isFill {
+				fillsTakenBeneathFills.insert(world.declaration(of: callee))
+			}
+			for (index, (edge, callee)) in zip(world.edgeFacts(from: declaration), world.calls(of: variant)).enumerated() where !(edge.isFill && fillsTakenAbove.contains(world.declaration(of: callee))) {
 				// What the callee has above it on the routes through this call.
 				let (some, every, someFills, everyFill): (Set<CycleID>, Set<CycleID>, Set<CycleID>, Set<CycleID>)
 				if edge.isFill {
@@ -693,7 +703,7 @@ struct SeamPlacesDrafts: Sendable {
 				}
 				guard inLine else { continue }
 				buildsInLine[callOffset + index] = true
-				if above[Int(callee)].meet(some: some, every: every, someFills: someFills, everyFill: everyFill), !isPending[Int(callee)] {
+				if above[Int(callee)].meet(some: some, every: every, someFills: someFills, everyFill: everyFill, fillsTakenAbove: edge.isFill ? fillsTakenBeneathFills : fillsTakenAbove), !isPending[Int(callee)] {
 					isPending[Int(callee)] = true
 					pending.append(callee)
 				}
