@@ -28,12 +28,13 @@
 /// reader of a subtree's union (the capture check, tier omissions) folds it bottom-up over the components, which are
 /// numbered so that every component a node reaches comes before it (`OrderedGraph.componentByNode`).
 ///
-/// Production worlds only: a mock world's own fact also names the module that writes a hand-written mock its tree
-/// calls, which reads the mock track's construction column (`TypeFactsConstruction.handWrittenMock`), so mocks keep
-/// `ScopeGenerator.fulfillersOfTree(buildingMock:)` until that column is filled. It holds the fulfillers only, for as
-/// long as its owner keeps it.
+/// A mock world's declaration builds its type with its hand-written mock where the mock's return type fits the property
+/// (`buildingMock`), so its fact also names the module that writes that mock, as the mock's tree builds it. A mock
+/// root's file adds what lies outside its world's declarations: the mocked type's own module and its `mock()`'s
+/// defaults (`ScopeGenerator.fulfillersOfMockOutsideTree(mockDefaults:)`). It holds the fulfillers only, for as long
+/// as its owner keeps it.
 struct TypeFactsImports: Sendable {
-	init(root: ConstructionScope) {
+	init(root: ConstructionScope, buildingMock: Bool) {
 		// The declarations the root builds: the properties each instantiates, then the fills it passes. An alias or a hole
 		// builds no type, so it imports nothing.
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
@@ -50,10 +51,11 @@ struct TypeFactsImports: Sendable {
 		// The root is built as no property, so it has no fact of its own: it alone reaches the `continue`.
 		for declaration in graph.nodes {
 			guard let property = declaration.property else { continue }
+			let instantiatedType = property.typeDescription.asInstantiatedType
 			fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
 				building: declaration.scope.instantiable,
-				forPropertyOfType: property.typeDescription.asInstantiatedType,
-				callingHandWrittenMock: false,
+				forPropertyOfType: instantiatedType,
+				callingHandWrittenMock: buildingMock && declaration.scope.instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiatedType),
 			))
 		}
 		self.fulfillers = fulfillers

@@ -363,11 +363,31 @@ func executeSafeDIToolTest(
 												// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
 												// (`TypeFactsReceivedValueSuppliesChecks`).
 												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-													// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-													try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-														// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
-														try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
-															try await tool.generate()
+													try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+														try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+															try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+																try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																	try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																		try await MockVariantBodyChecks.comparing {
+																			try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																				try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																					try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																						try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																							// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+																							try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+																								// A mock root's tree check its scopes left out must find nothing in its tree (`MockRootTreeChecksOracle`).
+																								try await MockRootTreeChecksOracle.comparing(handingOn: MockRootTreeChecksObservation.comparesTree) {
+																									try await tool.generate()
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
 														}
 													}
 												}
@@ -699,6 +719,11 @@ struct FixturePaths {
 	/// The path of the named fixture, or `nil` when the harness wrote no fixture of that name.
 	func writtenPath(of fileName: String) -> String? {
 		pathsByFileName[fileName]
+	}
+
+	/// The path of every fixture the harness wrote, sorted.
+	var writtenPaths: [String] {
+		pathsByFileName.values.sorted()
 	}
 
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:

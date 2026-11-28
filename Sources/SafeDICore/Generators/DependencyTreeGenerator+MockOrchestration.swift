@@ -42,7 +42,7 @@ extension DependencyTreeGenerator {
 		}
 		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
 		// local, so that a run no test observes threads nothing through the mock roots' construction.
-		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
+		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: MockWorldRoot).self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
 			try await generateMockCode(
 				mockConditionalCompilation: mockConditionalCompilation,
@@ -63,7 +63,7 @@ extension DependencyTreeGenerator {
 		additionalMocksToGenerate: Set<String>,
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
-		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
+		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: MockWorldRoot)>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -86,6 +86,9 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The imports each mock root's file takes for the types its tree builds, folded over its world as soon as the mock
+		// root is accepted, so no world's table is kept until the roots are lowered.
+		var foldedMockImportsByType = [TypeDescription: Set<FulfillerImports.Fulfiller>]()
 		// Which checks of each mock root's tree can find anything in it, by mocked type (`MockRootTreeChecks`).
 		var treeChecksByMockedType = [TypeDescription: MockRootTreeChecks]()
 		// Whether each mock root's world finds a `Sendable` capture, where a test compares it with the tree.
@@ -160,6 +163,7 @@ extension DependencyTreeGenerator {
 						ownPublicMockTypes.insert(instantiable.concreteInstantiable)
 					}
 				}
+				foldedMockImportsByType[instantiable.concreteInstantiable] = TypeFactsImports(root: mockRootTree.worldRoot, buildingMock: true).fulfillers
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 				treeChecksByMockedType[instantiable.concreteInstantiable] = mockRootTree.treeChecks
 				worldFindsSendableCaptureByMockedType[instantiable.concreteInstantiable] = mockRootTree.worldFindsSendableCapture
@@ -272,7 +276,7 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
-		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		var recordedWorldRoots = [TypeDescription: MockWorldRoot]()
 		if let worldRootRecording {
 			worldRootRecording.continuation.finish()
 			for await (mockedType, worldRoot) in worldRootRecording.stream {
@@ -280,16 +284,24 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let worldRoots = recordedWorldRoots
+		let foldedMockImports = foldedMockImportsByType
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
-			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
+			let foldedFulfillers = foldedMockImports[instantiable.concreteInstantiable, default: []]
+			if let observer = TypeFactsImportsObservation.comparesWalk {
+				let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
+					await mockRoot.fulfillersOfTree(buildingMock: true)
+				}
+				observer(TypeFactsImportsComparison(root: "mock of " + instantiable.concreteInstantiable.asSource, foldedFulfillers: foldedFulfillers, walkedFulfillers: walkedFulfillers))
+			}
+			async let fulfillersOutsideTree = mockRoot.fulfillersOfMockOutsideTree(mockDefaults: flatParameterMockDefaults)
 			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,
 					code: "",
-					fulfillers: fulfillers,
+					fulfillers: foldedFulfillers.union(fulfillersOutsideTree),
 				),
 				lowered: MockLowering.LoweredRoot(
 					mockedType: instantiable.concreteInstantiable,
