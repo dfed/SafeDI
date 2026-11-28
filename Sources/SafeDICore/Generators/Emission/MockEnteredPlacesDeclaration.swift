@@ -49,6 +49,12 @@ extension MockEnteredSlot {
 	/// other construction beneath such an edge to its initializer's own defaults, evaluated again each time. The nearest
 	/// place of a type is the first of that type going up, taken only where it is not left out.
 	///
+	/// Looking the nearest place of a type up does not grow with the places entered either. A place entered for the nearest
+	/// of its type keeps, by the type of the configuration it boxes, the nearest such place of each other type above it
+	/// (`nearestOfEachTypeAbove`), made once from the one above, so the lookup looks at the nearest such place and then at
+	/// most one more (`entered_looksAtOnePlaceForTheNearestOfItsType_whenEveryOtherTypeOfTheRingIsEnteredAbove`). A
+	/// configuration type is a cast's: the box of one type is cast only to the box of that type.
+	///
 	/// The text follows the five arguments and nothing else, so it is one text on every run.
 	/// - Parameter isSendable: Whether a function that is handed the places is `@Sendable`. The three types are then
 	///   `Sendable`, a place holds `any Sendable`, and all are `nonisolated`, so that a `nonisolated` function can enter a
@@ -82,6 +88,8 @@ extension MockEnteredSlot {
 			"\(indent)let above: \(place)?",
 			"\(indent)let jump: \(place)?",
 			"\(indent)let nearestOfTypeAbove: \(place)?",
+			"\(indent)let configuredType: ObjectIdentifier",
+			"\(indent)let nearestOfEachTypeAbove: [ObjectIdentifier: \(place)]",
 			"\(indent)let depth: Int",
 		]
 		if leavesOut {
@@ -104,7 +112,16 @@ extension MockEnteredSlot {
 			"\(indent)\(indent)let nearDepth = near?.depth ?? 0",
 			"\(indent)\(indent)depth = depthAbove + 1",
 			"\(indent)\(indent)jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above",
-			"\(indent)\(indent)nearestOfTypeAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }",
+			"\(indent)\(indent)let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }",
+			"\(indent)\(indent)nearestOfTypeAbove = nearestAbove",
+			"\(indent)\(indent)configuredType = ObjectIdentifier(type(of: configured))",
+			"\(indent)\(indent)if isNearestOfType, let nearestAbove {",
+			"\(indent)\(indent)\(indent)var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove",
+			"\(indent)\(indent)\(indent)nearestOfEachType[nearestAbove.configuredType] = nearestAbove",
+			"\(indent)\(indent)\(indent)nearestOfEachTypeAbove = nearestOfEachType",
+			"\(indent)\(indent)} else {",
+			"\(indent)\(indent)\(indent)nearestOfEachTypeAbove = [:]",
+			"\(indent)\(indent)}",
 			"\(indent)\(indent)let word = slot.map { $0 >> 6 } ?? -1",
 			"\(indent)\(indent)let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0",
 		]
@@ -131,14 +148,15 @@ extension MockEnteredSlot {
 		}
 		lines += [
 			"\(indent)func nearest\(handed)(_: Handed.Type) -> Handed? {",
+			"\(indent)\(indent)let type = ObjectIdentifier(\(configured)<Handed>.self)",
 			"\(indent)\(indent)var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }",
-			"\(indent)\(indent)while let candidate = place {",
-			leavesOut
-				? "\(indent)\(indent)\(indent)if let found = candidate.configured as? \(configured)<Handed> { return candidate.\(isLeftOut) ? nil : found.\(configuration) }"
-				: "\(indent)\(indent)\(indent)if let found = candidate.configured as? \(configured)<Handed> { return found.\(configuration) }",
-			"\(indent)\(indent)\(indent)place = candidate.nearestOfTypeAbove",
+			"\(indent)\(indent)if let candidate = place, candidate.configuredType != type {",
+			"\(indent)\(indent)\(indent)place = candidate.nearestOfEachTypeAbove[type]",
 			"\(indent)\(indent)}",
-			"\(indent)\(indent)return nil",
+			leavesOut
+				? "\(indent)\(indent)guard let place, let found = place.configured as? \(configured)<Handed>, !place.\(isLeftOut) else { return nil }"
+				: "\(indent)\(indent)guard let place, let found = place.configured as? \(configured)<Handed> else { return nil }",
+			"\(indent)\(indent)return found.\(configuration)",
 			"\(indent)}",
 			"\(indent)func \(ReservedName.mockEnteringFunctionName)\(handed)(_ slot: Int, _ handed: @autoclosure () -> Handed, \(nearestOfType): Bool = false) -> \(entered)<Handed> {",
 			"\(indent)\(indent)if var place = top, place.has(slot) {",
