@@ -267,9 +267,7 @@ extension SeamSignature.Places {
 							return HiddenElement(fieldLevel: key.level, fieldIndex: index, hiddenLevel: level, hiddenIndex: hiddenIndex, hiding: hiding.calledSeam)
 						}
 					}
-					if places.levels[key.level].parents.isEmpty {
-						return []
-					}
+					// A level with no parents has no children in the fold, whose union of them is empty.
 					return nil
 				},
 				children: { [unowned self] key in
@@ -387,9 +385,7 @@ extension SeamSignature.Places {
 				guard let property = places.levels[parent].key.nextProperty else { continue }
 				entries += Self.entries(of: property, builtAs: builtType)
 			}
-			if let first = route.levels.first, places.levels[first].key.builtType == nil {
-				entries += places.levels[first].fillBaseStack
-			}
+			// A case's route starts at the seam's root, which builds the seam, so no fill's base stack ends it there.
 			return entries
 		}
 
@@ -533,9 +529,7 @@ extension SeamSignature.Places {
 							if let earlier = declarations[..<index].lastIndex(where: { $0.field.property.label == label }) {
 								return hidden(level: level, index: index, hiddenLevel: level, hiddenIndex: earlier, hiding: hiding.calledSeam) == element.hidden ? past : []
 							}
-							if places.levels[level].parents.isEmpty {
-								return element.hidden == nil ? past : []
-							}
+							// A fill's field is declared at the fill's level, beneath the level of the call it fills, so it has parents.
 							return transitions(from: level, state: node.state).map { parent, state in
 								(Node(level: parent, state: state, phase: .seekingHidden(fieldLevel: level, fieldIndex: index)), true)
 							}
@@ -628,10 +622,9 @@ extension SeamSignature.Places {
 						return [(Node(level: node.level, state: node.state, phase: .found(depth: depth)), false)]
 					}
 					return transitions(from: node.level, state: node.state).map { parent, state in
-						guard let property = places.levels[parent].key.nextProperty else {
-							return (Node(level: parent, state: state, phase: node.phase), true)
-						}
-						return (Node(level: parent, state: state, phase: stacking(Self.entries(of: property, builtAs: builtType), depth: depth, last: last)), true)
+						// A parent no property leaves, a call's level, stacks nothing.
+						let entries = places.levels[parent].key.nextProperty.map { Self.entries(of: $0, builtAs: builtType) } ?? []
+						return (Node(level: parent, state: state, phase: stacking(entries, depth: depth, last: last)), true)
 					}
 				case .found:
 					return transitions(from: node.level, state: node.state).map { parent, state in
@@ -683,10 +676,8 @@ extension SeamSignature.Places {
 		}
 
 		/// The least route, in source order, by which a walk up from `startNode` reaches an end. Where `simple`, a route stacks
-		/// no entry twice: two levels alike are one level of the graph, so a route up can join builds of a tangle of cycles
-		/// that no tree holds together, climbing through a member already on it. Read from the ends down, each step takes the
-		/// least edge from which the start is still reachable without stacking an entry the route holds, so every choice is
-		/// final; a level outside every cycle of the graph needs no such check.
+		/// no entry twice, as no route a seam's tree builds does. Read from the ends down, each step takes the least edge that
+		/// stacks no entry the route holds; the graph holds no cycle of levels (`cycleReentries(ofLevel:beneath:context:)`).
 		private func leastRoute<Node: Hashable>(from startNode: Node, level: (Node) -> Int, next: (Node) -> [(Node, Bool)], isEnd: (Node) -> Bool, simple: Bool) -> Route? {
 			// The walk up, each node with the nodes it leads up to.
 			var parentsByNode = [Node: [(node: Node, isEdge: Bool)]]()
@@ -729,29 +720,12 @@ extension SeamSignature.Places {
 				guard let property = places.levels[level(upper)].key.nextProperty, let builtType = places.levels[level(lower)].key.builtType else { return nil }
 				return SeamSignature.Places.StackEntry(property: property, concreteType: builtType)
 			}
-			/// Whether a walk down from `node` reaches the start without stacking any of `entries`, or past a fill.
-			func reachesStart(from node: Node, avoiding entries: Set<SeamSignature.Places.StackEntry>) -> Bool {
-				var seen: Set<Node> = [node]
-				var toVisit = [node]
-				while let node = toVisit.popLast() {
-					if node == startNode {
-						return true
-					}
-					for (child, isEdge) in childrenByNode[node] ?? [] where onRoute.contains(child) && !seen.contains(child) {
-						if isEdge {
-							guard let entry = entry(from: node, to: child) else { return true }
-							guard !entries.contains(entry) else { continue }
-						}
-						seen.insert(child)
-						toVisit.append(child)
-					}
-				}
-				return false
-			}
 			// A node is entered by the first walk to read every location on the way to it, which is the least walk there.
 			var entered = Set<Node>()
 			var frontier = ends.map { (levels: [level($0)], node: $0, pending: ArraySlice<SeamSignature.Hole.DeclaredProperty>(), entries: Set<SeamSignature.Places.StackEntry>()) }
-			while !frontier.isEmpty {
+			// `frontier` starts with the ends, of which there is one at least, since the start is on a route; each round keeps
+			// a walk at least, or returns.
+			while true {
 				// Each walk with nothing pending goes on down each of its steps; a step that stays at its level reads nothing.
 				var expanded = [Walk]()
 				var index = 0
@@ -772,7 +746,7 @@ extension SeamSignature.Places {
 							var entries = walk.entries
 							if simple {
 								if let entry = entry(from: walk.node, to: child) {
-									guard entries.insert(entry).inserted, cycleContext.cycleComponent[childLevel] == nil || reachesStart(from: child, avoiding: entries) else { continue }
+									guard entries.insert(entry).inserted else { continue }
 								} else {
 									entries = []
 								}
@@ -793,7 +767,6 @@ extension SeamSignature.Places {
 					return advanced
 				}
 			}
-			return nil
 		}
 
 		/// Whether `lhs` sorts before `rhs` on a route: by location, then, where the locations are equal, by label.

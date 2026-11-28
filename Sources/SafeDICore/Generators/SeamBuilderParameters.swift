@@ -494,7 +494,6 @@ extension DependencyTreeGenerator {
 		guard draftsPlaceLevels else { return HolesAndPlaces(holes: sortedHoles) }
 		// The paths to the calls that close cycles, after every place's and call's: where a cycle re-enters a scope is a fact
 		// of the route, which the graph's query reads from these levels.
-		placesBuilder.beginClosingCalls()
 		for (closingSite, closesOn) in closingCallSites(in: generator) {
 			var childDeclarationsOnPathToCall = [ObjectIdentifier: ChildDeclarations]()
 			var levels = fields(
@@ -756,7 +755,7 @@ extension DependencyTreeGenerator {
 
 	/// The `@Sendable` function a scope built as `property`, of the type `builtType`, opens: a level of a seam's own tree,
 	/// or a call that presents the places of the seam it builds.
-	private static func sendableFunction(openedBy property: Property, building builtType: TypeDescription) -> SeamSignature.Hole.UncarriedDeclaration.SendableFunction {
+	static func sendableFunction(openedBy property: Property, building builtType: TypeDescription) -> SeamSignature.Hole.UncarriedDeclaration.SendableFunction {
 		if ScopeGenerator.isBuilder(property) {
 			.instantiator(builtType: builtType)
 		} else if case .sendableLazilyInstantiated = property.propertyType {
