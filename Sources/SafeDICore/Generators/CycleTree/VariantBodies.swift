@@ -246,9 +246,12 @@ extension DependencyTreeGenerator {
 				beneath: NearestDeclarations(),
 				lazilyInstantiatedInstanceProperties: [],
 			)
+			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			let world = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
+			orderFacts = world
+			orderVariantsByBody[rootBody] = 0
 			if shadow.twinValues.isEmpty, Self.keysBodiesByFacts(inTreeOf: scope) {
-				let (table, record) = frozenScopeMap.freezing(rootScope: scope)
-				facts = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
+				facts = world
 				variantsByBody[rootBody] = 0
 			}
 			return try plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: false, cache: &cache).map { (rootBody, $0) }
@@ -277,6 +280,9 @@ extension DependencyTreeGenerator {
 				beneath: rootNearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			)
+			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			orderFacts = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: true)
+			orderVariantsByBody[rootBody] = 0
 			return try plan(fromRootBody: rootBody, shadow: shadow, isMockRoot: true, cache: &cache).map { (rootBody, $0) }
 		}
 
@@ -321,7 +327,8 @@ extension DependencyTreeGenerator {
 							calledNearestDeclarations.build(functionProperty)
 						}
 						let key = VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt)
-						let calledVariant = variantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, builtAs: $0) }
+						let calledVariant = variantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, builtAs: $0, in: facts) }
+						let calledOrderVariant = orderVariantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, builtAs: $0, in: orderFacts) }
 						let (calledBody, arguments) = try self.calledBody(
 							of: calledCopy,
 							calledScope: calledScope,
@@ -345,7 +352,10 @@ extension DependencyTreeGenerator {
 							return nil
 						}
 						// The tree can receive the label the body is built as too, as a loop mate does: it keeps its first place.
-						let labelsInOrderReceived = [context.property.label] + parameterLabels(ofFunctionBuiltAs: context.property, calledTree: calledTree, variant: calledVariant)
+						if orderVariantsByBody[calledBody] == nil {
+							orderVariantsByBody[calledBody] = calledOrderVariant
+						}
+						let labelsInOrderReceived = [context.property.label] + parameterLabels(ofFunctionAt: calledOrderVariant)
 						var positionsByLabel = [String: Int]()
 						for (position, label) in bodies[calledBody].labels.enumerated() {
 							positionsByLabel[label] = position
@@ -490,8 +500,6 @@ extension DependencyTreeGenerator {
 		private struct CalledTree {
 			/// The labels the scope's tree reads from above, sorted (`sortedLabelsReadFromAbove(inTreeOf:)`).
 			let sortedReceivedLabels: [String]
-			/// The same labels in the order a walk first meets a receive of each (`labelsInOrderFirstReceived(inTreeOf:)`).
-			let labelsInOrderFirstReceived: [String]
 		}
 
 		private mutating func calledTree(of scope: Scope) -> CalledTree {
@@ -500,7 +508,6 @@ extension DependencyTreeGenerator {
 			} else {
 				let calledTree = CalledTree(
 					sortedReceivedLabels: Self.sortedLabelsReadFromAbove(inTreeOf: scope),
-					labelsInOrderFirstReceived: Self.labelsInOrderFirstReceived(inTreeOf: scope),
 				)
 				calledTreesByScope[ObjectIdentifier(scope)] = calledTree
 				return calledTree
@@ -582,11 +589,11 @@ extension DependencyTreeGenerator {
 			return true
 		}
 
-		/// The facts' variant of the call place at `path` in a body that is the variant `callingVariant`:
+		/// The variant of `facts` of the call place at `path` in a body that is the variant `callingVariant`:
 		/// at each scope from the body's own down, the variant its variant calls at the edge of the child that leads to
 		/// the call. The facts' graph has an edge for each of a scope's properties to generate, in their order, before
-		/// the edges of its fills, so a child's edge is its index. `nil` where the facts do not key the plan.
-		private func variant(calledAt path: [Int], builtAs callingVariant: Int) -> Int? {
+		/// the edges of its fills, so a child's edge is its index. `nil` where there are no facts.
+		private func variant(calledAt path: [Int], builtAs callingVariant: Int, in facts: TypeFactsGraph?) -> Int? {
 			var variant: Int? = callingVariant
 			for index in path {
 				variant = variant.flatMap { variant in facts.flatMap { facts in
@@ -597,16 +604,13 @@ extension DependencyTreeGenerator {
 			return variant
 		}
 
-		/// The labels a function built as `property` takes as parameters after its own, in the order it takes them: the
-		/// facts' order of its declaration (`TypeFactsWorld.parameterOrder(of:)`) where the facts key the plan, else the
-		/// order a walk of the called scope's tree first receives each.
-		private func parameterLabels(ofFunctionBuiltAs property: Property, calledTree: CalledTree, variant: Int?) -> [String] {
-			let plansOrder = calledTree.labelsInOrderFirstReceived.filter { $0 != property.label }
-			guard let facts, let variant else { return plansOrder }
-			// The facts' order is the tree's (`ScopeGenerator.inOrderTheBodyFirstReceives`), which the cycle function
-			// parameters check compares in every test; the plan's walk skips a scope that closes a cycle, so it can meet a
-			// label later than the tree does, and is no measure of the facts.
-			return facts.parameterOrder(of: facts.variants.node(of: variant)).map { facts.labelTexts[Int($0)] }
+		/// The labels the function of the variant `variant` takes as parameters after its own, in the order it takes them: the
+		/// facts' order of its declaration (`TypeFactsWorld.parameterOrder(of:)`), which is the tree's
+		/// (`ScopeGenerator.inOrderTheBodyFirstReceives`) and which the cycle function parameters check compares in every
+		/// test. Every plan reads it, whether or not the facts key its bodies, so no order a plan writes is its own.
+		private func parameterLabels(ofFunctionAt variant: Int?) -> [String] {
+			guard let orderFacts, let variant else { return [] }
+			return orderFacts.parameterOrder(of: orderFacts.variants.node(of: variant)).map { orderFacts.labelTexts[Int($0)] }
 		}
 
 		/// The labels `scope`'s tree reads from above it, sorted: hiding is by label, so a read is answered by the nearest
@@ -631,38 +635,6 @@ extension DependencyTreeGenerator {
 				bound: { scopes[$0].declaredLabels },
 			)
 			return labels.labels(of: 0).sorted()
-		}
-
-		/// The labels the scopes of `scope`'s tree receive, each once, in the order a walk first meets a receive of it: each
-		/// scope's received dependencies and the properties its renames are fulfilled by, in declaration order, then the
-		/// trees of the scopes it instantiates, depth first, each scope once.
-		private static func labelsInOrderFirstReceived(inTreeOf scope: Scope) -> [String] {
-			var labels = [String]()
-			var labelsMet = Set<String>()
-			var visitedScopes = Set<ObjectIdentifier>()
-			var scopesToVisit = [scope]
-			while let scope = scopesToVisit.popLast() {
-				guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
-				for dependency in scope.instantiable.dependencies {
-					let label: String? = switch dependency.source {
-					case .instantiated, .forwarded:
-						nil
-					case .received:
-						dependency.property.label
-					case let .aliased(fulfillingProperty, _, _):
-						fulfillingProperty.label
-					}
-					if let label, labelsMet.insert(label).inserted {
-						labels.append(label)
-					}
-				}
-				for propertyToGenerate in scope.propertiesToGenerate.reversed() {
-					if case let .instantiated(_, childScope, _) = propertyToGenerate {
-						scopesToVisit.append(childScope)
-					}
-				}
-			}
-			return labels
 		}
 
 		/// The type of a scope whose one declaration is `dependency` of `builder`: what a body built as its property is the
@@ -705,6 +677,11 @@ extension DependencyTreeGenerator {
 		private var facts: TypeFactsGraph?
 		/// The facts' variant each body is, by its position, and the body of each variant that keys one.
 		private var variantsByBody = [Int: Int]()
+		/// The per-type facts of the root the plan is of, whether or not they key its bodies, which give each function the
+		/// order of its parameters (`parameterLabels(ofFunctionAt:)`), and the variant each body is of them, by
+		/// its position; held as long as the bodies are.
+		private var orderFacts: TypeFactsGraph?
+		private var orderVariantsByBody = [Int: Int]()
 		private var bodiesByVariant = [Int: Int]()
 		private var calledTreesByScope = [ObjectIdentifier: CalledTree]()
 		/// The memo the root's bodies are built with: shared across them where the plan lays the root's code out, so a
