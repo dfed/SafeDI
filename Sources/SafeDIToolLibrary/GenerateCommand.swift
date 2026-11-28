@@ -529,9 +529,11 @@ public struct Generate: AsyncParsableCommand {
 				identity: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
 				isOwnFile: isOwnFile,
 				// A declaration records its file as this run named it: relative to the project root, or else to the
-				// working directory, or absolute.
-				isReadableFile: { filePath in
+				// working directory, or absolute. Another module's file can also be read where `DiagnosticLocator` reads it,
+				// under the directory this run's inputs resolve under, as in a sandboxed Bazel action.
+				isReadableFile: { [inputFilePaths] filePath in
 					FileManager.default.isReadableFile(atPath: comparisonFilePaths.projectFilePath(of: filePath).path)
+						|| DiagnosticLocator.isReadable(underResolvedRootOfAnyOf: inputFilePaths, recordedPath: filePath)
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
 				modulesReadByRunOfModule: { [membership] moduleName in

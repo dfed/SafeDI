@@ -176,19 +176,33 @@ struct DiagnosticLocator {
 		}
 	}
 
-	/// The distinct directories the run's input files resolve under (`resolvedRoot(ofRelativePath:)`), in the order of the
-	/// files' paths.
+	/// See ``resolvedRoots(of:)``, computed once a diagnostic needs them.
 	private mutating func resolvedInputRoots(of inputs: Inputs) -> [String] {
 		if let inputRoots {
 			return inputRoots
 		} else {
-			var roots = [String]()
-			for root in inputs.inputFilePaths.sorted().compactMap(resolvedRoot(ofRelativePath:)) where !roots.contains(root) {
-				roots.append(root)
-			}
+			let roots = Self.resolvedRoots(of: inputs.inputFilePaths)
 			inputRoots = roots
 			return roots
 		}
+	}
+
+	/// Whether `recordedPath`, a path a `.safedi` file records relative to the run that wrote it, can be read under one of
+	/// the directories the run's input files resolve under, where the locator reads it when it cannot be read where it
+	/// is: the run's access check then reports a diagnostic at the declaration it names, which the locator locates.
+	static func isReadable(underResolvedRootOfAnyOf inputFilePaths: Set<String>, recordedPath: String) -> Bool {
+		guard !recordedPath.hasPrefix("/") else { return false }
+		return resolvedRoots(of: inputFilePaths).contains { root in FileManager.default.isReadableFile(atPath: root + "/" + recordedPath) }
+	}
+
+	/// The distinct directories the run's input files resolve under (`resolvedRoot(ofRelativePath:)`), in the order of the
+	/// files' paths.
+	private static func resolvedRoots(of inputFilePaths: Set<String>) -> [String] {
+		var roots = [String]()
+		for root in inputFilePaths.sorted().compactMap(resolvedRoot(ofRelativePath:)) where !roots.contains(root) {
+			roots.append(root)
+		}
+		return roots
 	}
 
 	/// Every range `entry` holds, in the order a read of the bytes `ranks` writes finds them.

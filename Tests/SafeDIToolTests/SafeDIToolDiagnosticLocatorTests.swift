@@ -129,6 +129,30 @@ struct SafeDIToolDiagnosticLocatorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsAccessErrorAtDeclarationWithFixItUnderResolvedRootOfInput_whenRecordedRelativePathOpensOnlyThere() async throws {
+		// As in a sandboxed Bazel action: the access check reads `Feature`'s file where the locator does, so the error lands
+		// at the declaration to widen, with its fix-it, rather than at `App`'s reference.
+		let project = try makeProject(featureFiles: ["Service.swift": Self.packageServiceWithInternalInitializer], underWorkingDirectory: true)
+		try await project.runFeature()
+		let executionRoot = project.root.appendingPathComponent("ExecutionRoot")
+		for relativePath in [project.featurePath("Service.swift"), project.appPath("Root.swift")] {
+			let destination = executionRoot.appendingPathComponent(relativePath)
+			try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try FileManager.default.moveItem(atPath: relativePath, toPath: destination.path)
+		}
+		try FileManager.default.createSymbolicLink(atPath: project.appPath("Root.swift"), withDestinationPath: executionRoot.appendingPathComponent(project.appPath("Root.swift")).path)
+		#expect(!FileManager.default.fileExists(atPath: project.featurePath("Service.swift")))
+
+		let description = try await project.appErrorDescription()
+
+		#expect(description == """
+		\(project.featurePath("Service.swift")):3:5: error: `Service`’s initializer is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix.
+		\(project.featurePath("Service.swift")):3:5-3:5: fixit: package\(" ")
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_locatesWarningInAnotherModulesFile_whenWarningsAreNotReplayedFromCache() async throws {
 		let project = try makeProject(featureFiles: ["Owner.swift": Self.ownerInstantiatingSessionWithIt], appFiles: ["Root.swift": Self.rootInstantiatingOwner])
 		try await project.runFeature()
