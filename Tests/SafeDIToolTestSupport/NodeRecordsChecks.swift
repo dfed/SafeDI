@@ -64,11 +64,13 @@ enum NodeRecordsChecks {
 		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$observer.withValue({ report in
 				// A seam's place graph drafted from its facts world is compared with its stored places only in a report until
-				// the drafts are assembled into the places (`SAFEDI_PLACES_DRAFT_REPORT`), and no other observer sees it.
+				// the drafts are assembled into the places (`SAFEDI_PLACES_DRAFT_REPORT`), and an enclosing observer, a growth
+				// row's, which reads the report's lines.
 				if let placesDraftDifferences = report.placesDraftDifferences {
 					if let placesDraftReportPath {
 						append(placesDraftDifferences.map { "\(testName)\t\(report.root)\t\($0)\n" }.joined(), toFileAt: placesDraftReportPath)
 					}
+					enclosingObserver?(report)
 					return
 				}
 				for difference in report.differences {
