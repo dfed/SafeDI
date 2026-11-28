@@ -109,11 +109,6 @@ struct BuiltPlaceRecord: Sendable {
 		callFields?.closureArguments ?? []
 	}
 
-	/// The closures the place builds for the builders its call hands on (`CallFields.builtClosures`).
-	var builtClosures: [BuiltClosure] {
-		callFields?.builtClosures ?? []
-	}
-
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
 		get { sharingFields?.passedArguments ?? [] }
