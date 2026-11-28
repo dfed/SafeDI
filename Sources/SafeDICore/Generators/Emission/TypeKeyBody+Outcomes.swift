@@ -259,6 +259,19 @@ extension TypeKeyLayout {
 	/// takes.
 	mutating func computeParameterTypes() -> Bool {
 		parameterTypes = Array(repeating: [:], count: membersByClass.count)
+		// The labels a rename in each class reads, which the class takes as their declarations type them, so that the
+		// rename reads the type the path key binds it from. A cycle parameter is typed as the path key types it, optional
+		// where nothing requires it, whatever reads it.
+		let labelsReadByRenames = membersByClass.map { members in
+			Set(members.flatMap { member in
+				bodies[member].statements.compactMap { statement -> String? in
+					guard case let .alias(record) = statement, let label = record.fulfillingProperty?.label,
+					      !bodies[member].cycleParameterLabels.contains(label)
+					else { return nil }
+					return label
+				}
+			})
+		}
 		for _ in 0..<16 {
 			var changed = false
 			for owner in membersByClass.indices.dropFirst() {
@@ -282,8 +295,9 @@ extension TypeKeyLayout {
 						}
 						guard isComplete || parameterTypes[owner][label] == nil else { continue }
 						var combined = Self.parameterType(combining: types)
-						// A value nothing in the function requires is taken optionally, as the path key types a cycle's parameter.
-						if let value = combined, !value.isOptional, value.lazilyInstantiatedInstanceType == nil,
+						// A value nothing in the function requires is taken optionally, as the path key types a cycle's parameter,
+						// but for one a rename in the function reads, which takes the type its calls' declarations share.
+						if !labelsReadByRenames[owner].contains(label), let value = combined, !value.isOptional, value.lazilyInstantiatedInstanceType == nil,
 						   !membersByClass[owner].contains(where: { requiredReads[$0].contains(label) })
 						{
 							combined = .optional(value)
