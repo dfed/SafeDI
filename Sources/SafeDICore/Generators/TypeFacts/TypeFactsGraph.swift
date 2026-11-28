@@ -819,7 +819,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let mockRootPins = forMockGeneration ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
+		let mockRootPins = forMockGeneration ? TypeFactsMockRootPins(graph: graph, root: 0, edgeIsFill: edgeIsFill, labels: labels) : nil
 		self.mockRootPins = mockRootPins
 		let edgeOpens = edgeFacts.map(\.opens)
 		let answers = Self.answers(

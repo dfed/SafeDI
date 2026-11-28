@@ -46,11 +46,12 @@ struct TypeFactsMockRootPins: Sendable {
 	}
 
 	/// - Parameters:
-	///   - graph: The mock root's world, whose root is the mock root.
+	///   - graph: The mock root's world, or a graph that holds it.
+	///   - root: The node of `graph` that is the mock root, whose own and promoted children the walk starts from.
 	///   - edgeIsFill: Whether each edge, by its position among every node's edges, is a fill, which the walk enters no
 	///     tree of.
 	///   - labels: The world's labels, which every read of a pinnable label names.
-	init(graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], labels: TypeFactsInterner<String>) {
+	init(graph: OrderedGraph<TypeFactsDeclaration>, root: Int, edgeIsFill: [Bool], labels: TypeFactsInterner<String>) {
 		let nodes = graph.nodes
 		var pinSets = TypeFactsInterner<Set<Property>>()
 		// Each node's required receives of a label and its receives of one only if available, as the walk judges them.
@@ -91,7 +92,7 @@ struct TypeFactsMockRootPins: Sendable {
 
 		// The root's edges to the children it promotes, whose trees production builds above the mocked type: the walk starts
 		// each of them afresh, and the mocked type's own receives pin nothing in them.
-		let rootScope = nodes[0].scope
+		let rootScope = nodes[root].scope
 		let ownChildProperties = Set(rootScope.instantiable.dependencies.compactMap { dependency -> Property? in
 			switch dependency.source {
 			case .instantiated:
@@ -101,7 +102,7 @@ struct TypeFactsMockRootPins: Sendable {
 			}
 		})
 		var promotedEdges = Set<Int>()
-		for (index, target) in graph.edges(from: 0).enumerated() {
+		for (index, target) in graph.edges(from: root).enumerated() {
 			if let property = nodes[Int(target)].property, nodes[Int(target)].key.leaf == .none, !edgeIsFill[index], !ownChildProperties.contains(property) {
 				promotedEdges.insert(index)
 			}
@@ -111,7 +112,7 @@ struct TypeFactsMockRootPins: Sendable {
 			let offset = graph.edgeOffset(of: node)
 			var children = [Int]()
 			for (index, target) in graph.edges(from: node).enumerated()
-				where !edgeIsFill[offset + index] && nodes[Int(target)].key.leaf == .none && !(node == 0 && promotedEdges.contains(index))
+				where !edgeIsFill[offset + index] && nodes[Int(target)].key.leaf == .none && !(node == root && promotedEdges.contains(index))
 			{
 				children.append(Int(target))
 			}
@@ -122,7 +123,7 @@ struct TypeFactsMockRootPins: Sendable {
 		// starts at the mocked type and at each promoted child, and judges every type it reaches before a declaration of the
 		// label against the required receives on it and beneath it, back to a declaration of the label.
 		var pinnedWhereverBuilt = [String: [TypeDescription: Set<Property>]]()
-		let starts = [0] + graph.edges(from: 0).enumerated().compactMap { index, target in
+		let starts = [root] + graph.edges(from: root).enumerated().compactMap { index, target in
 			promotedEdges.contains(index) ? Int(target) : nil
 		}
 		for label in pinnableLabels.sorted() {
@@ -171,6 +172,7 @@ struct TypeFactsMockRootPins: Sendable {
 		self.pinnableLabels = Set(pinnableLabels.compactMap { labels.existingID(of: $0) })
 		self.pinnedWhereverBuilt = pinnedWhereverBuilt
 		self.requiredSetsByNodeAndLabel = requiredSetsByNodeAndLabel
+		self.root = root
 		self.promotedEdges = promotedEdges
 		self.onlyIfAvailableByNode = onlyIfAvailableByNode
 	}
@@ -183,7 +185,7 @@ struct TypeFactsMockRootPins: Sendable {
 	/// The context the root answers a mock read of a pinnable label with at its edge with `index` among its edges: its own
 	/// required receives of the label pin the places beneath, but for a child it promotes.
 	func rootContext(atEdge index: Int, label: Int32) -> Context {
-		promotedEdges.contains(index) ? .root(pinnedAbove: []) : .root(pinnedAbove: (requiredSetsByNodeAndLabel[0][label] ?? []).sortedDistinct)
+		promotedEdges.contains(index) ? .root(pinnedAbove: []) : .root(pinnedAbove: (requiredSetsByNodeAndLabel[root][label] ?? []).sortedDistinct)
 	}
 
 	/// The context `node` hands on for a mock read of `label` it does not bind, given the one it was handed: its own
@@ -213,6 +215,8 @@ struct TypeFactsMockRootPins: Sendable {
 	private let pinnableLabels: Set<Int32>
 	private let pinnedWhereverBuilt: [String: [TypeDescription: Set<Property>]]
 	private let requiredSetsByNodeAndLabel: [[Int32: [Int32]]]
+	/// The node that is the mock root.
+	private let root: Int
 	/// The root's edges, by index among its edges, to the children it promotes.
 	private let promotedEdges: Set<Int>
 	private let onlyIfAvailableByNode: [[(property: Property, dependency: Dependency)]]
