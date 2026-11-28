@@ -668,7 +668,8 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 37
+	/// The last check's number; 38 is unused, so its count stays 0.
+	static let lastCheck = 39
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -703,6 +704,11 @@ enum TypeFactsChecks {
 	/// 37. Each fill a place passes builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction(ofFill:)`)
 	///     exactly where the facts' fold says so (`TypeFactsFill.buildsInSendableFunction`, `TypeFactsFillSendability`),
 	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property.
+	/// 39. Each fill a place passes takes the memos the place's generator hands it (`Scope.Fill.labelsHandedAsMemo`, the
+	///     fill's fields of those labels), exactly the facts' column (`TypeFactsFill.handedMemoStart`): which labels, each
+	///     memo's property, and its deferral, the `SendableLazilyInstantiated` its tree reads beside the value applied
+	///     (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
+	///     the fill's edge found by its key as in 37.
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
@@ -791,6 +797,11 @@ enum TypeFactsChecks {
 					count(37)
 					if places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
 						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillBuildsInSendableFunction) (the seam takes it `@Sendable` \(edge.fillHoleIsSendable))")
+					}
+					// Check 39.
+					count(39)
+					if places[fillChild].fillHandedMemos != edge.fillHandedMemos {
+						add(39, "place \(index) \(place.declaration) hands fill \(places[fillChild].declaration) the memos \(places[fillChild].fillHandedMemos.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillHandedMemos)")
 					}
 				}
 			}

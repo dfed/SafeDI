@@ -338,6 +338,8 @@ struct TypeFactsGraph: Sendable {
 		// the place's fields, but where some route hands the fill a memo, the memo's (`FillsOfCall.structBindings`).
 		let requiredIncludingFillsRows: BitRows
 		let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
+		// The memo each fill takes of each label some route hands it one of (`TypeFactsFill.handedMemoStart`).
+		var handedMemoByLabelByEdge = [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
 		if fillHoles.isEmpty {
 			requiredIncludingFillsRows = requiredRows
 			fillStructRows = nil
@@ -345,10 +347,11 @@ struct TypeFactsGraph: Sendable {
 			var fillStructBindingsByEdge = [Int32: ScopeGenerator.FillStructBindings]()
 			let propertyValues = properties.values
 			for fillsOfCall in fillsOfCalls {
-				let bindingsByEdge = fillsOfCall.structBindings { edge in
+				let (bindingsByEdge, memoByLabelByEdge) = fillsOfCall.structBindings { edge in
 					Set(received.columns(inRow: Int(graph.edgeTargets[Int(edge)])).map { propertyValues[Int($0)] })
 				}
 				fillStructBindingsByEdge.merge(bindingsByEdge) { bindings, _ in bindings }
+				handedMemoByLabelByEdge.merge(memoByLabelByEdge) { memoByLabel, _ in memoByLabel }
 			}
 			// A property no node reads or declares has no ID, and hides nothing.
 			func rows(_ selected: (ScopeGenerator.FillStructBindings) -> Set<Property>) -> BitRows {
@@ -706,11 +709,17 @@ struct TypeFactsGraph: Sendable {
 		)
 		var fills = [TypeFactsFill]()
 		var fillPathEntries = [TypeFactsFillPathEntry]()
+		var fillHandedMemos = [TypeFactsHandedMemo]()
 		for (edge, hole) in fillHoles {
 			let source = Self.source(ofEdge: Int(edge), in: graph)
 			let stackStart = Int32(fillPathEntries.count)
 			for (property, concreteType) in zip(hole.fillPropertyStack, hole.fillConcreteTypeStack) {
 				fillPathEntries.append(TypeFactsFillPathEntry(property: properties.id(of: property), concreteType: types.id(of: concreteType)))
+			}
+			// By label, so no dictionary's order reaches the column.
+			let handedMemoStart = Int32(fillHandedMemos.count)
+			for (label, memo) in (handedMemoByLabelByEdge[edge] ?? [:]).sorted(by: { $0.key < $1.key }) {
+				fillHandedMemos.append(TypeFactsHandedMemo(label: labels.id(of: label), property: properties.id(of: memo.property), deferral: memo.deferral))
 			}
 			fills.append(TypeFactsFill(
 				edge: edge,
@@ -723,6 +732,8 @@ struct TypeFactsGraph: Sendable {
 				holeIsSendable: hole.isSendable,
 				buildsInSendableFunction: fillBuildsInSendableFunction[Int(edge)],
 				key: fillKeys.id(of: ScopeGenerator.fillKey(of: hole)),
+				handedMemoStart: handedMemoStart,
+				handedMemoCount: Int32(fillHandedMemos.count) - handedMemoStart,
 			))
 		}
 
@@ -824,6 +835,7 @@ struct TypeFactsGraph: Sendable {
 		self.parents = parents
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
+		self.fillHandedMemos = fillHandedMemos
 		self.propertyFacts = propertyFacts
 		propertyTable = properties.values
 		typeTable = types.values
@@ -1424,6 +1436,9 @@ struct TypeFactsGraph: Sendable {
 	let fills: [TypeFactsFill]
 	/// Every fill's path, each fill's in a run.
 	let fillPathEntries: [TypeFactsFillPathEntry]
+	/// The memos the fills take of labels some route hands them a memo of (`TypeFactsFill.handedMemoStart`), each fill's
+	/// run by label.
+	let fillHandedMemos: [TypeFactsHandedMemo]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
@@ -1505,7 +1520,7 @@ struct TypeFactsGraph: Sendable {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
 		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
-		count += 7 * fills.count + 2 * fillPathEntries.count + propertyFacts.columnElementCount + readTable.count
+		count += 12 * fills.count + 2 * fillPathEntries.count + 3 * fillHandedMemos.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		count += madeAgain?.columnElementCount ?? 0
@@ -1951,21 +1966,25 @@ struct FillsOfCall {
 		calledBuilders = scope.calledBuilders
 	}
 
-	/// What each fill edge's fill binds from its site's scope struct, by the edge's position: `receivedByFillTarget` gives
-	/// what the subtree of an edge's target reads from above it, along the edges that are no fills.
+	/// What each fill edge's fill binds from its site's scope struct, and the memo it takes of each label some route hands
+	/// it one of, by the edge's position: `receivedByFillTarget` gives what the subtree of an edge's target reads from above
+	/// it, along the edges that are no fills.
 	///
 	/// Where some route hands a fill a memo, the fill binds the memo's forms of its label in place of the place's field
 	/// (`ScopeGenerator.FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`,
 	/// the tree's own rule, over the call's dispatchers, which the tree's rule declares from the call's builders and
-	/// filled places; only their names, which no memo reads, come from an allocator of their own). The tree finds the
-	/// labels a fill's tree reads only as the place's field on the pass before, and on the next pass hands no memo of them
-	/// (`ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`); here the fill's
-	/// target's reads answer it, and a second round of the rule leaves them out. Three inputs of the tree's are not a
-	/// record's, and stay at what they are for a call outside a fill in a tree that is no seam's: the dispatchers enclosing
-	/// calls declare (none), the scope values a seam's tree hands its fills (`SeamHoles.innerScope(at:innerKey:)`, none),
-	/// and the fields the sites inside a fill carry (none); `readingSendableWrapper` decides only a memo's deferral, which
-	/// hides nothing.
-	func structBindings(receivedByFillTarget: (_ edge: Int32) -> Set<Property>) -> [Int32: ScopeGenerator.FillStructBindings] {
+	/// filled places; only their names, which no memo reads, come from an allocator of their own). The tree finds two
+	/// inputs of that rule on the pass before, and here the fill's target's reads answer each, the rule run again with what
+	/// they find: the labels a fill's tree reads only as the place's field, of which it hands no memo
+	/// (`ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`), and then the
+	/// `SendableLazilyInstantiated` its tree reads beside a label it is handed a memo of, which decides only that memo's
+	/// deferral (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
+	/// so it hides nothing but tells which wrapper's memo the fill takes. Three inputs of the tree's are not a record's,
+	/// and stay at what they are for a call outside a fill in a tree that is no seam's: the dispatchers enclosing calls
+	/// declare (none), the scope values a seam's tree hands its fills (`SeamHoles.innerScope(at:innerKey:)`, none), and the
+	/// fields the sites inside a fill carry (none). Each rule runs over the call's dispatchers at most three times, and each
+	/// fill edge's received row is read once.
+	func structBindings(receivedByFillTarget: (_ edge: Int32) -> Set<Property>) -> (bindingsByEdge: [Int32: ScopeGenerator.FillStructBindings], handedMemoByLabelByEdge: [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]) {
 		let innerScopeReaders = calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 		var handedMemosByKey = [String: ScopeGenerator.FillDispatcher.HandedMemos]()
 		var emittedFills = [(fill: ScopeGenerator.FillDispatcher.EmittedFill, edge: Int32, placeFields: [SeamSignature.Hole.Field])]()
@@ -1993,14 +2012,17 @@ struct FillsOfCall {
 				fillNames: [:],
 				names: &names,
 			)
-			func memosHanded(leavingOut labelsReadOnlyAsPlaceField: [String: Set<String>]) -> [String: ScopeGenerator.FillDispatcher.HandedMemos] {
-				ScopeGenerator.FillDispatcher.memosHanded(toFills: emittedFills.map(\.fill), ofPublicMockCall: isPublicMockCall, labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField, readingSendableWrapper: [:], among: dispatchers)
+			func memosHanded(leavingOut labelsReadOnlyAsPlaceField: [String: Set<String>], readingSendableWrapper: [String: [String: Property]]) -> [String: ScopeGenerator.FillDispatcher.HandedMemos] {
+				ScopeGenerator.FillDispatcher.memosHanded(toFills: emittedFills.map(\.fill), ofPublicMockCall: isPublicMockCall, labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField, readingSendableWrapper: readingSendableWrapper, among: dispatchers)
 			}
-			handedMemosByKey = memosHanded(leavingOut: [:])
+			handedMemosByKey = memosHanded(leavingOut: [:], readingSendableWrapper: [:])
+			// What each fill's target reads from above, found once for a fill some route hands a memo.
+			var receivedByEdge = [Int32: Set<Property>]()
 			var labelsReadOnlyAsPlaceField = [String: Set<String>]()
 			for (fill, edge, placeFields) in emittedFills {
 				guard let memoByLabel = handedMemosByKey[fill.key]?.memoByLabel, !memoByLabel.isEmpty else { continue }
 				let received = receivedByFillTarget(edge)
+				receivedByEdge[edge] = received
 				for field in fill.fields {
 					guard let memo = memoByLabel[field.property.label],
 					      ScopeGenerator.FillDispatcher.readsOnlyAsPlaceField(field.handedAsMemo(memo), placeFields: placeFields, reads: { ScopeGenerator.reads($0, among: received) }, carriedBySites: [])
@@ -2009,7 +2031,18 @@ struct FillsOfCall {
 				}
 			}
 			if !labelsReadOnlyAsPlaceField.isEmpty {
-				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField)
+				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField, readingSendableWrapper: [:])
+			}
+			var readingSendableWrapper = [String: [String: Property]]()
+			for (fill, edge, _) in emittedFills {
+				guard let memoByLabel = handedMemosByKey[fill.key]?.memoByLabel, !memoByLabel.isEmpty, let received = receivedByEdge[edge] else { continue }
+				let instancePropertyByLabel = ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo: Set(memoByLabel.keys), labelsReadOnlyAsPlaceField: labelsReadOnlyAsPlaceField[fill.key] ?? [], among: received)
+				if !instancePropertyByLabel.isEmpty {
+					readingSendableWrapper[fill.key] = instancePropertyByLabel
+				}
+			}
+			if !readingSendableWrapper.isEmpty {
+				handedMemosByKey = memosHanded(leavingOut: labelsReadOnlyAsPlaceField, readingSendableWrapper: readingSendableWrapper)
 			}
 		}
 		var memoByLabelByEdge = [Int32: [String: ScopeGenerator.FillDispatcher.HandedMemo]]()
@@ -2020,7 +2053,7 @@ struct FillsOfCall {
 		for (edge, hole) in fillEdges {
 			bindingsByEdge[edge] = ScopeGenerator.structBindings(ofFillOf: hole, passedByPublicMockCall: isPublicMockCall, innerScopeReaders: innerScopeReaders, handedMemoByLabel: memoByLabelByEdge[edge] ?? [:])
 		}
-		return bindingsByEdge
+		return (bindingsByEdge, memoByLabelByEdge)
 	}
 
 	private let fillEdges: [(edge: Int32, hole: SeamSignature.Hole)]

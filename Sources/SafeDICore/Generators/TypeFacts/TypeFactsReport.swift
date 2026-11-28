@@ -38,6 +38,9 @@ struct TypeFactsPlaces {
 		var fillBuildsInSendableFunction: Bool?
 		/// For a fill, its key (`ScopeGenerator.fillKey(of:)`), which names the place it fills; `nil` for any other place.
 		var fillKey: String?
+		/// For a fill, the memo its call's generator hands it of each label some route hands it a memo of
+		/// (`TypeFactsReport.handedMemoDescription(of:deferral:)`), by label; `nil` for any other place.
+		var fillHandedMemos: [String]?
 	}
 
 	private(set) var places = [Place]()
@@ -71,6 +74,7 @@ struct TypeFactsPlaces {
 		for (fillPlace, fill) in zip(fillPlaces, fills) where fillPlaces.count == fills.count {
 			places[fillPlace].fillBuildsInSendableFunction = call.buildsInSendableFunction(ofFill: fill)
 			places[fillPlace].fillKey = fill.fillKey
+			places[fillPlace].fillHandedMemos = fill.fillFields.filter { fill.fillLabelsHandedAsMemo.contains($0.property.label) }.sorted { $0.property.label < $1.property.label }.map { TypeFactsReport.handedMemoDescription(of: $0.property, deferral: $0.deferral) }
 		}
 	}
 }
@@ -228,6 +232,11 @@ public struct TypeFactsReport: Sendable {
 						fillHoleIsSendable: fillByEdge[Int32(edgeIndex)]?.holeIsSendable ?? false,
 						fillBuildsInSendableFunction: fillByEdge[Int32(edgeIndex)]?.buildsInSendableFunction ?? false,
 						fillKey: fillByEdge[Int32(edgeIndex)].map { graph.fillKeyTexts[Int($0.key)] },
+						fillHandedMemos: fillByEdge[Int32(edgeIndex)].map { fill in
+							graph.fillHandedMemos[Int(fill.handedMemoStart)..<Int(fill.handedMemoStart + fill.handedMemoCount)].map { memo in
+								Self.handedMemoDescription(of: graph.propertyTable[Int(memo.property)], deferral: memo.deferral)
+							}
+						} ?? [],
 					)
 				},
 				instantiatedEdgeCount: edgeFacts.count { !$0.isFill },
@@ -286,6 +295,7 @@ public struct TypeFactsReport: Sendable {
 				generator: place.generator.map(Generator.init),
 				fillBuildsInSendableFunction: place.fillBuildsInSendableFunction,
 				fillKey: place.fillKey,
+				fillHandedMemos: place.fillHandedMemos,
 			)
 		}
 	}
@@ -308,6 +318,15 @@ public struct TypeFactsReport: Sendable {
 		public let fillBuildsInSendableFunction: Bool
 		/// For a fill edge, the fill's key (`ScopeGenerator.fillKey(of:)`); `nil` for any other edge.
 		public let fillKey: String?
+		/// For a fill edge, the memo the fill takes of each label some route hands it a memo of (`TypeFactsFill.handedMemoStart`),
+		/// by label, as `handedMemoDescription(of:deferral:)` spells it; empty for any other edge.
+		public let fillHandedMemos: [String]
+	}
+
+	/// A memo a fill takes (`ScopeGenerator.FillDispatcher.HandedMemo`) as the report spells it: its property, then its
+	/// deferral, whose `isSendable` says whether it is a `SendableLazilyInstantiated`.
+	static func handedMemoDescription(of property: Property, deferral: SeamSignature.Parameter.Deferral) -> String {
+		"\(property.spelledWithoutAny), \(deferral)"
 	}
 
 	/// What the generator built at a place decided (`TypeFactsGeneratorFacts`), properties and types as text.
@@ -434,6 +453,9 @@ public struct TypeFactsReport: Sendable {
 		public let fillBuildsInSendableFunction: Bool?
 		/// For a fill, its key (`ScopeGenerator.fillKey(of:)`); `nil` for any other place.
 		public let fillKey: String?
+		/// For a fill, the memo its call's generator hands it of each label some route hands it a memo of, by label; `nil` for
+		/// any other place.
+		public let fillHandedMemos: [String]?
 	}
 
 	/// The tree's DOT graph as its places draw it and as the graph's declarations unfold it (`TypeFactsDOT`), which must be
