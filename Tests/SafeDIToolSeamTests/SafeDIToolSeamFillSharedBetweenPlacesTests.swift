@@ -388,11 +388,13 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 	mutating func generate_unfoldsFillEdgesOfACall_whenItsFirstPlaceIsBeneathAFillOfItsOwnHole() async throws {
 		// `LiveGadget`'s `homeBuilder` is first drawn beneath the fill of `Home`'s `gadget`, where it passes that fill on and
 		// draws no edge, and then beneath the fill of `Office`'s, where it fills `gadget` itself: the declaration's column is
-		// the second, so the unfolded DOT graph draws the fill edge where the tree does.
+		// the second, so the unfolded DOT graph draws the fill edge where the tree does. `Home`'s `lamp`, which is no hole,
+		// is drawn in neither: a graph draws only the holes of a seam it calls, whose own children its module's graph draws.
 		let modules = SafeDIToolSeamBuilderParameterTests.modules(
 			feature: [
 				"public protocol Gadget {}",
-				seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
+				seamFixtureType(named: "Lamp", declarations: []),
+				seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated let lamp: Lamp", "@Instantiated let gadget: any Gadget"]),
 				seamFixtureType(named: "Office", isSeam: true, declarations: ["@Instantiated let gadget: any Gadget"]),
 			],
 			app: [
@@ -401,7 +403,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 			],
 		)
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
-		_ = try await ConstructionMemoOracle.$observer.withValue(TaskLocalFunction { _, _, report in continuation.yield(report) }) {
+		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()
@@ -414,6 +416,8 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		let fillEdge = "    \"homeBuilder: Instantiator<Home>\" -- \"gadget: any Gadget\""
 		#expect(report.dot.drawnByTree.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.drawnByTree)")
 		#expect(report.dot.unfolded.split(separator: "\n").contains { $0 == fillEdge }, "\(report.dot.unfolded)")
+		#expect(!report.dot.drawnByTree.contains("lamp: Lamp"), "\(report.dot.drawnByTree)")
+		#expect(report.dot.unfolded == report.dot.drawnByTree)
 	}
 
 	@Test
@@ -605,7 +609,7 @@ struct SafeDIToolSeamFillSharedBetweenPlacesTests: ~Copyable {
 		var thrownError: (any Error)?
 		var filesToDelete = filesToDelete
 		do {
-			try await SeamFillSharing.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
+			try await SeamFillSharing.$observer.withValue({ continuation.yield($0) }) {
 				try await body(&filesToDelete)
 			}
 		} catch {

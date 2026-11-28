@@ -145,7 +145,6 @@ struct TypeFactsDOT {
 			case let .lines(text):
 				lines.append(text)
 			case let .declaration(node, route, fills):
-				let fillTargets = fills.map(\.target)
 				let routeKeys = route.dropLast().map { graph.cycleKey(ofNode: $0) }
 				if route.count > 1, routeKeys.contains(graph.cycleKey(ofNode: node)) {
 					if let closing = closingColumns[node] {
@@ -163,7 +162,11 @@ struct TypeFactsDOT {
 					switch item {
 					case let .declaration(_, target, isFill):
 						if isFill {
-							childFrames.append(.declaration(node: target, route: fillTargets + [target], fills: fills + [FillEdge(callScope: graph.graph.nodes[node].key.record, target: target)]))
+							// The fill's route holds only the fills above it of the same call's holes: a fill of another call's hole
+							// of the same property and type closes no cycle on it.
+							let callScope = graph.graph.nodes[node].key.record
+							let routeOfFills = fills.filter { $0.callScope == callScope }.map(\.target)
+							childFrames.append(.declaration(node: target, route: routeOfFills + [target], fills: fills + [FillEdge(callScope: callScope, target: target)]))
 						} else {
 							childFrames.append(.declaration(node: target, route: route + [target], fills: fills))
 						}
