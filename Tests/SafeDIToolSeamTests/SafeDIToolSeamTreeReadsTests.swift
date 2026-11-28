@@ -343,6 +343,29 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillReadsLabelOnlyIfAvailableThatCalledSeamBindsLazilyOnFirstRouteToPlace(integration: MultiModuleIntegration) async throws {
+		// `Kiosk` calls `Terminal`, which reaches `Ledger`'s place inside `Booth`, first in builder order, which binds
+		// `ticket` as a `LazilyInstantiated`, and beside it, where nothing binds `ticket`: the one fill serves both routes,
+		// so on the second it reads `Kiosk`'s own `ticket`, and `DefaultCourier`'s receive of it leaves `Kiosk`.
+		let modules = Self.ticketRouteModules(ticketReceive: "@Received(onlyIfAvailable: true) let ticket: Ticket?")
+		let comparisons = try await observedComparisons(of: modules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Kiosk", "Terminal"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillRequiresLabelThatCalledSeamBindsLazilyOnFirstRouteToPlace(integration: MultiModuleIntegration) async throws {
+		// `generate_reportsNoDifference_whenFillReadsLabelOnlyIfAvailableThatCalledSeamBindsLazilyOnFirstRouteToPlace`'s
+		// shape, where `DefaultCourier` and `Kiosk` require `ticket`.
+		let modules = Self.ticketRouteModules(ticketReceive: "@Received let ticket: Ticket")
+		let comparisons = try await observedComparisons(of: modules, under: integration)
+		#expect(Set(comparisons.map(\.seam)) == ["Kiosk", "Terminal"])
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesSameSignaturesAndCode_whenSignaturePassesProceedWithFactsReads() async throws {
@@ -1146,6 +1169,27 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 
 	/// `Drawer`, a seam of `Supplies`, takes a builder for `pen`; `Desk`, a seam of `Office`, calls `Drawer` and fills the
 	/// place with `PenImpl`, which requires `clock`, a value no type of `Desk`'s tree declares.
+	/// `Terminal`, a seam of `Feature`, builds `Ledger`, whose `courier` is a place, inside `Booth`, which it builds first
+	/// and which binds `ticket: LazilyInstantiated<Ticket>`, and beside it, where nothing binds `ticket`. `Kiosk`, a seam of
+	/// `App` that calls `Terminal`, and `DefaultCourier`, the fill of the place, each receive `ticket` as `ticketReceive`
+	/// declares it.
+	private static func ticketRouteModules(ticketReceive: String) -> [ModuleFixture] {
+		SafeDIToolSeamBuilderParameterTests.modules(
+			feature: [
+				"public protocol Courier {}",
+				seamFixtureType(named: "Ticket", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Ledger", declarations: ["@Instantiated let courier: any Courier"]),
+				seamFixtureType(named: "Booth", declarations: ["@Instantiated let ticket: LazilyInstantiated<Ticket>", "@Instantiated let ledger: Ledger"]),
+				seamFixtureType(named: "Terminal", isSeam: true, declarations: ["@Instantiated let booth: Booth", "@Instantiated let ledger: Ledger"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultCourier", fulfilling: "Courier", declarations: [ticketReceive]),
+				seamFixtureType(named: "Kiosk", isSeam: true, declarations: [ticketReceive, "@Instantiated let terminal: Terminal"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let ticket: Ticket", "@Instantiated let kiosk: Kiosk"]),
+			],
+		)
+	}
+
 	private static let fillRequiringCallersValueModules = [
 		ModuleFixture(name: "Supplies", packageName: "Stationery", swiftFileContent: ["""
 		import SafeDI
