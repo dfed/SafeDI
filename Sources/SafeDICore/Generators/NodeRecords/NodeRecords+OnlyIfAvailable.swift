@@ -182,12 +182,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
-					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call. A
-					// rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
+					// The layout engine passes a read only if available `nil` per view, as the tree does
+					// (`TypeKeyBody.passesNil`), so calls that answer a label apart share the variant. A rename only if available is bound where its scope is built, to the declaration or to `nil`, by one
 					// statement for every call, so a label one fulfills is not taken as a parameter.
 					// A world with a hole or a fill writes the places beneath them from its sites' code, which passes `nil` where
 					// one call sees no declaration, so it takes no such parameter either.
-					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && !world.isOnCycle(world.declaration(of: callee)) && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
+					// A lazy wrapper one call answers and another does not is refused still: judging its capture in a
+					// `@Sendable` function per call is not done yet, and one variant would capture it beneath both calls.
+					let answersLazyWrapperApart = labelsOneCallAnswers.contains { label in
+						(existingContext[label] ?? calleeContext[label] ?? []).contains { $0.property.propertyType.isLazilyInstantiated }
+					}
+					guard labelsOneCallAnswers.isEmpty || (!holdsHoleOrFill && !answersLazyWrapperApart && renamedLabels.isDisjoint(with: labelsOneCallAnswers)) else {
 						throw .onlyIfAvailableAnsweredApart
 					}
 					let mergedContext = try Self.context(merging: existingContext, with: calleeContext)
@@ -198,11 +203,6 @@ struct OnlyIfAvailableAnswers: Sendable {
 				} else {
 					contextByVariant[Int(callee)] = calleeContext
 					variantsToVisit.append(callee)
-				}
-			}
-			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				if try Self.binding(reading: dependency.property, in: context) == nil {
-					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 				}
 			}
 			// A rename only if available is bound from a property its scope creates, whatever order it is built in, else from

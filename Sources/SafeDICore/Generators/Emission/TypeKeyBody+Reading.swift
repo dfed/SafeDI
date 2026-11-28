@@ -75,7 +75,10 @@ extension TypeKeyLayout {
 					var outerView = [String: KeyedDeclaration]()
 					var outerDeclarations = [String: PathValue]()
 					for label in labels {
-						let declaration = lookUp(label, inBody: body, before: position)
+						// A label of the view's domain that its own place declares is read beneath that declaration while it is
+						// built: no cycle parameter passes it (`bound`), so each read is only if available and reads `nil`, as the
+						// tree's reads do (`NearestDeclarations.resolvingBinding(of:)`).
+						let declaration = label == built.property.label ? PathValue.none : lookUp(label, inBody: body, before: position)
 						outerDeclarations[label] = declaration
 						outerView[label] = keyed(declaration, byKind: keysByKind)
 					}
@@ -505,7 +508,61 @@ extension TypeKeyLayout {
 		     .optionalWrapper,
 		     .builderArgument,
 		     .spelledArgument:
-			lookUp(read.label, inBody: body, before: index)
+			passesNil(read, positions: bodies[body].positionsByLabel[read.label], at: index, nearest: { Self.lastPosition(in: bodies[body].positionsByLabel[read.label], before: index).map { bodies[body].statements[$0] } })
+				? .none
+				: outerValue(of: read, lookUp(read.label, inBody: body, before: index))
+		}
+	}
+
+	/// Whether `read`, a read only if available made by the statement at `index` of a body whose statements declare its
+	/// label at `positions`, is passed `nil` as the tree passes it (`NearestDeclarations.resolvingBinding(of:)`): the body's
+	/// nearest declaration of the label is the statement being built, is built after it, or provides no form the read
+	/// takes, and hides any declaration farther up. Two binary searches of the positions, whatever the body's size.
+	func passesNil(_ read: PlaceRead, positions: [Int]?, at index: Int, nearest: () -> Statement?) -> Bool {
+		guard read.isOnlyIfAvailable, let positions, !positions.isEmpty else { return false }
+		GenerationWork.record(1, by: .askingWhetherReadsPassNil)
+		if Self.lastPosition(in: positions, before: index + 1) == index {
+			return true
+		} else if let declaration = nearest() {
+			GenerationWork.record(1, by: .askingWhetherReadsPassNil)
+			return hides(declaration, from: read)
+		} else {
+			return true
+		}
+	}
+
+	/// `value`, what a read looks its label up to, or `.none` where `read` is only if available and `value` is a statement
+	/// outside the read's body that provides no form the read takes: the tree's nearest declaration hides any farther up.
+	func outerValue(of read: PlaceRead, _ value: PathValue) -> PathValue {
+		guard read.isOnlyIfAvailable, case let .statement(declaringBody, index) = value else { return value }
+		return hides(bodies[declaringBody].statements[index], from: read) ? .none : value
+	}
+
+	/// Whether `declaration`, the nearest declaration of `read`'s label, provides no form `read` takes. A text statement
+	/// that fulfills no property, as the wrapper of a seam's handed parameter, binds the forms the tree gave the value it
+	/// wraps, which its record does not hold, so it hides nothing.
+	func hides(_ declaration: Statement, from read: PlaceRead) -> Bool {
+		if case let .alias(record) = declaration, record.fulfillingProperty == nil {
+			false
+		} else if let declared = property(of: declaration) {
+			!ScopeGenerator.provides(declared, aFormReadBy: read.property)
+		} else {
+			false
+		}
+	}
+
+	/// Whether the code of class `owner` passes `nil` for `read`, made before the class's statement at `index`, as the path
+	/// key's code of the class's members does (`passesNil(_:positions:at:nearest:)`).
+	/// A read the class takes as its parameter is passed `nil` where the parameter's type provides no form it takes: the
+	/// parameter's type is the declarations' its calls pass, each of which provides none (`outerValue(of:_:)`).
+	func passesNil(_ read: PlaceRead, inClass owner: Int, at index: Int) -> Bool {
+		let positions = bodies[owner == 0 ? 0 : membersByClass[owner][0]].positionsByLabel[read.label]
+		if passesNil(read, positions: positions, at: index, nearest: { lastPosition(of: read.label, inClass: owner, before: index).map { statements(ofClass: owner)[$0] } }) {
+			return true
+		} else if read.isOnlyIfAvailable, positions == nil, owner != 0, typeLookUp(read.label, inClass: owner, before: index) == .read(owner: owner, label: read.label), let parameterType = parameterTypes[owner][read.label] {
+			return !ScopeGenerator.provides(Property(label: read.label, typeDescription: parameterType.unwrapped), aFormReadBy: read.property)
+		} else {
+			return false
 		}
 	}
 

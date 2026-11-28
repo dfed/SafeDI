@@ -102,6 +102,18 @@ extension DependencyTreeGenerator {
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			})
 			let (treeCode, comparisons) = planned
+			// Where the run keeps the tree's code, the records' code is laid out only for the comparison, so that a difference
+			// of the records the two texts do not show can be told from one they do (`NodeRecordsReport.comparedTexts`). The
+			// work is no run's, so the tests that count a run's work count none of it.
+			let comparedCode: GeneratedCode? = if let laidOutCode {
+				laidOutCode
+			} else if rootInfo.ownSeamRoot == nil, comparisons.contains(where: { !$0.differences.isEmpty }),
+			          case let .success(code) = GenerationWork.$observer.withValue(nil, operation: { NodeRecords.refusingWhatRecordsThrow { try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) } })
+			{
+				code
+			} else {
+				nil
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
@@ -114,7 +126,7 @@ extension DependencyTreeGenerator {
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
 				)
-				report.comparedTexts = laidOutCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				report.comparedTexts = comparedCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
 				observer(report)
 			}
 			return laidOutCode ?? treeCode

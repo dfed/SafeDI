@@ -283,6 +283,8 @@ extension TypeKeyLayout {
 				value = spelled
 			} else if members.allSatisfy({ sourceAtMember($0, position) == .nil }) {
 				value = "nil"
+			} else if passesNil(read, inClass: owner, at: index) {
+				value = "nil"
 			} else {
 				let declaration = typeLookUp(read.label, inClass: owner, before: index)
 				if let declaredType = type(of: declaration) {

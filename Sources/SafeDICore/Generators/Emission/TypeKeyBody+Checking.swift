@@ -188,6 +188,8 @@ extension TypeKeyLayout {
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
 		guard !isNilAtEveryMember else { return true }
 		let expected = normalized(pathValue(of: read, inBody: body, before: index))
+		// The class's code passes `nil` where its members' code does, which the spelling writes (`passesNil(_:inClass:at:)`).
+		guard !passesNil(read, inClass: owner, at: index) else { return expected == .none }
 		let declaration = typeLookUp(read.label, inClass: owner, before: index)
 		return normalized(evaluate(declaration, inBody: body)) == expected
 	}
