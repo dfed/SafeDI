@@ -27,7 +27,8 @@ import Testing
 /// The seam-world switch's attack on fills `validateFills` reports (`NodeRecordsObservation.recordsFilledCalls`): for each
 /// kind of `FillFinding`, at least twenty graphs whose run reports it, made from the suite's own graphs of that kind
 /// (`templates`) by calling their root from another: by value, through an `Instantiator`, a `LazilyInstantiated` or a lazy
-/// cycle, once or twice (two fills of each place), beside a sibling or not. Each graph runs with the records of filled
+/// cycle, or as the fill of another seam's hole (fills nested in a fill), once or twice (two fills of each place), beside
+/// a sibling or not. Each graph runs with the records of filled
 /// calls off and on: the two report the same diagnostics, or both generate, and node records never lay out a root whose
 /// fills `validateFills` reports (`checkingNodeRecords`' `acceptedRootWithFillFindings`), nor one whose records differ
 /// from its tree's.
@@ -50,6 +51,7 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsSameFindingsAndLaysOutNoRootItJudges_whenRecordsOfFilledCallsMeetFillFinding(kind: String) async throws {
 		var graphsReportingKind = 0
+		var holdingsReportingKind = Set<Holding>()
 		for graph in Self.graphs(ofKind: kind) {
 			let off = try await outcome(of: graph.modules, recordsFilledCalls: false)
 			let on = try await outcome(of: graph.modules, recordsFilledCalls: true)
@@ -58,9 +60,13 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 			#expect(graph.isTemplate ? on.kinds.contains(kind) : true, "\(graph.name)")
 			if on.kinds.contains(kind) {
 				graphsReportingKind += 1
+				if let holding = graph.holding {
+					holdingsReportingKind.insert(holding)
+				}
 			}
 		}
 		#expect(graphsReportingKind >= 20, "\(kind)")
+		#expect(holdingsReportingKind == Set(Holding.allCases), "\(kind)")
 	}
 
 	// MARK: Graphs
@@ -72,6 +78,9 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 		case lazilyInstantiated
 		/// Beneath a type that builds itself again through an `Instantiator`: the template's calls under a lazy cycle.
 		case lazyCycle
+		/// Beneath `AttackFill`, which fills the hole of `AttackHome`, a seam of a module below: the template's fills
+		/// nested in a fill.
+		case insideFill
 	}
 
 	struct Graph {
@@ -79,35 +88,37 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 		let modules: [ModuleFixture]
 		/// Whether the graph is a template as written, which no variant changes.
 		let isTemplate: Bool
+		/// How the graph holds the template's root, where it is a variant.
+		let holding: Holding?
 	}
 
 	static var kinds: [String] {
 		Array(Set(templates.map(\.kind))).sorted()
 	}
 
-	/// Thirty-two graphs of `kind`, or every one its templates make where they make fewer: each template as written, then
-	/// its variants, the templates taken in turn.
+	/// Thirty-six graphs of `kind`, or every one its templates make where they make fewer: each template as written, then
+	/// its variants, the templates taken in turn, each template starting where the one before it stopped in the list of
+	/// variants, which changes the holding fastest, so that every holding meets several templates.
 	static func graphs(ofKind kind: String) -> [Graph] {
 		let templatesOfKind = templates.filter { $0.kind == kind }
-		var variants = [(holding: Holding?, callsTwice: Bool, sibling: Int)]()
-		variants.append((nil, false, 0))
-		for holding in Holding.allCases {
-			for callsTwice in [false, true] {
-				for sibling in 0..<3 {
+		var variants = [(holding: Holding, callsTwice: Bool, sibling: Int)]()
+		for callsTwice in [false, true] {
+			for sibling in 0..<3 {
+				for holding in Holding.allCases {
 					variants.append((holding, callsTwice, sibling))
 				}
 			}
 		}
 		var graphs = [Graph]()
-		for (variantIndex, variant) in variants.enumerated() {
-			for (templateIndex, template) in templatesOfKind.enumerated() where graphs.count < 32 {
-				let name = "\(kind) template \(templateIndex) variant \(variantIndex)"
-				if let holding = variant.holding {
-					guard let modules = held(template.modules, holding: holding, callsTwice: variant.callsTwice, sibling: variant.sibling) else { continue }
-					graphs.append(Graph(name: name, modules: modules, isTemplate: false))
-				} else {
-					graphs.append(Graph(name: name, modules: template.modules, isTemplate: true))
-				}
+		for (templateIndex, template) in templatesOfKind.enumerated() {
+			graphs.append(Graph(name: "\(kind) template \(templateIndex)", modules: template.modules, isTemplate: true, holding: nil))
+		}
+		for round in 0..<variants.count {
+			for (templateIndex, template) in templatesOfKind.enumerated() where graphs.count < 36 {
+				let variantIndex = (round * templatesOfKind.count + templateIndex) % variants.count
+				let variant = variants[variantIndex]
+				guard let modules = held(template.modules, holding: variant.holding, callsTwice: variant.callsTwice, sibling: variant.sibling) else { continue }
+				graphs.append(Graph(name: "\(kind) template \(templateIndex) variant \(variantIndex)", modules: modules, isTemplate: false, holding: variant.holding))
 			}
 		}
 		return graphs
@@ -128,11 +139,11 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 		else { return nil }
 		let rootName = String(words[kindIndex + 1])
 		// The file's imports, which the types the graph adds beside the root need, and none of the types it declares.
-		let imports = file.split(separator: "\n", omittingEmptySubsequences: false).prefix { $0.hasPrefix("import ") || $0.isEmpty }.map { "\($0)\n" }.joined()
+		var imports = file.split(separator: "\n", omittingEmptySubsequences: false).prefix { $0.hasPrefix("import ") || $0.isEmpty }.map { "\($0)\n" }.joined()
 		var files = module.swiftFileContent
 		files[fileIndex] = file.replacingOccurrences(of: rootAttribute, with: "@Instantiable")
 		let heldType = switch holding {
-		case .value, .lazyCycle: rootName
+		case .value, .lazyCycle, .insideFill: rootName
 		case .instantiator: "Instantiator<\(rootName)>"
 		case .lazilyInstantiated: "LazilyInstantiated<\(rootName)>"
 		}
@@ -141,10 +152,22 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 			held.append("@Instantiated let attackHeldAgain: \(heldType)")
 		}
 		var rootDeclarations: [String]
-		if holding == .lazyCycle {
+		var heldModules = modules
+		var dependencies = module.dependencies
+		switch holding {
+		case .lazyCycle:
 			files.append(imports + seamFixtureType(named: "AttackLoop", declarations: held + ["@Instantiated let attackLoopBuilder: Instantiator<AttackLoop>"]))
 			rootDeclarations = ["@Instantiated let attackLoop: AttackLoop"]
-		} else {
+		case .insideFill:
+			heldModules.insert(ModuleFixture(name: "AttackFeature", packageName: "AttackPackage", swiftFileContent: [
+				"public protocol AttackHeld {}",
+				seamFixtureType(named: "AttackHome", isSeam: true, declarations: ["@Instantiated let attackHole: any AttackHeld"]),
+			]), at: 0)
+			dependencies.append("AttackFeature")
+			imports = "import AttackFeature\n" + imports
+			files.append(imports + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "AttackFill", fulfilling: "AttackHeld", declarations: held))
+			rootDeclarations = ["@Instantiated let attackHome: AttackHome"]
+		case .value, .instantiator, .lazilyInstantiated:
 			rootDeclarations = held
 		}
 		if sibling > 0 {
@@ -153,8 +176,7 @@ struct SafeDIToolSeamFillFindingAttackTests: ~Copyable {
 			rootDeclarations = sibling == 1 ? rootDeclarations + [siblingDeclaration] : [siblingDeclaration] + rootDeclarations
 		}
 		files.append(imports + seamFixtureType(named: "AttackRoot", isRoot: true, declarations: rootDeclarations))
-		var heldModules = modules
-		heldModules[moduleIndex] = ModuleFixture(name: module.name, packageName: module.packageName, swiftFileContent: files, swiftFileContentByFilePath: module.swiftFileContentByFilePath, dependencies: module.dependencies)
+		heldModules[holding == .insideFill ? moduleIndex + 1 : moduleIndex] = ModuleFixture(name: module.name, packageName: module.packageName, swiftFileContent: files, swiftFileContentByFilePath: module.swiftFileContentByFilePath, dependencies: dependencies)
 		return heldModules
 	}
 
