@@ -142,7 +142,7 @@ struct MockRootNames: Sendable {
 	}
 
 	/// The name the root gives each value of its level it names apart, by label and then type.
-	let namesApart: [String: [TypeDescription: String]]
+	var namesApart: [String: [TypeDescription: String]]
 
 	/// The name of the parameter `mock()` takes as a plain value for `property`, a dependency a type of the tree instantiates
 	/// that the mock cannot build, and `nil` where it takes none so.

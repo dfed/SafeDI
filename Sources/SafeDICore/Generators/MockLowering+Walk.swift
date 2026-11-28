@@ -219,7 +219,7 @@ extension ScopeGenerator {
 			configurations: walk.configurationRecords,
 		)
 		// Where a test observes node records, an internal mock that binds nothing but its nodes has the statements that build
-		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:handWrittenMockDefaultParameters:)`).
+		// them laid out from the records of its world (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:sendableConfigurationTypeNames:rootNames:outerDeclarations:levelNamesTaken:renamesAbove:handWrittenMockDefaultParameters:)`).
 		if let worldRoot {
 			// `mock()`'s parameters and the overrides it binds before the nodes are the declarations the nodes' reads resolve
 			// to, as a seam's parameters are for its root's body, each by its label: one named apart, or an uncovered
@@ -302,7 +302,6 @@ extension ScopeGenerator {
 				bindsOnlyNodes: bindsOnlyNodes,
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 				rootNames: MockRootNames(
-					namesApart: walk.rootRenames,
 					unavailableDependencyOverrides: signature.onlyIfAvailableOverrides.compactMap { override in signature.unavailableDependencyOverrideNames[override.receivedProperty].map { (override.receivedProperty, $0) } },
 					passedUpBuilderNames: signature.passedUpBuilderNames,
 					uncoveredParameterNames: Dictionary(
@@ -316,6 +315,8 @@ extension ScopeGenerator {
 					receivesPassedNil: worldRoot.receivesPassedNil,
 				),
 				outerDeclarations: outerDeclarations,
+				levelNamesTaken: walk.rootLevelNamesTaken,
+				renamesAbove: walk.renames,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			) {
 				surface = layout.surface
