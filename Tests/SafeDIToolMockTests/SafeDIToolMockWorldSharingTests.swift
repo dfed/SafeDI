@@ -683,6 +683,82 @@ struct SafeDIToolMockWorldSharingTests: ~Copyable {
 		#expect(rowsReadNamesApart || betaScreen.builtWholeReason != nil, "\(report.printed)")
 	}
 
+	@Test(arguments: [2, 4, 8])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedRowsOnce_whenEveryMockRootNamesDeepUncoveredDependencyApart(rootCount: Int) async throws {
+		var declarations = (0..<rootCount).map { index in
+			"""
+			@Instantiable(generateMock: true)
+			public struct Screen\(index): Instantiable {
+			    public init(panel: Panel, extra: Extra\(index)) {
+			        self.panel = panel
+			        self.extra = extra
+			    }
+
+			    @Instantiated let panel: Panel
+			    @Instantiated let extra: Extra\(index)
+			}
+
+			@Instantiable
+			public struct Extra\(index): Instantiable {
+			    public init(gadget: Gadget\(index)) {
+			        self.gadget = gadget
+			    }
+
+			    @Instantiated let gadget: Gadget\(index)
+			}
+
+			public struct Gadget\(index) {}
+			"""
+		}
+		declarations += [
+			"""
+			@Instantiable
+			public struct Panel: Instantiable {
+			    public init(gauge: Gauge) {
+			        self.gauge = gauge
+			    }
+
+			    @Instantiated let gauge: Gauge
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Gauge: Instantiable {
+			    public init(gadget: Gadget) {
+			        self.gadget = gadget
+			    }
+
+			    @Instantiated let gadget: Gadget
+			}
+			""",
+			"""
+			public struct Gadget {}
+			""",
+		]
+		let source = declarations.joined(separator: "\n\n")
+		let report = try await Self.sharingReport(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [],
+				swiftFileContentByFilePath: ["Screens.swift": source],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// Nothing builds `Gadget` or any `GadgetN`, so each mock takes them as parameters, and since each root's tree
+		// instantiates `gadget` in two types, it names both apart: `Gauge`'s record, deep in the subtree the roots share,
+		// reads the name its root gives that parameter (`MockRootNames.uncoveredParameterName(of:)`), and each root's tree
+		// holds a different other declaration of the label. The work counted: the rows of the shared subtree, `panel` and
+		// `gauge`, are built once however many roots there are; a row per root's answer would make `2 × rootCount` and fail
+		// at 4 and 8 roots. Each root's own `extra` is its world's alone and is not counted. Every world stays clean and
+		// sharing changes no record.
+		let sharedRows = report.rows.filter { $0.label == "panel" || $0.label == "gauge" }
+		#expect(sharedRows.map(\.label) == ["panel", "gauge"], "\(report.printed)")
+		#expect(report.worlds.map(\.mockedType) == (0..<rootCount).map { "Screen\($0)" })
+		#expect(report.worlds.allSatisfy { $0.builtWholeReason == nil }, "\(report.printed)")
+		#expect(report.differences == [])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_changesNoRecord_whenBuilderLoopIsWhollyInsideSharedSubtree() async throws {
