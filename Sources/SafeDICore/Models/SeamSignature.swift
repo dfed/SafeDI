@@ -2052,8 +2052,7 @@ public struct SeamSignature: Sendable {
 	/// (`Places.Query.labels(reaching:)`), every distinct field the case's routes carry, in the order of the label's answers
 	/// (`Places.Query.answers(ofLabel:at:)`, the naming route's first), which follows no name.
 	/// Where two routes carry one label as two types (`token: Token` and `token: Token?`), both stay, so the call shape
-	/// tells apart every signature a hole per place would, though the case's scope struct declares one
-	/// (`Places.Query.fields(of:)`).
+	/// tells apart every signature a hole per place would, though the case's scope struct declares one.
 	private static func callShapeFields(ofCaseAt caseIndex: Int, in query: Places.Query) -> [CallShape.Hole.Field] {
 		query.labels(reaching: caseIndex).flatMap { label in
 			var fieldsOfLabel = [CallShape.Hole.Field]()
