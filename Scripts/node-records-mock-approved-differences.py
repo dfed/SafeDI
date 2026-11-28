@@ -1058,13 +1058,17 @@ used_none = []
 # until the tests that compare those values are named. Each entry here lists those tests; an empty list holds
 # every pair the entry is used on, which then prints "held" and not the words a gate reads as equal.
 AWAITING_CELLS = {
-    '18': [],  # in a mock: the mock writer is writing a cell on Home's fixture (04:30Z)
+    # in a mock; the test is on claude/mock-cycle-twin-parameters a2858a1a4 (merge request 1128-0436)
+    '18': ['SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenEveryCallPassesNilForLabelBuiltAfterTheCycle'],
     '26': ['SafeDIToolMockKindsLazyCycleValueTests/mock_buildsWalksValues_whenCycleClosingCallPassesValueMockTakesUnderNameApartFromItsLabel'],
     '21 per function': [
         'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTwoBodiesNameOneVariantsFunctionApart',
         'SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenTheBodyThatNamesAVariantsFunctionApartIsReadBeforeTheOneThatKeepsItsName',
     ],
-    '21 two variants': [],  # no cell named yet for two variants of one node
+    # two variants of one node: mock_buildsTheWalksValues_whenOneNodeIsBuiltBeneathItsLabelHeldLazilyAndByValue
+    # (same branch) compares the values, but nobody has checked that its fixture writes the two functions of one
+    # name the held pairs show, so the hold stays until that is confirmed
+    '21 two variants': [],
 }
 IGNORE_HOLDS = False
 
