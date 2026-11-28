@@ -961,9 +961,9 @@ enum SplitPositionsRun {
 		// whole run's reports alone.
 		let laysOutRoots = NodeRecordsChecks.laysOutRoots
 		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
-		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
+		var nodeRecordsObserver: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
-			nodeRecordsObserver = { _ in }
+			nodeRecordsObserver = TaskLocalFunction { _ in }
 		}
 		let splitObserver = nodeRecordsObserver
 		let splitRun: Result<Generate.Output, any Error> = await Task.detached {

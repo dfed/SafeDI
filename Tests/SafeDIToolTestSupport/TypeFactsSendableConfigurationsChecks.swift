@@ -29,7 +29,7 @@ import Testing
 enum TypeFactsSendableConfigurationsChecks {
 	/// Runs `operation` while comparing the `Sendable` configurations of every mock root it lowers, handing each comparison
 	/// to `enclosingObserver` too, and records an issue for each mock root whose two sets differ.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (TypeFactsSendableConfigurationsComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (TypeFactsSendableConfigurationsComparison) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: TypeFactsSendableConfigurationsComparison.self)
 		let result = try await TypeFactsSendableConfigurationsObservation.$comparesWalk.withValue(TaskLocalFunction { comparison in
 			continuation.yield(comparison)
