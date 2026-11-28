@@ -284,11 +284,13 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             newline=re.sub(r'(?<![\w.])'+re.escape(name)+r'(?=\()',newname,newline)
         if guard and base_indent>8: ALSO_USED.append('10')
         marker=m.group(2)
-        if marker=='@Sendable nonisolated func ' and entered.get(('sendable above',)) and (base_indent,newname) in WALK_PLAIN:
+        if marker=='@Sendable nonisolated func ' and entered.get(('sendable above',)) and ((base_indent,newname) in WALK_PLAIN or (base_indent,stem(newname)) in WALK_PLAIN):
             # entry 24's rule in a mock: a function the records declare in mock()'s body, out of a @Sendable
             # function that calls it, is marked @Sendable nonisolated; nested in that function, where the
             # walk declares it, it is plain. Dropped only inside a function that is marked, and only where the
             # walk's function of this name at this depth is plain.
+            # A function the records name apart with a trailing underscore (entry 11) is looked up under the
+            # name entry 11 gives it too (lead, 11-28 10:43Z: both entries apply to one function).
             marker='func ';ALSO_USED.append('24')
         inst=([ind+guard.strip()] if guard else [])+[ind+marker+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]

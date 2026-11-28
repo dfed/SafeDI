@@ -195,6 +195,10 @@ CASES = [
     ('20-classes', 'a call enters its place under another function’s slot',
      once('__safeDI_entered.entering(2, Home.SafeDIMockConfiguration(), nearestOfType: true)',
           '__safeDI_entered.entering(1, Home.SafeDIMockConfiguration(), nearestOfType: true)')),
+    ('24-named-apart', 'the @Sendable function that reads the moved function is plain in both texts',
+     once('@Sendable nonisolated func __safeDI_t4Builder(', 'func __safeDI_t4Builder('), 'both'),
+    ('24-named-apart', 'the moved function, named apart, is marked @Sendable only',
+     once('@Sendable nonisolated func __safeDI_anyT5Builder_(', '@Sendable func __safeDI_anyT5Builder_(')),
 ]
 
 
