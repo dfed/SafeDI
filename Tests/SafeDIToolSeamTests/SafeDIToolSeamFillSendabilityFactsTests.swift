@@ -107,7 +107,9 @@ struct SafeDIToolSeamFillSendabilityFactsTests: ~Copyable {
 			}
 			work.append(count)
 		}
-		#expect(work == [64, 256])
+		// 13 visits per call: the two graphs that hold every call visit five per call, and three graphs per call that hold
+		// one call visit one each.
+		#expect(work == [104, 416])
 	}
 
 	// MARK: Private
