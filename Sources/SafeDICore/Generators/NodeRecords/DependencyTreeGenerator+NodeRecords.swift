@@ -127,6 +127,18 @@ extension DependencyTreeGenerator {
 			} else {
 				laidOutCode
 			}
+			// One variant serving a call that answers a read only if available and a call that does not differs from the
+			// tree's place at the second call, which only the laid-out text shows passing `nil`. Where the engine cannot lay
+			// the root out, nothing shows it, so the records are refused as before that merge (`nodeHasSeveralVariants`).
+			let differsOnlyByOptionalParameter = comparisons.allSatisfy { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			guard comparedCode != nil || !holdsDifferenceOfOptionalParameter || !differsOnlyByOptionalParameter else {
+				let everyRefusal = GenerationWork.$observer.withValue(nil) { NodeRecords.refusals(in: world, seamTree: seamTree, declaredTypeNames: declaredTypeNames) }
+				observer(NodeRecordsReport(root: root, refusal: NodeRecordRefusal.nodeHasSeveralVariants.rawValue, everyRefusal: NodeRecordRefusal.allCases.filter { Set(everyRefusal + [.nodeHasSeveralVariants]).contains($0) }.map(\.rawValue), isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
+				return treeCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
