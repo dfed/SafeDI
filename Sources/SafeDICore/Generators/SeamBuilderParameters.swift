@@ -2980,7 +2980,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			return locations
 		}
 
-		private var kindName: String {
+		/// The kind's name, which orders findings that tie on every location, and which tests count findings by.
+		var kindName: String {
 			switch kind {
 			case .fieldNotReadable:
 				"fieldNotReadable"
