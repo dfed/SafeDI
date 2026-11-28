@@ -422,16 +422,16 @@ struct SeamPlacesDrafts: Sendable {
 	/// builder of the site at the end of it is named and the case is named by its first site in builder-label order
 	/// (`Hole.pathLabels(of:)`); routes alike in their labels go by source order. Empty where no route reaches the owner.
 	///
-	/// One fold from the root over the variants that hold a place, in an order where each comes after the callers that
-	/// build it in line (a depth-first walk's, which cuts each call back to a variant above it on that walk, so a loop of
-	/// calls that build in line is followed once). Each variant keeps, per whether its route opened a `@Sendable`
-	/// function, its least routes, as nodes of one tree of routes, so no route's labels are spelled out: two routes are
-	/// compared by the labels after the node they share. Builder-label order is not kept by a common extension where one
-	/// string is a proper prefix of the other (`panel` sorts before `panelMaker`, `panel_widget` after
-	/// `panelMaker_widget`), so a variant keeps every route that no other route it keeps precedes without being a prefix of
-	/// it: a chain of prefixes of each other, one route where no labels nest. Comparing two routes costs their steps after
-	/// the node they share, which the routes that name cases bound where each variant met holds a place of its own, but not
-	/// where many routes meet on the way to few places: on a lattice whose far corner alone holds one, its side cubed.
+	/// One walk of the routes in builder-label order, over a trie of their labels split at `_`, whose pieces hold no `_`,
+	/// so the trie's order is the joined strings' order: a node's string sorts before its children's, and of two children
+	/// `piece` and `other`, the node of `piece` sorts by `piece` and its descendants by `piece_`. The routes from the root
+	/// follow the calls that build in line to variants that hold a place, cutting each call back to a variant above it on
+	/// a depth-first walk, so a loop of calls is followed once. A route reaches a variant, per whether it opened a
+	/// `@Sendable` function, first by the least of its routes, and the walk follows from there only that route and the later
+	/// ones it is a proper prefix of: builder-label order is not kept by a common extension where one string is a proper
+	/// prefix of the other (`panel` sorts before `panelMaker`, `panel_widget` after `panelMaker_widget`), and a later route
+	/// that some kept one does not prefix sorts after it under every extension. So each call is followed once per route
+	/// kept at its variant, one where no labels nest, and each piece of its labels is a trie node visited once.
 	static func namingRoutes(to owners: [(owner: SeamPlacesLevelID, family: SeamPlacesRouteFamily)], in world: TypeFactsGraph, buildsInLine: [Bool], holdsPlace: [Bool]) -> (routes: [[SeamPlacesLevelID]], work: Int) {
 		/// Where a property is declared, which breaks a tie of labels in source order.
 		func declarationLocation(of level: SeamPlacesLevelID) -> Dependency.DeclarationLocation? {
@@ -441,7 +441,8 @@ struct SeamPlacesDrafts: Sendable {
 			guard !target.key.isFill, let property = target.property else { return nil }
 			return world.graph.nodes[Int(declaration)].scope.instantiable.dependencies.first { $0.property == property }?.declarationLocation
 		}
-		// The order: a depth-first walk's post-order from the root over the calls that build in line, reversed.
+		// The calls cut: those a depth-first walk from the root over the calls that build in line meets back to a variant
+		// above it.
 		let variantCount = world.variantCount
 		let root = world.rootVariant(0)
 		enum WalkState {
@@ -451,7 +452,6 @@ struct SeamPlacesDrafts: Sendable {
 		}
 		var state = [WalkState](repeating: .unseen, count: variantCount)
 		var isCutCall = [Bool](repeating: false, count: buildsInLine.count)
-		var postOrder = [VariantID]()
 		var stack: [(variant: VariantID, next: Int)] = [(root, 0)]
 		state[Int(root)] = .onWalk
 		while let (variant, next) = stack.last {
@@ -460,7 +460,6 @@ struct SeamPlacesDrafts: Sendable {
 			guard next < callees.count else {
 				stack.removeLast()
 				state[Int(variant)] = .done
-				postOrder.append(variant)
 				continue
 			}
 			stack[stack.count - 1].next = next + 1
@@ -476,116 +475,147 @@ struct SeamPlacesDrafts: Sendable {
 				break
 			}
 		}
-		// The tree of routes: each node a step, under the route above it, -1 the root's empty route.
-		var nodes: [(parent: Int32, depth: Int32, step: SeamPlacesLevelID, call: Int)] = []
-		var labelsOfCall = [String?](repeating: nil, count: buildsInLine.count)
-		var work = 0
-		func labels(ofNode node: Int32) -> String {
-			let call = nodes[Int(node)].call
-			if let labels = labelsOfCall[call] {
-				return labels
-			}
-			let labels = pathLabels(of: nodes[Int(node)].step, in: world).joined(separator: "_")
-			labelsOfCall[call] = labels
-			return labels
-		}
-		func depth(of node: Int32) -> Int32 {
-			node < 0 ? 0 : nodes[Int(node)].depth
-		}
-		/// The steps of each route after the node they share, root first.
-		func tails(_ lhs: Int32, _ rhs: Int32) -> (lhs: [Int32], rhs: [Int32]) {
-			var (lhs, rhs) = (lhs, rhs)
-			var (lhsTail, rhsTail) = ([Int32](), [Int32]())
-			while depth(of: lhs) > depth(of: rhs) {
-				lhsTail.append(lhs)
-				lhs = nodes[Int(lhs)].parent
-			}
-			while depth(of: rhs) > depth(of: lhs) {
-				rhsTail.append(rhs)
-				rhs = nodes[Int(rhs)].parent
-			}
-			while lhs != rhs {
-				lhsTail.append(lhs)
-				rhsTail.append(rhs)
-				lhs = nodes[Int(lhs)].parent
-				rhs = nodes[Int(rhs)].parent
-			}
-			work += lhsTail.count + rhsTail.count
-			return (lhsTail.reversed(), rhsTail.reversed())
-		}
-		/// How two routes' joined labels compare: `precedes` by labels, then routes alike in their labels in source order;
-		/// `isProperPrefix` where the first's labels are a proper prefix of the second's.
-		func compare(_ lhs: Int32, _ rhs: Int32) -> (precedes: Bool, isProperPrefix: Bool) {
-			let (lhsTail, rhsTail) = tails(lhs, rhs)
-			let lhsLabels = lhsTail.map(labels(ofNode:)).joined(separator: "_")
-			let rhsLabels = rhsTail.map(labels(ofNode:)).joined(separator: "_")
-			work += lhsLabels.utf8.count + rhsLabels.utf8.count
-			guard lhsLabels == rhsLabels else {
-				return (lhsLabels < rhsLabels, rhsLabels.hasPrefix(lhsLabels))
-			}
-			guard let lhsFirst = lhsTail.first, let rhsFirst = rhsTail.first else { return (false, false) }
-			return (Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation(of: nodes[Int(lhsFirst)].step), declarationLocation(of: nodes[Int(rhsFirst)].step)), false)
-		}
-		// Each variant's kept routes, per whether the route opened a `@Sendable` function, in label order.
-		var kept = [[Int32]](repeating: [], count: 2 * variantCount)
-		func keep(_ node: Int32, at slot: Int) {
-			var chain = kept[slot]
-			// A kept route that precedes the new one and is no proper prefix of it precedes it under every extension.
-			for other in chain {
-				let order = compare(other, node)
-				guard !order.precedes || order.isProperPrefix else { return }
-			}
-			chain.removeAll { other in
-				let order = compare(node, other)
-				return order.precedes && !order.isProperPrefix
-			}
-			chain.insert(node, at: chain.firstIndex { compare(node, $0).precedes } ?? chain.count)
-			kept[slot] = chain
-		}
-		kept[2 * Int(root)] = [-1]
-		for variant in postOrder.reversed() {
-			let callees = world.calls(of: variant)
-			let callOffset = world.variants.callOffset(of: Int(variant))
-			let edges = world.edgeFacts(from: world.declaration(of: variant))
-			for (index, callee) in callees.enumerated() where buildsInLine[callOffset + index] && holdsPlace[Int(callee)] && !isCutCall[callOffset + index] {
-				let step = SeamPlacesLevelID(variant: variant, edge: Int32(index))
-				let opens = edges[edges.startIndex + index].opens.opensSendableFunction
-				for opened in [false, true] {
-					for route in kept[2 * Int(variant) + (opened ? 1 : 0)] {
-						nodes.append((route, depth(of: route) + 1, step, callOffset + index))
-						work += 1
-						keep(Int32(nodes.count - 1), at: 2 * Int(callee) + (opened || opens ? 1 : 0))
-					}
-				}
-			}
-		}
+		// The routes followed, each a step under the route above it, -1 the root's empty route.
+		var routeNodes: [(parent: Int32, step: SeamPlacesLevelID)] = []
 		/// A route, root first.
 		func route(endingAt node: Int32) -> [SeamPlacesLevelID] {
 			var route = [SeamPlacesLevelID]()
 			var node = node
 			while node >= 0 {
-				route.append(nodes[Int(node)].step)
-				node = nodes[Int(node)].parent
+				route.append(routeNodes[Int(node)].step)
+				node = routeNodes[Int(node)].parent
 			}
 			return route.reversed()
+		}
+		/// Whether `lhs`, a route whose labels are those of `rhs`, precedes it in source order: at the first step they part.
+		func precedesInSourceOrder(_ lhs: Int32, _ rhs: Int32) -> Bool {
+			for (lhsStep, rhsStep) in zip(route(endingAt: lhs), route(endingAt: rhs)) where lhsStep != rhsStep {
+				return Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation(of: lhsStep), declarationLocation(of: rhsStep))
+			}
+			return false
+		}
+		// The trie of the routes' label pieces; a route reaching a variant arrives at the node of its last piece, a slot
+		// per variant and whether the route opened a `@Sendable` function.
+		struct TrieNode {
+			let parent: Int32
+			let depth: Int
+			let piece: String
+			var children = [Int32]()
+			var arrivals = [(route: Int32, slot: Int)]()
+		}
+		struct ChildKey: Hashable {
+			let node: Int32
+			let piece: String
+		}
+		var trie = [TrieNode(parent: -1, depth: 0, piece: "")]
+		var childByPiece = [ChildKey: Int32]()
+		var work = 0
+		func child(of node: Int32, piece: String) -> Int32 {
+			let key = ChildKey(node: node, piece: piece)
+			if let child = childByPiece[key] {
+				return child
+			}
+			trie.append(TrieNode(parent: node, depth: trie[Int(node)].depth + 1, piece: piece))
+			let created = Int32(trie.count - 1)
+			trie[Int(node)].children.append(created)
+			childByPiece[key] = created
+			work += 1 + piece.utf8.count
+			return created
+		}
+		// The trie's nodes from the root to the one the walk is at.
+		var path: [Int32] = [0]
+		/// Whether the string of `node`, visited before the one the walk is at, is a prefix of it: its parent is on the walk's
+		/// path, and its piece a prefix of the path's piece at its depth.
+		func isPrefixOfVisited(_ node: Int32) -> Bool {
+			let depth = trie[Int(node)].depth
+			guard depth < path.count else { return false }
+			guard path[depth] != node else { return true }
+			guard depth > 0, trie[Int(node)].parent == path[depth - 1] else { return false }
+			work += trie[Int(node)].piece.utf8.count
+			return trie[Int(path[depth])].piece.hasPrefix(trie[Int(node)].piece)
+		}
+		// Each slot's kept routes, in the order the walk reached them: the first is the least.
+		var kept = [[(node: Int32, route: Int32, order: Int)]](repeating: [], count: 2 * variantCount)
+		var reachedCount = 0
+		func visit(_ node: Int32) {
+			let arrivals = trie[Int(node)].arrivals
+			trie[Int(node)].arrivals = []
+			// Routes alike in their labels that reach one slot go by source order.
+			var chosen = [(route: Int32, slot: Int)]()
+			var chosenIndexBySlot = [Int: Int]()
+			for arrival in arrivals {
+				work += 1
+				guard let index = chosenIndexBySlot[arrival.slot] else {
+					chosenIndexBySlot[arrival.slot] = chosen.count
+					chosen.append(arrival)
+					continue
+				}
+				if precedesInSourceOrder(arrival.route, chosen[index].route) {
+					chosen[index] = arrival
+				}
+			}
+			for (route, slot) in chosen {
+				// A kept route precedes this one, and precedes it under every extension unless it is a prefix of it.
+				guard kept[slot].allSatisfy({ isPrefixOfVisited($0.node) }) else { continue }
+				kept[slot].append((node, route, reachedCount))
+				reachedCount += 1
+				let variant = VariantID(slot / 2)
+				let opened = slot % 2 == 1
+				let callees = world.calls(of: variant)
+				let callOffset = world.variants.callOffset(of: Int(variant))
+				let edges = world.edgeFacts(from: world.declaration(of: variant))
+				for (index, callee) in callees.enumerated() where buildsInLine[callOffset + index] && holdsPlace[Int(callee)] && !isCutCall[callOffset + index] {
+					let step = SeamPlacesLevelID(variant: variant, edge: Int32(index))
+					routeNodes.append((route, step))
+					var arrivalNode = node
+					for label in pathLabels(of: step, in: world) {
+						for piece in label.split(separator: "_", omittingEmptySubsequences: false) {
+							arrivalNode = child(of: arrivalNode, piece: String(piece))
+						}
+					}
+					let opensSendableFunction = opened || edges[edges.startIndex + index].opens.opensSendableFunction
+					trie[Int(arrivalNode)].arrivals.append((Int32(routeNodes.count - 1), 2 * Int(callee) + (opensSendableFunction ? 1 : 0)))
+				}
+			}
+		}
+		/// A node's children in the trie's order: each child by its piece, and its descendants by its piece and `_`.
+		func entries(of node: Int32) -> [(key: String, child: Int32, isDescent: Bool)] {
+			let children = trie[Int(node)].children
+			work += 2 * children.count
+			return children.flatMap { child in [(trie[Int(child)].piece, child, false), (trie[Int(child)].piece + "_", child, true)] }.sorted { $0.key < $1.key }
+		}
+		trie[0].arrivals = [(-1, 2 * Int(root))]
+		visit(0)
+		var frames: [(entries: [(key: String, child: Int32, isDescent: Bool)], next: Int)] = [(entries(of: 0), 0)]
+		while let (frameEntries, next) = frames.last {
+			guard next < frameEntries.count else {
+				frames.removeLast()
+				path.removeLast()
+				continue
+			}
+			frames[frames.count - 1].next = next + 1
+			let entry = frameEntries[next]
+			path.append(entry.child)
+			if entry.isDescent {
+				frames.append((entries(of: entry.child), 0))
+			} else {
+				visit(entry.child)
+				path.removeLast()
+			}
 		}
 		let routes = owners.map { owner, family -> [SeamPlacesLevelID] in
 			let plain = kept[2 * Int(owner.variant)].first
 			let opened = kept[2 * Int(owner.variant) + 1].first
-			let least: Int32? = switch family {
+			let least = switch family {
 			case .plain:
 				plain
 			case .opensSendableFunction:
 				opened
 			case .either:
-				if let plain, let opened {
-					compare(opened, plain).precedes ? opened : plain
-				} else {
-					plain ?? opened
-				}
+				[plain, opened].compactMap(\.self).min { $0.order < $1.order }
 			}
 			guard let least else { return [] }
-			return route(endingAt: least) + [owner]
+			return route(endingAt: least.route) + [owner]
 		}
 		return (routes, work)
 	}

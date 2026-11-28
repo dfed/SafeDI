@@ -27,7 +27,7 @@ import Testing
 /// The fold that names the cases of a seam's place graph drafted from its facts world (`SeamPlacesDrafts.namingRoutes`)
 /// does work in proportion to the seam's calls and the steps of the routes that name its cases: `Hub`, a seam in
 /// `Feature`, builds a chain of types whose last holds `api: any Api`, which only `App` fulfills, or a lattice of types
-/// each holding one, built both to its right and beneath.
+/// each built both to its right and beneath, each holding one or the far corner alone, which the most routes meet on.
 struct SafeDIToolSeamPlaceNamingGrowthTests: ~Copyable {
 	init() {
 		filesToDelete = [URL]()
@@ -73,6 +73,28 @@ struct SafeDIToolSeamPlaceNamingGrowthTests: ~Copyable {
 		let naming = try await namingOfHub(feature: feature)
 		#expect(naming.cases >= side * side)
 		#expect(naming.work <= 4 * (naming.calls + naming.routeSteps), "\(naming.work) work for \(naming.calls) calls and \(naming.routeSteps) route steps")
+	}
+
+	@Test(arguments: [3, 4, 5])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func namingRoutes_workInProportionToCalls_whenSeamsTreeIsLatticeWhoseFarCornerAloneHoldsPlace(side: Int) async throws {
+		var feature = ["public protocol Api {}"]
+		for row in 0..<side {
+			for column in 0..<side {
+				var declarations = row + 1 == side && column + 1 == side ? ["@Instantiated public let api: any Api"] : []
+				if column + 1 < side {
+					declarations.append("@Instantiated public let right: L\(row)x\(column + 1)")
+				}
+				if row + 1 < side {
+					declarations.append("@Instantiated public let down: L\(row + 1)x\(column)")
+				}
+				feature.append(seamFixtureType(named: "L\(row)x\(column)", declarations: declarations))
+			}
+		}
+		feature.append(seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let corner: L0x0"]))
+		let naming = try await namingOfHub(feature: feature)
+		#expect(naming.cases >= 1)
+		#expect(naming.work <= 8 * (naming.calls + naming.routeSteps), "\(naming.work) work for \(naming.calls) calls and \(naming.routeSteps) route steps")
 	}
 
 	/// The naming fold's line of `Hub`'s drafts report (`SeamPlacesDrafts.levelAndSiteDifferences(from:)`).
