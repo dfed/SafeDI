@@ -1163,16 +1163,43 @@ struct TypeFactsGraph: Sendable {
 
 	/// The edges whose children start after their siblings that hold no place (`ScopeGenerator.startsAsCarrier(_:)`), as
 	/// `SeamDeclarationGraph` finds them: an edge whose target dominates its source closes a cycle on every build and is
-	/// removed; a fill is entered where its tree reaches a hole; and a child holds a place where the edge for its property
+	/// removed; a fill is entered where its tree reaches a hole, unless a call above every route to it takes the same fill
+	/// beneath one of its fills, which is entered again there, never built (`SeamPlacesDrafts.routeFold(of:)`); and a child
+	/// holds a place where the edge for its property
 	/// out of any declaration of its parent's type is left and reaches a hole along what is left. A fact of the parent's
 	/// type, so every declaration of it starts its children in one order.
 	private static func carrierEdges(of graph: OrderedGraph<TypeFactsDeclaration>, edgeIsFill: [Bool], builtTypes: [Int32], nodeProperties: [Int32]) -> Set<Int> {
 		let nodes = graph.nodes
-		// The nodes that reach a hole along every edge: a fill whose tree reaches none is left out, as the generator's graph
-		// skips a fill whose tree holds no site.
+		// The fills a call above every route to each node takes beneath one of its fills (`nil` before a route arrives).
+		var fillsTakenAbove = [Set<Int32>?](repeating: nil, count: nodes.count)
+		fillsTakenAbove[0] = []
+		var nodesToFold = [0]
+		while let source = nodesToFold.popLast() {
+			let above = fillsTakenAbove[source] ?? []
+			var beneathFills = above
+			for edge in graph.edgeIndices(from: source) where edgeIsFill[edge] {
+				beneathFills.insert(graph.edgeTargets[edge])
+			}
+			for edge in graph.edgeIndices(from: source) where !edgeIsFill[edge] || !above.contains(graph.edgeTargets[edge]) {
+				let target = Int(graph.edgeTargets[edge])
+				let arriving = edgeIsFill[edge] ? beneathFills : above
+				let met = fillsTakenAbove[target].map { $0.intersection(arriving) } ?? arriving
+				guard met != fillsTakenAbove[target] else { continue }
+				fillsTakenAbove[target] = met
+				nodesToFold.append(target)
+			}
+		}
+		var isReentered = [Bool](repeating: false, count: graph.edgeCount)
+		for source in nodes.indices {
+			for edge in graph.edgeIndices(from: source) where edgeIsFill[edge] {
+				isReentered[edge] = fillsTakenAbove[source]?.contains(graph.edgeTargets[edge]) == true
+			}
+		}
+		// The nodes that reach a hole along every edge but a re-entered fill: a fill whose tree reaches none is left out, as
+		// the generator's graph skips a fill whose tree holds no site.
 		var predecessors = [[Int]](repeating: [], count: nodes.count)
 		for source in nodes.indices {
-			for edge in graph.edgeIndices(from: source) {
+			for edge in graph.edgeIndices(from: source) where !isReentered[edge] {
 				predecessors[Int(graph.edgeTargets[edge])].append(source)
 			}
 		}
@@ -1189,7 +1216,7 @@ struct TypeFactsGraph: Sendable {
 		}
 		let reachesHole = reachingHoles(along: predecessors)
 		func isInGraph(_ edge: Int) -> Bool {
-			!edgeIsFill[edge] || reachesHole[Int(graph.edgeTargets[edge])]
+			!edgeIsFill[edge] || (reachesHole[Int(graph.edgeTargets[edge])] && !isReentered[edge])
 		}
 		let dominators = immediateDominators(of: graph, followsEdge: isInGraph)
 		func dominates(_ dominator: Int, _ node: Int) -> Bool {
