@@ -102,6 +102,12 @@ struct MockRootNames: Sendable {
 		receivesPassedNil.labelsPinnedFromAbove.contains(label)
 	}
 
+	/// Whether `property` is that of a child the mock root promotes, whose tree production builds above the mocked type,
+	/// so that the mocked type's own required receives pin nothing in it (`MockReceivesPassedNil.promotedProperties`).
+	func promotes(_ property: Property) -> Bool {
+		receivesPassedNil.promotedProperties.contains(property)
+	}
+
 	private let receivesPassedNil: MockReceivesPassedNil
 
 	/// Whether the root names apart a child labeled `label`.
@@ -177,10 +183,11 @@ extension NodeRecords {
 	/// the name again under the label at the top of its function (`mockNamesReadApart(in:)`). Refused, and left to the
 	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a child of the
 	/// root named apart whose property is optional, which the walk binds as the value it builds; a rename of such a label
-	/// or from one, whose binding the walk reads otherwise; and a receive only if available of a label a required receive
-	/// of another form pins from above (`MockRootNames.pinsFromAbove(label:)`), which reads the name or `nil` by its place,
-	/// while one function serves every place. Any other receive of the label only if available reads alike in every place:
-	/// the name, bound again, where it is available, and `nil` otherwise (`mockNamesReadApart(in:)`).
+	/// or from one, whose binding the walk reads otherwise. A receive of the label only if available reads the name, bound
+	/// again, where it is available, and `nil` otherwise (`mockNamesReadApart(in:)`); where a required receive of another
+	/// form pins the label from above (`MockRootNames.pinsFromAbove(label:)`), `OnlyIfAvailableAnswers` judge each call, and
+	/// a function called both beneath the pin and away from it takes the name as a parameter
+	/// (`MockNamesReadApart.bindNamesToNil(beneathPinsFoundBy:in:)`).
 	static func refusalOfNamingApart(_ declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordRefusal? {
 		let mockRootNames = world.mockRootNames
 		var labels = Set<String>()
@@ -196,9 +203,9 @@ extension NodeRecords {
 		guard declaration != 0 else { return nil }
 		for dependency in world.scope(of: declaration).instantiable.dependencies {
 			switch dependency.source {
-			case let .received(onlyIfAvailable):
-				// Such a receive reads the name or `nil` by its place, and one function serves every place.
-				guard !onlyIfAvailable || !mockRootNames.namesApart(label: dependency.property.label) || !mockRootNames.pinsFromAbove(label: dependency.property.label) else { return .mockOverrideNotParentField }
+			case .received:
+				// A receive only if available reads the name or `nil`, as `OnlyIfAvailableAnswers` find it for every call.
+				break
 			case let .aliased(fulfillingProperty, _, _):
 				// A rename reads its fulfilling label by name, which the walk resolves past a receive bound again.
 				guard !mockRootNames.namesApart(label: dependency.property.label), !mockRootNames.namesApart(label: fulfillingProperty.label) else { return .mockOverrideNotParentField }

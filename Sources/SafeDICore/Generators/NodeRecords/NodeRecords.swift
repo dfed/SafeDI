@@ -270,6 +270,7 @@ struct NodeRecords: Sendable {
 			receivesPassedNil: mockNamesReadApart.receivesPassedNil,
 		)
 		mockNamesReadApart.removeReceivesBoundAgain(passedNilBy: onlyIfAvailableAnswers)
+		try mockNamesReadApart.bindNamesToNil(beneathPinsFoundBy: onlyIfAvailableAnswers, in: world)
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
