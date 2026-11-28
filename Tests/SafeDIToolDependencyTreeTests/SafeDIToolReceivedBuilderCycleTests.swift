@@ -2262,25 +2262,21 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
 			            return Other(screenBuilder: screenBuilder)
 			        }
-			        let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
 			        func __safeDI_screenBuilder(otherBuilder: Instantiator<Other>) -> Screen {
 			            let detail = Detail(otherBuilder: otherBuilder)
-			            func __safeDI_stepBuilder() -> Step {
-			                func __safeDI_otherBuilder() -> Other {
-			                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
-			                    return Other(screenBuilder: screenBuilder)
-			                }
-			                let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
-			                func __safeDI_screenBuilder_received() -> Screen {
-			                    let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
-			                    return __safeDI_screenBuilder(otherBuilder: otherBuilder)
-			                }
-			                let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
-			                return Step(otherBuilder: otherBuilder, screenBuilder: screenBuilder)
-			            }
 			            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 			            return Screen(detail: detail, stepBuilder: stepBuilder)
 			        }
+			        func __safeDI_stepBuilder() -> Step {
+			            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+			            func __safeDI_screenBuilder_received() -> Screen {
+			                let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+			                return __safeDI_screenBuilder(otherBuilder: otherBuilder)
+			            }
+			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
+			            return Step(otherBuilder: otherBuilder, screenBuilder: screenBuilder)
+			        }
+			        let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
 			        func __safeDI_screenBuilder_received() -> Screen {
 			            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
 			            return __safeDI_screenBuilder(otherBuilder: otherBuilder)
@@ -2311,84 +2307,84 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_aBuilder(bBuilder: Instantiator<B>) -> A {
 			            let detail = DetailA(bBuilder: bBuilder)
-			            func __safeDI_stepBuilder() -> StepA {
-			                func __safeDI_bBuilder(aBuilder: Instantiator<A>) -> B {
-			                    let detail = DetailB(aBuilder: aBuilder)
-			                    func __safeDI_stepBuilder() -> StepB {
-			                        func __safeDI_aBuilder_received() -> A {
-			                            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                            return __safeDI_aBuilder(bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                        func __safeDI_bBuilder_received() -> B {
-			                            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                            return __safeDI_bBuilder(aBuilder: aBuilder)
-			                        }
-			                        let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                        return StepB(aBuilder: aBuilder, bBuilder: bBuilder)
-			                    }
-			                    let stepBuilder = Instantiator<StepB>(__safeDI_stepBuilder)
-			                    return B(detail: detail, stepBuilder: stepBuilder)
-			                }
-			                func __safeDI_bBuilder_received() -> B {
-			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                    return __safeDI_bBuilder(aBuilder: aBuilder)
-			                }
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                func __safeDI_aBuilder_received() -> A {
-			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                    return __safeDI_aBuilder(bBuilder: bBuilder)
-			                }
-			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                return StepA(bBuilder: bBuilder, aBuilder: aBuilder)
-			            }
 			            let stepBuilder = Instantiator<StepA>(__safeDI_stepBuilder)
 			            return A(detail: detail, stepBuilder: stepBuilder)
+			        }
+			        func __safeDI_stepBuilder() -> StepA {
+			            func __safeDI_bBuilder_received() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                return __safeDI_bBuilder(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			            func __safeDI_aBuilder_received() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			                return __safeDI_aBuilder(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            return StepA(bBuilder: bBuilder, aBuilder: aBuilder)
+			        }
+			        func __safeDI_bBuilder(aBuilder: Instantiator<A>) -> B {
+			            let detail = DetailB(aBuilder: aBuilder)
+			            let stepBuilder = Instantiator<StepB>(__safeDI_stepBuilder_)
+			            return B(detail: detail, stepBuilder: stepBuilder)
+			        }
+			        func __safeDI_stepBuilder_() -> StepB {
+			            func __safeDI_aBuilder_received() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			                return __safeDI_aBuilder(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            func __safeDI_bBuilder_received() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                return __safeDI_bBuilder(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			            return StepB(aBuilder: aBuilder, bBuilder: bBuilder)
 			        }
 			        func __safeDI_aBuilder_received() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
 			            return __safeDI_aBuilder(bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			        func __safeDI_bBuilder(aBuilder: Instantiator<A>) -> B {
+			        func __safeDI_bBuilder_(aBuilder: Instantiator<A>) -> B {
 			            let detail = DetailB(aBuilder: aBuilder)
-			            func __safeDI_stepBuilder() -> StepB {
-			                func __safeDI_aBuilder(bBuilder: Instantiator<B>) -> A {
-			                    let detail = DetailA(bBuilder: bBuilder)
-			                    func __safeDI_stepBuilder() -> StepA {
-			                        func __safeDI_bBuilder_received() -> B {
-			                            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                            return __safeDI_bBuilder(aBuilder: aBuilder)
-			                        }
-			                        let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                        func __safeDI_aBuilder_received() -> A {
-			                            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                            return __safeDI_aBuilder(bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                        return StepA(bBuilder: bBuilder, aBuilder: aBuilder)
-			                    }
-			                    let stepBuilder = Instantiator<StepA>(__safeDI_stepBuilder)
-			                    return A(detail: detail, stepBuilder: stepBuilder)
-			                }
-			                func __safeDI_aBuilder_received() -> A {
-			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                    return __safeDI_aBuilder(bBuilder: bBuilder)
-			                }
-			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                func __safeDI_bBuilder_received() -> B {
-			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			                    return __safeDI_bBuilder(aBuilder: aBuilder)
-			                }
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
-			                return StepB(aBuilder: aBuilder, bBuilder: bBuilder)
-			            }
-			            let stepBuilder = Instantiator<StepB>(__safeDI_stepBuilder)
+			            let stepBuilder = Instantiator<StepB>(__safeDI_stepBuilder__)
 			            return B(detail: detail, stepBuilder: stepBuilder)
+			        }
+			        func __safeDI_stepBuilder__() -> StepB {
+			            func __safeDI_aBuilder_received() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			                return __safeDI_aBuilder_(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            func __safeDI_bBuilder_received() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                return __safeDI_bBuilder_(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			            return StepB(aBuilder: aBuilder, bBuilder: bBuilder)
+			        }
+			        func __safeDI_aBuilder_(bBuilder: Instantiator<B>) -> A {
+			            let detail = DetailA(bBuilder: bBuilder)
+			            let stepBuilder = Instantiator<StepA>(__safeDI_stepBuilder___)
+			            return A(detail: detail, stepBuilder: stepBuilder)
+			        }
+			        func __safeDI_stepBuilder___() -> StepA {
+			            func __safeDI_bBuilder_received() -> B {
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                return __safeDI_bBuilder_(aBuilder: aBuilder)
+			            }
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			            func __safeDI_aBuilder_received() -> A {
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
+			                return __safeDI_aBuilder_(bBuilder: bBuilder)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            return StepA(bBuilder: bBuilder, aBuilder: aBuilder)
 			        }
 			        func __safeDI_bBuilder_received() -> B {
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
-			            return __safeDI_bBuilder(aBuilder: aBuilder)
+			            return __safeDI_bBuilder_(aBuilder: aBuilder)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder_received)
 			        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
