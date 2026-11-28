@@ -139,6 +139,13 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             number,expr=expr[1:].split(HANDED,1)
             how=HANDS[int(number)]
         closes=('slot',how[1]) if how and how[0]=='entering' else name if not how else None
+        # entry 20, places entered left out: a value made of one that is left out is left out too
+        left_out=bool(how) and (entered.get(('left out',),False) or how[3])
+        if how and how[0]=='entering' and closes in entered and entered.get(('left',closes)):
+            # a place entered left out keeps the configuration each call hands, never the one it was entered
+            # with. The call is written as a call of the enclosing function only where it hands the very
+            # configuration that function was entered with; any other is refused
+            if expr!=entered.get(('expr',closes)): raise SystemExit('a call closes on a place left out with another configuration')
         if how and how[0]=='same':
             # entry 20: the function nested here calls itself at its own place; any other callee fails closed
             current=entered.get(('current',))
@@ -191,13 +198,19 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             # then stays different. At run time the cast is to the struct that boxes the configuration
             # (required line for line above), so an optional configuration finds no nil of another type.
             # A slot entered anywhere above is looked up first, as the declaration's loop returns it first.
-            kind,slot,asks_nearest=how
+            kind,slot,asks_nearest,_=how
             configuration=re.search(r'(?:^|, )safeDIOverrides: (.*)$',m.group(4))
             if not configuration: raise SystemExit('a call hands places to a function that takes none')
             of_type=('type',configuration.group(1))
-            if kind=='entering' and asks_nearest and of_type in nearest: expr=nearest[of_type]
-            if kind!='passing':
-                below=dict(below);below[of_type]=expr
+            # the nearest place of the type answers only where it is not left out; the place entered with its
+            # configuration is then not left out either. A nearest place that is left out answers nothing
+            # (the declaration does not look past it), and the place takes what the call hands.
+            if kind=='entering' and asks_nearest and of_type in nearest and not nearest.get(('left',of_type)):
+                expr=nearest[of_type];left_out=False
+            # which places answer a later call that asks for the nearest of their type: every place in the
+            # enum's text, and in the classes' text those entered as the nearest of their type
+            if kind=='enteringNearest' or (kind=='entering' and (PLACES_FORM[0]=='enum' or asks_nearest)):
+                below=dict(below);below[of_type]=expr;below[('left',of_type)]=left_out
         loop_parameter=LOOP_PARAMETER.search(m.group(4))
         params=LOOP_PARAMETER.sub('',m.group(4))
         params=re.sub(r'(^|, )safeDIOverrides: .*$','',params)
@@ -251,6 +264,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         inst=([ind+guard.strip()] if guard else [])+[ind+m.group(2)+newname+'('+params+')'+m.group(5)+' {']
         sub=[ (ind+'    '+b if b else b) for b in (fold_empty(TOKEN.sub(lambda _:expr,x)) if expr is not None else x for x in body)]
         if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
+        if how: sub=[choose_left_out(x,left_out) for x in sub]
         if base_indent>8000: raise RecursionError('functions nest without end')
         inside=dict(entered)
         inside[('current',)]=(name,('slot',how[1]) if how and how[0]=='entering' else name if not how else None)
@@ -258,6 +272,9 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         elif how[0]=='entering':
             inside[('slot',how[1])]=newname
             inside[('kept',('slot',how[1]))]=kept_labels
+            inside[('left',('slot',how[1]))]=left_out
+            inside[('expr',('slot',how[1]))]=expr
+        inside[('left out',)]=left_out
         sub=expand(sub,hoisted,base_indent+4,inside,below,visible|level,referenced)
         inst+=sub+[ind+'}']
         # find statement start in out
@@ -296,6 +313,24 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
     return out
 # entry 20, the places enum: the records write a wrapper's closure on one line where the function is handed the
 # places; once the call hands nothing, the walk hands the wrapper the function itself
+LEFT_OUT_CHOICE='__safeDI_entered.isLeftOut ? '
+def choose_left_out(line,left_out):
+    """entry 20, places entered left out: `__safeDI_entered.isLeftOut ? A : B` in a function's copy is A where the
+    copy's place is left out and B where it is not, which the copy's place decides once"""
+    while LEFT_OUT_CHOICE in line:
+        start=line.index(LEFT_OUT_CHOICE);k=start+len(LEFT_OUT_CHOICE);depth=0;colon=None
+        while k<len(line):
+            c=line[k]
+            if c in '([{': depth+=1
+            elif c in ')]}':
+                if depth==0: break
+                depth-=1
+            elif depth==0 and c==',': break
+            elif depth==0 and colon is None and line.startswith(' : ',k): colon=k
+            k+=1
+        if colon is None: raise SystemExit('a choice by whether a place is left out has no second value')
+        line=line[:start]+(line[start+len(LEFT_OUT_CHOICE):colon] if left_out else line[colon+3:k])+line[k:]
+    return line
 def three_lines(taking):
     """entry 20, the places enum: a wrapper's closure whose call still hands arguments, on the walk's three lines"""
     return [taking.group(1)+taking.group(2)+' {',taking.group(1)+'    '+taking.group(3),taking.group(1)+'}']
@@ -340,7 +375,7 @@ def unhoist(text,walk=None):
                     k=e+1
                 else:
                     rest.append(body[k]);k+=1
-            res+=lines[i:j+1]+expand(rest,hoisted,8)
+            res+=lines[i:j+1]+expand([choose_left_out(x,False) for x in rest],hoisted,8)
             i=end
         else:
             res.append(lines[i]);i+=1
@@ -382,7 +417,7 @@ def e4(text,walk=None):
 def e20(text,walk=None):
     # entry 20, cycle kind form c: the places list's declaration and the calls that hand it on are removed.
     # What a function then reads of its configuration, and every other line, stays in the byte comparison.
-    if 'indirect enum __safeDI_Places' in text: return e20_places(text)
+    if 'let __safeDI_entered = __safeDI_Entered(configuration: ())' in text: return e20_places(text)
     if 'struct __safeDI_EnteredPlaces {' not in text: return text
     lines=text.split('\n');out=[];i=0
     while i<len(lines):
@@ -401,9 +436,11 @@ def e20(text,walk=None):
         line=re.sub(r'(, )?__safeDI_entered: __safeDI_entered(, )?',lambda m:', ' if m.group(1) and m.group(2) else '',line)
         out.append(line);i+=1
     return '\n'.join(out)
-def places_declaration(sendable,enters_nearest,passes):
-    """the lines a mock root declares its places with, as the generator writes them for its three arguments"""
+def places_declaration(sendable,enters_nearest,passes,leaves_out=False):
+    """the lines a mock root declares its places with in the enum's text, as the generator writes them for its
+    four arguments (MockEnteredSlot.mockEnteredPlacesDeclaration on claude/mock-kinds-integration 9ab71f445)"""
     handed='<Handed: Sendable>' if sendable else '<Handed>'
+    carried=', isLeftOut: isLeftOut' if leaves_out else ''
     lines=[
         'nonisolated indirect enum __safeDI_Places: Sendable {' if sendable else 'indirect enum __safeDI_Places {',
         '    case none',
@@ -412,32 +449,151 @@ def places_declaration(sendable,enters_nearest,passes):
         'nonisolated struct __safeDI_Entered<Configuration: Sendable>: Sendable {' if sendable else 'struct __safeDI_Entered<Configuration> {',
         '    let configuration: Configuration',
         '    var places = __safeDI_Places.none',
+    ]
+    if leaves_out:
+        lines+=['    var isLeftOut = false',
+                '    var leavingOut: __safeDI_Entered<Configuration> { .init(configuration: configuration, places: places, isLeftOut: true) }']
+    lines+=[
         '    func entering'+handed+'(_ slot: String, _ handed: Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {',
         '        var nearest: __safeDI_Entered<Handed>?',
         '        var above = places',
         '        while case let .entered(enteredSlot, entered, next) = above {',
         '            if enteredSlot == slot || nearestOfType && nearest == nil, let entered = entered as? __safeDI_Entered<Handed> {',
-        '                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }',
+        ('                if enteredSlot == slot { return .init(configuration: entered.isLeftOut ? handed : entered.configuration, places: above, isLeftOut: entered.isLeftOut) }' if leaves_out
+         else '                if enteredSlot == slot { return .init(configuration: entered.configuration, places: above) }'),
         '                nearest = entered',
         '            }',
         '            above = next',
         '        }',
-        '        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)',
-        '        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))',
+        ('        let entered = if let nearest, !nearest.isLeftOut { nearest } else { __safeDI_Entered<Handed>(configuration: handed'+carried+') }' if leaves_out
+         else '        let entered = __safeDI_Entered<Handed>(configuration: nearest?.configuration ?? handed)'),
+        ('        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places), isLeftOut: entered.isLeftOut)' if leaves_out
+         else '        return .init(configuration: entered.configuration, places: .entered(slot: slot, entered: entered, above: places))'),
         '    }',
     ]
     if enters_nearest:
         lines+=['    func enteringNearest'+handed+'(_ handed: Handed) -> __safeDI_Entered<Handed> {',
-                '        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed), above: places))',
+                '        .init(configuration: handed, places: .entered(slot: nil, entered: __safeDI_Entered<Handed>(configuration: handed'+carried+'), above: places)'+carried+')',
                 '    }']
     if passes:
         lines+=['    func passing'+handed+'(_ handed: Handed) -> __safeDI_Entered<Handed> {',
-                '        .init(configuration: handed, places: places)',
+                '        .init(configuration: handed, places: places'+carried+')',
                 '    }']
     return lines+['}','let __safeDI_entered = __safeDI_Entered(configuration: ())']
+def places_declaration_classes(sendable, enters_nearest, passes, leaves_out, slot_count):
+    """the lines a mock root declares its places with in the classes' text (the builder-loop lane's copy of
+    MockEnteredSlot.mockEnteredPlacesDeclaration on claude/project-thread-wagbyr-nearest-of-type-lookup 9db2c5480,
+    which its own self-test compares with the four texts SafeDIToolMockEnteredDeclarationTests pins)"""
+    i = '    '
+    place, configured, entered = '__safeDI_Place', '__safeDI_Configured', '__safeDI_Entered'
+    handed = '<Handed: Sendable>' if sendable else '<Handed>'
+    carried = ', isLeftOut: isLeftOut' if leaves_out else ''
+    any_value = 'any Sendable' if sendable else 'Any'
+    words = range(max(1, (slot_count + 63) // 64))
+    lines = [
+        'nonisolated struct %s<Configuration: Sendable>: Sendable {' % configured if sendable else 'struct %s<Configuration> {' % configured,
+        i + 'let configuration: Configuration',
+        '}',
+        'nonisolated final class %s: Sendable {' % place if sendable else 'final class %s {' % place,
+        i + 'let slot: Int?',
+        i + 'let isNearestOfType: Bool',
+        i + 'let configured: ' + any_value,
+        i + 'let above: %s?' % place,
+        i + 'let jump: %s?' % place,
+        i + 'let nearestOfTypeAbove: %s?' % place,
+        i + 'let configuredType: ObjectIdentifier',
+        i + 'let nearestOfEachTypeAbove: [ObjectIdentifier: %s]' % place,
+        i + 'let depth: Int',
+    ]
+    if leaves_out:
+        lines.append(i + 'let isLeftOut: Bool')
+    lines += [i + 'let entered%d: UInt64' % w for w in words]
+    lines += [
+        i + 'init(slot: Int?, isNearestOfType: Bool, configured: %s%s, above: %s?) {' % (any_value, ', isLeftOut: Bool' if leaves_out else '', place),
+        i * 2 + 'self.slot = slot',
+        i * 2 + 'self.isNearestOfType = isNearestOfType',
+        i * 2 + 'self.configured = configured',
+        i * 2 + 'self.above = above',
+    ]
+    if leaves_out:
+        lines.append(i * 2 + 'self.isLeftOut = isLeftOut')
+    lines += [
+        i * 2 + 'let depthAbove = above?.depth ?? 0',
+        i * 2 + 'let near = above?.jump',
+        i * 2 + 'let nearDepth = near?.depth ?? 0',
+        i * 2 + 'depth = depthAbove + 1',
+        i * 2 + 'jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above',
+        i * 2 + 'let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }',
+        i * 2 + 'nearestOfTypeAbove = nearestAbove',
+        i * 2 + 'configuredType = ObjectIdentifier(type(of: configured))',
+        i * 2 + 'if isNearestOfType, let nearestAbove {',
+        i * 3 + 'var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove',
+        i * 3 + 'nearestOfEachType[nearestAbove.configuredType] = nearestAbove',
+        i * 3 + 'nearestOfEachTypeAbove = nearestOfEachType',
+        i * 2 + '} else {',
+        i * 3 + 'nearestOfEachTypeAbove = [:]',
+        i * 2 + '}',
+        i * 2 + 'let word = slot.map { $0 >> 6 } ?? -1',
+        i * 2 + 'let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0',
+    ]
+    lines += [i * 2 + 'entered%d = (above?.entered%d ?? 0) | (word == %d ? bit : 0)' % (w, w, w) for w in words]
+    lines += [i + '}', i + 'func has(_ slot: Int) -> Bool {', i * 2 + 'let bit: UInt64 = 1 << UInt64(slot & 63)', i * 2 + 'switch slot >> 6 {']
+    lines += [i * 2 + 'case %d: return entered%d & bit != 0' % (w, w) for w in words]
+    lines += [i * 2 + 'default: return false', i * 2 + '}', i + '}', '}',
+              'nonisolated struct %s<Configuration: Sendable>: Sendable {' % entered if sendable else 'struct %s<Configuration> {' % entered,
+              i + 'let configuration: Configuration',
+              i + 'var top: %s?' % place]
+    if leaves_out:
+        lines.append(i + 'var isLeftOut = false')
+        lines.append(i + 'var leavingOut: %s<Configuration> { .init(configuration: configuration, top: top, isLeftOut: true) }' % entered)
+    lines += [
+        i + 'func nearest%s(_: Handed.Type) -> Handed? {' % handed,
+        i * 2 + 'let type = ObjectIdentifier(%s<Handed>.self)' % configured,
+        i * 2 + 'var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }',
+        i * 2 + 'if let candidate = place, candidate.configuredType != type {',
+        i * 3 + 'place = candidate.nearestOfEachTypeAbove[type]',
+        i * 2 + '}',
+        i * 2 + ('guard let place, let found = place.configured as? %s<Handed>, !place.isLeftOut else { return nil }' % configured if leaves_out
+                 else 'guard let place, let found = place.configured as? %s<Handed> else { return nil }' % configured),
+        i * 2 + 'return found.configuration',
+        i + '}',
+        i + 'func entering%s(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> %s<Handed> {' % (handed, entered),
+        i * 2 + 'if var place = top, place.has(slot) {',
+        i * 3 + 'while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {',
+        i * 4 + 'place = next',
+        i * 3 + '}',
+        i * 3 + 'if let found = place.configured as? %s<Handed> {' % configured,
+        i * 4 + ('return .init(configuration: place.isLeftOut ? handed() : found.configuration, top: place, isLeftOut: place.isLeftOut)' if leaves_out
+                 else 'return .init(configuration: found.configuration, top: place)'),
+        i * 3 + '}',
+        i * 2 + '}',
+        i * 2 + 'if nearestOfType, let nearest = nearest(Handed.self) {',
+        i * 3 + 'return .init(configuration: nearest, top: %s(slot: slot, isNearestOfType: true, configured: %s(configuration: nearest)%s, above: top))' % (place, configured, ', isLeftOut: false' if leaves_out else ''),
+        i * 2 + '}',
+        i * 2 + 'let configuration = handed()',
+        i * 2 + 'return .init(configuration: configuration, top: %s(slot: slot, isNearestOfType: nearestOfType, configured: %s(configuration: configuration)%s, above: top)%s)' % (place, configured, carried, carried),
+        i + '}',
+    ]
+    if enters_nearest:
+        lines += [i + 'func enteringNearest%s(_ handed: Handed) -> %s<Handed> {' % (handed, entered),
+                  i * 2 + '.init(configuration: handed, top: %s(slot: nil, isNearestOfType: true, configured: %s(configuration: handed)%s, above: top)%s)' % (place, configured, carried, carried),
+                  i + '}']
+    if passes:
+        lines += [i + 'func passing%s(_ handed: Handed) -> %s<Handed> {' % (handed, entered),
+                  i * 2 + '.init(configuration: handed, top: top%s)' % carried,
+                  i + '}']
+    return lines + ['}', 'let __safeDI_entered = %s(configuration: ())' % entered]
 ENTERED_PARAMETER=re.compile(r'(^|, )__safeDI_entered: __safeDI_Entered<(.*)>$')
-HANDS_ON=re.compile(r'__safeDI_entered: __safeDI_entered\.(entering|enteringNearest|passing)\(')
-SLOT=re.compile(r'^"((?:[^"\\])*)"$')
+HANDS_ON=re.compile(r'__safeDI_entered: __safeDI_entered\.(leavingOut\.)?(entering|enteringNearest|passing)\(')
+# a slot is a string in the enum's text and a number in the classes'
+SLOT=re.compile(r'^(?:"((?:[^"\\])*)"|(\d+))$')
+PLACES_FORM=['enum']
+PLACES_FIRST_LINES={
+    'indirect enum __safeDI_Places {':'enum',
+    'nonisolated indirect enum __safeDI_Places: Sendable {':'enum',
+    'struct __safeDI_Configured<Configuration> {':'classes',
+    'nonisolated struct __safeDI_Configured<Configuration: Sendable>: Sendable {':'classes',
+}
 def e20_places(text):
     # entry 20, cycle kind form c with the places in an enum: the declaration is removed only where it is,
     # line for line, the text the generator writes; a function handed its configuration with the places takes
@@ -448,17 +604,23 @@ def e20_places(text):
     lines=text.split('\n');out=[];i=0;inside=None
     while i<len(lines):
         line=lines[i]
-        if line.strip() in ('indirect enum __safeDI_Places {','nonisolated indirect enum __safeDI_Places: Sendable {'):
+        if line.strip() in PLACES_FIRST_LINES:
             indent=line[:len(line)-len(line.lstrip())]
             sendable=line.strip().startswith('nonisolated')
+            form=PLACES_FIRST_LINES[line.strip()]
+            found=None
             for enters_nearest in (False,True):
                 for passes in (False,True):
-                    declaration=[indent+d for d in places_declaration(sendable,enters_nearest,passes)]
-                    if lines[i:i+len(declaration)]==declaration: break
-                else: continue
-                break
-            else: return text
-            i+=len(declaration); continue
+                    for leaves_out in (False,True):
+                        # the classes' text grows by one line group per 64 slots; the enum's has no slot count
+                        for words in ((1,) if form=='enum' else range(1,33)):
+                            if form=='enum': candidate=places_declaration(sendable,enters_nearest,passes,leaves_out)
+                            else: candidate=places_declaration_classes(sendable,enters_nearest,passes,leaves_out,64*words)
+                            candidate=[indent+d if d else d for d in candidate]
+                            if lines[i:i+len(candidate)]==candidate: found=candidate
+            if found is None: return text
+            PLACES_FORM[0]=form
+            i+=len(found); continue
         f=FUNC.match(line)
         if f:
             parameter=ENTERED_PARAMETER.search(f.group(4))
@@ -477,15 +639,15 @@ def e20_places(text):
                     if depth==0: break
             else: return text
             parts=split_top(line[call.end():k])
-            kind=call.group(1)
+            kind=call.group(2);leaving=bool(call.group(1))
             if kind=='entering':
                 slot=SLOT.match(parts[0]) if parts else None
                 asks=len(parts)==3 and parts[2]=='nearestOfType: true'
                 if not slot or not (len(parts)==2 or asks): return text
-                how=(kind,slot.group(1),asks);handed=parts[1]
+                how=(kind,slot.group(1) if slot.group(1) is not None else slot.group(2),asks,leaving);handed=parts[1]
             else:
                 if len(parts)!=1: return text
-                how=(kind,None,False);handed=parts[0]
+                how=(kind,None,False,leaving);handed=parts[0]
             HANDS.append(how)
             line=line[:call.start()]+'safeDIOverrides: '+HANDED+str(len(HANDS)-1)+HANDED+handed+line[k+1:]
         # a call inside a function that hands that function's places on unchanged calls the function at its own
@@ -493,7 +655,7 @@ def e20_places(text):
         if inside:
             same=SAME_PLACE.search(line)
             if same:
-                HANDS.append(('same',None,False))
+                HANDS.append(('same',None,False,False))
                 line=line[:same.start(1)]+'safeDIOverrides: '+HANDED+str(len(HANDS)-1)+HANDED+'__safeDI_entered.configuration'+line[same.end(1):]
         if inside: line=line.replace('__safeDI_entered.configuration','safeDIOverrides')
         out.append(line);i+=1
