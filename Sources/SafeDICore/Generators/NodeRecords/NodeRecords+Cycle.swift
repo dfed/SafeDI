@@ -193,6 +193,7 @@ extension NodeRecords {
 			)
 			named.sharingFields = built.sharingFields
 			named.callFields = built.callFields
+			named.returnsPropertyType = built.returnsPropertyType
 			return .built(named)
 		case .alias, .closer:
 			return record

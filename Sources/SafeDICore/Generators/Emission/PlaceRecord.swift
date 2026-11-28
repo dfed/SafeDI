@@ -346,6 +346,12 @@ extension ValuePath {
 		closing += ")"
 		return .spliced([.value(value), .text(opening), .value(handed), .text(closing)])
 	}
+
+	/// One of two values by a flag of a third, spelled `<value>.<flag> ? <whenSet> : <otherwise>`: the three values
+	/// spliced with the text between them, so it reads what they read.
+	static func choice(byMember flag: String, of value: ValuePath, whenSet: ValuePath, otherwise: ValuePath) -> ValuePath {
+		.spliced([.value(.member(flag, of: value)), .text(" ? "), .value(whenSet), .text(" : "), .value(otherwise)])
+	}
 }
 
 /// The value a member of a value path is read from. A mock's override of a node reads a member of its parent's, so a

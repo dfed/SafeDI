@@ -72,8 +72,10 @@ extension NodeRecords {
 /// way round).
 ///
 /// Cost: two passes over the declarations, one walk up from the slots, one walk down from the declarations off every
-/// cycle that enter a place, one walk down from the declarations that take the places, and one walk up per
-/// configuration that has a nearest name, each visiting a declaration once. Memory: a few entries per declaration and one per slot, for as long as a caller holds it.
+/// cycle that enter a place, one walk down from the declarations that take the places, one walk down from the edges
+/// the configurations leave out and one up from the declarations that read a field of their configuration, and one
+/// walk up per configuration that has a nearest name, each visiting a declaration once. Memory: a few entries per
+/// declaration and one per slot, for as long as a caller holds it.
 struct MockEnteredSlots: Sendable {
 	init(world: some NodeRecordSources) {
 		let declarations = 0..<Int32(world.declarationCount)
@@ -157,12 +159,33 @@ struct MockEnteredSlots: Sendable {
 				pendingDown.append(child)
 			}
 		}
+		// A declaration built along an edge the configurations leave out, or beneath one, is handed a new configuration
+		// where its place is entered so, and it matters where a construction there, its own or one beneath it, reads a
+		// field of its configuration: each declaration between the two hands on whether its place was.
+		var isBuiltBeneathEdgeLeftOut = [Bool](repeating: false, count: world.declarationCount)
+		var pendingLeftOut = declarations.filter { declaration in
+			world.parents(of: declaration).contains { NodeRecords.mockConfigurationLeavesOut(declaration, builtBy: $0.parent, in: world) }
+		}
+		while let declaration = pendingLeftOut.popLast() {
+			guard !isBuiltBeneathEdgeLeftOut[Int(declaration)] else { continue }
+			isBuiltBeneathEdgeLeftOut[Int(declaration)] = true
+			pendingLeftOut.append(contentsOf: world.edges(from: declaration))
+		}
+		var mayBeEnteredLeftOut = [Bool](repeating: false, count: world.declarationCount)
+		var pendingFieldReaders = declarations.filter { isBuiltBeneathEdgeLeftOut[Int($0)] && !NodeRecords.mockConfigurationFieldArguments(of: $0, in: world).isEmpty }
+		while let declaration = pendingFieldReaders.popLast() {
+			guard !mayBeEnteredLeftOut[Int(declaration)] else { continue }
+			mayBeEnteredLeftOut[Int(declaration)] = true
+			pendingFieldReaders.append(contentsOf: world.parents(of: declaration).map(\.parent).filter { isBuiltBeneathEdgeLeftOut[Int($0)] })
+		}
+		mayBeEnteredLeftOutByDeclaration = mayBeEnteredLeftOut
 		let nearestEntered = nearestEnteredByDeclaration
 		takesEnteredPlacesByDeclaration = declarations.map { declaration in
 			declaration != 0 && (world.isOnCycle(declaration)
 				|| slotIndexByDeclaration[Int(declaration)] >= 0
 				|| nearestEntered[Int(declaration)] != nil
-				|| isBeneathAnEntry[Int(declaration)] && isAboveASlot[Int(declaration)])
+				|| isBeneathAnEntry[Int(declaration)] && isAboveASlot[Int(declaration)]
+				|| mayBeEnteredLeftOut[Int(declaration)])
 		}
 		let takesEnteredPlaces = takesEnteredPlacesByDeclaration
 		handsPlacesToSendableFunction = declarations.contains { declaration in
@@ -191,6 +214,12 @@ struct MockEnteredSlots: Sendable {
 	let nearestEnteredByDeclaration: [String?]
 	/// By declaration: whether its function takes and hands on the entered places.
 	let takesEnteredPlacesByDeclaration: [Bool]
+	/// By declaration: whether its place may be entered along an edge the configurations leave out, or beneath one, and
+	/// a construction there, its own or one beneath it, reads a field of its configuration. The walk leaves each such
+	/// construction to its initializer's own default, evaluated again each time, so a call of the declaration's function
+	/// from a place entered so hands a new configuration (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`).
+	/// Such a declaration takes the places, which carry whether its place was.
+	let mayBeEnteredLeftOutByDeclaration: [Bool]
 	/// Whether some `@Sendable` function takes the entered places, or hands them to a function it builds: the closure
 	/// that calls a function that takes them captures the places it hands, and a `@Sendable` function that takes none
 	/// captures `mock()`'s own, so `mock()` declares them in their `Sendable` form
@@ -201,13 +230,14 @@ struct MockEnteredSlots: Sendable {
 	/// (`NodeRecords.mockOverridesStayOutsideSendableFunctions(of:in:)`).
 	let isBuiltBeneathEnteredPlacesByDeclaration: [Bool]
 
-	/// Whether some function on no cycle enters the nearest place of its type alone, and whether some function only hands
-	/// the places on: the two functions `mock()` declares for them only where one is called
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:slotCount:)`).
+	/// Whether some function on no cycle enters the nearest place of its type alone, whether some function only hands
+	/// the places on, and whether some place may be entered left out: what `mock()` declares only where a call uses it
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:slotCount:)`).
 	var use: MockEnteredPlacesUse {
 		MockEnteredPlacesUse(
 			entersNearest: nearestEnteredByDeclaration.contains { $0 != nil },
 			passes: takesEnteredPlacesByDeclaration.indices.contains { takesEnteredPlacesByDeclaration[$0] && slotIndexByDeclaration[$0] < 0 && nearestEnteredByDeclaration[$0] == nil },
+			leavesOut: mayBeEnteredLeftOutByDeclaration.contains(true),
 			slotCount: slots.count,
 		)
 	}
@@ -226,6 +256,8 @@ struct MockEnteredPlacesUse: Hashable, Sendable {
 	let entersNearest: Bool
 	/// Whether some call only hands the places on.
 	let passes: Bool
+	/// Whether some call enters a place left out, or from one entered so.
+	let leavesOut: Bool
 	/// How many slots the calls enter: a call names its slot by its position among them.
 	let slotCount: Int
 }

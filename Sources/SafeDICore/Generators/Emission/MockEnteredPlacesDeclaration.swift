@@ -40,15 +40,25 @@ extension MockEnteredSlot {
 	/// with the logarithm of the places entered (`entered_looksAtPlacesByTheLogarithmOfTheRing_whenALapClosesOnItsFirstFunction`).
 	/// A place is immutable and made once, when entered; finding one makes nothing.
 	///
-	/// The text follows the four arguments and nothing else, so it is one text on every run.
+	/// Where some place may be entered left out, the struct a function is handed and each place also say whether the
+	/// place was: a call along an edge the configurations leave out enters its place from `leavingOut`, and every value
+	/// entered from one that is left out is left out too, until a call closes on a place entered before that is not, or
+	/// enters, for the nearest of its type, beneath one that is not: that place takes the nearest's configuration and is
+	/// not left out, as the walk's function for a type built again beneath itself reads the overrides of the one above.
+	/// A place entered left out keeps the configuration each call hands, never one entered before: the walk leaves every
+	/// other construction beneath such an edge to its initializer's own defaults, evaluated again each time. The nearest
+	/// place of a type is the first of that type going up, taken only where it is not left out.
+	///
+	/// The text follows the five arguments and nothing else, so it is one text on every run.
 	/// - Parameter isSendable: Whether a function that is handed the places is `@Sendable`. The three types are then
 	///   `Sendable`, a place holds `any Sendable`, and all are `nonisolated`, so that a `nonisolated` function can enter a
 	///   place in a module whose declarations default to the main actor.
 	/// - Parameter entersNearest: Whether some function on no cycle enters the nearest place of its type alone.
 	/// - Parameter passes: Whether some function only hands the places on.
+	/// - Parameter leavesOut: Whether some place may be entered left out (`MockEnteredSlots.mayBeEnteredLeftOutByDeclaration`).
 	/// - Parameter slotCount: How many slots the root's calls enter, numbered from zero. A place holds one `UInt64` of
 	///   bits per 64 of them.
-	static func mockEnteredPlacesDeclaration(isSendable: Bool, entersNearest: Bool, passes: Bool, slotCount: Int) -> [String] {
+	static func mockEnteredPlacesDeclaration(isSendable: Bool, entersNearest: Bool, passes: Bool, leavesOut: Bool, slotCount: Int) -> [String] {
 		let indent = ScopeGenerator.standardIndent
 		let place = ReservedName.mockEnteredPlaceTypeName
 		let configured = ReservedName.mockEnteredConfiguredTypeName
@@ -56,6 +66,10 @@ extension MockEnteredSlot {
 		let configuration = ReservedName.mockEnteredConfigurationMemberName
 		let nearestOfType = ReservedName.mockEnteringNearestOfTypeArgumentLabel
 		let handed = isSendable ? "<Handed: Sendable>" : "<Handed>"
+		let isLeftOut = ReservedName.mockEnteredIsLeftOutMemberName
+		// What each place and value made of a value that may be left out carries on.
+		let carriedOn = leavesOut ? ", \(isLeftOut): \(isLeftOut)" : ""
+		let anyValue = isSendable ? "any Sendable" : "Any"
 		let words = 0..<max(1, (slotCount + 63) / 64)
 		var lines = [
 			isSendable ? "nonisolated struct \(configured)<Configuration: Sendable>: Sendable {" : "struct \(configured)<Configuration> {",
@@ -64,19 +78,27 @@ extension MockEnteredSlot {
 			isSendable ? "nonisolated final class \(place): Sendable {" : "final class \(place) {",
 			"\(indent)let slot: Int?",
 			"\(indent)let isNearestOfType: Bool",
-			"\(indent)let configured: \(isSendable ? "any Sendable" : "Any")",
+			"\(indent)let configured: \(anyValue)",
 			"\(indent)let above: \(place)?",
 			"\(indent)let jump: \(place)?",
 			"\(indent)let nearestOfTypeAbove: \(place)?",
 			"\(indent)let depth: Int",
 		]
+		if leavesOut {
+			lines.append("\(indent)let \(isLeftOut): Bool")
+		}
 		lines += words.map { "\(indent)let entered\($0): UInt64" }
 		lines += [
-			"\(indent)init(slot: Int?, isNearestOfType: Bool, configured: \(isSendable ? "any Sendable" : "Any"), above: \(place)?) {",
+			"\(indent)init(slot: Int?, isNearestOfType: Bool, configured: \(anyValue)\(leavesOut ? ", \(isLeftOut): Bool" : ""), above: \(place)?) {",
 			"\(indent)\(indent)self.slot = slot",
 			"\(indent)\(indent)self.isNearestOfType = isNearestOfType",
 			"\(indent)\(indent)self.configured = configured",
 			"\(indent)\(indent)self.above = above",
+		]
+		if leavesOut {
+			lines.append("\(indent)\(indent)self.\(isLeftOut) = \(isLeftOut)")
+		}
+		lines += [
 			"\(indent)\(indent)let depthAbove = above?.depth ?? 0",
 			"\(indent)\(indent)let near = above?.jump",
 			"\(indent)\(indent)let nearDepth = near?.depth ?? 0",
@@ -102,10 +124,18 @@ extension MockEnteredSlot {
 			isSendable ? "nonisolated struct \(entered)<Configuration: Sendable>: Sendable {" : "struct \(entered)<Configuration> {",
 			"\(indent)let \(configuration): Configuration",
 			"\(indent)var top: \(place)?",
+		]
+		if leavesOut {
+			lines.append("\(indent)var \(isLeftOut) = false")
+			lines.append("\(indent)var \(ReservedName.mockEnteredLeavingOutMemberName): \(entered)<Configuration> { .init(\(configuration): \(configuration), top: top, \(isLeftOut): true) }")
+		}
+		lines += [
 			"\(indent)func nearest\(handed)(_: Handed.Type) -> Handed? {",
 			"\(indent)\(indent)var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }",
 			"\(indent)\(indent)while let candidate = place {",
-			"\(indent)\(indent)\(indent)if let found = candidate.configured as? \(configured)<Handed> { return found.\(configuration) }",
+			leavesOut
+				? "\(indent)\(indent)\(indent)if let found = candidate.configured as? \(configured)<Handed> { return candidate.\(isLeftOut) ? nil : found.\(configuration) }"
+				: "\(indent)\(indent)\(indent)if let found = candidate.configured as? \(configured)<Handed> { return found.\(configuration) }",
 			"\(indent)\(indent)\(indent)place = candidate.nearestOfTypeAbove",
 			"\(indent)\(indent)}",
 			"\(indent)\(indent)return nil",
@@ -116,21 +146,26 @@ extension MockEnteredSlot {
 			"\(indent)\(indent)\(indent)\(indent)place = next",
 			"\(indent)\(indent)\(indent)}",
 			"\(indent)\(indent)\(indent)if let found = place.configured as? \(configured)<Handed> {",
-			"\(indent)\(indent)\(indent)\(indent)return .init(\(configuration): found.\(configuration), top: place)",
+			leavesOut
+				? "\(indent)\(indent)\(indent)\(indent)return .init(\(configuration): place.\(isLeftOut) ? handed() : found.\(configuration), top: place, \(isLeftOut): place.\(isLeftOut))"
+				: "\(indent)\(indent)\(indent)\(indent)return .init(\(configuration): found.\(configuration), top: place)",
 			"\(indent)\(indent)\(indent)}",
 			"\(indent)\(indent)}",
-			"\(indent)\(indent)let \(configuration): Handed = (\(nearestOfType) ? nearest(Handed.self) : nil) ?? handed()",
-			"\(indent)\(indent)return .init(\(configuration): \(configuration), top: \(place)(slot: slot, isNearestOfType: \(nearestOfType), configured: \(configured)(\(configuration): \(configuration)), above: top))",
+			"\(indent)\(indent)if \(nearestOfType), let nearest = nearest(Handed.self) {",
+			"\(indent)\(indent)\(indent)return .init(\(configuration): nearest, top: \(place)(slot: slot, isNearestOfType: true, configured: \(configured)(\(configuration): nearest)\(leavesOut ? ", \(isLeftOut): false" : ""), above: top))",
+			"\(indent)\(indent)}",
+			"\(indent)\(indent)let \(configuration) = handed()",
+			"\(indent)\(indent)return .init(\(configuration): \(configuration), top: \(place)(slot: slot, isNearestOfType: \(nearestOfType), configured: \(configured)(\(configuration): \(configuration))\(carriedOn), above: top)\(carriedOn))",
 			"\(indent)}",
 		]
 		if entersNearest {
 			lines.append("\(indent)func \(ReservedName.mockEnteringNearestFunctionName)\(handed)(_ handed: Handed) -> \(entered)<Handed> {")
-			lines.append("\(indent)\(indent).init(\(configuration): handed, top: \(place)(slot: nil, isNearestOfType: true, configured: \(configured)(\(configuration): handed), above: top))")
+			lines.append("\(indent)\(indent).init(\(configuration): handed, top: \(place)(slot: nil, isNearestOfType: true, configured: \(configured)(\(configuration): handed)\(carriedOn), above: top)\(carriedOn))")
 			lines.append("\(indent)}")
 		}
 		if passes {
 			lines.append("\(indent)func \(ReservedName.mockPassingFunctionName)\(handed)(_ handed: Handed) -> \(entered)<Handed> {")
-			lines.append("\(indent)\(indent).init(\(configuration): handed, top: top)")
+			lines.append("\(indent)\(indent).init(\(configuration): handed, top: top\(carriedOn))")
 			lines.append("\(indent)}")
 		}
 		lines.append("}")

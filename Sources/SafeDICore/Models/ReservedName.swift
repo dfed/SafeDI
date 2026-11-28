@@ -157,6 +157,13 @@ public enum ReservedName: Hashable, Sendable {
 		"\(builderFunctionNamePrefix)\(typeIdentifier)_loopConfiguration".spelledAsJoinedIdentifier
 	}
 
+	/// The name of the `Sendable` struct a generated `mock()` declares for the overrides a level, a node of the type
+	/// `typeIdentifier` names, hands the `@Sendable` members of its loops of builders, whose functions cannot take the
+	/// level's configuration (`NodeRecords.SendableLoopStruct`).
+	static func sendableLoopOverridesTypeName(ofTypeIdentifier typeIdentifier: String) -> String {
+		"\(builderFunctionNamePrefix)\(typeIdentifier)_LoopOverrides".spelledAsJoinedIdentifier
+	}
+
 	/// The name of the box a scope binds the levels and payloads of a loop of builders in, beside the builder function
 	/// named `functionName` of the loop's first member (see `ScopeGenerator.boxedLoops`).
 	static func loopLevelsName(of functionName: String) -> String {
@@ -186,6 +193,12 @@ public enum ReservedName: Hashable, Sendable {
 	static let mockEnteringNearestFunctionName = "enteringNearest"
 	/// The function a call of a function that only hands the places on hands the function its value with.
 	static let mockPassingFunctionName = "passing"
+	/// The member of that struct that says whether its place was entered along an edge the configurations leave out, or
+	/// from a place entered so, which `mock()` declares where some place may be.
+	static let mockEnteredIsLeftOutMemberName = "isLeftOut"
+	/// The member of that struct a call along an edge the configurations leave out reads the value it enters a place
+	/// with from: the same configuration and places, entered left out.
+	static let mockEnteredLeavingOutMemberName = "leavingOut"
 
 	/// The name of the parameter through which a function building a hole held in an instantiator takes the value the
 	/// instantiator forwards.

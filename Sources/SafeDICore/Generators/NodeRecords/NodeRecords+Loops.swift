@@ -53,7 +53,8 @@ extension NodeRecords {
 	/// Whether the loop of builders `member` belongs to, in a mock root's world, is of a shape these records make: every
 	/// member at its level is handed nothing (`mockLoopMemberTakesNothing(_:in:)`), or no level that builds a member is on
 	/// a cycle, every level that builds one member of the loop builds every member and reads the overrides it hands it
-	/// alike, none is built in a `@Sendable` function, none builds a property nothing fulfills, whose override a member's
+	/// alike, its members are all `@Sendable` or none is (`@Sendable` members take their level's overrides in a `Sendable`
+	/// struct, `MockLoopLevels.sendableStructByLevel`), none builds a property nothing fulfills, whose override a member's
 	/// function would take beside its own, and none is a call of another module's public mock, whose function takes no
 	/// level's configuration.
 	static func mockLoopRefusesNothing(ofMember member: DeclarationID, in world: some NodeRecordSources) -> Bool {
@@ -99,9 +100,11 @@ extension NodeRecords {
 				guard component.isSubset(of: edges) else { return false }
 			}
 		}
+		// A loop of `@Sendable` members and members that are not would hand one struct to functions of both kinds.
+		let sendableMembers = members.count { world.property(of: $0)?.propertyType.isSendable == true }
+		guard sendableMembers == 0 || sendableMembers == members.count else { return false }
 		return members.allSatisfy { member in
-			world.property(of: member)?.propertyType.isSendable == false
-				&& world.scope(of: member).publicMockCall == nil
+			world.scope(of: member).publicMockCall == nil
 				&& !buildsUnavailableDependency(beneath: member, in: world)
 		}
 	}
@@ -158,6 +161,41 @@ extension NodeRecords {
 		/// The name each home level's argument is passed under, `__safeDI_<LevelType>_loopConfiguration`, claimed apart
 		/// from every builder function name of the world and from the names of the levels claimed before it.
 		var parameterNameByLevel = [DeclarationID: String]()
+		/// The struct each home level of a loop of `@Sendable` members hands them in its configuration's place, which is
+		/// not `Sendable`: one per level, holding each member's override, so that a loop of k members spells k fields.
+		var sendableStructByLevel = [DeclarationID: SendableLoopStruct]()
+	}
+
+	/// A `Sendable` struct `mock()` declares for a loop of `@Sendable` members: each member's override, a `@Sendable`
+	/// closure or a configuration of the `Sendable` form, under the member's label. Every level that builds the members
+	/// binds one, made of the locals it reads the members' overrides into (`mockLoopSendableStructBindings(atLevel:in:levels:)`),
+	/// and hands it to each member's function, which hands it on.
+	struct SendableLoopStruct: Sendable {
+		/// The struct's name, claimed apart from every builder function name of the world and every level's argument.
+		let typeName: String
+		/// The name each level binds it under, and each member's function takes it by: the home level's argument's.
+		let parameterName: String
+		/// A field for each member whose function takes overrides, in the home level's order.
+		let fields: [Field]
+
+		/// A member's override: the member's label and the type of its override.
+		struct Field: Sendable {
+			let member: DeclarationID
+			let label: String
+			let type: TypeDescription
+		}
+
+		/// The struct's type.
+		var type: TypeDescription {
+			.simple(name: typeName)
+		}
+
+		/// The struct's declaration, its lines unindented.
+		var declaration: [String] {
+			["nonisolated struct \(typeName): Sendable {"]
+				+ fields.map { "\(ScopeGenerator.standardIndent)let \($0.label.spelledAsMemberDeclarationName): \($0.type.asSource)" }
+				+ ["}"]
+		}
 	}
 
 	/// The members of `world`'s loops of builders that take their level's overrides (`MockLoopLevels`), a least fixed
@@ -184,6 +222,7 @@ extension NodeRecords {
 		var names = GeneratedNameAllocator(reserving: Set((0..<world.declarationCount).compactMap { declaration in
 			world.property(of: DeclarationID(declaration)).map { ScopeGenerator.functionName(toBuildPropertyNamed: $0.label) }
 		}))
+		var sendableHomes = [DeclarationID: String]()
 		for member in members where levels.takingLevel.contains(member) {
 			if levels.homeLevelByMember[member] == nil {
 				let component = mockLoopComponent(of: member, in: world)
@@ -195,7 +234,27 @@ extension NodeRecords {
 			}
 			guard let level = levels.homeLevelByMember[member], levels.parameterNameByLevel[level] == nil else { continue }
 			let typeIdentifier = world.scope(of: level).instantiable.concreteInstantiable.asIdentifier
-			levels.parameterNameByLevel[level] = names.claim(ReservedName.loopLevelConfigurationParameterName(ofTypeIdentifier: typeIdentifier))
+			let parameterName = names.claim(ReservedName.loopLevelConfigurationParameterName(ofTypeIdentifier: typeIdentifier))
+			levels.parameterNameByLevel[level] = parameterName
+			// The members at one level are all `@Sendable` or none is (`mockLoopRefusesNothing(ofMember:in:)`).
+			if world.property(of: member)?.propertyType.isSendable == true {
+				sendableHomes[level] = parameterName
+			}
+		}
+		// Each home level of `@Sendable` members, once every loop's home is known, in declaration order.
+		for (level, parameterName) in sendableHomes.sorted(by: { $0.key < $1.key }) {
+			let typeIdentifier = world.scope(of: level).instantiable.concreteInstantiable.asIdentifier
+			var fields = [SendableLoopStruct.Field]()
+			for member in world.edges(from: level) where levels.homeLevelByMember[member] == level {
+				if let property = world.property(of: member), let type = mockLoopOverridesType(of: member, in: world) {
+					fields.append(SendableLoopStruct.Field(member: member, label: property.label, type: type))
+				}
+			}
+			levels.sendableStructByLevel[level] = SendableLoopStruct(
+				typeName: names.claim(ReservedName.sendableLoopOverridesTypeName(ofTypeIdentifier: typeIdentifier)),
+				parameterName: parameterName,
+				fields: fields,
+			)
 		}
 		return levels
 	}
@@ -210,6 +269,10 @@ extension NodeRecords {
 		      let home = levels.homeLevelByMember[member],
 		      let parameterName = levels.parameterNameByLevel[home]
 		else { return nil }
+		// `@Sendable` members are handed the struct their level binds (`mockLoopSendableStructBindings(atLevel:in:levels:)`).
+		if let sendableStruct = levels.sendableStructByLevel[home] {
+			return PassedArgument(parameterName: parameterName, type: sendableStruct.type, value: .read(sendableStructLocal(named: parameterName, typed: sendableStruct.type)), staysOutsideSendableFunctions: false)
+		}
 		let type = mockLoopLevelType(of: home, in: world)
 		let parents = world.parents(of: member)
 		// Every level that builds the member reads these overrides alike (`mockLoopRefusesNothing(ofMember:in:)`).
@@ -236,6 +299,53 @@ extension NodeRecords {
 		return PassedArgument(parameterName: parameterName, type: type, value: value, staysOutsideSendableFunctions: true)
 	}
 
+	/// The local a level binds the struct it hands a loop's `@Sendable` members to, named as their functions take it.
+	private static func sendableStructLocal(named name: String, typed type: TypeDescription) -> PlaceRead {
+		PlaceRead(argumentLabel: name, label: name, property: Property(label: name, typeDescription: type), source: .binding(label: name))
+	}
+
+	/// The places `level` binds, after the locals of its loop members' overrides, the struct of each loop of `@Sendable`
+	/// members it builds to (`MockLoopLevels.sendableStructByLevel`): `<Struct>(<label>: <the member's local>, …)`, read once
+	/// and handed to every member's function, so that the level spells each member's override once.
+	static func mockLoopSendableStructBindings(atLevel level: DeclarationID, in world: some NodeRecordSources, levels: MockLoopLevels) -> [BuiltPlaceRecord] {
+		var homes = Set<DeclarationID>()
+		var structs = [SendableLoopStruct]()
+		for member in world.edges(from: level) {
+			if let home = levels.homeLevelByMember[member], let sendableStruct = levels.sendableStructByLevel[home], homes.insert(home).inserted {
+				structs.append(sendableStruct)
+			}
+		}
+		return structs.map { sendableStruct in
+			var segments: [ValueSegment] = [.text("\(sendableStruct.typeName)(")]
+			for (index, field) in sendableStruct.fields.enumerated() {
+				segments.append(.text("\(index == 0 ? "" : ", ")\(field.label.spelledAsArgumentLabel): "))
+				segments.append(.value(.read(mockOverridesLocal(ofNodeLabeled: field.label, typed: field.type, isConfigured: isConfigured(field.member, in: world)))))
+			}
+			segments.append(.text(")"))
+			let local = sendableStructLocal(named: sendableStruct.parameterName, typed: sendableStruct.type)
+			var binding = BuiltPlaceRecord(
+				property: local.property,
+				isErased: false,
+				concreteType: sendableStruct.type,
+				isExtension: false,
+				target: .initializer(sendableStruct.type),
+				arguments: [],
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: sendableStruct.parameterName,
+				isSendable: false,
+				typesDeclaredEscaping: [],
+				lineEnd: "",
+				hasFunction: false,
+				children: [],
+				node: PlanNode(),
+			)
+			binding.constructionValue = ConstructionValue(value: .spliced(segments), resultWrapper: nil)
+			return binding
+		}
+	}
+
 	/// The type of the overrides `level` hands the members of its loops of builders: `mock()`'s own at the root, else the
 	/// level's configuration.
 	private static func mockLoopLevelType(of level: DeclarationID, in world: some NodeRecordSources) -> TypeDescription {
@@ -247,30 +357,33 @@ extension NodeRecords {
 	/// where its function takes them, then the level's, where its function takes that.
 	private static func mockLoopRebindingArguments(of member: DeclarationID, level: PassedArgument, in world: some NodeRecordSources, levels: MockLoopLevels) -> [PassedArgument] {
 		var arguments = [PassedArgument]()
+		// A level's configuration is not `Sendable`; the struct a loop of `@Sendable` members is handed is.
+		let staysOutsideSendableFunctions = level.staysOutsideSendableFunctions
 		if let property = world.property(of: member), let type = mockLoopOverridesType(of: member, in: world) {
 			arguments.append(PassedArgument(
 				parameterName: ReservedName.mockOverridesParameterName,
 				type: type,
 				value: .member(property.label, of: .passedArgument(level.parameterName)),
-				staysOutsideSendableFunctions: true,
+				staysOutsideSendableFunctions: staysOutsideSendableFunctions,
 			))
 		}
 		if levels.takingLevel.contains(member) {
-			arguments.append(PassedArgument(parameterName: level.parameterName, type: level.type, value: .passedArgument(level.parameterName), staysOutsideSendableFunctions: true))
+			arguments.append(PassedArgument(parameterName: level.parameterName, type: level.type, value: .passedArgument(level.parameterName), staysOutsideSendableFunctions: staysOutsideSendableFunctions))
 		}
 		return arguments
 	}
 
 	/// The type of the overrides the function of `member`, a member of a loop of builders in a mock root's world, takes:
-	/// its configuration, or its override closure where it reads no configuration. `nil` where its function is handed
-	/// nothing (`mockLoopMemberTakesNothing(_:in:)`).
+	/// its configuration, or its override closure where it reads no configuration, `@Sendable` for a `@Sendable` member, as
+	/// the local its level reads it into is typed (`mockOverrideType(of:usesHandWrittenMock:isConfigured:instantiable:)`).
+	/// `nil` where its function is handed nothing (`mockLoopMemberTakesNothing(_:in:)`).
 	private static func mockLoopOverridesType(of member: DeclarationID, in world: some NodeRecordSources) -> TypeDescription? {
 		guard !mockLoopMemberTakesNothing(member, in: world), let property = world.property(of: member) else { return nil }
 		let instantiable = world.scope(of: member).instantiable
 		let usesHandWrittenMock = world.construction(of: member) == .handWrittenMock && instantiable.mockInitializer != nil
 		return isConfigured(member, in: world)
 			? mockConfigurationType(of: instantiable)
-			: .unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+			: .unknown(text: "(\(property.propertyType.isSendable ? "@Sendable " : "")(\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 	}
 
 	/// Whether `declaration` is a member of a loop of builders in a mock root's world: its function makes another member
