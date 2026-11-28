@@ -412,13 +412,12 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// `Screen`'s own tree reads its deferred parameter through its memo, which a record would read from its variant's
-		// key; a seam's root's keys are not yet seeded from its parameters, so its world is refused as `lazy` until they
-		// are.
+		// `Screen`'s own tree reads its deferred parameter through its memo, which a record reads from its variant's key,
+		// seeded from the seam's parameters, so both roots are laid out.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.refusal) == ["lazy", nil])
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
-		#expect(reports.map(\.recordCount) == [0, 2])
+		#expect(reports.map(\.refusal) == [nil, nil])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true, true])
+		#expect(reports.map(\.recordCount) == [1, 2])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -558,10 +557,10 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		"""])
-		// A seam's root's keys are not yet seeded from its parameters, so `Screen`'s world, which reads its deferred
-		// parameter's instance, is refused as `lazy` until they are.
+		// A seam's root's keys are seeded from its parameters, so `Screen`'s world, which reads its deferred parameter's
+		// instance, is laid out from node records too.
 		#expect(reports.map(\.root) == ["Screen", "Root"])
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [false, true])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true, true])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -1122,11 +1121,11 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
 		}
 		""")
-		// A seam's root's keys are not yet seeded from its parameters, so a world that reads a deferred parameter's instance
-		// is refused as `lazy` until they are.
+		// A seam's root's keys are seeded from its parameters, the deferred one as its memo, so the world, which reads the
+		// memo's instance, is laid out from node records.
 		let screenReports = reports.filter { $0.root == "Screen" }
-		#expect(screenReports.map(\.refusal) == ["lazy"])
-		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(screenReports.map(\.refusal) == [nil])
+		#expect(screenReports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
@@ -1197,12 +1196,116 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		    }
 		}
 		""")
-		// A seam's root's keys are not yet seeded from its parameters, so `Screen`'s world, whose rename reads a deferred
-		// parameter's instance, is refused as `lazy` until they are; `Root`'s is laid out.
-		#expect(reports.first { $0.root == "Screen" }?.refusal == "lazy")
+		// A seam's root's keys are seeded from its parameters, the deferred `user` as its memo, so `Screen`'s renames key and
+		// read the memo's instance, as `Root`'s rename reads its own wrapper's, and both roots are laid out.
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
 		#expect(reports.first { $0.root == "Root" }?.refusal == nil)
-		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == false)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
 		#expect(reports.first { $0.root == "Root" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInItsTreeReceivesADeferredPassThroughByValue() async throws {
+		// `Header`, in `Screen`'s own tree, receives `user` by value, with no rename. `Screen` defers the pass-through and binds
+		// its memo under the label, which its root's keys are seeded with, so `Header`'s record reads the memo's instance
+		// where the tree does.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received let user: User"]),
+			seamFixtureType(named: "User", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User) {
+		        let user = LazilyInstantiated<User>(__safeDI_user)
+		        let header = Header(user: user.instance)
+		        self.init(header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_08AA1A656B91D4BA {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInItsTreeReceivesADeferredPassThroughOnlyIfAvailable() async throws {
+		// `Header` receives `user` only if available: `Screen` defers the optional pass-through and binds its memo, whose
+		// instance the tree reads, and so does `Header`'s record, from its variant's key.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let header: Header"]),
+			seamFixtureType(named: "Header", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
+			seamFixtureType(named: "User", declarations: []),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_user: @autoclosure @escaping () -> User?) {
+		        let user = LazilyInstantiated<User?>(__safeDI_user)
+		        let header = Header(user: user.instance)
+		        self.init(header: header)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_B61C3DC8DD996187 {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
+		#expect(reports.flatMap(\.differences) == [])
+	}
+
+	@Test
+	mutating func generate_laysOutASeamsOwnRootAsTheTreeDoes_whenATypeInASendableFunctionOfItsTreeReceivesADeferredPassThrough() async throws {
+		// `Panel`, built in a `SendableInstantiator`'s `@Sendable` function, receives `token`, so `Screen` defers the
+		// pass-through `@Sendable` and binds its memo as a `SendableLazilyInstantiated`, which its root's keys are seeded
+		// with: `Panel`'s record reads the memo's instance where the tree does.
+		let files = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"]),
+			seamFixtureType(named: "Panel", declarations: ["@Received let token: Token"], conformances: ", Sendable"),
+			seamFixtureType(named: "Token", declarations: [], conformances: ", Sendable"),
+		]
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_token: @autoclosure @escaping @Sendable () -> Token) {
+		        let token = SendableLazilyInstantiated<Token>(__safeDI_token)
+		        @inline(never) @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+		            Panel(token: token.instance)
+		        }
+		        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
+		        self.init(panelBuilder: panelBuilder)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_03EF6477B3A206A0 {}
+		}
+		""")
+		#expect(reports.first { $0.root == "Screen" }?.refusal == nil)
+		#expect(reports.first { $0.root == "Screen" }?.isLaidOutFromNodeRecords == true)
 		#expect(reports.flatMap(\.differences) == [])
 	}
 
