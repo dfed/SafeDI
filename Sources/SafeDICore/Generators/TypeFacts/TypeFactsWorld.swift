@@ -179,6 +179,9 @@ struct TypeFactsAnswer: Equatable, Sendable {
 		case optionalLazilyInstantiatedParameter
 		/// As `optionalParameter`, answered by a `SendableLazilyInstantiated`, which the parameter is.
 		case optionalSendableLazilyInstantiatedParameter
+		/// A member of a loop of builders, which the node answering rebinds at the top of its body: made again from the
+		/// member's one function, never being built.
+		case madeAgain
 	}
 
 	let form: Form
@@ -203,9 +206,6 @@ struct TypeFactsOwedFacts: OptionSet, Sendable {
 	static let mockRootRecord = TypeFactsOwedFacts(rawValue: 1 << 2)
 	/// The mock root's bindings: whether the mock root binds a read. Set on every declaration of a mock world.
 	static let mockRootBinding = TypeFactsOwedFacts(rawValue: 1 << 3)
-	/// The `madeAgain` producer: the bindings a builder made again in a loop of builders rebinds. Set on every member of
-	/// a loop of builders.
-	static let madeAgain = TypeFactsOwedFacts(rawValue: 1 << 4)
 }
 
 /// What every track reads of one world.
@@ -223,6 +223,19 @@ protocol TypeFactsWorld {
 	func firstRoute(to declaration: DeclarationID) -> [DeclarationID]
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The members of loops of builders the declaration's body makes again at its top, in the order it rebinds them: a
+	/// column of its own beside `edges(from:)`, which the reads closure and the variants read and the build order,
+	/// `isOnCycle` and `firstRoute` do not.
+	///
+	/// A writer reads the member's own arguments from here too: its argument for a label of `madeAgainLabels(from:)` is
+	/// always that label's rebinding, whatever source its read's answer names. The rebinding shadows the member's own
+	/// receives of the labels it makes again, so those reads leave its row, but for one: the read of the label it is built
+	/// as, which a loop of one makes again too and still reaches above, answered as its parent's declaration being built.
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32>
+	/// The label the declaration rebinds each member of `madeAgain(from:)` as, in that order.
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID>
+	/// The loop members whose parents' loops make different members again, which a stage that writes from nodes refuses.
+	var loopMembersSharedApart: [Int32] { get }
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
 	/// value up to its run ID.
@@ -263,6 +276,12 @@ protocol TypeFactsWorld {
 	func calls(of variant: VariantID) -> ArraySlice<VariantID>
 	/// Where each answer a call hands its callee comes from, in the callee's read order.
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
+	/// The variant each member the variant's declaration makes again calls, in `madeAgain(from:)`'s order: a call from the
+	/// top of the declaration's body, handed its answers there.
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID>
+	/// Where each answer a made-again call hands its callee comes from, in the callee's read order: `bound` by the caller
+	/// for a label it rebinds, else passed through from the caller's own answers.
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	/// Called by exactly one call and off every cycle; not whether the body is a function (`BuiltPlaceRecord.hasFunction`).
 	func isCalledOnce(_ variant: VariantID) -> Bool
 	/// What each read of the variant comes to, parallel to `keys(of:)` (the outcomes fold).
@@ -285,6 +304,30 @@ protocol TypeFactsWorld {
 	/// received, never on their spelling.
 	/// Walked when asked, never while the world is built.
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID]
+	/// The parameter the variant's function takes for a read its subtree makes from above, were the read a parameter,
+	/// or `nil` where it takes none: the read has no answer, its answer is still being built where the function is
+	/// called (a call that closes a cycle on it, a twin being built), it asks about no value of a label, or no one
+	/// parameter can pass the forms of its label the subtree receives (`CycleParameter.property(passing:requiredForms:)`).
+	/// A function takes one parameter per label, so every read of a label is typed alike: by the forms of the label
+	/// the declaration's subtree receives from above and those some receiver requires, as the function a lazy cycle
+	/// closes on types its parameter today. Whether the function takes the read as a parameter at all is the outcomes
+	/// fold's answer (`outcomes(of:)`), which `parameters(of:)` joins with this.
+	/// Computed when asked, never while the world is built.
+	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter?
+	/// Exactly the parameters the variant's function takes: each label one of whose reads comes to a parameter
+	/// (`outcomes(of:)`), in the order of `parameterOrder(of:)` for its declaration, typed by `parameterType(of:_:)`.
+	/// Computed when asked, never while the world is built.
+	func parameters(of variant: VariantID) -> [TypeFactsParameter]
+}
+
+/// A parameter of a variant's function: what it takes for one label its subtree reads from above.
+struct TypeFactsParameter: Hashable, Sendable {
+	/// The parameter as the function declares it: the label, and the form of it that provides every form the body
+	/// receives, optional where no receiver requires the label.
+	let property: Property
+	/// Whether a receive by value in the body reads the parameter through its wrapper's `instance`: the parameter is a
+	/// lazily instantiated wrapper, and the body receives the instance it creates.
+	let readsInstanceOfWrapper: Bool
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -327,6 +370,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32> {
 		graph.edges(from: Int(declaration))
+	}
+
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
+		madeAgain?.targets(of: Int(declaration)) ?? []
+	}
+
+	func madeAgainLabels(from declaration: DeclarationID) -> ArraySlice<WorldLabelID> {
+		madeAgain?.labels(of: Int(declaration)) ?? []
 	}
 
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge> {
@@ -407,7 +458,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 			}
 			return TypeFactsAnswer(form: form, forms: -1)
 		}
-		return TypeFactsAnswer(form: answerIsBeingBuilt[Int(answer)] ? .beingBuilt : .declared, forms: answerKeys[Int(answer)])
+		let form: TypeFactsAnswer.Form = if answerIsMadeAgain[Int(answer)] {
+			.madeAgain
+		} else if answerIsBeingBuilt[Int(answer)] {
+			.beingBuilt
+		} else {
+			.declared
+		}
+		return TypeFactsAnswer(form: form, forms: answerKeys[Int(answer)])
 	}
 
 	func calls(of variant: VariantID) -> ArraySlice<VariantID> {
@@ -416,6 +474,14 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
 		variants.sources(ofCall: variants.callOffset(of: Int(variant)) + edgeIndex)
+	}
+
+	func madeAgainCalls(of variant: VariantID) -> ArraySlice<VariantID> {
+		variants.madeAgainCallees(of: Int(variant))
+	}
+
+	func sources(ofMadeAgainCall index: Int, of variant: VariantID) -> ArraySlice<AnswerSource> {
+		variants.sources(ofCall: variants.madeAgainCallOffset(of: Int(variant)) + index)
 	}
 
 	func isCalledOnce(_ variant: VariantID) -> Bool {
@@ -443,6 +509,51 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func parameterOrder(of declaration: DeclarationID) -> [WorldLabelID] {
 		parameterOrder(of: declaration, walking: [])
+	}
+
+	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter? {
+		let declaration = declaration(of: variant)
+		let reads = reads(of: declaration)
+		let label = readTable[Int(read)].label
+		guard let position = reads.firstIndex(of: read) else { return nil }
+		switch readTable[Int(read)].channel {
+		case .value, .optional, .optionalValue:
+			break
+		case .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+			return nil
+		}
+		let keys = keys(of: variant)
+		switch answer(keys[keys.startIndex + (position - reads.startIndex)]).form {
+		case .none, .beingBuilt, .madeAgain:
+			return nil
+		case .declared, .optionalParameter, .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
+			break
+		}
+		var forms = Set<Property>()
+		for received in receives.received.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(received)] == label {
+			forms.insert(propertyTable[Int(received)])
+		}
+		var requiredForms = Set<Property>()
+		for required in receives.required.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(required)] == label {
+			requiredForms.insert(propertyTable[Int(required)])
+		}
+		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
+		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
+		return TypeFactsParameter(
+			property: property,
+			readsInstanceOfWrapper: instance.map { passedForms.contains($0) || passedForms.contains($0.asOptionalProperty) } ?? false,
+		)
+	}
+
+	func parameters(of variant: VariantID) -> [TypeFactsParameter] {
+		let declaration = declaration(of: variant)
+		let reads = reads(of: declaration)
+		let outcomes = outcomes(of: variant)
+		return parameterOrder(of: declaration).compactMap { label in
+			reads.indices
+				.first { readTable[Int(reads[$0])].label == label && outcomes[outcomes.startIndex + ($0 - reads.startIndex)] == .parameter }
+				.flatMap { parameterType(of: variant, reads[$0]) }
+		}
 	}
 
 	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
@@ -516,10 +627,6 @@ extension TypeFactsGraph: TypeFactsWorld {
 		var owed: TypeFactsOwedFacts = []
 		if forMockGeneration {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
-		}
-		// A member of a loop of builders: an edge into it is in a loop.
-		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
-			owed.insert(.madeAgain)
 		}
 		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
 		var visited: Set = [declaration]

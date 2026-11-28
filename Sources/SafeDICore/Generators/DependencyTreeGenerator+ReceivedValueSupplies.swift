@@ -33,7 +33,7 @@ extension DependencyTreeGenerator {
 	public func receivedValueSupplies() async throws -> ReceivedValueSupplies? {
 		let proof = ownAccessProof()
 		let roots = try await TypeFactsReceivedValueSupplies.$readsWhereTreesAreBuilt.withValue(unfulfilledReceiveLocations.isEmpty) {
-			try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: proof).roots
+			try await dependencyTrees(unreadTypeComment: nil, ownAccessProof: proof, plansCyclesPerType: false, readersOfEveryTree: [.reader(.receivedValueSupplies)]).roots
 		}
 		var supplies = [ReceivedValueSupply]()
 		var constructedTypes = [TypeDescription]()
@@ -46,14 +46,16 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let unfulfilledReceives = ScopeGenerator.UnfulfilledReceives(locations: unfulfilledReceiveLocations, labels: unfulfilledReceiveLabels)
-		for root in roots {
-			if unfulfilledReceiveLocations.isEmpty {
+		if unfulfilledReceiveLocations.isEmpty {
+			for root in roots {
 				// Read from the root's per-type graph, where a node stands for every place of its declaration, where the
 				// tree was built.
 				guard let tree = root.receivedValueSupplies else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)
-			} else {
+			}
+		} else {
+			for root in roots.compactMap(\.tree) {
 				guard let tree = await root.scopeGenerator.receivedValueSupplies(ofTreeRootedAt: root.instantiable, unfulfilledReceives: unfulfilledReceives) else { return nil }
 				supplies.append(contentsOf: tree.supplies)
 				constructedTypes.append(contentsOf: tree.constructedTypes)

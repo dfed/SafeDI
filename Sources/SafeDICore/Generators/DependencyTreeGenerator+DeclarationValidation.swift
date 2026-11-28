@@ -29,12 +29,7 @@ extension DependencyTreeGenerator {
 	func validateSendableBuildersCaptureNoNonSendableWrapper(
 		inTreesRootedAt roots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
 	) async throws {
-		// Walking the trees costs a pass over every scope, so only a module whose types name both a wrapper
-		// that is not `Sendable` and a `Sendable` builder pays for it.
-		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
-		guard dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable }),
-		      dependencies.contains(where: \.property.propertyType.isSendable)
-		else { return }
+		guard namesNonSendableWrapperAndSendableBuilder else { return }
 		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
 		// The trees are walked in parallel: the captures are a set, which the error sorts into source order.
 		let captures = await withTaskGroup(
@@ -57,6 +52,28 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// Hands `PlanCaptureObservation` each root of `roots` whose code is laid out from its per-type plan, where today's tree
+	/// of it is built too, with what today's `@Sendable` capture walk finds in that tree. The walk reads no root laid out
+	/// from its plan: the root choice walks such a root's bodies for a capture instead, and keeps a root whose bodies may
+	/// make one per path (`WrittenVariantPlan.Unplanned.mayCaptureNonSendableWrapper()`), so a root laid out from its plan
+	/// captures nothing today's walk would report. Does nothing where no test observes it.
+	func observePlanCaptures(of roots: [RootScopeInfo]) async {
+		guard let observer = PlanCaptureObservation.observer else { return }
+		for root in roots {
+			guard case .perType = root.built, let todaysTree = root.drawnTree else { continue }
+			let captures = await todaysTree.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+			observer(root.instantiable.concreteInstantiable.asSource, !captures.isEmpty)
+		}
+	}
+
+	/// Whether the module's types name both a wrapper that is not `Sendable` and a `Sendable` builder. Walking the trees
+	/// for a `@Sendable` builder function's captures costs a pass over every scope, so only such a module pays for it.
+	var namesNonSendableWrapperAndSendableBuilder: Bool {
+		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
+		return dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable })
+			&& dependencies.contains(where: \.property.propertyType.isSendable)
+	}
+
 	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
 	/// holds: a value for a parameter the tier the call reaches omits, or no tier takes, which the receivers inside
 	/// the seam would be handed were the tree built inline. Walks each finished generator tree as generation does
@@ -67,8 +84,9 @@ extension DependencyTreeGenerator {
 		// its module.
 		guard !seams.isEmpty, let emittingModule else { return }
 		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
-		for root in roots {
-			for omission in await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
+		// A root laid out from its plan by type or from its node records has no tree per path.
+		for (root, scopeGenerator) in roots.compactMap({ root in root.scopeGenerator.map { (root, $0) } }) {
+			for omission in await scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
 				// A provider in a file this run cannot read – another module's, in a build that hands this run that
 				// module's declarations but not its files – is reported where this module refers to what leads to the
 				// call, naming the provider's module.

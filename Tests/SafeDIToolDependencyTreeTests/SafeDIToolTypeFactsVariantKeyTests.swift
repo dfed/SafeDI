@@ -312,6 +312,42 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_answersBoundButNotProvided_whenMockRootForwardsAnotherTypeUnderALabelItsTreeReceives() async throws {
+		// A mock root's forwarded properties hide nothing its tree receives, so `Screen`'s `gizmo: Gizmo` is named only by the
+		// mock root's bindings, no declaration of the tree. The `Settings` the mock builds receives `gizmo:
+		// Instantiator<Widget>`, which the mock takes apart: the bound `gizmo` provides no form it reads.
+		let report = try await rootReport(of: [
+			"""
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    public init(gizmo: Gizmo, settingsBuilder: Instantiator<Settings>, gadget: Gadget) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Forwarded public let gizmo: Gizmo
+			    @Received public let settingsBuilder: Instantiator<Settings>
+			    @Instantiated public let gadget: Gadget
+			}
+			@Instantiable
+			public final class Settings: Instantiable {
+			    public init(gizmo: Instantiator<Widget>) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received public let gizmo: Instantiator<Widget>
+			}
+			public final class Gizmo: Instantiable { public init() {} }
+			public final class Widget: Instantiable { public init() {} }
+			public final class Gadget: Instantiable { public init() {} }
+			""",
+		], root: "Screen", forMockGeneration: true)
+
+		// The mock root's call of `Settings` answers `settingsBuilder` as being built and `gizmo` by the forwarded `gizmo`.
+		#expect(report.world.contains("calls [1, 2] sources [[], [\"bound beingBuilt\", \"bound declared not provided\"]]"), "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_ordersParametersAsBodyFirstReceives_whenAnEarlierSiblingReadsALaterLabelFirst() async throws {
 		// `Early` reads `alpha` before the world reaches `Ring0`, so the world's reads order `alpha` first (and read
 		// `ring0Builder`, the label of the cycle `Ring1` closes, which is no parameter), while
@@ -1270,12 +1306,30 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenProductionBuildsTypeInPlainFunctionAndInSendableFunction() async throws {
+		// `leaf` is one node with two parents, one built in a plain `Instantiator`'s function and one in a
+		// `SendableInstantiator`'s `@Sendable` function: production's body is one, `@Sendable` a mark folded over its calls,
+		// so the family keys no production variant.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let plainBuilder: Instantiator<Plain>", "@Instantiated let sharedBuilder: SendableInstantiator<Shared>"]),
+			seamFixtureType(named: "Plain", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"]),
+			seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leaf: Leaf"], conformances: ", Sendable"),
+			seamFixtureType(named: "Leaf", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "Leaf as leaf: Leaf" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "Leaf as leaf: Leaf", in: report) == 1, "\(report.world)")
+		#expect(Set(report.variantFamilies) == ["plain"], "\(report.world)")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private func rootReport(of types: [String], skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
+	private func rootReport(of types: [String], root: String = "Root", forMockGeneration: Bool = false, skipCompileVerification: Bool = false) async throws -> TypeFactsReport {
 		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
 		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
 			var filesToDelete = [URL]()
@@ -1288,10 +1342,16 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		}
 		continuation.finish()
 		var reports = [TypeFactsReport]()
-		for await report in stream where report.root == "Root" && !report.forMockGeneration {
+		for await report in stream where report.root == root && report.forMockGeneration == forMockGeneration {
 			reports.append(report)
 		}
-		return try #require(reports.last)
+		// Where a root's cycles are planned per type, the tree is built in pieces, each observed as a world of its own: the
+		// last piece with the most places holds the functions a test reads.
+		var largest = try #require(reports.last)
+		for report in reports.reversed() where report.places.count > largest.places.count {
+			largest = report
+		}
+		return largest
 	}
 
 	/// `Leaf` receives `theme` only if available, as `leafTheme`, and builds itself again through `leafBuilder`, so 2.4.x

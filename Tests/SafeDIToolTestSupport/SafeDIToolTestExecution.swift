@@ -74,6 +74,7 @@ func executeSafeDIToolTest(
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
 	moduleMembershipArguments: [String] = [],
+	treeForcersOutput: URL? = nil,
 	pluginTargetGraph: ((_ inputSwiftFilePaths: [String]) -> PluginTargetGraph)? = nil,
 	verificationCompilationConditions: [String]? = nil,
 	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
@@ -309,6 +310,13 @@ func executeSafeDIToolTest(
 		if buildCombinedOutput {
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
 		}
+		// Where `SAFEDI_TREE_FORCERS_REPORT` names a file, each root's line of `--tree-forcers-output` is appended to it,
+		// after the test's name, so a sweep counts the roots of every test that still build a tree (`TreeForcer`).
+		let treeForcersReportPath = ProcessInfo.processInfo.environment["SAFEDI_TREE_FORCERS_REPORT"]
+		let treeForcersPath = treeForcersOutput ?? treeForcersReportPath.map { _ in TestTemporaryDirectory.uniquePath(prefix: "TreeForcers", pathExtension: "txt") }
+		if let treeForcersPath {
+			generateArguments += ["--tree-forcers-output", treeForcersPath.path]
+		}
 		if compilerReceivesInputPathsUnchanged {
 			generateArguments += ["--compiler-receives-input-paths-unchanged"]
 		}
@@ -342,21 +350,43 @@ func executeSafeDIToolTest(
 			// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 			generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
 				try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-								try await ConstructionInternerOrder.applying(.fromEnvironment) {
-									try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-										// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
-										try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
-											// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
-											// (`TypeFactsReceivedValueSuppliesChecks`).
-											try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
-												// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
-												try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
-													try await tool.generate()
+					try await NodeRecordsChecks.checking {
+						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+									try await ConstructionInternerOrder.applying(.fromEnvironment) {
+										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+											// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+											try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+												// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
+												// (`TypeFactsReceivedValueSuppliesChecks`).
+												try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
+													try await LabelsReadFromAboveChecks.comparing(handingOn: LabelsReadFromAboveObservation.observer) {
+														try await CallPlaceOrderChecks.comparing(handingOn: CallPlaceOrderObservation.observer) {
+															try await PlaceReadsChecks.comparing(handingOn: PlaceReadsObservation.observer) {
+																try await VariantBodyChecks.comparing(handingOn: VariantBodyObservation.observer) {
+																	try await PlanBodiesChecks.comparing(handingOn: PlanBodiesObservation.observer) {
+																		try await MockVariantBodyChecks.comparing {
+																			try await TwinIdentityChecks.comparing(handingOn: TwinIdentityObservation.observer) {
+																				try await PlanSendableChecks.comparing(handingOn: PlanSendableObservation.observer) {
+																					try await PlanCaptureChecks.comparing(handingOn: PlanCaptureObservation.observer) {
+																						try await UnpassableCycleLabelChecks.checking(handingOn: UnpassableCycleLabelObservation.observer) {
+																							// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+																							try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+																								try await tool.generate()
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
 												}
 											}
 										}
@@ -369,6 +399,13 @@ func executeSafeDIToolTest(
 			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)
+		}
+		if let treeForcersReportPath, let treeForcersPath, let lines = try? String(contentsOf: treeForcersPath, encoding: .utf8) {
+			let testName = Test.current?.name ?? "unknown test"
+			TreeForcerSweep.append(lines.split(separator: "\n").filter { !$0.hasPrefix("roots that built a tree") }.map { "\(testName)\t\($0)\n" }.joined(), toFileAt: treeForcersReportPath)
+			if treeForcersOutput == nil {
+				try? FileManager.default.removeItem(at: treeForcersPath)
+			}
 		}
 		// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
 		StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
@@ -679,6 +716,11 @@ struct FixturePaths {
 	/// The path of the named fixture, or `nil` when the harness wrote no fixture of that name.
 	func writtenPath(of fileName: String) -> String? {
 		pathsByFileName[fileName]
+	}
+
+	/// The path of every fixture the harness wrote, sorted.
+	var writtenPaths: [String] {
+		pathsByFileName.values.sorted()
 	}
 
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:

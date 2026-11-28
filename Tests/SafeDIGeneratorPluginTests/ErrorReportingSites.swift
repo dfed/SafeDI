@@ -42,14 +42,31 @@ extension ErrorReportingSite {
 			path: "Sources/SafeDIToolLibrary/GenerateCommand.swift",
 			code: "catch let error as any SourceLocatedError",
 		),
+		// Never reported: the loop over production roots gives the limit, catches it, and builds the root from its plan
+		// by type or again without a limit.
+		"ScopeGeneratorLimitExceeded": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/DependencyTreeGenerator.swift",
+			code: "catch is ScopeGeneratorLimitExceeded",
+		),
 		// The macros attach them to the declaration as diagnostics; neither is thrown.
 		"FixableInjectableError": .macroDiagnostic,
 		"FixableInstantiableError": .macroDiagnostic,
+		// Never reported: a world node records refuse keeps the tree's plan, and only a test observes the refusal.
+		"NodeRecordRefusal": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/NodeRecords/DependencyTreeGenerator+NodeRecords.swift",
+			code: "refusal: refusal.rawValue",
+		),
 		// The `@Instantiable` macro reports it as diagnostics. Generation builds a type only with an initializer that
 		// fulfills its dependencies, so generation never throws it.
 		"Initializer.GenerationError": ErrorReportingSite(
 			path: "Sources/SafeDIMacros/Macros/InstantiableMacro.swift",
 			code: "extension Initializer.GenerationError",
+		),
+		// Thrown by the layout of a per-type plan to say why it keeps the path key's body. It is never reported to the
+		// user: no generator calls `statements(ofPlan:)` yet, and the caller a plan brings catches it and keeps that body.
+		"TypeKeyRefusal": ErrorReportingSite(
+			path: "Sources/SafeDICore/Generators/Emission/TypeKeyBody+VariantCalls.swift",
+			code: "throws(TypeKeyRefusal) -> [GeneratedCode]",
 		),
 	]
 
