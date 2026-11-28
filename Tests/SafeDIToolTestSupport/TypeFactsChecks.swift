@@ -813,7 +813,8 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 35
+	/// The last check's number; 38 is unused, so its count stays 0.
+	static let lastCheck = 39
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -842,6 +843,17 @@ enum TypeFactsChecks {
 	/// 32. Oracle B: each member a variant makes again is called as the variant that each body calling the maker calls for
 	///     that member at its own edge, and the maker has such a body. It reads the variants alone, so it runs on every tree
 	///     with a loop of builders, refused or not.
+	/// 36. What the place requires, the receives inside the fills beneath it counted, is its node's fold along every
+	///     edge (`requiredIncludingFills`), in a production world, outside a fill, and where no cycle explains a
+	///     difference (34 and 35 are other lanes' checks).
+	/// 37. Each fill a place passes builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction(ofFill:)`)
+	///     exactly where the facts' fold says so (`TypeFactsFill.buildsInSendableFunction`, `TypeFactsFillSendability`),
+	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property.
+	/// 39. Each fill a place passes takes the memos the place's generator hands it (`Scope.Fill.labelsHandedAsMemo`, the
+	///     fill's fields of those labels), exactly the facts' column (`TypeFactsFill.handedMemoStart`): which labels, each
+	///     memo's property, and its deferral, the `SendableLazilyInstantiated` its tree reads beside the value applied
+	///     (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
+	///     the fill's edge found by its key as in 37.
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree with a hole beneath, fills included, which read their cases from the `@Sendable` carrier inside a
@@ -931,6 +943,19 @@ enum TypeFactsChecks {
 				if fillChildren.count > facts.fillCount || fillChildren.contains(where: { places[$0].node.map { !fillTargets.contains($0) } ?? true }) {
 					add(28, "place \(index) \(place.declaration) passes \(fillChildren.count) fills where its node passes \(facts.fillCount)")
 				}
+				// Check 37.
+				for fillChild in fillChildren {
+					guard let fillKey = places[fillChild].fillKey, let edge = facts.edgeFacts.first(where: { $0.isFill && $0.fillKey == fillKey }) else { continue }
+					count(37)
+					if places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
+						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillBuildsInSendableFunction) (the seam takes it `@Sendable` \(edge.fillHoleIsSendable))")
+					}
+					// Check 39.
+					count(39)
+					if places[fillChild].fillHandedMemos != edge.fillHandedMemos {
+						add(39, "place \(index) \(place.declaration) hands fill \(places[fillChild].declaration) the memos \(places[fillChild].fillHandedMemos.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillHandedMemos)")
+					}
+				}
 			}
 			// Check 23 and 24.
 			if place.closesCycle, let closedOn = closedOnPlace(index), let closedOnNode = places[closedOn].node {
@@ -1010,6 +1035,13 @@ enum TypeFactsChecks {
 				}
 				let differences = receiveDifferences.map { "\($0.0) \($0.1) where its node's union is \($0.2)" }.joined(separator: ", ")
 				add(isExplainedReceive && isSubset ? 17 : 16, "place \(index) \(place.declaration) receives \(differences)")
+			}
+			// Check 36. The fold along every edge counts what the fills beneath read, as the generator's required receives do.
+			if !subtreeClosesCycle[index], !isInsideFill[index], !report.forMockGeneration, !facts.isOnCycle {
+				count(36)
+				if spellingsOfOneType(generator.required) != spellingsOfOneType(facts.requiredIncludingFills) {
+					add(36, "place \(index) \(place.declaration) requires \(generator.required) where its node's fold including fills is \(facts.requiredIncludingFills)")
+				}
 			}
 			// Check 18 and 19.
 			count(explained ? 19 : 18)

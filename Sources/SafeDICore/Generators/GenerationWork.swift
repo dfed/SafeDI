@@ -124,6 +124,10 @@ public struct GenerationWork: Sendable {
 		/// each place the walk visits. The walk enters no tree that holds no call of a seam tier that omits a parameter, and
 		/// in a tree that holds one only a place whose subtree holds such a call or a scope that closes a lazy cycle.
 		case findingSeamTierOmissions
+		/// Finding which fills of a world's calls build in a `@Sendable` function (`TypeFactsFillSendability`): each node and
+		/// edge the one walk of the world's graph visits, each key a call adds or resolves, and each key a summary hands its
+		/// parent. A node stands for every place of its declaration, so the declarations and the keys count, not the paths.
+		case foldingFillSendability
 	}
 
 	/// The step that did the work.

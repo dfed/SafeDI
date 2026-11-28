@@ -66,11 +66,32 @@ struct TypeFactsPropertyFacts: Sendable {
 struct TypeFactsReceives: Sendable {
 	let received: BitRows
 	let required: BitRows
+	/// What each node's subtree requires from above it with the receives inside fills counted, as a seam's
+	/// `requiredReceivedProperties` holds them: the fold of `required` along every edge, fill edges included. Sibling
+	/// order reads `required`, whose fold leaves fills out.
+	let requiredIncludingFills: BitRows
+	/// For each fill edge, by its position among the graph's edges, what the fill binds from the site's scope struct
+	/// (`ScopeGenerator.structBindings(ofFillOf:passedByPublicMockCall:innerScopeReaders:handedMemoByLabel:)`), each property with its
+	/// optional forms: all of it, and the part that hides the fill's reads from the caller. `nil` in a world without
+	/// fills.
+	let fillStructRows: (bound: BitRows, hiddenFromCaller: BitRows)?
 	let onlyIfAvailableUnwrapped: BitRows
 	let requiredAliasFulfilling: BitRows
 
+	/// The properties a fill binds from the site's scope struct along `edge`, in increasing ID order: none along an edge
+	/// that is no fill's.
+	func boundFromScopeStruct(atEdge edge: Int) -> [Int32] {
+		fillStructRows?.bound.columns(inRow: edge) ?? []
+	}
+
+	/// Those of `boundFromScopeStruct(atEdge:)` that hide the fill's reads of them from the caller, which the fold
+	/// including fills leaves out along the edge.
+	func hiddenFromCaller(atEdge edge: Int) -> [Int32] {
+		fillStructRows?.hiddenFromCaller.columns(inRow: edge) ?? []
+	}
+
 	var wordCount: Int {
-		received.wordCount + required.wordCount + onlyIfAvailableUnwrapped.wordCount + requiredAliasFulfilling.wordCount
+		received.wordCount + required.wordCount + requiredIncludingFills.wordCount + (fillStructRows.map { $0.bound.wordCount + $0.hiddenFromCaller.wordCount } ?? 0) + onlyIfAvailableUnwrapped.wordCount + requiredAliasFulfilling.wordCount
 	}
 }
 

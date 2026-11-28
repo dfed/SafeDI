@@ -1797,6 +1797,47 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 	#endif
 
+	// MARK: What the facts require of a seam's caller
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_factsRequireOfCallerWhatFillReadsThatItsSiteDoesNotCarry_whenSeamFillsInnerSeamsHole() async throws {
+		// `Outer` fills `Inner`'s hole `panel` with `DefaultPanel`, which receives `user` and `tag`. `Detail`, the hole's
+		// site, declares `tag`, so the fill binds it from the site's scope struct, each with the optional form it unwraps;
+		// `user` it receives from `Outer`'s caller.
+		let modules = SafeDIToolSeamBuilderParameterTests.modules(
+			feature: [
+				"public protocol Panel: Sendable {}",
+				Self.userType,
+				Self.sendableType(named: "Tag"),
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let detail: Detail"]),
+				seamFixtureType(named: "Detail", declarations: ["@Instantiated let tag: Tag", "@Instantiated let panel: any Panel"]),
+			],
+			app: [
+				SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultPanel", fulfilling: "Panel", declarations: ["@Received let user: User", "@Received let tag: Tag"]),
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let inner: Inner"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let outer: Outer"]),
+			],
+		)
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeFactsReport.self)
+		_ = try await ConstructionMemoOracle.$observer.withValue({ _, _, report in continuation.yield(report) }) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var reports = [TypeFactsReport]()
+		for await report in stream where report.root == "Outer" && !report.forMockGeneration {
+			reports.append(report)
+		}
+		let report = try #require(reports.last)
+		let call = try #require(report.nodes.firstIndex { $0.construction == "seamCall" })
+		let fillEdges = report.nodes[call].edgeFacts.filter(\.isFill)
+
+		#expect(report.nodes[0].required == [])
+		#expect(report.nodes[0].requiredIncludingFills == ["user: User"])
+		#expect(fillEdges.map(\.boundFromScopeStruct) == [["panel: Panel", "panel: Panel?", "tag: Tag", "tag: Tag?"]])
+		#expect(fillEdges.map(\.hiddenFromCaller) == [["panel: Panel", "panel: Panel?", "tag: Tag", "tag: Tag?"]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

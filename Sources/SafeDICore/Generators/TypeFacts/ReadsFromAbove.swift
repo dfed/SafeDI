@@ -225,12 +225,16 @@ struct ReadsFromAbove: Sendable {
 	///   - hidden: The reads each node hides from the nodes above it, of the same shape.
 	///   - followsEdge: Whether a node takes what the target of an edge, by its position among the graph's edges, reads:
 	///     every edge, unless a fold says otherwise.
+	///   - hiddenAtEdge: The reads each edge, a row per edge by its position, hides from its source beside what the source
+	///     hides: what a fill's scope struct hands the fill along the call's fill edge. `nil` where no edge hides any.
 	///   - madeAgain: The world's made-again calls, or `nil` for a world with no loop of builders.
-	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }, madeAgain: MadeAgainEdges? = nil) {
+	init(graph: OrderedGraph<some Hashable & Sendable>, own: BitRows, hidden: BitRows, followsEdge: (_ edgeIndex: Int) -> Bool = { _ in true }, hiddenAtEdge: BitRows? = nil, madeAgain: MadeAgainEdges? = nil) {
 		var rows = BitRows(columnCount: own.columnCount)
 		rows.reserveRows(graph.nodes.count)
 		var accumulator = RowAccumulator(columnCount: own.columnCount)
 		var mask = RowAccumulator(columnCount: own.columnCount)
+		// The source's mask with an edge's own hidings, for an edge that hides reads its source does not.
+		var edgeMask = RowAccumulator(columnCount: own.columnCount)
 		let componentByNode = madeAgain?.componentByNode ?? graph.componentByNode
 		let componentCount = madeAgain?.componentCount ?? graph.componentCount
 		var nodesByComponent = [Int32](repeating: 0, count: graph.nodes.count)
@@ -262,7 +266,14 @@ struct ReadsFromAbove: Sendable {
 				for edgeIndex in graph.edgeIndices(from: index) where followsEdge(edgeIndex) {
 					let target = graph.edgeTargets[edgeIndex]
 					work += rows.wordCount(ofRow: Int(target))
-					_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					if let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 {
+						edgeMask.load(row: index, of: hidden)
+						edgeMask.load(row: edgeIndex, of: hiddenAtEdge)
+						_ = rows.add(row: Int(target), to: &accumulator, excluding: edgeMask)
+						edgeMask.drain { _, _ in }
+					} else {
+						_ = rows.add(row: Int(target), to: &accumulator, excluding: mask)
+					}
 				}
 				mask.drain { _, _ in }
 				if let madeAgain {
@@ -289,17 +300,18 @@ struct ReadsFromAbove: Sendable {
 					changed = false
 					pass.reserveRows(members.count)
 					pass.removeAllWords()
-					/// Adds the row of `target`, a member's from the pass before or a finished one's, without what `mask` holds.
-					func add(rowOf target: Int32) {
+					/// Adds the row of `target`, a member's from the pass before or a finished one's, without what `exclusion`
+					/// holds: the source's mask, or an edge's.
+					func add(rowOf target: Int32, excluding exclusion: RowAccumulator) {
 						let targetSlot = memberSlotByNode[Int(target)]
 						if targetSlot >= 0 {
 							work += previousPass.wordCount(ofRow: Int(targetSlot))
-							if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: mask) {
+							if previousPass.add(row: Int(targetSlot), to: &accumulator, excluding: exclusion) {
 								changed = true
 							}
 						} else {
 							work += rows.wordCount(ofRow: Int(target))
-							if rows.add(row: Int(target), to: &accumulator, excluding: mask) {
+							if rows.add(row: Int(target), to: &accumulator, excluding: exclusion) {
 								changed = true
 							}
 						}
@@ -308,13 +320,20 @@ struct ReadsFromAbove: Sendable {
 						mask.load(row: Int(index), of: hidden)
 						previousPass.add(row: slot, to: &accumulator)
 						for edgeIndex in graph.edgeIndices(from: Int(index)) where followsEdge(edgeIndex) {
-							add(rowOf: graph.edgeTargets[edgeIndex])
+							if let hiddenAtEdge, hiddenAtEdge.wordCount(ofRow: edgeIndex) > 0 {
+								edgeMask.load(row: Int(index), of: hidden)
+								edgeMask.load(row: edgeIndex, of: hiddenAtEdge)
+								add(rowOf: graph.edgeTargets[edgeIndex], excluding: edgeMask)
+								edgeMask.drain { _, _ in }
+							} else {
+								add(rowOf: graph.edgeTargets[edgeIndex], excluding: mask)
+							}
 						}
 						mask.drain { _, _ in }
 						if let madeAgain {
 							mask.load(row: Int(index), of: madeAgain.rebound)
 							for target in madeAgain.targets(of: Int(index)) {
-								add(rowOf: target)
+								add(rowOf: target, excluding: mask)
 							}
 							mask.drain { _, _ in }
 						}

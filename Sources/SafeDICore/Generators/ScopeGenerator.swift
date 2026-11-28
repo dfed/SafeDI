@@ -791,11 +791,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillLabelsReadOnlyAsPlaceField = previousPassFillLabelsReadOnlyAsPlaceField
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
-			for field in fill.fillFields where fill.fillLabelsHandedAsMemo.contains(field.property.label) && !built.reads(field.property) && !built.fieldsCarriedBySites.contains(field.property) {
-				let placeField = fill.fillCaseHoles.lazy.flatMap(\.fields).first { $0.property.label == field.property.label }
-				if let placeField, built.reads(placeField.property) {
-					fillLabelsReadOnlyAsPlaceField[key, default: []].insert(field.property.label)
-				}
+			let placeFields = fill.fillCaseHoles.flatMap(\.fields)
+			for field in fill.fillFields where fill.fillLabelsHandedAsMemo.contains(field.property.label) && FillDispatcher.readsOnlyAsPlaceField(field, placeFields: placeFields, reads: built.reads, carriedBySites: built.fieldsCarriedBySites) {
+				fillLabelsReadOnlyAsPlaceField[key, default: []].insert(field.property.label)
 			}
 		}
 		if fillLabelsReadOnlyAsPlaceField != previousPassFillLabelsReadOnlyAsPlaceField {
@@ -810,11 +808,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
-			var instancePropertyByLabel = [String: Property]()
-			let labelsReadOnlyAsPlaceField = fillLabelsReadOnlyAsPlaceField[key] ?? []
-			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
-				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
-			}
+			let instancePropertyByLabel = FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo: fill.fillLabelsHandedAsMemo, labelsReadOnlyAsPlaceField: fillLabelsReadOnlyAsPlaceField[key] ?? [], among: built.receivedProperties)
 			if !instancePropertyByLabel.isEmpty {
 				fillSendableWrapperReads[key] = instancePropertyByLabel
 			}
@@ -1844,12 +1838,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The properties a fill of `hole` declares: the property of each field of the site's scope struct it binds – each
-	/// labeled in `boundLabels` – and, for a lazily instantiated field, the instance a receive reads by value.
-	static func fieldForms(of hole: SeamSignature.Hole, boundLabels: Set<String>) -> Set<Property> {
-		fieldForms(of: hole.fields, boundLabels: boundLabels)
-	}
-
 	/// The property a fill of `hole` builds, with its instance, where it is no instantiator: the type that owns the place
 	/// declares it, so a receive of it in the fill's tree is not received from the scopes enclosing the call. The fill's
 	/// tree finds it still being built and passes a receive only if available `nil`, as the same types built inline do,
@@ -1865,7 +1853,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return properties
 	}
 
-	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels` (see `fieldForms(of:boundLabels:)`).
+	/// What a fill of `hole` that a call passes binds from the site's scope struct, and of that what hides the fill's
+	/// reads from the caller's scope, as the walk of what the call receives reads it.
+	struct FillStructBindings: Sendable {
+		/// The forms of the fields the fill binds from the struct, and the property it builds.
+		let bound: Set<Property>
+		/// `bound` but for the fields of a label a level of an inner seam's enum holds on some route to the place and not
+		/// on another, which the fill reads of the caller's scope on that other route
+		/// (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`).
+		let hiddenFromCaller: Set<Property>
+	}
+
+	/// What a fill of `hole` binds from the site's scope struct (`FillStructBindings`). A public mock takes no deferred
+	/// parameter, so its fill binds every field. A seam's fill reads a field bound from a deferred parameter of the
+	/// caller's scope, but for a place a seam passes up from a seam it calls, whose deferred fields hold the memo of what
+	/// that call passed, which the fill binds from the struct (`fillUnderConstruction`). So does a fill some route hands
+	/// such a memo through the levels on a carried route, by each label of `handedMemoByLabel`
+	/// (`FillDispatcher.memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`):
+	/// its field is then that memo's, whose forms it binds in place of the place's field of the label, so a read of the
+	/// place's field that the memo does not provide is the caller's, as the tree's fill reads it.
+	static func structBindings(ofFillOf hole: SeamSignature.Hole, passedByPublicMockCall: Bool, innerScopeReaders: InnerScopeReaders?, handedMemoByLabel: [String: FillDispatcher.HandedMemo] = [:]) -> FillStructBindings {
+		let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
+		let readsDeferredFieldsFromStruct = passedByPublicMockCall || hole.innerSeamType != nil
+		let fields = hole.fields.map { field in
+			handedMemoByLabel[field.property.label].map { field.handedAsMemo($0) } ?? field
+		}
+		let boundLabels = Set(fields.filter { readsDeferredFieldsFromStruct || !$0.isDeferredParameter || handedMemoByLabel[$0.property.label] != nil }.map(\.property.label))
+		let beingBuilt = propertiesBeingBuilt(byFillOf: hole)
+		return FillStructBindings(
+			bound: fieldForms(of: fields, boundLabels: boundLabels).union(beingBuilt),
+			hiddenFromCaller: fieldForms(of: fields, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(beingBuilt),
+		)
+	}
+
+	/// The properties a fill declares that binds those of `fields` labeled in `boundLabels`: the property of each field of
+	/// the site's scope struct it binds and, for a lazily instantiated field, the instance a receive reads by value.
 	static func fieldForms(of fields: [SeamSignature.Hole.Field], boundLabels: Set<String>) -> Set<Property> {
 		var fieldForms = Set<Property>()
 		for field in fields where boundLabels.contains(field.property.label) {
@@ -2329,6 +2351,75 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			return handedMemos
+		}
+
+		/// A fill of a seam call whose code is emitted, as `memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`
+		/// reads it: its key, the place it fills, and the fields it takes (`ScopeGenerator.caseFields(of:)` for a case nested
+		/// by type, else the place's own).
+		struct EmittedFill {
+			let key: String
+			let hole: SeamSignature.Hole
+			let fields: [SeamSignature.Hole.Field]
+		}
+
+		/// The memo each fill of `fills` takes of each label some route of `dispatchers` hands it as a memo
+		/// (`memosHanded(toFillOf:labels:readingSendableWrapper:among:)`), by the fill's key: only of a seam's call whose
+		/// dispatchers hold a level on a carried route that carries a deferred parameter's field, a field of the fill's that
+		/// is not a deferred parameter's itself, its case's payload does not carry, and its tree does not read only as the
+		/// place's own field (`labelsReadOnlyAsPlaceField`, which the pass before finds: `readsOnlyAsPlaceField(_:placeFields:reads:carriedBySites:)`).
+		/// A public mock's caller hands values. Empty for nearly every call.
+		///
+		/// One rule for the tree, which builds each fill with the memos it takes (`Scope`), and for the per-type facts, which
+		/// hide along a fill edge what the fill binds (`TypeFactsGraph`). Which labels are handed and in which form reads the
+		/// dispatchers' keys and cases alone, never their names. `readingSendableWrapper` decides only a memo's deferral, never
+		/// which labels are handed nor the memo's property.
+		static func memosHanded(
+			toFills fills: [EmittedFill],
+			ofPublicMockCall isPublicMockCall: Bool,
+			labelsReadOnlyAsPlaceField: [String: Set<String>],
+			readingSendableWrapper: [String: [String: Property]],
+			among dispatchers: [FillDispatcher],
+		) -> [String: HandedMemos] {
+			guard !isPublicMockCall, dispatchers.contains(where: { dispatcher in
+				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
+			}) else { return [:] }
+			var handedMemosByKey = [String: HandedMemos]()
+			for fill in fills {
+				let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
+				let readOnlyAsPlaceField = labelsReadOnlyAsPlaceField[fill.key] ?? []
+				handedMemosByKey[fill.key] = memosHanded(
+					toFillOf: fill.key,
+					labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) && !readOnlyAsPlaceField.contains($0.property.label) }.map(\.property.label)),
+					readingSendableWrapper: readingSendableWrapper[fill.key] ?? [:],
+					among: dispatchers,
+				)
+			}
+			return handedMemosByKey
+		}
+
+		/// The `SendableLazilyInstantiated` a fill's tree, which receives `receivedProperties`, reads of each label among
+		/// `labelsHandedAsMemo` (the labels some route hands it a memo of) but those it reads only as the place's own field
+		/// (`labelsReadOnlyAsPlaceField`), by that wrapper's instance property: the `readingSendableWrapper` of
+		/// `memosHanded(toFills:ofPublicMockCall:labelsReadOnlyAsPlaceField:readingSendableWrapper:among:)`. The optional
+		/// wrapper only if available is left out (`ScopeGenerator.fillSendableWrapperReads` says why); of two wrappers of one
+		/// label, the one that sorts first. One rule for the tree, which finds these reads on the pass before, and the
+		/// per-type facts, which find them in the fill target's received fold.
+		static func sendableWrapperReads(ofLabelsHandedAsMemo labelsHandedAsMemo: Set<String>, labelsReadOnlyAsPlaceField: Set<String>, among receivedProperties: Set<Property>) -> [String: Property] {
+			var instancePropertyByLabel = [String: Property]()
+			for property in receivedProperties.sorted() where labelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
+			}
+			return instancePropertyByLabel
+		}
+
+		/// Whether a fill that takes `field`, a memo some route hands it, reads its label only as the place's own field of it,
+		/// the wrapper a type further out declares: its tree, which reads what `reads` says, reads neither the memo's value
+		/// nor its memo, no site inside it carries the field (`carriedBySites`), and it reads the field of the label the
+		/// first of `placeFields` that has one is. Such a fill takes that field on the next pass
+		/// (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`). One rule for the tree and the per-type facts.
+		static func readsOnlyAsPlaceField(_ field: SeamSignature.Hole.Field, placeFields: [SeamSignature.Hole.Field], reads: (Property) -> Bool, carriedBySites: Set<Property>) -> Bool {
+			guard !reads(field.property), !carriedBySites.contains(field.property), let placeField = placeFields.first(where: { $0.property.label == field.property.label }) else { return false }
+			return reads(placeField.property)
 		}
 
 		/// What identifies a dispatcher among the fills and dispatchers enclosing a call.
@@ -2856,6 +2947,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this generator's tree reads `field`, a field of a scope struct, as its fill binds it: it receives the
 	/// field, its optional form, or its instance.
 	nonisolated func reads(_ field: Property) -> Bool {
+		Self.reads(field, among: receivedProperties)
+	}
+
+	/// Whether a tree that receives `receivedProperties` reads `field` as a fill binds it (see `reads(_:)`).
+	nonisolated static func reads(_ field: Property, among receivedProperties: Set<Property>) -> Bool {
 		receivedProperties.contains(field)
 			|| receivedProperties.contains(field.asOptionalProperty)
 			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { receivedProperties.contains($0) || receivedProperties.contains($0.asOptionalProperty) } == true
