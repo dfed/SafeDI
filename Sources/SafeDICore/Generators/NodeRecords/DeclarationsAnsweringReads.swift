@@ -144,7 +144,8 @@ struct DeclarationsAnsweringReads: Sendable {
 				// which opens a `@Sendable` function at every call or at none. A read only if available is the exception: rule 1
 				// keys it alike whether a call answers it or not, so the variant takes it as one optional parameter
 				// (`OnlyIfAvailableAnswers`), resolved as a call that answers it does, and read again, with everything it calls,
-				// whichever call comes first.
+				// whichever call comes first. Its first caller stays its caller, so a capture judged through a filled answer
+				// may refuse where the later path passes `nil` (`isPassedNil`).
 				var calleeAnswers = calleeAnsweringDeclarations
 				if let resolved = answeringDeclarations[Int(callee)] {
 					var merged = resolved
@@ -223,6 +224,12 @@ struct DeclarationsAnsweringReads: Sendable {
 	/// declaration still being built around the call, the node of the label that `answeringDeclaration` builds on the path
 	/// to `callee`, which captures nothing (`NearestDeclarations.resolvingBinding(of:)`). A required read of the label reads
 	/// `value` beside it, which is judged on its own.
+	///
+	/// The walk above `caller` follows each variant's first caller. Where a later call's answer filled a read only if
+	/// available that the first caller's chain left unanswered, no declaration of the label is on that chain (every hop
+	/// passes a read of the label through, or binds it), so the walk finds none and the read counts as a capture: a
+	/// refusal where the later path passes `nil`, never a capture missed. A deliberate over-refusal, kept until each answer
+	/// carries whether it is read across a `@Sendable` function (above).
 	private static func isPassedNil(
 		_ channel: ReadChannel,
 		of label: String,

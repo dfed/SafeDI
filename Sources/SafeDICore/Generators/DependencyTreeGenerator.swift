@@ -459,9 +459,9 @@ public actor DependencyTreeGenerator {
 						// The imports are the root's union fact, read from its declarations where its tree was built, not from
 						// its generator tree.
 						let fulfillers = rootInfo.fulfillers
+						let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
 						switch rootInfo.built {
 						case .tree, .nodeRecords:
-							let code = try await Self.plannedRootCode(of: rootInfo, declaredTypeNames: declaredTypeNames)
 							if let observer = TypeFactsImportsObservation.comparesWalk, let tree = rootInfo.observedTree {
 								let walkedFulfillers = await GenerationWork.$observer.withValue(nil) {
 									await tree.fulfillersOfTree(buildingMock: false)
@@ -488,7 +488,7 @@ public actor DependencyTreeGenerator {
 								code: code,
 								fulfillers: fulfillers,
 							)
-						case let .perType(code, bodies):
+						case let .perType(_, bodies):
 							if let observer = TypeFactsImportsObservation.comparesWalk {
 								// Each body's generator is the tree of one function, so the bodies together build what the root's tree
 								// builds. No tree per path is built here, so the received values are not compared with a walk's.
@@ -766,13 +766,10 @@ public actor DependencyTreeGenerator {
 		/// The root's place tree, where this run built one: for its code, or beside its node records for a test that
 		/// compares them.
 		var observedTree: ScopeGenerator? {
-			switch built {
-			case let .tree(scopeGenerator):
-				scopeGenerator
-			case let .nodeRecords(_, comparisonTree):
+			if case let .nodeRecords(_, comparisonTree) = built {
 				comparisonTree
-			case .perType:
-				nil
+			} else {
+				scopeGenerator
 			}
 		}
 
@@ -1215,12 +1212,7 @@ public actor DependencyTreeGenerator {
 				)
 			}
 			if let observer = UnpassableCycleLabelObservation.factsObserver, let todaysTree {
-				let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-				observer(
-					typeDescription.asSource,
-					Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
-					Set(todaysTree.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
-				)
+				TypeFactsGraph(root: constructionScope, forMockGeneration: false).compareCycleFunctionParameters(of: typeDescription.asSource, with: todaysTree, observer: observer)
 			}
 		}
 		return roots

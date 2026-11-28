@@ -532,12 +532,8 @@ extension DependencyTreeGenerator {
 		// The labels the facts of the mock root's world find no one parameter can pass, beside those its tree reports,
 		// where a test compares the two (`UnpassableCycleLabelObservation.factsObserver`).
 		if let observer = UnpassableCycleLabelObservation.factsObserver {
-			let world = TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true)
-			observer(
-				"mock of \(instantiable.concreteInstantiable.asSource)",
-				Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
-				Set(generator.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
-			)
+			TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true)
+				.compareCycleFunctionParameters(of: "mock of \(instantiable.concreteInstantiable.asSource)", with: generator, observer: observer)
 		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// Each place of the tree against the body the plan of a tree by declaration builds for it, built only where a test

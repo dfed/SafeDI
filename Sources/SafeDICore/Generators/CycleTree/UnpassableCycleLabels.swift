@@ -26,9 +26,88 @@ public enum UnpassableCycleLabelObservation {
 	/// today's tree reports a label no one parameter can pass.
 	@TaskLocal public static var observer: (@Sendable (_ root: String, _ detectorFires: Bool, _ todaysTreeReports: Bool) -> Void)?
 	/// Called for each production root with the root's type, the labels the per-type facts find no one parameter can
-	/// pass (`TypeFactsWorld.unpassableCycleLabels()`) and those today's tree reports, each as `<built type>.<label>`,
-	/// sorted.
-	@TaskLocal public static var factsObserver: (@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String]) -> Void)?
+	/// pass (`TypeFactsGraph.cycleFunctionParameters()`) and those today's tree reports, each as `<built type>.<label>`,
+	/// sorted; then the parameters of each function a lazy cycle closes on as the facts find them and as today's tree
+	/// declares them, one line per place that takes one, sorted. Called for each mock root too.
+	@TaskLocal public static var factsObserver: (@Sendable (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String], _ factsParameterLines: [String], _ todaysTreeParameterLines: [String]) -> Void)?
+}
+
+extension TypeFactsGraph {
+	/// Hands `observer` what the facts of this world find of the functions lazy cycles close on beside what `tree`, the
+	/// tree of `root`, holds. Test only.
+	func compareCycleFunctionParameters(of root: String, with tree: ScopeGenerator, observer: (_ root: String, _ factsLabels: [String], _ todaysTreeLabels: [String], _ factsParameterLines: [String], _ todaysTreeParameterLines: [String]) -> Void) {
+		let solved = cycleFunctionParameters()
+		let lines = cycleFunctionParameterLines(of: solved, comparedWith: tree)
+		observer(
+			root,
+			Set(solved.unpassableLabels.map { "\(graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
+			Set(tree.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
+			lines.facts,
+			lines.tree,
+		)
+	}
+
+	/// One line per place whose function takes a parameter, from `solved` and from `tree`, each sorted.
+	private func cycleFunctionParameterLines(of solved: TypeFactsCycleFunctionParameters, comparedWith tree: ScopeGenerator) -> (facts: [String], tree: [String]) {
+		func typeName(_ declaration: DeclarationID) -> String {
+			graph.nodes[Int(declaration)].scope.instantiable.concreteInstantiable.asSource
+		}
+		// A declaration is a type built for a property: one type built for two properties is two declarations.
+		func name(_ declaration: DeclarationID) -> String {
+			"\(typeName(declaration)) for \(graph.nodes[Int(declaration)].property?.asSource ?? "the root")"
+		}
+		func line(type: String, beneath membersAbove: [String], parameters: [(property: Property, redeclaration: CycleParameter.Redeclaration, isForwarded: Bool)]) -> String {
+			let takes = parameters.map { parameter in
+				"\(parameter.property.asSource) from \(parameter.isForwarded ? "forwarded " : "")\(parameter.redeclaration.declaringType.asSource).\(parameter.redeclaration.property.asSource) at \(String(describing: parameter.redeclaration.declarationLocation))"
+			}
+			return "\(type) beneath [\(membersAbove.joined(separator: ", "))] takes \(takes.joined(separator: "; "))"
+		}
+		var typeDependencies = [String: [Dependency]]()
+		for declaration in 0..<DeclarationID(declarationCount) {
+			typeDependencies[typeName(declaration)] = graph.nodes[Int(declaration)].scope.instantiable.dependencies
+		}
+		var typesOfComponent = [String: Set<String>]()
+		var factsLines = Set<String>()
+		for (place, parameters) in solved.places {
+			typesOfComponent[name(place.declaration), default: []].formUnion(
+				(0..<DeclarationID(declarationCount)).filter { solved.cycleGroups[Int($0)] == solved.cycleGroups[Int(place.declaration)] }.map(name),
+			)
+			guard !parameters.isEmpty else { continue }
+			factsLines.insert(line(
+				type: name(place.declaration),
+				beneath: place.componentMembersAbove.map(name),
+				parameters: parameters.map { ($0.property, $0.redeclaration, $0.isForwarded) },
+			))
+		}
+		var treeLines = Set<String>()
+		var visited = Set<[AnyHashable]>()
+		var generatorsToVisit = [(generator: tree, path: [String]())]
+		while let (generator, path) = generatorsToVisit.popLast() {
+			guard !generator.closesPropertyCycle else { continue }
+			var pathBeneath = path
+			if let instantiable = generator.builtInstantiable {
+				let name = "\(instantiable.concreteInstantiable.asSource) for \(generator.declaration?.property.asSource ?? "the root")"
+				let membersAbove = path.filter { typesOfComponent[name, default: []].contains($0) }
+				guard visited.insert([ObjectIdentifier(generator), membersAbove]).inserted else { continue }
+				if generator.declaresCycleParameters {
+					treeLines.insert(line(
+						type: name,
+						beneath: membersAbove,
+						parameters: generator.cycleParameters.map { parameter in
+							(
+								parameter.property,
+								parameter.redeclaration,
+								typeDependencies[parameter.redeclaration.declaringType.asSource, default: []].contains { $0.source == .forwarded && $0.property == parameter.redeclaration.property },
+							)
+						},
+					))
+				}
+				pathBeneath.append(name)
+			}
+			generatorsToVisit.append(contentsOf: generator.children.map { ($0, pathBeneath) })
+		}
+		return (factsLines.sorted(), treeLines.sorted())
+	}
 }
 
 extension DependencyTreeGenerator {
