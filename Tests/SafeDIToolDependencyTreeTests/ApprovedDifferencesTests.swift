@@ -98,12 +98,14 @@ struct ApprovedDifferencesTests: ~Copyable {
 		}
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries } == [[28]])
-		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		let rootFile = try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
 		// The records declare one function, named for the property declared first, never for the label that sorts first,
 		// and every property calls it.
-		#expect(rootFile.components(separatedBy: "func __safeDI_").count - 1 == 2)
+		#expect(rootFile.components(separatedBy: ") -> Shared {").count - 1 == 1)
 		#expect(rootFile.contains("func __safeDI_\(labels[0])() -> Shared {"))
-		#expect(output.generatedFiles != treeOutput.generatedFiles)
+		// The tree’s generated code shares the function too, where its type key lays the root out: only the place tree’s
+		// own spelling, which the check of node records compares, writes a copy for each property.
+		#expect(output.generatedFiles == treeOutput.generatedFiles)
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: treeOutput.generatedFiles ?? [:]),
@@ -147,25 +149,29 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_sharesSendableFunction_whenASendableBuilderAndABuilderOfOneTypeShareIt(sendableBuilderIsDeclaredFirst: Bool) async throws {
-		let fixtureFiles = ["Fixture.swift": Self.sendableAndPlainBuilderFixture(sendableBuilderIsDeclaredFirst: sendableBuilderIsDeclaredFirst)]
-		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
-		#expect(reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries } == [[28]])
-		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
-		// The one function the two builders share is `@Sendable`, as the `SendableInstantiator` needs, and the
-		// `Instantiator`, which needs less, calls it too: the compile of the laid-out code checks both.
-		#expect(rootFile.components(separatedBy: "func __safeDI_").count - 1 == 1)
-		#expect(rootFile.contains("@Sendable nonisolated func __safeDI_"))
-		try await expectDifferentialValuesAgree(
-			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
-			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: treeOutput.generatedFiles ?? [:]),
-			probes: [DifferentialValueProbe("Root()")],
-			filesToDelete: &filesToDelete,
-		)
+	mutating func generate_sharesSendableFunction_whenASendableLazyWrapperAndASendableBuilderOfOneTypeShareIt(lazyWrapperIsDeclaredFirst: Bool) async throws {
+		let (output, treeOutput, entries) = try await layOutWrapperPair(first: lazyWrapperIsDeclaredFirst ? "SendableLazilyInstantiated" : "SendableInstantiator", second: lazyWrapperIsDeclaredFirst ? "SendableInstantiator" : "SendableLazilyInstantiated")
+		#expect(entries == [[28]])
+		let rootFile = try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
+		// The one function both wrappers call is `@Sendable`, as each of them needs.
+		#expect(rootFile.components(separatedBy: ") -> Shared {").count - 1 == 1)
+		#expect(rootFile.components(separatedBy: "@Sendable nonisolated func __safeDI_firstShared() -> Shared {").count - 1 == 1)
+		// The tree’s generated code shares the function too, where its type key lays the root out: only the place tree’s
+		// own spelling, which the check of node records compares, writes a copy for each property.
+		#expect(output.generatedFiles == treeOutput.generatedFiles)
+	}
+
+	@Test(arguments: [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesAFunctionForEachWrapper_whenASendableBuilderAndABuilderOfOneTypeAreDeclared(sendableBuilderIsDeclaredFirst: Bool) async throws {
+		let (output, treeOutput, entries) = try await layOutWrapperPair(first: sendableBuilderIsDeclaredFirst ? "SendableInstantiator" : "Instantiator", second: sendableBuilderIsDeclaredFirst ? "Instantiator" : "SendableInstantiator")
+		// A `@Sendable` function and one that is not differ beyond their names, so the records share neither: each wrapper
+		// keeps the function its own kind needs, as the tree writes them.
+		#expect(entries == [[]])
+		let rootFile = try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
+		#expect(rootFile.components(separatedBy: ") -> Shared {").count - 1 == 2)
+		#expect(rootFile.components(separatedBy: "@Sendable nonisolated func __safeDI_").count - 1 == 1)
+		#expect(output.generatedFiles == treeOutput.generatedFiles)
 	}
 
 	// MARK: Tests – entry 29, a function named apart from another body's
@@ -180,7 +186,7 @@ struct ApprovedDifferencesTests: ~Copyable {
 		}
 		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 		#expect(reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries } == [[29]])
-		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
+		let rootFile = try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
 		#expect(rootFile.contains("func __safeDI_t2Builder_("))
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
@@ -213,19 +219,38 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Root` builds `Shared` through a `SendableInstantiator` and through an `Instantiator`, in either order.
-	private static func sendableAndPlainBuilderFixture(sendableBuilderIsDeclaredFirst: Bool) -> String {
-		let sendableBuilder = "    @Instantiated let strictBuilder: SendableInstantiator<Shared>\n"
-		let plainBuilder = "    @Instantiated let looseBuilder: Instantiator<Shared>\n"
-		var fixture = """
+	/// Lays out `Root`, which builds `Shared` through a `first` and a `second` wrapper, and compares its values, compiled,
+	/// with the tree's; returns both outputs and the entries the check of node records approved for each report.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func layOutWrapperPair(first: String, second: String) async throws -> (output: TestOutput, treeOutput: TestOutput, entries: [[Int]]) {
+		let fixtureFiles = ["Fixture.swift": Self.wrapperPairFixture(first: first, second: second)]
+		let treeOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixtureFiles, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+		try await expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: output.generatedFiles ?? [:]),
+			knownRight: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: treeOutput.generatedFiles ?? [:]),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+		return (output, treeOutput, reports.map { NodeRecordsChecks.outcome(of: $0).approvedEntries })
+	}
+
+	/// `Root` builds `Shared` through `first` and then `second`, each a wrapper of `Shared`, and a loop of builders.
+	private static func wrapperPairFixture(first: String, second: String) -> String {
+		"""
 		import SafeDI
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
-		    public init(strictBuilder: SendableInstantiator<Shared>, looseBuilder: Instantiator<Shared>) {}
-
-		"""
-		fixture += sendableBuilderIsDeclaredFirst ? sendableBuilder : plainBuilder
-		fixture += sendableBuilderIsDeclaredFirst ? plainBuilder : sendableBuilder
-		fixture += """
+		    public init(firstShared: \(first)<Shared>, secondShared: \(second)<Shared>, loopBuilder: Instantiator<Loop>) {
+		        self.firstShared = firstShared
+		        self.secondShared = secondShared
+		        self.loopBuilder = loopBuilder
+		    }
+		    @Instantiated let firstShared: \(first)<Shared>
+		    @Instantiated let secondShared: \(second)<Shared>
+		    @Instantiated let loopBuilder: Instantiator<Loop>
 		}
 		@Instantiable public final class Shared: Instantiable, Sendable {
 		    public init(leaf: Leaf) { self.leaf = leaf }
@@ -234,12 +259,23 @@ struct ApprovedDifferencesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable, Sendable {
 		    public init() {}
 		}
-		"""
-		return fixture
+
+		""" + loopTypes
 	}
 
-	/// `Root` builds `t2Builder` of `T0`, and `T1`, which `t1Builder` builds, a `t2Builder` of `T2`: two properties of one
-	/// label and two types, whose functions the tree names alike in two bodies.
+	/// A loop of builders: `Loop` builds a `Looper`, which receives the builder of `Loop`. A root that builds it keeps the
+	/// path key's body (seed 1080 of the base corpus).
+	private static let loopTypes = """
+	@Instantiable public final class Loop: Instantiable {
+	    public init(looper: Looper) { self.looper = looper }
+	    @Instantiated let looper: Looper
+	}
+	@Instantiable public final class Looper: Instantiable {
+	    public init(loopBuilder: Instantiator<Loop>) { self.loopBuilder = loopBuilder }
+	    @Received let loopBuilder: Instantiator<Loop>
+	}
+	"""
+
 	/// `nestingBodyIsDeclaredFirst` declares `t1Builder`, whose body nests the other function, before `t2Builder`.
 	private static func nameKeptApartFixture(nestingBodyIsDeclaredFirst: Bool) -> String {
 		let t1Builder = "    @Instantiated let t1Builder: Instantiator<T1>\n"
@@ -247,7 +283,12 @@ struct ApprovedDifferencesTests: ~Copyable {
 		var fixture = """
 		import SafeDI
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
-		    public init(t1Builder: Instantiator<T1>, anyT0Builder: ErasedInstantiator<(), AnyT0>, t2Builder: Instantiator<T0>, service: Service) {}
+		    public init(t1Builder: Instantiator<T1>, anyT0Builder: ErasedInstantiator<(), AnyT0>, t2Builder: Instantiator<T0>, service: Service) {
+		        self.t1Builder = t1Builder
+		        self.anyT0Builder = anyT0Builder
+		        self.t2Builder = t2Builder
+		        self.service = service
+		    }
 
 		"""
 		fixture += nestingBodyIsDeclaredFirst ? t1Builder : t2Builder
@@ -260,13 +301,20 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	private static let nameKeptApartTypes = """
 	@Instantiable public final class T1: Instantiable {
-	    public init(t2Builder: Instantiator<T2>, anyT0Builder: ErasedInstantiator<(), AnyT0>, service: Service) {}
+	    public init(t2Builder: Instantiator<T2>, anyT0Builder: ErasedInstantiator<(), AnyT0>, service: Service) {
+	        self.t2Builder = t2Builder
+	        self.anyT0Builder = anyT0Builder
+	        self.service = service
+	    }
 	    @Instantiated let t2Builder: Instantiator<T2>
 	    @Received let anyT0Builder: ErasedInstantiator<(), AnyT0>
 	    @Received let service: Service
 	}
 	@Instantiable public final class T0: Instantiable {
-	    public init(t1BuilderAlias: Instantiator<T1>?, service: Service) {}
+	    public init(t1BuilderAlias: Instantiator<T1>?, service: Service) {
+	        self.t1BuilderAlias = t1BuilderAlias
+	        self.service = service
+	    }
 	    @Received(fulfilledByDependencyNamed: "t1Builder", ofType: Instantiator<T1>.self, onlyIfAvailable: true) let t1BuilderAlias: Instantiator<T1>?
 	    @Received let service: Service
 	}
@@ -288,7 +336,8 @@ struct ApprovedDifferencesTests: ~Copyable {
 	]
 
 	/// `Root` builds twenty properties of `Shared`, declared in the order of `labels`; `Shared` builds a lazy `Leaf`, so
-	/// each property is built in a function of its own. `Root` is in a file of its own, whose path sorts before or after
+	/// each property is built in a function of its own. `Root` also builds a loop of builders (`loopTypes`), so the tree
+	/// keeps the path key's body, which writes a function for each property, where the node records write one. `Root` is in a file of its own, whose path sorts before or after
 	/// the file of `Shared` and `Leaf`.
 	private static func twentyPropertiesFixtureFiles(labels: [String], rootFileIsReadFirst: Bool) -> [String: String] {
 		var root = """
@@ -296,10 +345,16 @@ struct ApprovedDifferencesTests: ~Copyable {
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 
 		"""
-		root += "    public init(" + labels.map { "\($0): Shared" }.joined(separator: ", ") + ") {}\n"
+		root += "    public init(" + labels.map { "\($0): Shared" }.joined(separator: ", ") + ", loopBuilder: Instantiator<Loop>) {\n"
+		for label in labels {
+			root += "        self.\(label) = \(label)\n"
+		}
+		root += "        self.loopBuilder = loopBuilder\n"
+		root += "    }\n"
 		for label in labels {
 			root += "    @Instantiated let \(label): Shared\n"
 		}
+		root += "    @Instantiated let loopBuilder: Instantiator<Loop>\n"
 		root += "}\n"
 		let types = """
 		import SafeDI
@@ -310,7 +365,8 @@ struct ApprovedDifferencesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable {
 		    public init() {}
 		}
-		"""
+
+		""" + loopTypes
 		return rootFileIsReadFirst ? ["A_Root.swift": root, "B_Types.swift": types] : ["B_Root.swift": root, "A_Types.swift": types]
 	}
 

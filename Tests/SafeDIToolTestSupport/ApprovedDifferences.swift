@@ -197,7 +197,8 @@ enum NameKeptApartRewrite {
 
 extension FunctionText {
 	/// Gives the next function whose name ends in underscores the tree's name without them, where the tree declares a
-	/// function of that name at the same line and no reference to the function lies inside a body declaring that name,
+	/// function of that name at the same line and no reference to the function lies inside a body that declares a
+	/// function of that name,
 	/// and returns whether it found one.
 	mutating func restoreNextNameKeptApart(treeLines: Set<String>) -> Bool {
 		let functions = functions
@@ -206,7 +207,12 @@ extension FunctionText {
 			guard name != function.name, name.hasPrefix("__safeDI_"),
 			      treeLines.contains(Self.replacingReferences(to: function.name, with: name, in: lines[function.range.lowerBound]))
 			else { continue }
-			let hidingBodies = functions.filter { $0.name == name }.map(\.range)
+			// A local function is in scope throughout the body that declares it, so the body enclosing each function of the
+			// tree's name, or the whole text where no function encloses one, is where that name would hide this one.
+			let hidingBodies = functions.filter { $0.name == name }.map { declaration in
+				functions.filter { $0.range.lowerBound < declaration.range.lowerBound && $0.range.upperBound >= declaration.range.upperBound }
+					.min { $0.range.count < $1.range.count }?.range ?? lines.indices
+			}
 			guard !lines.indices.contains(where: { index in
 				hidingBodies.contains { $0.contains(index) } && Self.references(function.name, in: lines[index])
 			})
