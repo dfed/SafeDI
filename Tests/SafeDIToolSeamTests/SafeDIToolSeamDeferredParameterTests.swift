@@ -1835,6 +1835,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(report.nodes[0].required == [])
 		#expect(report.nodes[0].requiredIncludingFills == ["user: User"])
 		#expect(fillEdges.map(\.boundFromScopeStruct) == [["panel: Panel", "panel: Panel?", "tag: Tag", "tag: Tag?"]])
+		#expect(fillEdges.map(\.hiddenFromCaller) == [["panel: Panel", "panel: Panel?", "tag: Tag", "tag: Tag?"]])
 	}
 
 	// MARK: Private
