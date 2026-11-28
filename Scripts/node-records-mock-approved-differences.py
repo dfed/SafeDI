@@ -181,6 +181,11 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             # entry 20, the places enum: a place is entered with the configuration handed, or, where the call
             # asks for the nearest of its type, with the configuration the nearest place of that type above
             # was entered with. The type is the one the function declares its configuration with.
+            # The type is compared as text. Every function handed places is declared in mock()'s own body, one
+            # scope, so one spelling there names one type; one type spelled two ways is missed, and the pair
+            # then stays different. At run time the cast is to the struct that boxes the configuration
+            # (required line for line above), so an optional configuration finds no nil of another type.
+            # A slot entered anywhere above is looked up first, as the declaration's loop returns it first.
             kind,slot,asks_nearest=how
             configuration=re.search(r'(?:^|, )safeDIOverrides: (.*)$',m.group(4))
             if not configuration: raise SystemExit('a call hands places to a function that takes none')
