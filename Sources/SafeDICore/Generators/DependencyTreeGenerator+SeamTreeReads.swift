@@ -41,9 +41,18 @@ extension DependencyTreeGenerator {
 		let parameterReads: ParameterReads
 		/// The names the tree's declarations declare `@escaping` (`ScopeGenerator.typesDeclaredEscaping`).
 		var typesDeclaredEscaping: Set<TypeDescription>
-		/// The tree the builder function names are read from, when `seamRoot` asks for them: a seam that throws, or equals
-		/// its own initializer, never asks, so a run walks the tree for them only where it would without this value.
-		private let builderFunctionNameTree: ScopeGenerator
+		/// Where the builder function names come from: the tree, walked when `seamRoot` asks for them (a seam that throws,
+		/// or equals its own initializer, never asks, so a run walks the tree for them only where it would without this
+		/// value), or the facts, which name them once.
+		private var builderFunctionNameSource: BuilderFunctionNameSource
+
+		/// Where `builderFunctionNames(includingHoleSites:)` reads its names.
+		private enum BuilderFunctionNameSource {
+			/// The tree the names are read from (`builderFunctionNamesOfProperties(in:includingHoleSites:)`).
+			case tree(ScopeGenerator)
+			/// The names the facts give, with and without the hole sites' wrappers.
+			case facts(includingHoleSites: Set<String>, excludingHoleSites: Set<String>)
+		}
 
 		/// What `generator`, the root generator of `seam`'s tree, holds.
 		init(tree generator: ScopeGenerator, of seam: Instantiable, instantiables: [TypeDescription: Instantiable]) {
@@ -51,7 +60,7 @@ extension DependencyTreeGenerator {
 			requiredAliasFulfillingProperties = generator.requiredAliasFulfillingProperties
 			(receivers, parameterReads) = DependencyTreeGenerator.receivers(in: generator, of: seam, instantiables: instantiables)
 			typesDeclaredEscaping = generator.typesDeclaredEscaping
-			builderFunctionNameTree = generator
+			builderFunctionNameSource = .tree(generator)
 		}
 
 		/// What the facts of the seam's tree, `graph`, hold at its root, for each `FactsField`; every `TreeField` is
@@ -66,13 +75,49 @@ extension DependencyTreeGenerator {
 			typesDeclaredEscaping = Set(graph.typesDeclaredEscaping.columns(inRow: 0).map { graph.typeTable[Int($0)] })
 			receivers = treeReads.receivers
 			parameterReads = treeReads.parameterReads
-			builderFunctionNameTree = treeReads.builderFunctionNameTree
+			let names = Self.builderFunctionNames(in: graph)
+			builderFunctionNameSource = .facts(includingHoleSites: names.includingHoleSites, excludingHoleSites: names.excludingHoleSites)
 		}
 
 		/// The name of every builder function the tree declares, the functions that build its hole sites' wrappers among
 		/// them where `includingHoleSites` holds (`builderFunctionNamesOfProperties(in:includingHoleSites:)`).
 		func builderFunctionNames(includingHoleSites: Bool) -> Set<String> {
-			DependencyTreeGenerator.builderFunctionNamesOfProperties(in: builderFunctionNameTree, includingHoleSites: includingHoleSites)
+			switch builderFunctionNameSource {
+			case let .tree(generator):
+				DependencyTreeGenerator.builderFunctionNamesOfProperties(in: generator, includingHoleSites: includingHoleSites)
+			case let .facts(namesIncludingHoleSites, namesExcludingHoleSites):
+				includingHoleSites ? namesIncludingHoleSites : namesExcludingHoleSites
+			}
+		}
+
+		/// The builder function names of the declarations `graph`'s root reaches, as the tree's walk names them: every
+		/// declaration built as a property, a fill's among them, since a call's fills are its generator's children, and its
+		/// hole sites only where they are counted. The set of declarations visited dies with the walk.
+		private static func builderFunctionNames(in graph: TypeFactsGraph) -> (includingHoleSites: Set<String>, excludingHoleSites: Set<String>) {
+			var includingHoleSites = Set<String>()
+			var excludingHoleSites = Set<String>()
+			let nodes = graph.graph.nodes
+			var visited = [Bool](repeating: false, count: nodes.count)
+			visited[0] = true
+			var nodesToVisit = [0]
+			while let node = nodesToVisit.popLast() {
+				if let property = nodes[node].property {
+					let name = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+					includingHoleSites.insert(name)
+					switch nodes[node].key.leaf {
+					case .none, .alias:
+						excludingHoleSites.insert(name)
+					case .hole:
+						break
+					}
+				}
+				for edge in graph.graph.edgeIndices(from: node) where !visited[Int(graph.edgeFacts[edge].child)] {
+					let child = Int(graph.edgeFacts[edge].child)
+					visited[child] = true
+					nodesToVisit.append(child)
+				}
+			}
+			return (includingHoleSites, excludingHoleSites)
 		}
 
 		/// The field as the comparison reads it, sorted. The required sets are spelled as `==` reads them, `any P` as `P`:
@@ -84,7 +129,16 @@ extension DependencyTreeGenerator {
 				requiredAliasFulfillingProperties.map(\.spelledAsEqualityReadsIt).sorted()
 			case .typesDeclaredEscaping:
 				typesDeclaredEscaping.map(\.asSource).sorted()
+			case .builderFunctionNames:
+				builderFunctionNamesSpelled()
 			}
+		}
+
+		/// Both sets of builder function names, each sorted: with the hole sites' wrappers, then without them.
+		private func builderFunctionNamesSpelled() -> [String] {
+			var spelling = builderFunctionNames(includingHoleSites: true).sorted().map { "with hole sites: \($0)" }
+			spelling.append(contentsOf: builderFunctionNames(includingHoleSites: false).sorted().map { "without hole sites: \($0)" })
+			return spelling
 		}
 
 		/// `field` emptied, so a test can see the comparison report a difference (`SeamTreeReadsObservation.perturbsFactsField`).
@@ -95,6 +149,8 @@ extension DependencyTreeGenerator {
 				reads.requiredAliasFulfillingProperties = []
 			case .typesDeclaredEscaping:
 				reads.typesDeclaredEscaping = []
+			case .builderFunctionNames:
+				reads.builderFunctionNameSource = .facts(includingHoleSites: [], excludingHoleSites: [])
 			}
 			return reads
 		}
@@ -110,12 +166,14 @@ extension DependencyTreeGenerator {
 		guard observer != nil || producer == .facts else {
 			return treeReads
 		}
-		// The facts are made only for a test, so they count no work of the run's.
+		// The facts, and the comparison, which reads the tree again, are made only for a test, so they count no work of the
+		// run's.
 		let factsReads = GenerationWork.$observer.withValue(nil) {
-			SeamTreeReads(facts: TypeFactsGraph(root: rootScope, forMockGeneration: false), answeringOtherFieldsFrom: treeReads)
-		}
-		if let observer {
-			observer(comparison(of: seam, treeReads: treeReads, factsReads: factsReads))
+			let factsReads = SeamTreeReads(facts: TypeFactsGraph(root: rootScope, forMockGeneration: false), answeringOtherFieldsFrom: treeReads)
+			if let observer {
+				observer(comparison(of: seam, treeReads: treeReads, factsReads: factsReads))
+			}
+			return factsReads
 		}
 		switch producer {
 		case .tree:
@@ -150,6 +208,8 @@ public enum SeamTreeReadsObservation {
 	public enum FactsField: String, CaseIterable, Sendable {
 		case requiredAliasFulfillingProperties
 		case typesDeclaredEscaping
+		/// The builder function names, with and without the hole sites' wrappers.
+		case builderFunctionNames
 	}
 
 	/// The fields still read from the tree in both values, which the comparison cannot tell apart yet. What the facts lack
@@ -164,8 +224,6 @@ public enum SeamTreeReadsObservation {
 		/// `@Sendable` function. The facts lack the labels a fill binds from its struct, a fill the sendable-fill worklist
 		/// makes `@Sendable`, and a builder function a cycle makes `@Sendable`.
 		case parameterReads
-		/// The builder function names, with and without the hole sites' wrappers.
-		case builderFunctionNames
 	}
 
 	/// Which value a signature pass proceeds with.
