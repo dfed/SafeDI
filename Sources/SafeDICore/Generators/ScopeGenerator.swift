@@ -276,6 +276,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			cycleParameters: isPropertyCycle ? cycleParameters : [],
 		)
 		receivedProperties = receives.receivedProperties
+		formsReadWhereAvailable = Self.formsReadWhereAvailable(
+			receivedProperties: receivedProperties,
+			onlyIfAvailableDependencies: onlyIfAvailableDependencies,
+			unavailableOptionalProperties: unavailableOptionalProperties,
+			children: propertiesToGenerate,
+		)
 		requiredReceivedProperties = receives.requiredReceivedProperties
 		let publicMockCallReceives = Self.publicMockCallReceives(
 			children: propertiesToGenerate,
@@ -1331,6 +1337,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = false
+		formsReadWhereAvailable = Self.formsReadWhereAvailable(
+			receivedProperties: receivedProperties,
+			onlyIfAvailableDependencies: onlyIfAvailableDependencies,
+			unavailableOptionalProperties: unavailableOptionalProperties,
+			children: [],
+		)
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
@@ -1418,6 +1430,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = holdsPlace
+		formsReadWhereAvailable = []
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
@@ -1541,6 +1554,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		treeHoldsCallOrFill = generator.treeHoldsCallOrFill
 		treeHoldsSendableFunction = generator.treeHoldsSendableFunction
 		containsBuildSite = generator.containsBuildSite
+		formsReadWhereAvailable = generator.formsReadWhereAvailable
 		placeHoldingProperties = generator.placeHoldingProperties
 		lazilyInstantiatedInstanceProperties = generator.lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = generator.fulfillingPropertyIsLazilyInstantiatedInstance
@@ -1607,6 +1621,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"instantiatedDependenciesNotGenerated": .copied,
 			"passesUpBuilder": .copied,
 			"holdsCallReenteringEnclosingFill": .copied,
+			"formsReadWhereAvailable": .copied,
 			"fillStructBoundLabelsChangedInTree": .copied,
 			"fillBindsDeferredFieldsFromStruct": .copied,
 			"fillEmitsCode": .copied,
@@ -6069,6 +6084,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `placeHoldingProperties` is `nil` (see `orderedPropertyToGenerateIndices`).
 	let containsBuildSite: Bool
 
+	/// The optional forms this scope's tree reads where they are available: on a route of scopes that receive the form, each
+	/// finding it available (not among its `unavailableOptionalProperties`), to one that reads it itself, which a scope does
+	/// when no scope it builds receives it, or when it is one of its own `onlyIfAvailable` dependencies. A receive only if
+	/// available that every route finds unavailable is passed `nil` wherever it is read, so a seam call's record lists no
+	/// read of it (`SeamCallBody.formsAvailableToFills`). Set once, bottom-up, by the initializer that builds a scope's
+	/// generator, from its children's.
+	let formsReadWhereAvailable: Set<Property>
+
 	/// Whether a fill whose tree this scope's property roots is handed the structs of its own level
 	/// (`FillCallerReads.innerScopeParameters`): its tree builds a place, or a call that passes one up, whose case carries one,
 	/// or a call that re-enters an enclosing call's fill, whose case's member is called on one. A fill that builds its type in
@@ -7654,17 +7677,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for dispatcher in fillDispatchers {
 			guard dispatcher.carriedInnerScopes.isEmpty, dispatcher.cases.allSatisfy({ $0.target?.reusedCarriedInnerScopes.isEmpty ?? true }) else { return nil }
 		}
-		// A label the scope receives in two forms lists the form that sorts first. A read names the label the type key looks
-		// up, and the type of the declaration it resolves to, not the form, types what a shared function takes, so the layout
-		// does not follow which form sorts first (`generate_writesSameCall_whenFillReadsCallersLabelInTwoForms` names the
-		// forms both ways); the seam corpus's rename oracle checks it over drawn graphs.
-		// A label the root dispatcher hands only as `nil`, or no form of which is available to a fill that receives it, is not
-		// read.
-		let unavailableForms = seamCallBody.formsGeneratedLater.union(unavailableProperties)
-		let labelsWithAvailableForm = Set(receivedProperties.filter { seamCallBody.formsAvailableToFills.contains($0) && !unavailableForms.contains($0) }.map(\.label))
-		var labelsRead = Set(reads.map(\.label)).union(seamCallBody.labelsHandedAsNil).union(Set(receivedProperties.map(\.label)).subtracting(labelsWithAvailableForm))
+		// A label no form of which is available to a fill that receives it, or that the scope around the call generates after
+		// it, is not read. A label read in two available forms lists the available form that sorts first. A read names the label the
+		// type key looks up, and the type of the declaration it resolves to, not the form, types what a shared function
+		// takes, so the layout does not follow which form sorts first (`generate_writesSameCall_whenFillReadsCallersLabelInTwoForms`
+		// names the forms both ways); the seam corpus's rename oracle checks it over drawn graphs.
+		let availableForms = receivedProperties.filter { seamCallBody.formsAvailableToFills.contains($0) && !unavailableProperties.contains($0) && !seamCallBody.formsGeneratedLater.contains($0) }
+		var labelsRead = Set(reads.map(\.label))
 		var fillReads = [PlaceRead]()
-		for property in receivedProperties.sorted() where labelsRead.insert(property.label).inserted {
+		for property in availableForms.sorted() where labelsRead.insert(property.label).inserted {
 			fillReads.append(PlaceRead(argumentLabel: property.label, label: property.label, property: property, source: .binding(label: property.label)))
 		}
 		return fillReads
@@ -7931,17 +7952,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The fills and dispatchers the call's code keeps in place, in the order it declares them: each fill that is neither a
 		/// root function nor held by a dispatcher, and each dispatcher that is not a root function.
 		var keptFunctionNames = [String]()
-		/// Whether those read what no record of the call lists: a function of an enclosing call they call or hand on by name,
-		/// which the code around the call declares, or a member of the struct of the seam whose tree makes the call, which a
-		/// site inside a fill reads.
+		/// Whether a kept fill reads what no record of the call lists, which the code around the call declares: a member of
+		/// the struct of the seam whose tree makes the call, which a site inside the fill reads or a call inside it passes up,
+		/// or a function of an enclosing call, which a call inside it re-enters.
 		var readsWhatNoRecordLists = false
-		/// The labels the call's fills receive that every fill receiving them is handed as `nil`: each form of the label the
-		/// fill receives is unavailable to it.
-		var labelsHandedAsNil = Set<String>()
 		/// The forms of what the call's fills receive that some fill receiving them finds available: on no route of its tree
 		/// is the form unavailable to every scope that receives it.
 		var formsAvailableToFills = Set<Property>()
-		/// The forms of what the call receives that the scope around it generates after the call, unavailable to every fill.
+		/// The forms of what the call receives that the scope around it generates after the call, which the call's code hands
+		/// every fill as `nil`.
 		var formsGeneratedLater = Set<Property>()
 	}
 
@@ -8137,7 +8156,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				keysTargetedByBuilderStructDispatchers: Set(callDispatchers.filter(\.returnsBuilderStruct).flatMap { $0.cases.compactMap(\.target?.key) }),
 			),
 		)
-		// A form the caller builds after the call is handed as `nil` wherever the call's tree receives it only if available.
+		// A form the scope around the call generates after the call is handed as `nil` wherever the call's tree receives it
+		// only if available.
 		if seamCall != nil, !propertiesGeneratedLater.isEmpty {
 			body.seamCallBody.formsGeneratedLater = Set(receivedProperties.filter { propertiesGeneratedLater.contains($0.asUnwrappedProperty) })
 		}
@@ -8194,12 +8214,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			if case let .fill(_, functionName) = child.generator.scopeData {
 				body.seamCallBody.keptFunctionNames.append(functionName)
-				let ownKeys = Self.ownKeys(of: body)
 				// A fill whose tree builds a place, passes one up, or re-enters an enclosing call's fill reads a struct or a
 				// function declared around the call, which no record lists, so the call is left unplanned.
-				if child.generator.containsBuildSite || child.generator.passesUpBuilder || child.generator.holdsCallReenteringEnclosingFill
-					|| child.generator.referencedFillNamesByKey.keys.contains(where: { !ownKeys.contains($0) })
-				{
+				if child.generator.containsBuildSite || child.generator.passesUpBuilder || child.generator.holdsCallReenteringEnclosingFill {
 					body.seamCallBody.readsWhatNoRecordLists = true
 				}
 			}
@@ -8339,10 +8356,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard rootFunctionKeys.contains(dispatcher.key) else {
 				generatedProperties.append(.text(leadingMemberWhitespace + Self.localFunctionPrefix(isSendable: isSendable) + textWithoutAttributes))
 				body.seamCallBody.keptFunctionNames.append(dispatcher.functionName)
-				let ownKeys = Self.ownKeys(of: body)
-				if dispatcher.cases.contains(where: { $0.target.map { !ownKeys.contains($0.key) } ?? false }) {
-					body.seamCallBody.readsWhatNoRecordLists = true
-				}
 				continue
 			}
 			let targetKeys = dispatcher.cases.compactMap(\.target?.key)
@@ -8379,33 +8392,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typesDeclaredEscaping: typesDeclaredEscaping,
 			).map(GeneratedCode.text)
 		}
-		// The root dispatcher hands a fill `nil` for a label each form of which it finds unavailable (`callerArgumentByParameter`).
-		let labelsHandedValues = Set(body.callerArgumentByParameter.filter { $0.value != "nil" }.map(\.key.label))
-		body.seamCallBody.labelsHandedAsNil = Set(body.callerArgumentByParameter.filter { $0.value == "nil" }.map(\.key.label)).subtracting(labelsHandedValues)
 		// A fill reads in the call's code where the code keeps it, or where a dispatcher the code keeps reaches it and hands it
 		// what it reads. A fill the root declares, as a root function or inside a dispatcher that is one, that no kept
 		// dispatcher reaches reads what it reads where the root declares it.
 		let fillKeysReadInCode = Self.fillKeysReadInCode(of: body, rootFunctionDispatcherKeys: rootFunctionKeys)
 		for child in body.orderedChildren where child.generator.fillKey.map(fillKeysReadInCode.contains) ?? false {
 			let unavailableForms = child.unavailableProperties.union(child.generator.fillCallerReads.unavailableProperties)
-			body.seamCallBody.formsAvailableToFills.formUnion(child.generator.receivedProperties.filter { !unavailableForms.contains($0) && child.generator.readsAvailable($0) })
+			body.seamCallBody.formsAvailableToFills.formUnion(child.generator.receivedProperties.filter { !unavailableForms.contains($0) && (!$0.typeDescription.isOptional || child.generator.formsReadWhereAvailable.contains($0)) })
 		}
 		return BodyStatements(statements: generatedProperties, seamCallBody: body.seamCallBody)
 	}
 
-	/// Whether some scope of this tree reads `form` where it is available: on a route of scopes that receive it, each finding
-	/// it available (not among `unavailableOptionalProperties`), to one that reads it itself, which a scope does when no
-	/// scope it builds receives it, or when it is one of its own `onlyIfAvailable` dependencies. A receive only if available
-	/// that every route finds unavailable is passed `nil` wherever it is read. The walk keeps its own stack, as a tree can
-	/// be deep.
-	nonisolated func readsAvailable(_ form: Property) -> Bool {
-		var work = unavailableOptionalProperties.contains(form) ? [] : [self]
-		while let generator = work.popLast() {
-			let childrenReceiving = generator.propertiesToGenerate.filter { $0.receivedProperties.contains(form) }
-			guard !childrenReceiving.isEmpty, !generator.onlyIfAvailableDependencies.contains(where: { $0.unavailableProperties.contains(form) }) else { return true }
-			work += childrenReceiving.filter { !$0.unavailableOptionalProperties.contains(form) }
+	/// `formsReadWhereAvailable` of a scope that receives `receivedProperties`, whose own dependencies received only if
+	/// available are `onlyIfAvailableDependencies`, which finds `unavailableOptionalProperties` unavailable, and which builds
+	/// `children`.
+	nonisolated private static func formsReadWhereAvailable(
+		receivedProperties: Set<Property>,
+		onlyIfAvailableDependencies: [OnlyIfAvailableDependency],
+		unavailableOptionalProperties: Set<Property>,
+		children: [ScopeGenerator],
+	) -> Set<Property> {
+		var forms = Set<Property>()
+		var work = children.count
+		for child in children {
+			forms.formUnion(child.formsReadWhereAvailable)
+			work += child.formsReadWhereAvailable.count
 		}
-		return false
+		for form in receivedProperties where form.typeDescription.isOptional && !forms.contains(form) {
+			work += children.count
+			if !children.contains(where: { $0.receivedProperties.contains(form) }) || onlyIfAvailableDependencies.contains(where: { $0.unavailableProperties.contains(form) }) {
+				forms.insert(form)
+			}
+		}
+		GenerationWork.record(work, by: .readingFormsWhereAvailable)
+		return forms.subtracting(unavailableOptionalProperties)
 	}
 
 	/// The keys of the fills of `body`'s call that read in the call's code: each the code keeps, which is neither a root
@@ -8425,11 +8445,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return keys
-	}
-
-	/// The keys of the fills and dispatchers of `body`'s call.
-	nonisolated private static func ownKeys(of body: BodyChildren) -> Set<String> {
-		Set(body.orderedChildren.compactMap(\.generator.fillKey)).union(body.callDispatchers.map(\.key))
 	}
 
 	/// What this scope's call of another module's public mock passes each builder, by label, where the call's fills are

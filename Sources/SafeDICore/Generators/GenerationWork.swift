@@ -138,6 +138,10 @@ public struct GenerationWork: Sendable {
 		/// (`DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`): each generator of a fill's tree the walk visits, with
 		/// the declarations on its path it hands its children.
 		case findingDeclarationsHiddenByReenteringCalls
+		/// Finding the optional forms a tree reads where they are available (`ScopeGenerator.formsReadWhereAvailable`), once
+		/// for each generator, from its children's: each child, each form a child's set holds, and each child asked whether
+		/// it receives one of the generator's optional forms.
+		case readingFormsWhereAvailable
 	}
 
 	/// The step that did the work.
