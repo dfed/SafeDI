@@ -73,9 +73,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -96,9 +94,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Token()
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token
-			            #sourceLocation()
+			            let authToken: Token? = token // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -143,9 +139,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -166,9 +160,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Token(screen: nil)
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token
-			            #sourceLocation()
+			            let authToken: Token? = token // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -252,9 +244,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public convenience init(__safeDI_tokenBuilder tokenBuilder: Instantiator<Token>?) {
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			            let authTokenBuilder: Instantiator<Token>? = tokenBuilder
-			            #sourceLocation()
+			            let authTokenBuilder: Instantiator<Token>? = tokenBuilder // Declared as Detail.authTokenBuilder
 			            let child = Child(authTokenBuilder: authTokenBuilder)
 			            return Detail(authTokenBuilder: authTokenBuilder, child: child)
 			        }
@@ -281,9 +271,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			        func __safeDI_screenBuilder() -> Screen {
 			            let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
 			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                let authTokenBuilder: Instantiator<Token>? = tokenBuilder
-			                #sourceLocation()
+			                let authTokenBuilder: Instantiator<Token>? = tokenBuilder // Declared as Detail.authTokenBuilder
 			                let child = Child(authTokenBuilder: authTokenBuilder)
 			                return Detail(authTokenBuilder: authTokenBuilder, child: child)
 			            }
@@ -313,9 +301,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -372,9 +358,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			            return Inner(detail: detail)
 			        }
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token
-			            #sourceLocation()
+			            let authToken: Token? = token // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }
@@ -407,7 +391,6 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		let detailPath = try #require(output.modules["Feature"]).fixtures.compilerPath(of: "Detail.swift")
 		#expect(try #require(output.modules["Feature"]).generatedFiles == [
 			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
@@ -416,9 +399,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(detailPath)", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Detail.authToken
 			            let child = Child(authToken: authToken)
 			            return Detail(authToken: authToken, child: child)
 			        }

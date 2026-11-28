@@ -1373,15 +1373,14 @@ struct SafeDIToolSeamPlainInitializerTests: ~Copyable {
 		        public init(userService: @escaping () -> __safeDI_Built) {
 		            self.userService = userService
 		        }
-
-		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(userService: { __safeDI_builder() })
-		        }
 		    }
 
 		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
 		    public init(userServiceBuilder: @escaping () -> any UserService) {
-		        self.init(__safeDI_userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder))
+		        @Sendable nonisolated func __safeDI_noScope_Service_SafeDICarrierScope_UserService<__safeDI_Built>(_ __safeDI_builder: @escaping () -> __safeDI_Built) -> Service.__safeDI_UserServiceCarrier<__safeDI_Built> {
+		            .init(userService: { __safeDI_builder() })
+		        }
+		        self.init(__safeDI_userServiceBuilder: __safeDI_noScope_Service_SafeDICarrierScope_UserService(userServiceBuilder))
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.

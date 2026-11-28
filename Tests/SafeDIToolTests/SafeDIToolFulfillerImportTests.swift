@@ -163,7 +163,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				}
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 			}
 			continuation.finish()
@@ -194,7 +194,7 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				}
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				_ = try await executeSafeDIToolMultiModuleTest(
 					modules: [
 						ModuleFixture(name: "Kit", packageName: "App", swiftFileContent: ["""

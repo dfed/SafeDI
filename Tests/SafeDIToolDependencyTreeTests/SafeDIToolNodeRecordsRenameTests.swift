@@ -80,9 +80,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		    public init() {
 		        let user = User()
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let account: User = user
-		            #sourceLocation()
+		            let account: User = user // Declared as Profile.account
 		            return Profile(account: account)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -128,9 +126,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = nil
-		            #sourceLocation()
+		            let style: Theme? = nil // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -187,9 +183,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile(theme: Theme?) -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = theme
-		            #sourceLocation()
+		            let style: Theme? = theme // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        func __safeDI_screenBuilder(theme: Theme?) -> Screen {
@@ -220,7 +214,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

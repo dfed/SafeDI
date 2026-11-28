@@ -633,10 +633,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 			            self.service = service
 			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() })
-			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -692,10 +688,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 			        public init(renderer: @escaping (__safeDI_Values1) -> __safeDI_Built) {
 			            self.renderer = renderer
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(renderer: { _ in __safeDI_builder() })
 			        }
 			    }
 
@@ -3625,7 +3617,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.package])
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.lineAndColumn?.line) == [2])
+			// A `.safedi` file stores the declaration's rank in its file, never its line.
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.order) == [1])
 		}
 	}
 
@@ -5999,10 +5992,6 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 			        public init(service: @escaping (__safeDI_Values5) -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() })
 			        }
 			    }
 

@@ -50,6 +50,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 		seamSignatures: ModuleSeamSignatures,
 		publicMockPlans: ModulePublicMockPlans = .empty,
 		view: ModuleInfoView,
+		locationCountsByFilePath: [String: Int] = [:],
 	) {
 		self.moduleName = moduleName
 		self.ownEntryChecksum = ownEntryChecksum
@@ -66,6 +67,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 		self.seamSignatures = seamSignatures
 		self.publicMockPlans = publicMockPlans
 		self.view = view
+		self.locationCountsByFilePath = locationCountsByFilePath
 	}
 
 	init(
@@ -171,6 +173,30 @@ public struct ModuleInfoFile: Codable, Sendable {
 	let publicMockPlans: ModulePublicMockPlans
 	/// What the module's dependents need of the modules it depends on, directly or not.
 	let view: ModuleInfoView
+	/// For each file of the module's own declarations, the number of distinct locations the module recorded there, as a
+	/// read of the file finds it: the highest rank it read in that file (`Dependency.DeclarationLocation.order`). The file
+	/// stores no line or column, so a run that reads a declaration's file again to locate it can check that the file still
+	/// holds as many. Empty for a file not read from a module info file. Not written: it follows from the locations.
+	var locationCountsByFilePath = [String: Int]()
+
+	/// Every field `dump` prints: the fields the file is written as.
+	private enum CodingKeys: String, CodingKey {
+		case moduleName
+		case ownEntryChecksum
+		case packageName
+		case dependencyModuleNames
+		case imports
+		case mockImports
+		case instantiables
+		case configurations
+		case filesWithUnexpectedNodes
+		case conditionalCompilationDecisions
+		case instantiableTypeNamesInAnyClause
+		case plainTypeDeclarations
+		case seamSignatures
+		case publicMockPlans
+		case view
+	}
 
 	/// The module's own declarations.
 	public var module: ModuleInfo {
@@ -197,27 +223,6 @@ public struct ModuleInfoFile: Codable, Sendable {
 			dependencyModuleNames: dependencyModuleNames,
 			// The condition the module's own run guards its mocks with: its configuration's, `DEBUG` without one.
 			mockConditionalCompilation: configurations.first.map(\.mockConditionalCompilation) ?? "DEBUG",
-		)
-	}
-
-	/// This file with `view` in place of its own.
-	func replacingView(with view: ModuleInfoView) -> ModuleInfoFile {
-		ModuleInfoFile(
-			moduleName: moduleName,
-			ownEntryChecksum: ownEntryChecksum,
-			packageName: packageName,
-			dependencyModuleNames: dependencyModuleNames,
-			imports: imports,
-			mockImports: mockImports,
-			instantiables: instantiables,
-			configurations: configurations,
-			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions,
-			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
-			plainTypeDeclarations: plainTypeDeclarations,
-			seamSignatures: seamSignatures,
-			publicMockPlans: publicMockPlans,
-			view: view,
 		)
 	}
 
@@ -256,6 +261,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: .empty, publicMockPlans: .empty) },
 				references: view.references,
 			),
+			locationCountsByFilePath: locationCountsByFilePath,
 		)
 	}
 
@@ -381,21 +387,25 @@ extension ModuleInfoFile {
 		}
 	}
 
-	/// This module as a module info file.
+	/// This module as a module info file: the one way a run writes one, in every integration. Each location of the
+	/// module's own declarations is written as its file and its rank among the distinct locations the module records in
+	/// that file (`Dependency.DeclarationLocation.order`), which orders the locations as their lines and columns do, and
+	/// each range without its lines and columns, so a line moved in a module leaves every byte of its file, and so of every
+	/// file above it, unchanged. A diagnostic about another module's declaration then prints its file without a line.
+	///
+	/// The seam signatures and public mock plans a run computes carry the positions of the declarations they name, which
+	/// the file writes as absent (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them
+	/// instead allocated several times the file's size at the run's end, on pages the run had not used yet, which raised its
+	/// peak resident memory by a third on a module of two hundred seams although its peak heap held.
 	public var moduleInfoData: Data {
 		get throws(BinaryFileWriteError) {
-			try BinaryFile.data(.moduleInfo, holding: self)
-		}
-	}
-
-	/// This module as a module info file, as `moduleInfoData` writes it with every position in its seam signatures and
-	/// public mock plans absent: the signatures and plans a run computes carry the positions of the declarations they name, which the file writes as absent
-	/// (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them instead allocated several
-	/// times the file's size at the run's end, on pages the run had not used yet, which raised its peak resident memory
-	/// by a third on a module of two hundred seams although its peak heap held.
-	public var moduleInfoDataWritingSeamSignaturesWithoutPositions: Data {
-		get throws(BinaryFileWriteError) {
-			try BinaryFile.data(.moduleInfo) { writer in
+			// Every location the file writes is one of the module's own declarations: a view holds none, and the signatures
+			// and plans are written without them.
+			let locationRanks = LocationRanks(ranking: BinaryWriter.collectingLocations { writer in
+				writeFieldsBeforeSeamSignatures(to: &writer)
+			})
+			return try BinaryFile.data(.moduleInfo) { writer in
+				writer.locationRanks = locationRanks
 				write(to: &writer) { writer in
 					writer.writingPositionsAsAbsent { writer in
 						writer.write(seamSignatures)
@@ -403,6 +413,21 @@ extension ModuleInfoFile {
 					}
 				}
 			}
+		}
+	}
+
+	/// The module info file `data` holds.
+	/// - Parameter readingView: Whether to read the file's view, which `false` leaves empty: a file's view grows with the
+	///   modules beneath the file's module.
+	/// - Throws: When `data` is not a module info file.
+	static func reading(moduleInfoData data: Data, readingView: Bool) throws(BinaryFileReadError) -> ModuleInfoFile {
+		try BinaryFile.value(.moduleInfo, from: data) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
+			guard readingView else {
+				return try ModuleInfoFile(readingAllButViewFrom: &reader)
+			}
+			let file = try ModuleInfoFile(readingFrom: &reader)
+			try reader.finish()
+			return file
 		}
 	}
 }
@@ -415,14 +440,14 @@ struct MergedModuleInfoView {
 	///   - directModules: Each file with the path it was read from.
 	///   - ownModuleDeclaresSeamOrPublicMock: Whether the module the run generates code for declares a seam or a public
 	///     mock, whose signature its dependents compute from the modules it depends on directly.
+	///   - references: The entries the references of the files' views resolve to.
 	/// - Throws: `ModuleInfoDisagreementError` when two files describe one module differently.
-	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool, viewsReferToModules: Bool = false) throws(ModuleInfoDisagreementError) {
+	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool, viewsReferToModules: Bool = false, references: ResolvedModuleReferences) throws(ModuleInfoDisagreementError) {
 		// Two entries of one module are compared by the bytes they are written as, which are computed only once a module's
 		// name repeats, and then once for the entry kept: most modules are named once.
 		var identities = [String: (identity: ViewedModuleIdentity, path: String)]()
 		var identityBytes = [String: [UInt8]]()
-		var declarations = [String: (entry: ViewedModule, path: String)]()
-		var declarationBytes = [String: [UInt8]]()
+		var declarations = [String: (entry: ViewedModule, path: String, checksum: UInt64?)]()
 		var writtenDeclarationNames = Set<String>()
 		func merge(_ identity: ViewedModuleIdentity, from path: String) throws(ModuleInfoDisagreementError) {
 			if let existing = identities[identity.moduleName] {
@@ -435,24 +460,28 @@ struct MergedModuleInfoView {
 				identities[identity.moduleName] = (identity, path)
 			}
 		}
-		// Two entries of one module are compared without their seam signatures, which follow from what the comparison
-		// covers, as `ViewedModule.checksum` says: a signature is the bulk of an entry, as large as its seam's tree has
-		// paths, and a module above a chain of seams reads each module's entry from every file beneath it.
-		func merge(_ entry: ViewedModule, from path: String) throws(ModuleInfoDisagreementError) {
-			if let existing = declarations[entry.moduleName] {
-				let existingBytes = declarationBytes[entry.moduleName] ?? Self.encoded(existing.entry.withoutSeamSignatures)
-				declarationBytes[entry.moduleName] = existingBytes
-				guard existingBytes == Self.encoded(entry.withoutSeamSignatures) else {
-					throw ModuleInfoDisagreementError(moduleName: entry.moduleName, filePaths: [existing.path, path])
+		// Two entries of one module are compared by their checksums (`ViewedModule.checksum`), of the bytes they are
+		// written as without their seam signatures, which follow from what the comparison covers: a signature is the bulk
+		// of an entry, as large as its seam's tree has paths, and a module above a chain of seams reads each module's entry
+		// from every file beneath it. A reference and a file's own entry carry their checksum, so under views that refer
+		// to modules no entry is encoded; a copy's is computed only once its module's name repeats, and then once for
+		// the entry kept.
+		func merge(_ viewed: ViewedModuleEntry, from path: String) throws(ModuleInfoDisagreementError) {
+			let moduleName = viewed.entry.moduleName
+			if let existing = declarations[moduleName] {
+				let existingChecksum = existing.checksum ?? existing.entry.checksum
+				declarations[moduleName]?.checksum = existingChecksum
+				guard existingChecksum == viewed.checksum ?? viewed.entry.checksum else {
+					throw ModuleInfoDisagreementError(moduleName: moduleName, filePaths: [existing.path, path])
 				}
 			} else {
-				declarations[entry.moduleName] = (entry, path)
+				declarations[moduleName] = (viewed.entry, path, viewed.checksum)
 			}
 		}
 		// A file's own module first, so a module given both directly and in a view is read from its own file.
 		for (file, path) in directModules {
 			try merge(file.ownIdentity, from: path)
-			try merge(file.ownEntry, from: path)
+			try merge(ViewedModuleEntry(entry: file.ownEntry, checksum: file.ownEntryChecksum), from: path)
 			// A dependent of the run's module computes its signature from the modules it depends on directly, and a
 			// dependent of a direct module that declares one computes that module's from this file.
 			if file.declaresSeamOrPublicMock || ownModuleDeclaresSeamOrPublicMock {
@@ -463,9 +492,9 @@ struct MergedModuleInfoView {
 			for identity in file.view.moduleGraph {
 				try merge(identity, from: path)
 			}
-			for entry in file.view.declarations {
-				try merge(entry, from: path)
-				writtenDeclarationNames.insert(entry.moduleName)
+			for viewed in references.entries(of: file.view) {
+				try merge(viewed, from: path)
+				writtenDeclarationNames.insert(viewed.entry.moduleName)
 			}
 		}
 		// A module's file and every view carry the same signatures of its seams, without positions.
@@ -488,7 +517,7 @@ struct MergedModuleInfoView {
 				moduleGraph: moduleGraph,
 				declarations: [],
 				references: writtenNames.compactMap { name in
-					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.entry.checksum) }
+					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.checksum ?? $0.entry.checksum) }
 				},
 			)
 		} else {
@@ -574,7 +603,7 @@ public enum StoredBlockDecodeObservation {
 	}
 
 	/// Called once for each stored block whose decoding threw, when set: by the tests, never by the tool.
-	@TaskLocal public static var failureObserver: (@Sendable (Block) -> Void)?
+	@TaskLocal public static var failureObserver: TaskLocalFunction<@Sendable (Block) -> Void>?
 
 	/// Returns what `read` decodes of a stored `block`, and tells `failureObserver` when it throws.
 	static func reading<Value>(_ block: Block, _ read: () throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {

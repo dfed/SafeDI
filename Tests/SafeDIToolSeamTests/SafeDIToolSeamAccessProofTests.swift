@@ -447,7 +447,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let fixtures = try #require(output.modules["Feature"]).fixtures
-		func seamFile(consumerPath: String) -> String {
+		func seamFile(consumerPath _: String) -> String {
 			generatedFileHeader + """
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -455,9 +455,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			    public init(__safeDI_session: @autoclosure @escaping () -> Session) {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        @inline(never) func __safeDI_consumer() -> Consumer {
-			            #sourceLocation(file: "\(consumerPath)", line: 7)
-			            let auth: any Auth = session.instance
-			            #sourceLocation()
+			            let auth: any Auth = session.instance // Declared as Consumer.auth
 			            return Consumer(auth: auth)
 			        }
 			        let consumer: Consumer = __safeDI_consumer()
@@ -3613,10 +3611,6 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 			        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
 			            self.service = service
-			        }
-
-			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			            self.init(service: { _ in __safeDI_builder() })
 			        }
 			    }
 

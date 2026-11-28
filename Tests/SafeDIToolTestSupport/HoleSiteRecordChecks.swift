@@ -26,8 +26,8 @@ import Testing
 extension HoleSiteRecordObservation {
 	/// An observer that records an issue for each way the site's record disagrees with its text, then hands the site to
 	/// `enclosingObserver`.
-	static func checkingRecords(handingOn enclosingObserver: (@Sendable (HoleSiteRecordObservation) -> Void)?) -> @Sendable (HoleSiteRecordObservation) -> Void {
-		{ site in
+	static func checkingRecords(handingOn enclosingObserver: TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void>?) -> TaskLocalFunction<@Sendable (HoleSiteRecordObservation) -> Void> {
+		TaskLocalFunction { site in
 			for mismatch in site.recordMismatches {
 				Issue.record(Comment(rawValue: mismatch))
 			}

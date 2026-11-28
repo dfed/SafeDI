@@ -45,7 +45,7 @@ public struct ConstructionSharingSchedule: Sendable {
 
 	/// Called for each memo lookup that has a candidate, with whether the schedule changed which generator the place holds
 	/// from the one the place holds when it shares wherever it can: so the oracle can say how many places each draw moved.
-	@TaskLocal public static var observer: (@Sendable (_ changesHeldGenerator: Bool) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ changesHeldGenerator: Bool) -> Void>?
 
 	/// The draw for the lookup numbered `lookupCount` in the pass, which it advances.
 	func draw(atLookup lookupCount: inout Int) -> Draw {

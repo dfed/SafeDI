@@ -44,7 +44,7 @@ public enum GenerationLayerObservation {
 
 	/// Called once for each layer a run computes, with the name of the module the run generates, when set: by the tests,
 	/// never by the tool.
-	@TaskLocal public static var observer: (@Sendable (_ runModuleName: String?, _ layer: Layer) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ runModuleName: String?, _ layer: Layer) -> Void>?
 
 	/// The run a generator over another module's declarations computes that module's public mock plans for, while it does:
 	/// the layers that generator computes are that run's.

@@ -193,6 +193,7 @@ extension ScopeGenerator {
 	) throws -> [[Int]: FillPlaceBindings.HoleBuilder] {
 		guard !buildersByFamily.isEmpty, !foreignPublicMocks.isEmpty else { return [:] }
 		var holeBuilderByPath = [[Int]: FillPlaceBindings.HoleBuilder]()
+		var declaringModulesSight = ScopeGenerator.DeclaringModulesSight()
 		// Each scope with its path, whether a `@Sendable` builder function encloses it, the public mock built inline nearest
 		// above it, and the type its declaration instantiates, which a `fulfilledByType:` names.
 		var generatorsToVisit = orderedChildren.map { (generator: $0.generator, path: [$0.index], isInsideSendableFunction: false, publicMockBuiltInline: SeamResolution.ForeignPublicMock?.none, instantiatedType: TypeDescription?.none) }
@@ -201,7 +202,7 @@ extension ScopeGenerator {
 			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData, generator.publicMockCall == nil else { continue }
 			let instantiatedType = declaredInstantiatedType ?? property.typeDescription.asInstantiatedType
 			let requiresSendable = isInsideSendableFunction || generator.buildsInSendableFunction
-			if let publicMockBuiltInline, try publicMockBuiltInline.visibleDeclarations().instantiables[instantiatedType] == nil {
+			if let publicMockBuiltInline, try !declaringModulesSight.sees(instantiatedType, declaredBesides: publicMockBuiltInline) {
 				let family = MockRootParameters.SeamMockBuilder.Family(
 					holeType: SeamSignature.HoleType(instantiatedType: instantiatedType.spelledCanonically, builtType: property.typeDescription.builtTypeOfWrapper.spelledCanonically),
 					isSendable: requiresSendable || property.propertyType.isSendable,

@@ -359,7 +359,7 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func countLayers(_ body: () async throws -> Void) async throws -> [String: Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		try await GenerationLayerObservation.$observer.withValue({ runModuleName, layer in
+		try await GenerationLayerObservation.$observer.withValue(TaskLocalFunction { runModuleName, layer in
 			let layerDescription = switch layer {
 			case let .seamSignatures(moduleName, inCallersView):
 				"seam signatures of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"

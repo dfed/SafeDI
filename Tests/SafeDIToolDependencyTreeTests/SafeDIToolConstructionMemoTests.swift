@@ -78,7 +78,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		for seed in UInt64(0)..<8 {
 			let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
 			let scheduled = try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: seed, offersLaterPlacesCandidates: seed.isMultiple(of: 2))) { [fixture] in
-				try await ConstructionSharingSchedule.$observer.withValue({ continuation.yield($0) }) {
+				try await ConstructionSharingSchedule.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 				}
 			}
@@ -311,7 +311,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		// `Core`'s seam `Feature` takes a builder of `any Service`, which `App`'s `DefaultService` fills. `App`'s root builds
 		// `DefaultService` itself too, so the tree builds it at two places: once beneath `Root`, once as `Feature`'s fill.
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) {
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					ModuleFixture(
@@ -371,7 +371,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 				}))
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 			}
 			continuation.finish()
@@ -408,7 +408,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 				)))
 			}
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			_ = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) { [fixture] in
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
 			}
 			continuation.finish()
@@ -436,7 +436,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func typesKeyedInMemo(of fixture: [String], moduleMembershipArguments: [String] = []) async throws -> Set<String> {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, moduleMembershipArguments: moduleMembershipArguments)
 		}
 		continuation.finish()
@@ -452,7 +452,7 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func keyedPlaceCountsInMemo(of fixture: [String]) async throws -> [String: Int] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue(TaskLocalFunction { continuation.yield($0) }) { [fixture] in
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()

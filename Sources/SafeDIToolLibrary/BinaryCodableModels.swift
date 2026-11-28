@@ -481,7 +481,6 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("generatedInitializerAttributes", \.generatedInitializerAttributes),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
 				BinaryLayoutField("generateMock", \.generateMock),
-				BinaryLayoutField("mockGenerationArgumentRange", \.mockGenerationArgumentRange),
 				BinaryLayoutField("mockOnly", \.mockOnly),
 				BinaryLayoutField("mockInitializer", \.mockInitializer),
 				BinaryLayoutField("mockReturnType", \.mockReturnType),
@@ -491,6 +490,8 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("mockDeclarationModuleName", \.mockDeclarationModuleName),
 				BinaryLayoutField("mockDeclarationPackageName", \.mockDeclarationPackageName),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
+				// After the declaration's location, to which the range belongs.
+				BinaryLayoutField("mockGenerationArgumentRange", \.mockGenerationArgumentRange),
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
@@ -508,32 +509,58 @@ extension Instantiable: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		var fieldFlags = try reader.readFieldFlags()
+		// Read in the order written, which puts the `generateMock:` argument's range after the declaration's location, to
+		// which it belongs.
 		// `instantiableTypes` is written as its first element and then the rest, so it is never empty.
+		let instantiableType: TypeDescription = try reader.read()
+		let isRoot = fieldFlags.next()
+		let generatesDependencyTree = fieldFlags.next()
+		let initializer = try reader.readOptional(flaggedIn: &fieldFlags) as Initializer?
+		let otherInitializers: [Initializer] = try reader.read()
+		let additionalInstantiables: [TypeDescription] = try reader.read()
+		let dependencies: [Dependency] = try reader.read()
+		let declarationType: DeclarationType = try reader.read()
+		let access: AccessDeclaration = try reader.read()
+		let enclosingTypeAccess: [AccessDeclaration] = try reader.read()
+		let enclosingExtensionAccess = try reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?
+		let generatedInitializerAttributes: String = try reader.read()
+		let mockAttributes: String = try reader.read()
+		let generateMock: MockGeneration = try reader.read()
+		let mockOnly = fieldFlags.next()
+		let mockInitializer = try reader.readOptional(flaggedIn: &fieldFlags) as Initializer?
+		let mockReturnType = try reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?
+		let customMockName = try reader.readOptional(flaggedIn: &fieldFlags) as String?
+		let mockDeclarationLocation = try reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?
+		let mockDeclarationAccess = try reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?
+		let mockDeclarationModuleName = try reader.readOptional(flaggedIn: &fieldFlags) as String?
+		let mockDeclarationPackageName = try reader.readOptional(flaggedIn: &fieldFlags) as String?
+		let declarationLocation = try reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?
+		let mockGenerationArgumentRange = try reader.readOptionalRange(flaggedIn: &fieldFlags, unlocatedAs: declarationLocation.map { Dependency.SourceRange(owner: $0, part: .mockGenerationArgument) })
 		try self.init(
-			instantiableType: reader.read(),
-			isRoot: fieldFlags.next(),
-			generatesDependencyTree: fieldFlags.next(),
-			initializer: reader.readOptional(flaggedIn: &fieldFlags) as Initializer?,
-			otherInitializers: reader.read(),
-			additionalInstantiables: reader.read() as [TypeDescription],
-			dependencies: reader.read(),
-			declarationType: reader.read(),
-			access: reader.read(),
-			enclosingTypeAccess: reader.read(),
-			enclosingExtensionAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
-			generatedInitializerAttributes: reader.read(),
-			mockAttributes: reader.read(),
-			generateMock: reader.read(),
-			mockGenerationArgumentRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
-			mockOnly: fieldFlags.next(),
-			mockInitializer: reader.readOptional(flaggedIn: &fieldFlags) as Initializer?,
-			mockReturnType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
-			customMockName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
-			mockDeclarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
-			mockDeclarationAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
-			mockDeclarationModuleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
-			mockDeclarationPackageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
-			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			instantiableType: instantiableType,
+			isRoot: isRoot,
+			generatesDependencyTree: generatesDependencyTree,
+			initializer: initializer,
+			otherInitializers: otherInitializers,
+			additionalInstantiables: additionalInstantiables,
+			dependencies: dependencies,
+			declarationType: declarationType,
+			access: access,
+			enclosingTypeAccess: enclosingTypeAccess,
+			enclosingExtensionAccess: enclosingExtensionAccess,
+			generatedInitializerAttributes: generatedInitializerAttributes,
+			mockAttributes: mockAttributes,
+			generateMock: generateMock,
+			mockGenerationArgumentRange: mockGenerationArgumentRange,
+			mockOnly: mockOnly,
+			mockInitializer: mockInitializer,
+			mockReturnType: mockReturnType,
+			customMockName: customMockName,
+			mockDeclarationLocation: mockDeclarationLocation,
+			mockDeclarationAccess: mockDeclarationAccess,
+			mockDeclarationModuleName: mockDeclarationModuleName,
+			mockDeclarationPackageName: mockDeclarationPackageName,
+			declarationLocation: declarationLocation,
 			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
@@ -565,7 +592,6 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(generatedInitializerAttributes)
 			writer.write(mockAttributes)
 			writer.write(generateMock)
-			writer.writeOptional(mockGenerationArgumentRange, flaggedIn: &fieldFlags)
 			fieldFlags.append(mockOnly)
 			writer.writeOptional(mockInitializer, flaggedIn: &fieldFlags)
 			writer.writeOptional(mockReturnType, flaggedIn: &fieldFlags)
@@ -575,6 +601,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(mockDeclarationModuleName, flaggedIn: &fieldFlags)
 			writer.writeOptional(mockDeclarationPackageName, flaggedIn: &fieldFlags)
 			writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockGenerationArgumentRange, flaggedIn: &fieldFlags)
 			writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
 			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
 			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
@@ -778,8 +805,8 @@ extension AccessDeclaration: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("level", \.level),
 				BinaryLayoutField("spellsAccessModifier", \.spellsAccessModifier),
-				BinaryLayoutField("modifierRange", \.modifierRange),
 				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+				BinaryLayoutField("modifierRange", \.modifierRange),
 				BinaryLayoutField("isExtension", \.isExtension),
 			],
 			unwrittenProperties: [],
@@ -788,11 +815,15 @@ extension AccessDeclaration: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		var fieldFlags = try reader.readFieldFlags()
+		let level: AccessLevel = try reader.read()
+		let spellsAccessModifier = fieldFlags.next()
+		// Before the modifier's range, which belongs to the declaration that begins there.
+		let declarationStartLocation = try reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?
 		try self.init(
-			level: reader.read(),
-			spellsAccessModifier: fieldFlags.next(),
-			modifierRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
-			declarationStartLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			level: level,
+			spellsAccessModifier: spellsAccessModifier,
+			modifierRange: reader.readOptionalRange(flaggedIn: &fieldFlags, unlocatedAs: declarationStartLocation.map { Dependency.SourceRange(owner: $0, part: .accessModifier) }),
+			declarationStartLocation: declarationStartLocation,
 			isExtension: fieldFlags.next(),
 		)
 		try fieldFlags.finish()
@@ -803,8 +834,8 @@ extension AccessDeclaration: BinarySchemaMember {
 		let fieldsStart = writer.startFields()
 		writer.write(level)
 		fieldFlags.append(spellsAccessModifier)
-		writer.writeOptional(modifierRange, flaggedIn: &fieldFlags)
 		writer.writeOptional(declarationStartLocation, flaggedIn: &fieldFlags)
+		writer.writeOptional(modifierRange, flaggedIn: &fieldFlags)
 		fieldFlags.append(isExtension)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
@@ -955,14 +986,19 @@ extension Dependency: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		var fieldFlags = try reader.readFieldFlags()
+		let property: Property = try reader.read()
+		let source: Source = try reader.read()
+		// The ranges belong to the declaration at `declarationLocation`, which rebuilds those written without their lines
+		// and columns.
+		let declarationLocation = try reader.readOptional(flaggedIn: &fieldFlags) as DeclarationLocation?
 		// `asInstantiatedType` is derived from `property` and `source`.
 		try self.init(
-			property: reader.read(),
-			source: reader.read(),
-			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as DeclarationLocation?,
-			identifierRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
-			typeAnnotationRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
-			bareAttributeRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
+			property: property,
+			source: source,
+			declarationLocation: declarationLocation,
+			identifierRange: reader.readOptionalRange(flaggedIn: &fieldFlags, unlocatedAs: declarationLocation.map { SourceRange(owner: $0, part: .identifier) }),
+			typeAnnotationRange: reader.readOptionalRange(flaggedIn: &fieldFlags, unlocatedAs: declarationLocation.map { SourceRange(owner: $0, part: .typeAnnotation) }),
+			bareAttributeRange: reader.readOptionalRange(flaggedIn: &fieldFlags, unlocatedAs: declarationLocation.map { SourceRange(owner: $0, part: .bareAttribute) }),
 		)
 		try fieldFlags.finish()
 	}
@@ -972,9 +1008,6 @@ extension Dependency: BinarySchemaMember {
 		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(source)
-		if case .aliased = source {
-			writer.noteAliasDeclaration(at: declarationLocation)
-		}
 		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
 		writer.writeOptional(identifierRange, flaggedIn: &fieldFlags)
 		writer.writeOptional(typeAnnotationRange, flaggedIn: &fieldFlags)
@@ -1047,8 +1080,9 @@ extension Dependency.SourceRange: BinaryPosition {}
 extension Dependency.DeclarationLocation: BinaryPosition {}
 
 extension Dependency.SourceRange: BinarySchemaMember {
-	/// Each field as its number is written; a range stored elsewhere writes only its start line, `-1`, and the positions
-	/// file holds the four (`BinaryWriter.writeRange(_:)`).
+	/// Each field as its number is written; a range written without its lines and columns, as a module info file writes
+	/// every range, writes only its start line, `-1`, and the declaration it belongs to rebuilds it
+	/// (`BinaryWriter.writeRange(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1058,21 +1092,22 @@ extension Dependency.SourceRange: BinarySchemaMember {
 				BinaryLayoutField("endColumn", \.binaryEndColumn),
 			],
 			// Written as the four fields.
-			unwrittenProperties: ["placement"],
+			unwrittenProperties: ["span"],
 		)
 	}
 
+	/// A range read alone, outside the declaration it belongs to, which holds its lines and columns.
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		self = try reader.readRange()
+		self = try reader.readRange(unlocatedAs: nil)
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.writeRange(self)
 	}
 
-	/// The range's start and end where it holds them; a range stored elsewhere is written as a start line of -1 alone.
+	/// The range's start and end where it holds them; any other range is written as a start line of -1 alone.
 	private var startAndEnd: (startLine: Int, startColumn: Int, endLine: Int, endColumn: Int)? {
-		guard case let .here(startLine, startColumn, endLine, endColumn) = placement else { return nil }
+		guard case let .located(startLine, startColumn, endLine, endColumn) = span else { return nil }
 		return (startLine, startColumn, endLine, endColumn)
 	}
 
@@ -1094,18 +1129,17 @@ extension Dependency.SourceRange: BinarySchemaMember {
 }
 
 extension Dependency.DeclarationLocation: BinarySchemaMember {
-	/// A location no file ranked is written as its file, line and column. A ranked one writes, in place of the line, its
-	/// order negated and doubled, less one where its line and column are stored elsewhere, which then writes nothing
-	/// more, and otherwise followed by its line and column (`BinaryWriter.writeLocation(_:)`).
+	/// A location written with its position is its file, line and column. A module info file writes every location as
+	/// its file and its rank there, negated, in place of the line, and nothing more (`BinaryWriter.writeLocation(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
 				BinaryLayoutField("filePath", \.filePath),
-				BinaryLayoutField("lineOrOrder", \.binaryLineOrOrder),
+				BinaryLayoutField("lineOrNegatedOrder", \.binaryLineOrNegatedOrder),
 				BinaryLayoutField("column", \.binaryColumn),
 			],
-			// Written as `lineOrOrder` and `column`.
-			unwrittenProperties: ["order", "placement"],
+			// Written as `lineOrNegatedOrder` and `column`.
+			unwrittenProperties: ["order", "position"],
 		)
 	}
 
@@ -1117,20 +1151,14 @@ extension Dependency.DeclarationLocation: BinarySchemaMember {
 		writer.writeLocation(self)
 	}
 
-	/// The line where nothing ranked the location, and otherwise its order, negated and doubled, less one where the
-	/// line and column are stored elsewhere.
-	var binaryLineOrOrder: Int {
-		switch placement {
-		case let .here(line, _):
-			order == 0 ? line : -2 * order
-		case .storedElsewhere:
-			-2 * order + 1
-		}
+	/// The line where the location holds a position, and otherwise its order, negated.
+	var binaryLineOrNegatedOrder: Int {
+		position?.line ?? 0 &- order
 	}
 
-	/// The column, written after the line of a location that holds it, and 0, never written, for one stored elsewhere.
+	/// The column, written after the line of a location that holds one, and 0, never written, for one that does not.
 	var binaryColumn: Int {
-		lineAndColumn?.column ?? 0
+		position?.column ?? 0
 	}
 }
 
@@ -1427,7 +1455,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("publicMockPlans", \.publicMockPlans),
 				BinaryLayoutField("view", \.view),
 			],
-			unwrittenProperties: [],
+			// Derived from the locations a read finds.
+			unwrittenProperties: ["locationCountsByFilePath"],
 		)
 	}
 
@@ -1449,6 +1478,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			seamSignatures: fileWithoutView.seamSignatures,
 			publicMockPlans: fileWithoutView.publicMockPlans,
 			view: reader.read(),
+			locationCountsByFilePath: fileWithoutView.locationCountsByFilePath,
 		)
 	}
 
@@ -1472,6 +1502,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 			publicMockPlans: reader.read() as ModulePublicMockPlans,
 			view: .empty,
 		)
+		// The module's own declarations hold every location the file writes.
+		locationCountsByFilePath = reader.highestOrderByFilePath
 	}
 
 	func write(to writer: inout BinaryWriter) {

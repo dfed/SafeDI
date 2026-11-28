@@ -740,7 +740,7 @@ extension MockLowering {
 			fulfillingProperty: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 			bindingName: String?,
 			inScope scope: Set<Property>,
 			indent: String,
@@ -1782,7 +1782,9 @@ extension MockLowering {
 		let isOnlyIfAvailable: Bool
 		/// Whether the alias is only if available of a property unavailable where it is bound, so it is bound to `nil`.
 		let isBoundToNil: Bool
-		let declarationReference: AliasDeclarationReferences.Reference?
+		/// The `@Received` declaration an alias's binding names in a comment, `Type.label`; `nil` for a binding that is no
+		/// alias of a declaration.
+		let declarationReference: String?
 
 		/// The statement that binds the alias, which refers to its declaration as the production tree's does.
 		func bindingLines(indent: String) -> String {

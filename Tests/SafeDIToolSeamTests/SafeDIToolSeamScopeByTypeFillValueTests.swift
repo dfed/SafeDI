@@ -884,44 +884,40 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			feature: Self.lazyRouteFeature(),
 			fulfillers: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "token", ofType: Token.self, onlyIfAvailable: true) let renamed: Token?"#])],
 			root: Self.lazyRouteRoot,
-			expectedAppInSources: { appSources in
-				"""
-				#if canImport(Feature)
-				import Feature
-				#endif
+			expectedApp: """
+			#if canImport(Feature)
+			import Feature
+			#endif
 
-				extension Root {
-				    public init() {
-				        let token = Token()
-				        func __safeDI_office() -> Office {
-				            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
-				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
-				                func __safeDI_userService() -> DefaultUserService {
-				                    #sourceLocation(file: "\(appSources)/DefaultUserService.swift", line: 9)
-				                    let renamed: Token? = token?.instance
-				                    #sourceLocation()
-				                    return DefaultUserService(renamed: renamed)
-				                }
-				                let userService: any UserService = __safeDI_userService()
-				                return userService
-				            }
-				            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
-				                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
-				            }
-				            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
-				                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
-				            }
-				            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
-				                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
-				            }
-				            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
-				        }
-				        let office: Office = __safeDI_office()
-				        self.init(token: token, office: office)
-				    }
-				}
-				"""
-			},
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        func __safeDI_office() -> Office {
+			            _ = Office.__safeDI_Office_B2DE8228FC9538C0.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: LazilyInstantiated<Token>?) -> any UserService {
+			                func __safeDI_userService() -> DefaultUserService {
+			                    let renamed: Token? = token?.instance // Declared as DefaultUserService.renamed
+			                    return DefaultUserService(renamed: renamed)
+			                }
+			                let userService: any UserService = __safeDI_userService()
+			                return userService
+			            }
+			            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+			                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
+			                .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
+			            }
+			            func __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>?) -> Office.__safeDI_UserServiceCarrier_Model<any UserService> {
+			                .init(userService: { __safeDI_userServiceBuilder_Office_Model_Scope_userService(token: token) })
+			            }
+			            return Office(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
+			        }
+			        let office: Office = __safeDI_office()
+			        self.init(token: token, office: office)
+			    }
+			}
+			""",
 		)
 	}
 
@@ -1267,21 +1263,6 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		expectedApp: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
-		try await expectFill(feature: feature, fulfillers: fulfillers, root: root, integration: integration, fulfillersModule: fulfillersModule, probes: probes, expectedAppInSources: { _ in expectedApp }, sourceLocation: sourceLocation)
-	}
-
-	/// `expectFill`, where `App`'s expected file depends on the path of the directory `App`'s sources are written in, which
-	/// `expectedAppInSources` is handed, as a `#sourceLocation` directive names it.
-	private mutating func expectFill(
-		feature: [String],
-		fulfillers: [String],
-		root: String,
-		integration: MultiModuleIntegration = .moduleInfo,
-		fulfillersModule: String? = nil,
-		probes: [DifferentialValueProbe] = [DifferentialValueProbe("Root()")],
-		expectedAppInSources: (String) -> String,
-		sourceLocation: SourceLocation = #_sourceLocation,
-	) async throws {
 		let modules = if let fulfillersModule {
 			[
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
@@ -1292,8 +1273,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: fulfillers + [root])
 		}
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
-		let appSources = output.fixtureRoot.appendingPathComponent("Other").appendingPathComponent("Sources").appendingPathComponent("App").path
-		#expect(output.modules["App"]?.generatedFiles[integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"] == generatedFileHeader + expectedAppInSources(appSources), sourceLocation: sourceLocation)
+		#expect(output.modules["App"]?.generatedFiles[integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"] == generatedFileHeader + expectedApp, sourceLocation: sourceLocation)
 		guard compileVerificationIsEnabled else { return }
 		let visibleModules = SafeDIToolSeamBuilderParameterTests.modules(feature: feature + fulfillers, app: [root])
 		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)

@@ -28,8 +28,8 @@ import Testing
 enum SkippedConfirmingPassChecks {
 	/// An observer that records an issue for each skipped pass whose confirming pass threw or found another signature, then
 	/// hands the pass to `enclosingObserver`.
-	static func recordingDifferences(handingOn enclosingObserver: (@Sendable (SkippedConfirmingPass) -> Void)?) -> @Sendable (SkippedConfirmingPass) -> Void {
-		{ skippedPass in
+	static func recordingDifferences(handingOn enclosingObserver: TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void>?) -> TaskLocalFunction<@Sendable (SkippedConfirmingPass) -> Void> {
+		TaskLocalFunction { skippedPass in
 			if let difference = difference(in: skippedPass) {
 				Issue.record(Comment(rawValue: difference))
 			}

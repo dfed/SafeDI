@@ -105,9 +105,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let serviceAlias: Service? = safeDIOverrides.serviceAlias
 			        func __safeDI_child() -> Child {
 			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -165,9 +163,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -239,9 +235,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -320,9 +314,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -383,9 +375,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -456,9 +446,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let serviceAlias: Service? = safeDIOverrides.serviceAlias
 			        func __safeDI_child() -> Child {
 			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -517,9 +505,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			    ) -> Holder {
 			        func __safeDI_child() -> Child {
 			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -592,9 +578,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -671,9 +655,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -735,9 +717,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -846,9 +826,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -911,9 +889,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -1028,9 +1004,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -1093,9 +1067,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			                return if let safeDIBuilder = safeDIOverrides.child.leafBuilder { safeDIBuilder(leafBuilderAlias) } else { Leaf(leafBuilderAlias: leafBuilderAlias) }
 			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder
-			            #sourceLocation()
+			            let leafBuilderAlias: Instantiator<Leaf>? = leafBuilder // Declared as Child.leafBuilderAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(leafBuilder, leafBuilderAlias) } else { Child(leafBuilder: leafBuilder, leafBuilderAlias: leafBuilderAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -1121,9 +1093,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let serviceAlias = Service(serviceAlias: nil)
 			        func __safeDI_child() -> Child {
 			            let service = Service(serviceAlias: nil)
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return Child(service: service, serviceAlias: serviceAlias)
 			        }
 			        let child: Child = __safeDI_child()
@@ -1181,9 +1151,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        let serviceAlias = if let safeDIBuilder = safeDIOverrides.serviceAlias { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
 			        func __safeDI_child() -> Child {
 			            let service = if let safeDIBuilder = safeDIOverrides.child.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let serviceAlias: Service? = service
-			            #sourceLocation()
+			            let serviceAlias: Service? = service // Declared as Child.serviceAlias
 			            return if let safeDIBuilder = safeDIOverrides.child.safeDIBuilder { safeDIBuilder(service, serviceAlias) } else { Child(service: service, serviceAlias: serviceAlias) }
 			        }
 			        let child: Child = __safeDI_child()
@@ -1227,7 +1195,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 
 		#expect(output.mockFiles == [
-			"Holder+SafeDIMock.swift": generatedFileHeader + Self.expectedLazyCycleAroundAliasMock(fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling, fixtures: output.fixtures),
+			"Holder+SafeDIMock.swift": generatedFileHeader + Self.expectedLazyCycleAroundAliasMock(fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling),
 		], "Unexpected output \(output.mockFiles)")
 		try await expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
 	}
@@ -1313,9 +1281,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
 			            func __safeDI_midBuilder() -> Mid {
 			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			                #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
-			                let serviceAlias: Service? = service
-			                #sourceLocation()
+			                let serviceAlias: Service? = service // Declared as Mid.serviceAlias
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
 			                }
@@ -1382,9 +1348,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
 			            func __safeDI_midBuilder() -> Mid {
 			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
-			                #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
-			                let serviceAlias: Service? = service
-			                #sourceLocation()
+			                let serviceAlias: Service? = service // Declared as Mid.serviceAlias
 			                let aBuilder = Instantiator<A> {
 			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
 			                }
@@ -1421,7 +1385,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 	/// The mock SafeDI generates for `Holder` of `lazyCycleAroundAlias` with nothing else declared: `Mid` builds the
 	/// fulfilling property first, passing its type `nil`, creates the alias from it, and builds `A` again with the alias,
 	/// while `Holder` passes `A`'s builder function the override.
-	private static func expectedLazyCycleAroundAliasMock(fulfillingProperty: FulfillingProperty, withSibling: Bool, fixtures: FixturePaths) -> String {
+	private static func expectedLazyCycleAroundAliasMock(fulfillingProperty: FulfillingProperty, withSibling: Bool) -> String {
 		let label = fulfillingProperty.label
 		let type = fulfillingProperty.typeName
 		let fulfillingPropertyConstruction = switch fulfillingProperty {
@@ -1486,9 +1450,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		        func __safeDI_aBuilder(\(label)Alias: \(type)?) -> A {
 		            func __safeDI_midBuilder() -> Mid {
 		\(fulfillingPropertyConstruction)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: \(withSibling ? 11 : 10))
-		                let \(label)Alias: \(type)? = \(label)
-		                #sourceLocation()
+		                let \(label)Alias: \(type)? = \(label) // Declared as Mid.\(label)Alias
 		\(siblingConstruction)                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(\(label)Alias: \(label)Alias)
 		                }

@@ -1894,7 +1894,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_buildsMockScopesOncePerView_whenThreeTypesAreNamed() async throws {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
-		let output = try await GenerationLayerObservation.$observer.withValue({ _, layer in
+		let output = try await GenerationLayerObservation.$observer.withValue(TaskLocalFunction { _, layer in
 			if case .mockScopes = layer {
 				continuation.yield("mock scopes")
 			}

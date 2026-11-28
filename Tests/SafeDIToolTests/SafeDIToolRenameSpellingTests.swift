@@ -125,13 +125,9 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let fileLogger = FileLogger()
-			        #sourceLocation(file: "\(output.fixtures["FileLogger.swift"])", line: 18)
-			        let logger: any Logger = fileLogger
-			        #sourceLocation()
+			        let logger: any Logger = fileLogger // Declared as Root.logger
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 24)
-			            let sink: any LogSink = logger
-			            #sourceLocation()
+			            let sink: any LogSink = logger // Declared as Child.sink
 			            return Child(sink: sink)
 			        }
 			        let child: Child = __safeDI_child()
@@ -165,13 +161,9 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let fileLogger = FileLogger()
-			        #sourceLocation(file: "\(output.fixtures["FileLogger.swift"])", line: 18)
-			        let logger: any Logger = fileLogger
-			        #sourceLocation()
+			        let logger: any Logger = fileLogger // Declared as Root.logger
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-			            let logger: any Logger = fileLogger
-			            #sourceLocation()
+			            let logger: any Logger = fileLogger // Declared as Child.logger
 			            return Child(logger: logger)
 			        }
 			        let child: Child = __safeDI_child()
@@ -205,13 +197,9 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let fileLogger = FileLogger()
-			        #sourceLocation(file: "\(output.fixtures["FileLogger.swift"])", line: 18)
-			        let logger: any Logger = fileLogger
-			        #sourceLocation()
+			        let logger: any Logger = fileLogger // Declared as Root.logger
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 14)
-			            let sink: any LogSink = logger
-			            #sourceLocation()
+			            let sink: any LogSink = logger // Declared as Child.sink
 			            return Child(sink: sink)
 			        }
 			        let child: Child = __safeDI_child()
@@ -273,13 +261,9 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let fileLogger = FileLogger()
-			        #sourceLocation(file: "\(output.fixtures["FileLogger.swift"])", line: 18)
-			        let logger: any Logger = fileLogger
-			        #sourceLocation()
+			        let logger: any Logger = fileLogger // Declared as Root.logger
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
-			            let sink: any LogSink = logger
-			            #sourceLocation()
+			            let sink: any LogSink = logger // Declared as Child.sink
 			            return Child(sink: sink)
 			        }
 			        let child: Child = __safeDI_child()
@@ -351,12 +335,8 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_child(x: X) -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-			            let a: X? = x
-			            #sourceLocation()
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let b: X? = x
-			            #sourceLocation()
+			            let a: X? = x // Declared as Child.a
+			            let b: X? = x // Declared as Child.b
 			            return Child(a: a, b: b)
 			        }
 			        func __safeDI_available() -> Available {
@@ -366,12 +346,8 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			        }
 			        let available: Available = __safeDI_available()
 			        func __safeDI_unavailable() -> Child {
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-			            let a: X? = nil
-			            #sourceLocation()
-			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			            let b: X? = nil
-			            #sourceLocation()
+			            let a: X? = nil // Declared as Child.a
+			            let b: X? = nil // Declared as Child.b
 			            return Child(a: a, b: b)
 			        }
 			        let unavailable: Child = __safeDI_unavailable()
@@ -435,12 +411,8 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Child {
 			        let x: X? = safeDIOverrides.x
-			        #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-			        let a: X? = x
-			        #sourceLocation()
-			        #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			        let b: X? = x
-			        #sourceLocation()
+			        let a: X? = x // Declared as Child.a
+			        let b: X? = x // Declared as Child.b
 			        return Child(a: a, b: b)
 			    }
 			}

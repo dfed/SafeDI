@@ -418,9 +418,7 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_reader() -> Reader {
-			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-			            let store: Session = session.instance
-			            #sourceLocation()
+			            let store: Session = session.instance // Declared as Reader.store
 			            return Reader(store: store)
 			        }
 			        let reader: Reader = __safeDI_reader()
@@ -667,7 +665,7 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
 		let output = try await NodeRecordsObservation.$laysOutRoots.withValue(true) {
-			try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				try await body(&filesMade)
 			}
 		}

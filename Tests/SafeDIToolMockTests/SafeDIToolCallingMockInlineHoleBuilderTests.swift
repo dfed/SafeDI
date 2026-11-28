@@ -227,6 +227,30 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		])
 	}
 
+	// MARK: Tests – work
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_resolvesWhatPublicMocksModuleSeesOncePerWalk_whenInlineBuiltPublicMockHoldsManyPlaces() async throws {
+		// `G`, built inline by `Root`'s mock, holds one place beside `api` or twenty: the walk of the places built inline
+		// asked at each scope beneath `G` whether `Feat` sees its type, and resolved what `Feat` sees again each time.
+		var resolutions = [Int]()
+		for leafCount in [1, 20] {
+			let modules = Self.modules(rootAttribute: "@Instantiable(generateMock: true)", leafCountOfG: leafCount)
+			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+			_ = try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) { [modules] in
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			}
+			continuation.finish()
+			var resolved = 0
+			for await work in stream where work.step == .resolvingWhatAPublicMocksModuleSees {
+				resolved += work.elementCount
+			}
+			resolutions.append(resolved)
+		}
+		#expect(resolutions == [1, 1])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -475,8 +499,13 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 	/// `Root`, in module `App`, instantiates `F` and `G`, whose public mocks module `Feat` generates, and each instantiates
 	/// `api`, which only `App`'s `Live` fulfills. `F`'s initializer is internal, so `Root`'s mock calls `F`'s mock and
 	/// fills `api`, taking `apiBuilder` for it; `G`'s is public, so the mock builds `G` inline.
-	private static func modules(rootAttribute: String) -> [ModuleFixture] {
-		[
+	/// `G` holds `leafCountOfG` places of `Feat`'s own types beside `api`, which `Feat` sees.
+	private static func modules(rootAttribute: String, leafCountOfG: Int = 0) -> [ModuleFixture] {
+		let leaves = (0..<leafCountOfG).map { "\n\n@Instantiable\npublic struct Leaf\($0): Instantiable {\n    public init() {}\n}" }.joined()
+		let leafProperties = (0..<leafCountOfG).map { "\n    @Instantiated public let leaf\($0): Leaf\($0)" }.joined()
+		let leafParameters = (0..<leafCountOfG).map { ", leaf\($0): Leaf\($0)" }.joined()
+		let leafAssignments = (0..<leafCountOfG).map { "\n        self.leaf\($0) = leaf\($0)" }.joined()
+		return [
 			ModuleFixture(name: "Base", packageName: "Base", swiftFileContentByFilePath: [
 				"BaseTypes.swift": """
 				import SafeDI
@@ -500,13 +529,13 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 
 				@Instantiable(generateMock: .public)
 				public struct G: Instantiable {
-				    public init(api: any Api) {
-				        self.api = api
+				    public init(api: any Api\(leafParameters)) {
+				        self.api = api\(leafAssignments)
 				    }
 
-				    @Instantiated public let api: any Api
+				    @Instantiated public let api: any Api\(leafProperties)
 				}
-				""",
+				""" + leaves,
 			], dependencies: ["Base"]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
 				"AppTypes.swift": """
