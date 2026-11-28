@@ -711,6 +711,12 @@ def e21(text,walk):
                 if inner[1][1:]==outer[1][1:]: return text
                 if outer[1][1]<=inner[1][1] and inner[1][2]<=outer[1][2]:
                     if any(inner[1][1]<=i<=inner[1][2] for i in by_declaration[outer]): return text
+    # what the 04:02Z and 04:25Z rulings added, counted apart: one name of the records given two names of the
+    # walk, or given the plain name
+    given={}
+    for (x,_),y in renamed.items(): given.setdefault(x,set()).add(y)
+    if any(len(names)>1 or (x.endswith('_') and x[:-1] in names) for x,names in given.items()):
+        ALSO_USED.append('21 per function')
     out=[]
     for i,line in enumerate(lines):
         out.append(name.sub(lambda found:renamed[(found.group(0),declaration(found.group(0),i))],line))
@@ -1028,6 +1034,10 @@ def compare(records_path, walk_path):
     except (Exception, SystemExit) as error:  # a shape no rewrite expects, or one a rewrite refuses, fails closed
         return used_none, 'rewrite failed: ' + repr(error)
     if text == walk:
+        held = sorted(set(name for name in used if name in AWAITING_CELLS and not AWAITING_CELLS[name]))
+        if held and not IGNORE_HOLDS:
+            return used, 'held: the texts match after rewrite (entries: %s), but no value cell is named for: %s' % (
+                ', '.join(used), ', '.join(held))
         return used, None
     ours = text.split('\n')
     theirs = walk.split('\n')
@@ -1041,12 +1051,22 @@ def compare(records_path, walk_path):
 
 
 used_none = []
+# Lead, 2026-11-28 04:25Z: an entry approved on the condition that its values are equal counts as unclassified
+# until the tests that compare those values are named. Each entry here lists those tests; an empty list holds
+# every pair the entry is used on, which then prints "held" and not the words a gate reads as equal.
+AWAITING_CELLS = {'18': [], '26': [], '21 per function': []}
+IGNORE_HOLDS = False
 
 def main():
+    global IGNORE_HOLDS
     arguments = sys.argv[1:]
+    if arguments and arguments[0] == '--ignore-holds':  # the self-test's: it tests the rewrites, not the holds
+        IGNORE_HOLDS = True
+        arguments = arguments[1:]
     if len(arguments) == 2 and arguments[0] == '--pairs':
         counts = collections.Counter()
         failures = 0
+        held = 0
         total = 0
         for line in open(arguments[1]).read().splitlines():
             if not line.strip():
@@ -1059,9 +1079,11 @@ def main():
                     counts[name] += 1
             else:
                 failures += 1
+                held += failure.startswith('held: ')
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '23']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '21 per function', '23']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
+        print('held for a value cell: %d pairs' % held)
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
     elif len(arguments) == 2:

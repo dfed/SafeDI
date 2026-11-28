@@ -180,7 +180,7 @@ def equal_after_rewrite(records, walk_path):
     with tempfile.NamedTemporaryFile('w', suffix='.records', delete=False) as file:
         file.write(records)
     try:
-        return subprocess.run([sys.executable, SCRIPT, file.name, walk_path], capture_output=True, timeout=60).returncode == 0
+        return subprocess.run([sys.executable, SCRIPT, '--ignore-holds', file.name, walk_path], capture_output=True, timeout=60).returncode == 0
     except subprocess.TimeoutExpired:
         return False
     finally:
