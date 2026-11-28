@@ -349,6 +349,7 @@ struct SeamPlacesDrafts: Sendable {
 		self.levels = levels.map(withParents)
 		self.closingLevels = closingLevels.map(withParents)
 		self.sites = sites
+		self.families = families
 		variantOrder = order
 		self.world = world
 	}
@@ -360,9 +361,11 @@ struct SeamPlacesDrafts: Sendable {
 	let sites: [SeamPlacesSiteDraft]
 	/// The cases of the seam's own places, a case per site and family.
 	let cases: [SeamPlacesCaseDraft]
+	/// The families each variant's body is built in on the routes to it that reach a place.
+	let families: [SeamPlacesFamilies]
 	/// The variants the walk reached, in the order it reached them.
 	let variantOrder: [VariantID]
-	private let world: TypeFactsGraph
+	let world: TypeFactsGraph
 
 	/// Test only, deleted before merge: how the drafts' levels compare with `places`, the stored place graph of the same
 	/// seam, as lines of a report. A facts level is per declaration and its answers, where a stored level merges every

@@ -177,4 +177,8 @@ public struct NodeRecordsReport: Sendable {
 	/// Whether the root is a mock's: its records are compared with no tree's, so `differences` is empty, and a test
 	/// compares the code laid out from them, or the values that code builds, with the mock's walk's.
 	public var isMockRoot = false
+	/// On a report of its own for a seam's own root, `nil` on every other: each way the drafts of its place graph, read
+	/// off its facts world alone (`SeamPlacesDrafting`), differ from its stored places, a line opening `report:` a count
+	/// and every other a difference. The other fields are empty there.
+	public var placesDraftDifferences: [String]?
 }

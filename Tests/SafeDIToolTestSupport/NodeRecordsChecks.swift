@@ -25,6 +25,8 @@ import Testing
 /// place's node equals the record the tree's place made (`NodeRecordsObservation`). Where `SAFEDI_NODE_RECORDS_REPORT`
 /// names a file, each root's outcome is appended to it as a line: the test, the root, `laid out`, `accepted`, or the
 /// refusal's kind, the count of differences, every refusal the world holds, and `mock` for a mock's root. Where `SAFEDI_NODE_RECORDS_LAY_OUT` is `1`, every root node records accept is laid out from them.
+/// Where `SAFEDI_PLACES_DRAFT_REPORT` names a file, each line of each seam's comparison of its place graph's drafts with
+/// its stored places (`NodeRecordsReport.placesDraftDifferences`) is appended to it, after the test and the seam.
 enum NodeRecordsChecks {
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
@@ -58,8 +60,17 @@ enum NodeRecordsChecks {
 	}
 
 	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
-		try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
+		let placesDraftReportPath = ProcessInfo.processInfo.environment["SAFEDI_PLACES_DRAFT_REPORT"]
+		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$observer.withValue({ report in
+				// A seam's place graph drafted from its facts world is compared with its stored places only in a report until
+				// the drafts are assembled into the places (`SAFEDI_PLACES_DRAFT_REPORT`), and no other observer sees it.
+				if let placesDraftDifferences = report.placesDraftDifferences {
+					if let placesDraftReportPath {
+						append(placesDraftDifferences.map { "\(testName)\t\(report.root)\t\($0)\n" }.joined(), toFileAt: placesDraftReportPath)
+					}
+					return
+				}
 				for difference in report.differences {
 					Issue.record(Comment(rawValue: "Node records differ from the tree’s records of root \(report.root): \(difference)"))
 				}

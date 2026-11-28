@@ -658,6 +658,20 @@ struct TypeFactsGraph: Sendable {
 		self.parents = parents
 		self.fills = fills
 		self.fillPathEntries = fillPathEntries
+		// The holes each call passes up, which the caller's declarations hold no type to fill, each with the case of the
+		// called signature that holds it.
+		var passUpOffsets: [Int32] = [0]
+		var passUps = [TypeFactsPassUp]()
+		for node in nodes {
+			if node.key.leaf == .none, let calledBuilders = node.scope.calledBuilders {
+				for case let (index, .passUp(hole)) in node.scope.holeArguments.enumerated() {
+					passUps.append(TypeFactsPassUp(holeIndex: Int32(index), calledCaseIndex: Int32(calledBuilders.caseIndexBySite[hole.site] ?? -1)))
+				}
+			}
+			passUpOffsets.append(Int32(passUps.count))
+		}
+		self.passUpOffsets = passUpOffsets
+		self.passUps = passUps
 		self.propertyFacts = propertyFacts
 		propertyTable = properties.values
 		typeTable = types.values
@@ -953,6 +967,9 @@ struct TypeFactsGraph: Sendable {
 	let fills: [TypeFactsFill]
 	/// Every fill's path, each fill's in a run.
 	let fillPathEntries: [TypeFactsFillPathEntry]
+	/// Every call's passed-up holes, each node's in a run starting at its offset; the last offset is the count.
+	let passUpOffsets: [Int32]
+	let passUps: [TypeFactsPassUp]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
@@ -976,6 +993,11 @@ struct TypeFactsGraph: Sendable {
 	/// The node's bindings, in the order its scope binds them.
 	func worldBindings(of index: Int) -> ArraySlice<TypeFactsWorldBinding> {
 		bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])]
+	}
+
+	/// The holes the call at the node passes up, in the order of the called signature's holes: empty for any other node.
+	func passUps(of index: Int) -> ArraySlice<TypeFactsPassUp> {
+		passUps[Int(passUpOffsets[index])..<Int(passUpOffsets[index + 1])]
 	}
 
 	/// The node's parents, in the order the walk meets their edges to it.

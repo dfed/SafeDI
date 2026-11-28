@@ -62,6 +62,15 @@ struct TypeFactsFill: Hashable, Sendable {
 	let stackCount: Int32
 }
 
+/// A hole a call passes up: the caller's declarations hold no type that fulfills it, so the seam whose tree makes the call
+/// takes the builder for it from its own caller. Trivially copyable.
+struct TypeFactsPassUp: Hashable, Sendable {
+	/// The hole's position among the called signature's holes.
+	let holeIndex: Int32
+	/// The case of the called signature's places that holds the hole, or -1 where the called graph names none.
+	let calledCaseIndex: Int32
+}
+
 /// One entry of a fill's path: the property built and the concrete type built for it, by the world's IDs.
 struct TypeFactsFillPathEntry: Hashable, Sendable {
 	let property: Int32
