@@ -166,7 +166,7 @@ extension LevelFunctionRecordsObservation {
 			enclosingLevelCalls: [:],
 		)
 		// The fills an override closure of the call is handed a function over take each field of their payload by themselves.
-		let overrideFillKeys = overrideFillKeys(of: call, facts: allFacts, levels: levels, levelFunctions: levelFunctions, in: world)
+		let overrideFillKeys = overrideFillKeys(of: call, facts: allFacts, levels: levels, levelFunctions: levelFunctions, in: world, mockRootHoles: mockRootHoles)
 		var memberParameterFieldsByKey = fillParametersByKey
 		for facts in allFacts where overrideFillKeys.contains(facts.key) && !facts.takesPayloadFields {
 			memberParameterFieldsByKey[facts.key] = facts.payloadFields + facts.parametersTaken
@@ -199,10 +199,14 @@ extension LevelFunctionRecordsObservation {
 	/// The fills an override closure of `call` is handed a function over, as `ScopeGenerator.publicMockOverrideBuilders`
 	/// decides them: none where the called mock takes overrides, or where some builder the call fills is not filled by one
 	/// fill that takes only its payload, of a place that forwards nothing or returns its wrapper's builder, whose payload's
-	/// fields the called mock's hand-written mock takes by label and type.
-	private static func overrideFillKeys(of call: DeclarationID, facts allFacts: [FillFacts], levels: FillDispatchers, levelFunctions: PublicMockLevelFunctions, in world: TypeFactsGraph) -> Set<String> {
+	/// fields the called mock's hand-written mock takes by label and type. Nor where the call passes up a builder it does not
+	/// fill to a mock root built with its builders (`mockRootHoles`), a public mock, whose body holds only the struct its
+	/// caller built, from which no builder a person writes can be made: the call hands that builder's override nothing.
+	private static func overrideFillKeys(of call: DeclarationID, facts allFacts: [FillFacts], levels: FillDispatchers, levelFunctions: PublicMockLevelFunctions, in world: TypeFactsGraph, mockRootHoles: SeamHoles?) -> Set<String> {
 		let scope = world.scope(of: call)
-		guard let publicMockCall = scope.publicMockCall, !publicMockCall.takesOverrides else { return [] }
+		guard let publicMockCall = scope.publicMockCall, !publicMockCall.takesOverrides,
+		      mockRootHoles == nil || levels.builtClosures.count == scope.calledBuilders?.builders.count
+		else { return [] }
 		let builderLabels = Set(levels.builtClosures.map(\.label))
 		var parameterTypesByLabel = [String: TypeDescription]()
 		for argument in scope.instantiable.mockInitializer?.arguments ?? [] where !builderLabels.contains(argument.innerLabel) && parameterTypesByLabel[argument.innerLabel] == nil {
