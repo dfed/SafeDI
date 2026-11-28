@@ -1935,10 +1935,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let passedUpStruct: PassedUpStruct?
 
 		/// The builder or level struct a seam's call passing places up calls its member on, by the name the caller's tree binds
-		/// it under and its type there.
+		/// it under and its type there, and the member read: of the call's own case.
 		struct PassedUpStruct: Sendable {
 			let name: String
 			let type: TypeDescription
+			let caseName: String
+			let member: PassedOnMember
 		}
 	}
 
@@ -3329,10 +3331,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	func generateDOT() async -> String {
-		// A fill is drawn as the property it fills, which its child builds, so the seam call's edge leads to that
-		// property's own edges rather than to an edge from the property to itself.
+		Self.drawnTree(of: self)
+	}
+
+	/// The DOT lines of the tree `root` roots, one line per edge of each place, in the order of a depth-first walk of
+	/// what each place draws: `generateDOT()`'s text. Walked on an explicit stack, since a tree is as deep as the module
+	/// has types.
+	nonisolated static func drawnTree(of root: ScopeGenerator) -> String {
+		var lines = [String]()
+		var generators = [root]
+		while let generator = generators.popLast() {
+			let drawing = generator.dotDrawing
+			lines.append(contentsOf: drawing.lines)
+			generators.append(contentsOf: drawing.drawn.reversed().compactMap(\.generator))
+		}
+		return lines.joined(separator: "\n")
+	}
+
+	/// What one place draws of its own in the DOT graph: an edge to each node it draws, in order, then to each property
+	/// it forwards, sorted, and the generator that draws each drawn node's own edges, if any.
+	struct DOTDrawing {
+		/// The place's own node.
+		let node: String
+		let drawn: [(node: String, generator: ScopeGenerator?)]
+		/// The nodes of the properties the place forwards, sorted.
+		let forwarded: [String]
+
+		var lines: [String] {
+			var lines = [String]()
+			for drawnNode in drawn {
+				lines.append("    \(node) -- \(drawnNode.node)")
+			}
+			for forwardedNode in forwarded {
+				lines.append("    \(node) -- \(forwardedNode)")
+			}
+			return lines
+		}
+	}
+
+	/// What this place draws of its own (`DOTDrawing`). A fill is drawn as the property it fills, which its child builds,
+	/// so the seam call's edge leads to that property's own edges rather than to an edge from the property to itself.
+	nonisolated var dotDrawing: DOTDrawing {
 		if case .fill = scopeData, let child = propertiesToGenerate.first {
-			return await child.generateDOT()
+			return child.dotDrawing
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
 			// A place whose fill another place's stands for (`FillStoodFor`) is drawn where its own fill would be, among
@@ -3372,19 +3413,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for fillStoodFor in fillsStoodForToDraw {
 				drawn.append(("\"\(fillStoodFor.hole.property.asSource)\"", fillsByKey[fillStoodFor.standInKey]))
 			}
-			let instantiatedProperties = drawn.map(\.node)
-			var childDOTs = [String]()
-			for (_, generator) in drawn {
-				if let childDOT = await generator?.generateDOT(), !childDOT.isEmpty {
-					childDOTs.append(childDOT)
-				}
-			}
-
-			let root = scopeData.asDOTNode
-			let forwardedProperties = scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" }
-			return ((instantiatedProperties + forwardedProperties).map {
-				"    \(root) -- \($0)"
-			} + childDOTs).joined(separator: "\n")
+			return DOTDrawing(
+				node: scopeData.asDOTNode,
+				drawn: drawn,
+				forwarded: scopeData.forwardedProperties.sorted().map { "\"\($0.asSource)\"" },
+			)
 		}
 	}
 
@@ -6051,7 +6084,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// ancestor provides it. Receives are considered in sibling order, so the result
 	/// is deterministic, and it matches a plain topological order whenever every
 	/// receive can be honored.
-	private var orderedPropertiesToGenerate: LazyMapSequence<[Int], ScopeGenerator> {
+	nonisolated private var orderedPropertiesToGenerate: LazyMapSequence<[Int], ScopeGenerator> {
 		orderedPropertyToGenerateIndices.lazy.map { self.propertiesToGenerate[$0] }
 	}
 
@@ -7246,10 +7279,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The record of this scope's place where it calls another module's seam and is built by value: its text, with the reads
-	/// of the call's arguments, or `nil` where the type key does not plan it.
+	/// of the call's arguments, or `nil` where the type key does not plan it. Where a test observes it
+	/// (`SeamCallRecordObservation`), the place's record as the engine is to spell it is handed to the test beside its text.
 	nonisolated private func seamCallRecord(
 		of property: Property,
 		instantiable: Instantiable,
+		seamCall: SeamCall,
+		erasedToConcreteExistential: Bool,
 		code: GeneratedCode,
 		declaredFunctionName: String?,
 		unavailableProperties: Set<Property>,
@@ -7261,8 +7297,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
 		      inlinePlaceBuilder == nil,
 		      cycleParameters.isEmpty,
-		      var reads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
+		      let argumentReads = try initializerArgumentReads(of: instantiable, unavailableProperties: unavailableProperties)
 		else { return nil }
+		var reads = argumentReads
 		// A call that passes places up hands the seam a member of the builder or level the caller's tree holds for each: a read
 		// of that struct, typed as the caller's tree binds it. A call that fills a place, or passes a struct no binding of the
 		// tree types, such as one a fill is handed, is not planned.
@@ -7280,6 +7317,50 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
+		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records.
+		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty {
+			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
+			let passedOn = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
+				builderCallArgument.passedUpStruct.map { passedUpStruct in
+					(
+						label: builderCallArgument.label,
+						read: PassedOnRead(calledType: instantiable.concreteInstantiable, builderLabel: builder.label, structType: passedUpStruct.type, caseName: passedUpStruct.caseName, member: passedUpStruct.member),
+						structName: passedUpStruct.name,
+						written: "\(builderCallArgument.label): \(builderCallArgument.value)",
+					)
+				}
+			}
+			var record = BuiltPlaceRecord(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				concreteType: instantiable.concreteInstantiable,
+				isExtension: false,
+				target: .initializer(instantiable.concreteInstantiable),
+				arguments: argumentReads,
+				forwardedProperties: [],
+				cycleParameters: [],
+				callCycleArguments: [],
+				functionName: builderFunctionNames.functionName ?? Self.functionName(toBuild: property),
+				isSendable: buildsInSendableFunction,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lineEnd: "",
+				// The guard line is a statement, so every call declares its builder function.
+				hasFunction: true,
+				children: [],
+				node: PlanNode(),
+			)
+			record.callFields = CallFields(
+				leadingStatement: seamCall.callGuard(for: instantiable.concreteInstantiable),
+				closureArguments: passedOn.map { ClosureArgumentEntry(label: $0.label, value: .passedOn($0.read)) },
+			)
+			observer(SeamCallRecordObservation(
+				text: text,
+				readNames: record.arguments.filter { $0.source != .nil }.map(\.label) + passedOn.map(\.structName),
+				boundNames: [property.label] + (declaredFunctionName.map { [$0] } ?? []),
+				spelledFromRecord: (record.leadingStatement.map { [$0.spelled] } ?? []) + passedOn.map { "\($0.label): \($0.read.member.spelled(on: $0.structName, caseName: $0.read.caseName))" },
+				written: [seamCall.guardLine(for: instantiable.concreteInstantiable)] + passedOn.map(\.written),
+			))
+		}
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
@@ -8434,6 +8515,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
+				// A test that observes node records compares this body with theirs.
+				NodeRecordsObservation.rootBodyObserver?(childCode)
 				return Self.rootCode(of: rootInitializer, writing: consume childCode)
 			}
 		case let .property(
@@ -8663,7 +8746,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The initializer generated for `instantiable`, a root of the dependency tree, or `nil` for a root without
 	/// dependencies, for which nothing is generated (`RootInitializer.init(of:argumentList:)`).
 	@inline(never)
-	private static func rootInitializer(of instantiable: Instantiable) throws -> RootInitializer? {
+	static func rootInitializer(of instantiable: Instantiable) throws -> RootInitializer? {
 		try RootInitializer(of: instantiable, argumentList: instantiable.generateArgumentList())
 	}
 
@@ -9111,9 +9194,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					builderFunctionNames: builderFunctionNames,
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
-			} else if seamCall != nil {
+			} else if let seamCall {
 				// A seam call's forwarded values are bound inside its text, which lists only the reads outside it.
-				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
+				forwardedProperties.isEmpty ? try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings) : nil
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true, rebindings: rebindingLines)
 			}
@@ -9145,8 +9228,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			let code = function.spelled(after: valuesBindingLines, followedBy: lastLine)
-			let record: PlaceRecord? = if seamCall != nil {
-				try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+			let record: PlaceRecord? = if let seamCall {
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: functionName, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
 			} else {
 				try builtRecord(functionName: functionName, hasFunction: true)
 			}
@@ -9199,8 +9282,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let code = GeneratedCode.sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")])
 			// A call of another module's seam is written as its text, which the type key lays out with the reads it lists: its
 			// builder function holds the guard line, which the type key's constructions do not write.
-			let record: PlaceRecord? = if seamCall != nil {
-				try seamCallRecord(of: property, instantiable: instantiable, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
+			let record: PlaceRecord? = if let seamCall {
+				try seamCallRecord(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, declaredFunctionName: hasGeneratedContent ? functionName : nil, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, inlinePlaceBuilder: inlinePlaceBuilder, separatesValuesBindings: separatesValuesBindings)
 			} else if isUnavailableDependency {
 				.alias(Self.recordOfPropertyBoundToNil(property))
 			} else {
@@ -9870,6 +9953,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
+				// A test that observes node records compares this body with theirs.
+				NodeRecordsObservation.rootBodyObserver?(generatedProperties)
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
@@ -12412,7 +12497,12 @@ extension SeamCall {
 	/// from another signature fails to compile there rather than pass `nil` where the initializer expects a value, with a
 	/// comment saying what to do then.
 	func guardLine(for concreteType: TypeDescription) -> String {
-		"_ = \(concreteType.asSource).\(guardTypeName).self\(comment.lineEnd(for: concreteType))"
+		callGuard(for: concreteType).spelled
+	}
+
+	/// The guard line's record, of a call of `concreteType`.
+	func callGuard(for concreteType: TypeDescription) -> CallGuard {
+		CallGuard(calledType: concreteType, guardTypeName: guardTypeName, comment: comment)
 	}
 }
 
