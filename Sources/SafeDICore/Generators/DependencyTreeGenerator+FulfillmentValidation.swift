@@ -193,27 +193,46 @@ extension DependencyTreeGenerator {
 
 	/// The generators, whose code is never started, of the tree of each foreign seam whose initializer takes a builder,
 	/// from the seam's root over the validated scopes, which build the seam inline with the fills this module generates,
-	/// in type order. `validateCycleLabelsArePassable` judges them: inline, the builder function a lazy cycle in the
-	/// seam's tree closes on takes a label as a parameter whose forms include those a fill inside it receives, while the
-	/// seam's own module, which cannot see the fill, judged the parameter without them. So a fill that receives the label
-	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
-	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
+	/// in type order, where the seam's inline world holds a label no one parameter can pass. `validateCycleLabelsArePassable`
+	/// reports them from these trees: inline, the builder function a lazy cycle in the seam's tree closes on takes a label
+	/// as a parameter whose forms include those a fill inside it receives, while the seam's own module, which cannot see the
+	/// fill, judged the parameter without them. So a fill that receives the label in a form no one parameter carries
+	/// together with the forms the seam's tree receives is rejected as its inline build is, with the same error. A hole
+	/// this module does not fill has no scope, and its tree ends there.
+	///
+	/// The per-type facts of the seam's inline world find the labels (`TypeFactsGraph.unpassableCycleLabels()`), so a seam
+	/// whose world holds none builds no tree. A test builds every seam's tree to compare the two
+	/// (`UnpassableCycleLabelObservation.factsObserver`), and returns only those holding a label, as a run does.
 	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
 		var constructionMemo = ConstructionMemo()
 		var generators = [ScopeGenerator]()
-		// A tree no scope of which receives, in two forms, a label a scope of it declares holds no label to report, so its
-		// generators, one per path through a lazy cycle, are not built (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
-		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) where Self.canHoldUnpassableCycleLabel(inTreeRootedAt: scope) {
+		let factsObserver = UnpassableCycleLabelObservation.factsObserver
+		// A tree no scope of which receives, in two forms, a label a scope of it declares holds no label to report, so
+		// neither its world nor its generators, one per path through a lazy cycle, are built
+		// (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
+		let candidates = foreignSeamTypesWithHoles(among: foreignSeamRoots).lazy.compactMap { typeDescriptionToScopeMap[$0] }.filter(Self.canHoldUnpassableCycleLabel(inTreeRootedAt:)).map { scope in
 			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
-			try generators.append(record.createScopeGenerator(
-				in: table,
+			let world = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
+			return (scope: scope, table: table, record: record, world: world, factsLabels: world.unpassableCycleLabels())
+		}
+		for candidate in candidates where !candidate.factsLabels.isEmpty || factsObserver != nil {
+			let generator = try candidate.record.createScopeGenerator(
+				in: candidate.table,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
-			))
-			GenerationLayerObservation.record(.inlineTreeOfForeignSeam(of: scope.instantiable.concreteInstantiable), inRunOf: seams.currentModule.moduleName)
+			)
+			factsObserver?(
+				"\(candidate.scope.instantiable.concreteInstantiable.asSource) inline in \(seams.currentModule.moduleName ?? "nil")",
+				Set(candidate.factsLabels.map { "\(candidate.world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
+				Set(generator.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
+			)
+			if !candidate.factsLabels.isEmpty {
+				generators.append(generator)
+				GenerationLayerObservation.record(.inlineTreeOfForeignSeam(of: candidate.scope.instantiable.concreteInstantiable), inRunOf: seams.currentModule.moduleName)
+			}
 		}
 		return generators
 	}
