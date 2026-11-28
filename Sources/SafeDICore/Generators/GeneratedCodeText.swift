@@ -52,6 +52,89 @@ enum GeneratedCodeText {
 		return String(decoding: result, as: UTF8.self)
 	}
 
+	/// The lines of `code`, empty ones included: the same strings as
+	/// `code.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)`.
+	static func lines(of code: String) -> [String] {
+		var code = code
+		return code.withUTF8 { bytes in
+			lineRanges(in: bytes).map { line in String(decoding: UnsafeBufferPointer(rebasing: bytes[line]), as: UTF8.self) }
+		}
+	}
+
+	/// `code` with `whitespace` before each of its lines, empty ones included: the same bytes as
+	/// `code.split(separator: "\n", omittingEmptySubsequences: false).map { whitespace + $0 }.joined(separator: "\n")`.
+	static func indentingLines(of code: String, by whitespace: String) -> String {
+		let indentation = Array(whitespace.utf8)
+		var code = code
+		let result = code.withUTF8 { bytes in
+			let lines = lineRanges(in: bytes)
+			var result = [UInt8]()
+			result.reserveCapacity(bytes.count + lines.count * indentation.count)
+			for (index, line) in lines.enumerated() {
+				if index > 0 {
+					result.append(UInt8(ascii: "\n"))
+				}
+				result.append(contentsOf: indentation)
+				result.append(contentsOf: UnsafeBufferPointer(rebasing: bytes[line]))
+			}
+			return result
+		}
+		return String(decoding: result, as: UTF8.self)
+	}
+
+	/// Whether `code` holds `identifier` as a whole run of letters, numbers and underscores: the same answer as
+	/// `code.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(identifier))`.
+	/// Where both are ASCII it compares bytes: each ASCII byte is a `Character` of its own but for `"\r\n"`, which is no
+	/// letter, number or underscore, so a run is a span of `[A-Za-z0-9_]` bytes, and two ASCII runs are equal exactly
+	/// when their bytes are. Anywhere else it asks that expression, since `Character`s compare by canonical equivalence:
+	/// `"é"` equals `"e\u{301}"`, and the Kelvin sign equals `"K"`, though their bytes differ.
+	static func containsIdentifier(_ identifier: String, in code: String) -> Bool {
+		let needle = Array(identifier.utf8)
+		let haystack = Array(code.utf8)
+		if needle.allSatisfy({ $0 < 0x80 }), haystack.allSatisfy({ $0 < 0x80 }) {
+			// Splitting omits empty runs, so no run is empty, and no run is longer than `code`.
+			guard !needle.isEmpty, needle.allSatisfy(isASCIIIdentifierByte), haystack.count >= needle.count else { return false }
+			return haystack.indices.dropLast(needle.count - 1).contains { start in
+				let end = start + needle.count
+				return (start == 0 || !isASCIIIdentifierByte(haystack[start - 1]))
+					&& (end == haystack.count || !isASCIIIdentifierByte(haystack[end]))
+					&& haystack[start..<end].elementsEqual(needle)
+			}
+		} else {
+			// safedi-source-rule: allow stringScan — only for code or an identifier with a byte outside ASCII, which the byte search above cannot match as `Character`s do.
+			return code.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "_") }).contains(Substring(identifier))
+		}
+	}
+
+	/// Whether an ASCII byte is a letter, a digit or an underscore: the ASCII `Character`s that are letters, numbers or
+	/// `"_"`.
+	private static func isASCIIIdentifierByte(_ byte: UInt8) -> Bool {
+		switch byte {
+		case UInt8(ascii: "a")...UInt8(ascii: "z"),
+		     UInt8(ascii: "A")...UInt8(ascii: "Z"),
+		     UInt8(ascii: "0")...UInt8(ascii: "9"),
+		     UInt8(ascii: "_"):
+			true
+		default:
+			false
+		}
+	}
+
+	/// The range of each line of `bytes`, empty ones included, as splitting on `"\n"` finds them: `"\r\n"` is one
+	/// `Character`, which is no `"\n"`, so its line feed ends no line. A line feed is a `Character` of its own everywhere else.
+	private static func lineRanges(in bytes: UnsafeBufferPointer<UInt8>) -> [Range<Int>] {
+		let lineFeed = UInt8(ascii: "\n")
+		let carriageReturn = UInt8(ascii: "\r")
+		var ranges = [Range<Int>]()
+		var lineStart = bytes.startIndex
+		for index in bytes.indices where bytes[index] == lineFeed && (index == bytes.startIndex || bytes[index - 1] != carriageReturn) {
+			ranges.append(lineStart..<index)
+			lineStart = index + 1
+		}
+		ranges.append(lineStart..<bytes.endIndex)
+		return ranges
+	}
+
 	/// The name a mock gives what it reads from the override at `nodePath`, a path of labels below
 	/// `safeDIOverrides` joined by `.`: the path without each `safeDIOverrides.`, its labels joined by `_`. The same bytes
 	/// as Foundation’s replacing every `"safeDIOverrides."` with `""` and then every `"."` with `"_"`, unless a `.` forms

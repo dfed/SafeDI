@@ -208,7 +208,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -222,7 +222,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -244,7 +244,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.part = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(part: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -258,7 +258,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -268,12 +268,12 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_gearBuilder: SafeDIScope_Gear.__safeDI_Builder<any Gear>) {
 				        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session))
 				        let __safeDI_gearBuilder_inner_widgetBuilder = __safeDI_gearBuilder.inner_widgetBuilder(SafeDIScope_Gear.inner_widgetBuilder_Values(session: session))
-				        func __safeDI_inner() -> Inner {
+				        @inline(never) func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder_gadgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_inner_widgetBuilder_gearBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
+				            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder_gadgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_inner_widgetBuilder_gearBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_part() -> Part {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_6EBD3668CBE30F42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				                        return Part(__safeDI_gearBuilder: __safeDI_inner_widgetBuilder_gearBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
@@ -284,7 +284,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            func __safeDI_widgetBuilder_Inner(up_inner_widgetBuilder_gadgetBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetBuilder_gearBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) func __safeDI_widgetBuilder_Inner(up_inner_widgetBuilder_gadgetBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetBuilder_gearBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_inner_widgetBuilder_gadgetBuilder: up_inner_widgetBuilder_gadgetBuilder.widget(scope_analytics), __safeDI_inner_widgetBuilder_gearBuilder: up_inner_widgetBuilder_gearBuilder.widget(scope_analytics)) })
 				            }
 				            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up_inner_widgetBuilder_gadgetBuilder: __safeDI_gadgetBuilder_inner_widgetBuilder, up_inner_widgetBuilder_gearBuilder: __safeDI_gearBuilder_inner_widgetBuilder))
@@ -322,7 +322,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -340,7 +340,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -358,7 +358,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.part = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(part: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -376,7 +376,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -384,14 +384,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_gearSendableBuilder: SafeDISendableScope_Gear.__safeDI_Builder<any Gear>) {
-				        func __safeDI_shell() -> Shell {
+				        @inline(never) func __safeDI_shell() -> Shell {
 				            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 				            let __safeDI_gearSendableBuilder_shell_widgetSendableBuilder = __safeDI_gearSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gear.shell_widgetSendableBuilder_Values())
 				            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_part() -> Part {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_6EBD3668CBE30F42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				                        return Part(__safeDI_gearBuilder: __safeDI_shell_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
@@ -402,10 +402,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: up_shell_widgetSendableBuilder_gadgetSendableBuilder.innerBuilder(), up_shell_widgetSendableBuilder_gearSendableBuilder: up_shell_widgetSendableBuilder_gearSendableBuilder.innerBuilder()) })
 				            }
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: up_shell_widgetSendableBuilder_gadgetSendableBuilder.widget(scope_analytics), __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: up_shell_widgetSendableBuilder_gearSendableBuilder.widget(scope_analytics)) })
 				            }
 				            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder, up_shell_widgetSendableBuilder_gearSendableBuilder: __safeDI_gearSendableBuilder_shell_widgetSendableBuilder))
@@ -443,7 +443,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -461,7 +461,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.inner_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -479,7 +479,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.part = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(part: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -497,7 +497,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.inner_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -505,14 +505,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_gearSendableBuilder: SafeDISendableScope_Gear.__safeDI_Builder<any Gear>) {
-				        func __safeDI_inner() -> Inner {
+				        @inline(never) func __safeDI_inner() -> Inner {
 				            let __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gadget.inner_widgetSendableBuilder_Values())
 				            let __safeDI_gearSendableBuilder_inner_widgetSendableBuilder = __safeDI_gearSendableBuilder.inner_widgetSendableBuilder(SafeDISendableScope_Gear.inner_widgetSendableBuilder_Values())
 				            _ = Inner.__safeDI_Inner_1A9C10F553C3A46C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(_ scope_analytics: Analytics, _ scope_clock: Clock, __safeDI_inner_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_inner_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(_ scope_analytics: Analytics, _ scope_clock: Clock, __safeDI_inner_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_inner_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_part() -> Part {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_6EBD3668CBE30F42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				                        return Part(__safeDI_gearBuilder: __safeDI_inner_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
@@ -523,10 +523,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner(up_inner_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner(up_inner_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope(up_inner_widgetSendableBuilder_gadgetSendableBuilder: up_inner_widgetSendableBuilder_gadgetSendableBuilder.panelBuilder(), up_inner_widgetSendableBuilder_gearSendableBuilder: up_inner_widgetSendableBuilder_gearSendableBuilder.panelBuilder()) })
 				            }
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope(up_inner_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope(up_inner_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_inner_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
 				                .init(widget: { scope_analytics, scope_clock in __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(scope_analytics, scope_clock, __safeDI_inner_widgetSendableBuilder_gadgetSendableBuilder: up_inner_widgetSendableBuilder_gadgetSendableBuilder.widget(scope_analytics, scope_clock), __safeDI_inner_widgetSendableBuilder_gearSendableBuilder: up_inner_widgetSendableBuilder_gearSendableBuilder.widget(scope_analytics, scope_clock)) })
 				            }
 				            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner(up_inner_widgetSendableBuilder_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_inner_widgetSendableBuilder, up_inner_widgetSendableBuilder_gearSendableBuilder: __safeDI_gearSendableBuilder_inner_widgetSendableBuilder))
@@ -564,7 +564,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -582,7 +582,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -600,7 +600,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.part = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(part: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -618,7 +618,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -626,14 +626,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_gearSendableBuilder: SafeDISendableScope_Gear.__safeDI_Builder<any Gear>) {
-				        func __safeDI_shell() -> Shell {
+				        @inline(never) func __safeDI_shell() -> Shell {
 				            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 				            let __safeDI_gearSendableBuilder_shell_widgetSendableBuilder = __safeDI_gearSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gear.shell_widgetSendableBuilder_Values())
 				            _ = Shell.__safeDI_Shell_C22D2AA049360CFC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(_ scope_analytics: Analytics, _ scope_clock: Clock, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(_ scope_analytics: Analytics, _ scope_clock: Clock, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>, __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_part() -> Part {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) func __safeDI_part() -> Part {
 				                        _ = Part.__safeDI_Part_6EBD3668CBE30F42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				                        return Part(__safeDI_gearBuilder: __safeDI_shell_widgetSendableBuilder_gearSendableBuilder.part(SafeDIScope_Gear.DefaultWidget_Scope.part_Values()))
 				                    }
@@ -644,13 +644,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(innerBuilder_Sendable: __safeDI_widgetSendableBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: up_shell_widgetSendableBuilder_gadgetSendableBuilder.innerBuilder_Sendable, up_shell_widgetSendableBuilder_gearSendableBuilder: up_shell_widgetSendableBuilder_gearSendableBuilder.innerBuilder_Sendable))
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetSendableCarrier<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope(up_shell_widgetSendableBuilder_gadgetSendableBuilder: up_shell_widgetSendableBuilder_gadgetSendableBuilder.panelBuilder(), up_shell_widgetSendableBuilder_gearSendableBuilder: up_shell_widgetSendableBuilder_gearSendableBuilder.panelBuilder()) })
 				            }
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope(up_shell_widgetSendableBuilder_gadgetSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>, up_shell_widgetSendableBuilder_gearSendableBuilder: Inner.__safeDI_WidgetCarrier_Panel<SafeDIScope_Gear.DefaultWidget_Scope.__safeDI_Builder<any Gear>>) -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
 				                .init(widget: { scope_analytics, scope_clock in __safeDI_widgetSendableBuilder_Inner_Panel_Scope_widget(scope_analytics, scope_clock, __safeDI_shell_widgetSendableBuilder_gadgetSendableBuilder: up_shell_widgetSendableBuilder_gadgetSendableBuilder.widget(scope_analytics, scope_clock), __safeDI_shell_widgetSendableBuilder_gearSendableBuilder: up_shell_widgetSendableBuilder_gearSendableBuilder.widget(scope_analytics, scope_clock)) })
 				            }
 				            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up_shell_widgetSendableBuilder_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder, up_shell_widgetSendableBuilder_gearSendableBuilder: __safeDI_gearSendableBuilder_shell_widgetSendableBuilder))
@@ -929,7 +929,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -950,7 +950,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.holderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(holderBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -964,7 +964,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -972,13 +972,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
-			                    @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
 			                        let __safeDI_gadgetSendableBuilder_holderBuilder = __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.holderBuilder(SafeDISendableScope_Gadget.DefaultWidget_Scope.holderBuilder_Values())
 			                        let analytics = Analytics()
 			                        let gadget: any Gadget = __safeDI_gadgetSendableBuilder_holderBuilder.gadget(SafeDIScope_Gadget.Holder_Scope.gadget_Values(analytics: analytics))
@@ -990,10 +990,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell())
@@ -1083,7 +1083,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1104,7 +1104,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.deepShell_yarnSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(deepShell_yarnSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -1118,7 +1118,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -1126,26 +1126,26 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_deepShell() -> DeepShell {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) func __safeDI_deepShell() -> DeepShell {
 			                        let __safeDI_gadgetSendableBuilder_deepShell_yarnSendableBuilder = __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.deepShell_yarnSendableBuilder(SafeDISendableScope_Gadget.DefaultWidget_Scope.deepShell_yarnSendableBuilder_Values())
 			                        _ = DeepShell.__safeDI_DeepShell_2F81867793363127.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			                        @Sendable nonisolated func __safeDI_yarnBuilder_Deep_yarn(__safeDI_deepShell_yarnSendableBuilder: SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>) -> any Yarn {
-			                            func __safeDI_yarn() -> DefaultYarn {
+			                        @inline(never) @Sendable nonisolated func __safeDI_yarnBuilder_Deep_yarn(__safeDI_deepShell_yarnSendableBuilder: SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>) -> any Yarn {
+			                            @inline(never) func __safeDI_yarn() -> DefaultYarn {
 			                                let gadget: any Gadget = __safeDI_deepShell_yarnSendableBuilder.gadget(SafeDIScope_Gadget.DefaultYarn_Scope.gadget_Values())
 			                                return DefaultYarn(gadget: gadget)
 			                            }
 			                            let yarn: any Yarn = __safeDI_yarn()
 			                            return yarn
 			                        }
-			                        @Sendable nonisolated func __safeDI_yarnSendableBuilder_DeepShell(up: DeepShell.__safeDI_YarnSendableCarrier<SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>>) -> DeepShell.__safeDI_YarnSendableCarrier<any Yarn> {
+			                        @inline(never) @Sendable nonisolated func __safeDI_yarnSendableBuilder_DeepShell(up: DeepShell.__safeDI_YarnSendableCarrier<SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>>) -> DeepShell.__safeDI_YarnSendableCarrier<any Yarn> {
 			                            .init(deepBuilder: { __safeDI_yarnBuilder_Deep(up: up.deepBuilder()) })
 			                        }
-			                        @Sendable nonisolated func __safeDI_yarnBuilder_Deep(up: Deep.__safeDI_YarnCarrier<SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>>) -> Deep.__safeDI_YarnCarrier<any Yarn> {
+			                        @inline(never) @Sendable nonisolated func __safeDI_yarnBuilder_Deep(up: Deep.__safeDI_YarnCarrier<SafeDIScope_Gadget.DefaultYarn_Scope.__safeDI_Builder<any Gadget>>) -> Deep.__safeDI_YarnCarrier<any Yarn> {
 			                            .init(yarn: { __safeDI_yarnBuilder_Deep_yarn(__safeDI_deepShell_yarnSendableBuilder: up.yarn()) })
 			                        }
 			                        return DeepShell(__safeDI_yarnSendableBuilder: __safeDI_yarnSendableBuilder_DeepShell(up: __safeDI_gadgetSendableBuilder_deepShell_yarnSendableBuilder))
@@ -1156,10 +1156,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell())
@@ -1270,7 +1270,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -1288,7 +1288,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -1296,13 +1296,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-				        func __safeDI_shell() -> Shell {
+				        @inline(never) func __safeDI_shell() -> Shell {
 				            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 				            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    func __safeDI_gadget() -> any Gadget {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) func __safeDI_gadget() -> any Gadget {
 				                        __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 				                    }
 				                    let gadget = LazilyInstantiated<any Gadget>(__safeDI_gadget)
@@ -1311,10 +1311,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 				            }
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 				            }
 				            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -1352,7 +1352,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -1366,7 +1366,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-				                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                self.init(shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				            }
 				        }
 				    }
@@ -1374,13 +1374,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-				        func __safeDI_shell() -> Shell {
+				        @inline(never) func __safeDI_shell() -> Shell {
 				            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 				            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
 				                let analytics = scope_analytics
-				                func __safeDI_widget() -> DefaultWidget {
-				                    @Sendable nonisolated func __safeDI_gadget() -> any Gadget {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
+				                    @inline(never) @Sendable nonisolated func __safeDI_gadget() -> any Gadget {
 				                        __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.gadget(SafeDISendableScope_Gadget.DefaultWidget_Scope.gadget_Values())
 				                    }
 				                    let gadget = SendableLazilyInstantiated<any Gadget>(__safeDI_gadget)
@@ -1389,10 +1389,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 				                .init(innerBuilder: { __safeDI_widgetBuilder_Inner() })
 				            }
-				            @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics) })
 				            }
 				            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell())
@@ -1706,7 +1706,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -1724,7 +1724,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -1732,21 +1732,21 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -1846,7 +1846,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.hostBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(hostBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -1860,7 +1860,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.gadget = { _ in __safeDI_builder() }
+			                self.init(gadget: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -1882,7 +1882,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.hostBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(hostBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -1898,8 +1898,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -1907,13 +1906,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_hostBuilder() -> Host {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) func __safeDI_hostBuilder() -> Host {
 			                        _ = Host.__safeDI_Host_4123A8AD31012EAA.self
 			                        return Host(__safeDI_gadgetBuilder: __safeDI_shell_widgetSendableBuilder.hostBuilder(SafeDIScope_Gadget.DefaultWidget_Scope.hostBuilder_Values()), __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
 			                    }
@@ -1923,10 +1922,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -2022,7 +2021,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.holderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(holderBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -2039,7 +2038,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2053,7 +2052,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -2062,13 +2061,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session))
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let __safeDI_gadgetBuilder_holderBuilder = __safeDI_inner_widgetBuilder.holderBuilder(SafeDIScope_Gadget.DefaultWidget_Scope.holderBuilder_Values())
-			                    func __safeDI_holderBuilder() -> Holder {
+			                    @inline(never) func __safeDI_holderBuilder() -> Holder {
 			                        let gadget: any Gadget = __safeDI_gadgetBuilder_holderBuilder.gadget(SafeDIScope_Gadget.Holder_Scope.gadget_Values())
 			                        return Holder(analytics: analytics, gadget: gadget)
 			                    }
@@ -2078,7 +2077,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_inner_widgetBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up: __safeDI_gadgetBuilder_inner_widgetBuilder))
@@ -2163,7 +2162,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2184,7 +2183,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.holderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(holderBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -2198,7 +2197,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.inner_widgetBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(inner_widgetBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -2207,12 +2206,12 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let __safeDI_gadgetSendableBuilder_inner_widgetBuilder_Sendable = __safeDI_gadgetSendableBuilder.inner_widgetBuilder_Sendable(SafeDISendableScope_Gadget.inner_widgetBuilder_Sendable_Values())
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
-			                    @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) @Sendable nonisolated func __safeDI_holderBuilder() -> Holder {
 			                        let __safeDI_gadgetSendableBuilder_holderBuilder = __safeDI_gadgetSendableBuilder_inner_widgetBuilder_Sendable.holderBuilder(SafeDISendableScope_Gadget.DefaultWidget_Scope.holderBuilder_Values())
 			                        let analytics = Analytics()
 			                        let gadget: any Gadget = __safeDI_gadgetSendableBuilder_holderBuilder.gadget(SafeDIScope_Gadget.Holder_Scope.gadget_Values(analytics: analytics))
@@ -2224,7 +2223,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics) })
 			            }
 			            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
@@ -2299,13 +2298,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_part() -> Part {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) func __safeDI_part() -> Part {
 			                        _ = Part.__safeDI_Part_6EBD3668CBE30F42.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			                        func __safeDI_gearBuilder_Part() -> Part.__safeDI_GearCarrier<any Gear> {
+			                        @inline(never) func __safeDI_gearBuilder_Part() -> Part.__safeDI_GearCarrier<any Gear> {
 			                            .init(gear: {
 			                                let gear: any Gear = DefaultGear()
 			                                return gear
@@ -2319,10 +2318,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell() -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner() })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell())
@@ -2375,10 +2374,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session) {
-			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			        @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 			            .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
 			        }
-			        @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+			        @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
 			            .init(widget: { scope_analytics, scope_clock in
 			                let analytics = scope_analytics
 			                let clock = scope_clock
@@ -2386,7 +2385,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                return widget
 			            })
 			        }
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_1A9C10F553C3A46C.self\(seamCallComment(seam: "Inner", module: "Feature"))
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
 			        }
@@ -2469,7 +2468,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.subB_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(subB_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -2486,7 +2485,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2508,8 +2507,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.topBuilder_firstBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.topBuilder_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(topBuilder_firstBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, topBuilder_secondBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -2517,14 +2515,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        @Sendable nonisolated func __safeDI_topBuilder() -> Top {
+			        @inline(never) @Sendable nonisolated func __safeDI_topBuilder() -> Top {
 			            let __safeDI_gadgetSendableBuilder_topBuilder_firstBuilder = __safeDI_gadgetSendableBuilder.topBuilder_firstBuilder(SafeDISendableScope_Gadget.topBuilder_firstBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_topBuilder_secondBuilder = __safeDI_gadgetSendableBuilder.topBuilder_secondBuilder(SafeDISendableScope_Gadget.topBuilder_secondBuilder_Values())
 			            _ = Top.__safeDI_Top_9F42E50147BFAB2E.self\(seamCallComment(seam: "Top", module: "Feature"))
-			            func __safeDI_firstBuilder_SubA_first(__safeDI_topBuilder_firstBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
-			                func __safeDI_first() -> DefaultFirst {
+			            @inline(never) func __safeDI_firstBuilder_SubA_first(__safeDI_topBuilder_firstBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
+			                @inline(never) func __safeDI_first() -> DefaultFirst {
 			                    let __safeDI_gadgetSendableBuilder_subB_secondBuilder = __safeDI_topBuilder_firstBuilder.subB_secondBuilder(SafeDIScope_Gadget.DefaultFirst_Scope.subB_secondBuilder_Values())
-			                    func __safeDI_subB() -> SubB {
+			                    @inline(never) func __safeDI_subB() -> SubB {
 			                        _ = SubB.__safeDI_SubB_3200C917631BE20F.self\(seamCallComment(seam: "SubB", module: "Feature"))
 			                        return SubB(__safeDI_secondBuilder: __safeDI_secondBuilder_SubB(up: __safeDI_gadgetSendableBuilder_subB_secondBuilder))
 			                    }
@@ -2534,24 +2532,24 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let first: any First = __safeDI_first()
 			                return first
 			            }
-			            func __safeDI_secondBuilder_SubB_second(__safeDI_topBuilder_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
-			                func __safeDI_second() -> DefaultSecond {
+			            @inline(never) func __safeDI_secondBuilder_SubB_second(__safeDI_topBuilder_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+			                @inline(never) func __safeDI_second() -> DefaultSecond {
 			                    let gadget: any Gadget = __safeDI_topBuilder_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 			                    return DefaultSecond(gadget: gadget)
 			                }
 			                let second: any Second = __safeDI_second()
 			                return second
 			            }
-			            func __safeDI_firstBuilder_Top(up: Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_FirstCarrier<any First> {
+			            @inline(never) func __safeDI_firstBuilder_Top(up: Top.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_FirstCarrier<any First> {
 			                .init(subA: __safeDI_firstBuilder_SubA(up: up.subA))
 			            }
-			            func __safeDI_firstBuilder_SubA(up: SubA.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> SubA.__safeDI_FirstCarrier<any First> {
+			            @inline(never) func __safeDI_firstBuilder_SubA(up: SubA.__safeDI_FirstCarrier<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> SubA.__safeDI_FirstCarrier<any First> {
 			                .init(first: { __safeDI_firstBuilder_SubA_first(__safeDI_topBuilder_firstBuilder: up.first()) })
 			            }
-			            func __safeDI_secondBuilder_Top(up: Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_SecondCarrier<any Second> {
+			            @inline(never) func __safeDI_secondBuilder_Top(up: Top.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_SecondCarrier<any Second> {
 			                .init(subB: __safeDI_secondBuilder_SubB(up: up.subB))
 			            }
-			            func __safeDI_secondBuilder_SubB(up: SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> SubB.__safeDI_SecondCarrier<any Second> {
+			            @inline(never) func __safeDI_secondBuilder_SubB(up: SubB.__safeDI_SecondCarrier<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> SubB.__safeDI_SecondCarrier<any Second> {
 			                .init(second: { __safeDI_secondBuilder_SubB_second(__safeDI_topBuilder_secondBuilder: up.second()) })
 			            }
 			            return Top(__safeDI_firstBuilder: __safeDI_firstBuilder_Top(up: __safeDI_gadgetSendableBuilder_topBuilder_firstBuilder), __safeDI_secondBuilder: __safeDI_secondBuilder_Top(up: __safeDI_gadgetSendableBuilder_topBuilder_secondBuilder))
@@ -2692,7 +2690,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2715,7 +2713,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.otherBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(otherBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -2731,8 +2729,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -2740,14 +2737,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_otherBuilder() -> Other {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) func __safeDI_otherBuilder() -> Other {
 			                        _ = Other.__safeDI_Other_18A1B77BC02A5E93.self
 			                        return Other(__safeDI_session: session, __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.otherBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.otherBuilder_Sendable_Values()))
 			                    }
@@ -2758,10 +2755,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -2793,7 +2790,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session: @autoclosure @escaping @Sendable () -> Session, __safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
-			        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
+			        @inline(never) @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 			            _ = Host.__safeDI_Host_4291DD537A0A5962.self
 			            return Host(__safeDI_session: session.instance, __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder.hostBuilder_Sendable())
 			        }
@@ -2842,7 +2839,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2865,7 +2862,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.hostBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(hostBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -2881,8 +2878,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -2890,14 +2886,14 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
-			                    func __safeDI_hostBuilder() -> Host {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) func __safeDI_hostBuilder() -> Host {
 			                        _ = Host.__safeDI_Host_2A6BC3CCAE6E5EE1.self
 			                        return Host(__safeDI_session: session, __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
 			                    }
@@ -2908,10 +2904,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -2964,7 +2960,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -2987,7 +2983,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.hostBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(hostBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -3003,8 +2999,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -3014,13 +3009,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    public init(__safeDI_user: @autoclosure @escaping @Sendable () -> User, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 			        let account = Account(user: user.instance)
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 			                        _ = Host.__safeDI_Host_A2BF3A9AF8958F6D.self
 			                        return Host(__safeDI_user: user.instance, __safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
 			                    }
@@ -3031,10 +3026,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -3117,7 +3112,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3135,7 +3130,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shellMaker_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(shellMaker_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3143,22 +3138,22 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        @Sendable nonisolated func __safeDI_shellMaker() -> Shell {
+			        @inline(never) @Sendable nonisolated func __safeDI_shellMaker() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shellMaker_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shellMaker_widgetSendableBuilder(SafeDISendableScope_Gadget.shellMaker_widgetSendableBuilder_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shellMaker_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shellMaker_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
 			                let analytics = scope_analytics
-			                func __safeDI_widget() -> DefaultWidget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_shellMaker_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(analytics: analytics, gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shellMaker_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shellMaker_widgetSendableBuilder))
@@ -3248,7 +3243,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3269,7 +3264,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                    self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			                }
 			            }
 			        }
@@ -3283,7 +3278,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.holderMaker_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(holderMaker_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -3291,24 +3286,24 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        @Sendable nonisolated func __safeDI_holderMaker() -> ShellHolder {
+			        @inline(never) @Sendable nonisolated func __safeDI_holderMaker() -> ShellHolder {
 			            let __safeDI_gadgetSendableBuilder_holderMaker_Sendable = __safeDI_gadgetSendableBuilder.holderMaker_Sendable(SafeDISendableScope_Gadget.holderMaker_Sendable_Values())
 			            let bag = Bag()
-			            func __safeDI_shell() -> Shell {
+			            @inline(never) func __safeDI_shell() -> Shell {
 			                let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder_holderMaker_Sendable.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.ShellHolder_Scope.shell_widgetSendableBuilder_Values())
 			                _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			                @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                    func __safeDI_widget() -> DefaultWidget {
+			                @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                    @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                        let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                        return DefaultWidget(gadget: gadget)
 			                    }
 			                    let widget: any Widget = __safeDI_widget()
 			                    return widget
 			                }
-			                @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			                @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                    .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			                }
-			                @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			                @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                    .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			                }
 			                return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -3364,7 +3359,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3387,7 +3382,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                    self.hostBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.init(hostBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			                }
 			            }
 			        }
@@ -3403,8 +3398,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
-			                self.shell_widgetSendableBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }, shell_widgetSendableBuilder_Sendable: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -3412,17 +3406,17 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_itemMaker() -> Item {
+			        @inline(never) func __safeDI_itemMaker() -> Item {
 			            Item()
 			        }
 			        let itemMaker = Instantiator<Item>(__safeDI_itemMaker)
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder_Sendable(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Sendable_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
-			                    @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
+			                    @inline(never) @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 			                        _ = Host.__safeDI_Host_163AE1FD796934CA.self
 			                        return Host(__safeDI_gadgetSendableBuilder: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder_Sendable.hostBuilder_Sendable(SafeDISendableScope_Gadget.DefaultWidget_Scope.hostBuilder_Sendable_Values()))
 			                    }
@@ -3433,10 +3427,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -3508,7 +3502,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3522,7 +3516,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3531,31 +3525,31 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values())
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_2788B70329D6DF6A.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            func __safeDI_widgetBuilder_Inner_A_Scope_widget(_ scope_alpha: Alpha, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_A_Scope_widget(_ scope_alpha: Alpha, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_inner_widgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Inner_B_Scope_widget(_ scope_beta: Beta, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_B_Scope_widget(_ scope_beta: Beta, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_inner_widgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(a: __safeDI_widgetBuilder_Inner_A_Scope(up: up.a), b: { values_a in __safeDI_widgetBuilder_Inner_B_Scope(up: up.b(values_a)) })
 			            }
-			            func __safeDI_widgetBuilder_Inner_A_Scope(up: Inner.__safeDI_WidgetCarrier_A<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_A<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_A_Scope(up: Inner.__safeDI_WidgetCarrier_A<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_A<any Widget> {
 			                .init(widget: { scope_alpha in __safeDI_widgetBuilder_Inner_A_Scope_widget(scope_alpha, __safeDI_inner_widgetBuilder: up.widget(scope_alpha)) })
 			            }
-			            func __safeDI_widgetBuilder_Inner_B_Scope(up: Inner.__safeDI_WidgetCarrier_B<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_B<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_B_Scope(up: Inner.__safeDI_WidgetCarrier_B<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_B<any Widget> {
 			                .init(widget: { scope_beta in __safeDI_widgetBuilder_Inner_B_Scope_widget(scope_beta, __safeDI_inner_widgetBuilder: up.widget(scope_beta)) })
 			            }
 			            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up: __safeDI_gadgetBuilder_inner_widgetBuilder))
@@ -3598,7 +3592,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3616,7 +3610,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3624,35 +3618,35 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            _ = Shell.__safeDI_Shell_D7C83D2C944372B2.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_A_Inner_A_Scope_widget(_ scope_alpha: Alpha, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_A_Inner_A_Scope_widget(_ scope_alpha: Alpha, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_B_Inner_B_Scope_widget(_ scope_beta: Beta, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_B_Inner_B_Scope_widget(_ scope_beta: Beta, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(a: __safeDI_widgetBuilder_Inner_A_Scope(up: up.a), b: { values_a in __safeDI_widgetBuilder_Inner_B_Scope(up: up.b(values_a)) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_A_Scope(up: Inner.__safeDI_WidgetCarrier_A<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_A<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_A_Scope(up: Inner.__safeDI_WidgetCarrier_A<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_A<any Widget> {
 			                .init(widget: { scope_alpha in __safeDI_widgetBuilder_A_Inner_A_Scope_widget(scope_alpha, __safeDI_shell_widgetSendableBuilder: up.widget(scope_alpha)) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_B_Scope(up: Inner.__safeDI_WidgetCarrier_B<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_B<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_B_Scope(up: Inner.__safeDI_WidgetCarrier_B<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier_B<any Widget> {
 			                .init(widget: { scope_beta in __safeDI_widgetBuilder_B_Inner_B_Scope_widget(scope_beta, __safeDI_shell_widgetSendableBuilder: up.widget(scope_beta)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -3714,7 +3708,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3728,7 +3722,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.top_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(top_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -3737,31 +3731,31 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 			        let __safeDI_gadgetBuilder_top_widgetBuilder = __safeDI_gadgetBuilder.top_widgetBuilder(SafeDIScope_Gadget.top_widgetBuilder_Values())
-			        func __safeDI_top() -> Top {
+			        @inline(never) func __safeDI_top() -> Top {
 			            _ = Top.__safeDI_Top_BED1CDF2933E5930.self\(seamCallComment(seam: "Top", module: "Feature"))
-			            func __safeDI_widgetBuilder_SubA_SubA_widget(_ scope_alpha: Alpha, __safeDI_top_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) func __safeDI_widgetBuilder_SubA_SubA_widget(_ scope_alpha: Alpha, __safeDI_top_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_top_widgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_SubB_SubB_widget(_ scope_beta: Beta, __safeDI_top_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) func __safeDI_widgetBuilder_SubB_SubB_widget(_ scope_beta: Beta, __safeDI_top_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let gadget: any Gadget = __safeDI_top_widgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values())
 			                    return DefaultWidget(gadget: gadget)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Top(up: Top.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Top(up: Top.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Top.__safeDI_WidgetCarrier<any Widget> {
 			                .init(subA: __safeDI_widgetBuilder_SubA(up: up.subA), subB: __safeDI_widgetBuilder_SubB(up: up.subB))
 			            }
-			            func __safeDI_widgetBuilder_SubA(up: SubA.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> SubA.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_SubA(up: SubA.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> SubA.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_alpha in __safeDI_widgetBuilder_SubA_SubA_widget(scope_alpha, __safeDI_top_widgetBuilder: up.widget(scope_alpha)) })
 			            }
-			            func __safeDI_widgetBuilder_SubB(up: SubB.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> SubB.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_SubB(up: SubB.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> SubB.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_beta in __safeDI_widgetBuilder_SubB_SubB_widget(scope_beta, __safeDI_top_widgetBuilder: up.widget(scope_beta)) })
 			            }
 			            return Top(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Top(up: __safeDI_gadgetBuilder_top_widgetBuilder))
@@ -3894,7 +3888,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -3908,7 +3902,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -3917,10 +3911,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 				        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session))
-				        func __safeDI_inner() -> Inner {
+				        @inline(never) func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
+				            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
 				                    let analytics = Analytics()
 				                    let gadget: any Gadget = __safeDI_inner_widgetBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(analytics: analytics))
 				                    return DefaultWidget(analytics: analytics, gadget: gadget)
@@ -3928,7 +3922,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_inner_widgetBuilder: up.widget(scope_analytics)) })
 				            }
 				            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up: __safeDI_gadgetBuilder_inner_widgetBuilder))
@@ -3970,7 +3964,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.holder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(holder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -3987,7 +3981,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -4001,7 +3995,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -4010,13 +4004,13 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 				        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session))
-				        func __safeDI_inner() -> Inner {
+				        @inline(never) func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
+				            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
 				                    let analytics = Analytics()
 				                    let __safeDI_gadgetBuilder_holder = __safeDI_inner_widgetBuilder.holder(SafeDIScope_Gadget.DefaultWidget_Scope.holder_Values(analytics: analytics))
-				                    func __safeDI_holder() -> Holder {
+				                    @inline(never) func __safeDI_holder() -> Holder {
 				                        let gadget: any Gadget = __safeDI_gadgetBuilder_holder.gadget(SafeDIScope_Gadget.Holder_Scope.gadget_Values())
 				                        return Holder(gadget: gadget)
 				                    }
@@ -4026,7 +4020,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_inner_widgetBuilder: up.widget(scope_analytics)) })
 				            }
 				            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up: __safeDI_gadgetBuilder_inner_widgetBuilder))
@@ -4066,7 +4060,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.holderMaker = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+				                    self.init(holderMaker: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 				                }
 				            }
 				        }
@@ -4085,7 +4079,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                }
 
 				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.gadget = { _ in __safeDI_builder() }
+				                    self.init(gadget: { _ in __safeDI_builder() })
 				                }
 				            }
 				        }
@@ -4099,7 +4093,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				            }
 
 				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.inner_widgetBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+				                self.init(inner_widgetBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 				            }
 				        }
 				    }
@@ -4108,12 +4102,12 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_session session: Session, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
 				        let __safeDI_gadgetBuilder_inner_widgetBuilder = __safeDI_gadgetBuilder.inner_widgetBuilder(SafeDIScope_Gadget.inner_widgetBuilder_Values(session: session))
-				        func __safeDI_inner() -> Inner {
+				        @inline(never) func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_EA4DE2878D50CCB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-				                func __safeDI_widget() -> DefaultWidget {
+				            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_inner_widgetBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+				                @inline(never) func __safeDI_widget() -> DefaultWidget {
 				                    let __safeDI_gadgetBuilder_holderMaker = __safeDI_inner_widgetBuilder.holderMaker(SafeDIScope_Gadget.DefaultWidget_Scope.holderMaker_Values())
-				                    func __safeDI_holderMaker(analytics: Analytics) -> Holder {
+				                    @inline(never) func __safeDI_holderMaker(analytics: Analytics) -> Holder {
 				                        let gadget: any Gadget = __safeDI_gadgetBuilder_holderMaker.gadget(SafeDIScope_Gadget.Holder_Scope.gadget_Values(analytics: analytics))
 				                        return Holder(analytics: analytics, gadget: gadget)
 				                    }
@@ -4125,7 +4119,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 				                let widget: any Widget = __safeDI_widget()
 				                return widget
 				            }
-				            func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+				            @inline(never) func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 				                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_inner_widgetBuilder: up.widget(scope_analytics)) })
 				            }
 				            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner(up: __safeDI_gadgetBuilder_inner_widgetBuilder))
@@ -4174,7 +4168,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.gadget = { _ in __safeDI_builder() }
+			                    self.init(gadget: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -4192,7 +4186,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -4200,11 +4194,11 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let analytics = Analytics()
 			                    let gadget: any Gadget = __safeDI_shell_widgetSendableBuilder.gadget(SafeDIScope_Gadget.DefaultWidget_Scope.gadget_Values(analytics: analytics))
 			                    return DefaultWidget(analytics: analytics, gadget: gadget)
@@ -4212,10 +4206,10 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -4263,7 +4257,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.`my gadget` = { _ in __safeDI_builder() }
+			                    self.init(`my gadget`: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -4281,7 +4275,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.shell_widgetSendableBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+			                self.init(shell_widgetSendableBuilder: { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) })
 			            }
 			        }
 			    }
@@ -4289,21 +4283,21 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
-			        func __safeDI_shell() -> Shell {
+			        @inline(never) func __safeDI_shell() -> Shell {
 			            let __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder = __safeDI_gadgetSendableBuilder.shell_widgetSendableBuilder(SafeDISendableScope_Gadget.shell_widgetSendableBuilder_Values())
 			            _ = Shell.__safeDI_Shell_B70E55C1014F1064.self\(seamCallComment(seam: "Shell", module: "Feature"))
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
-			                func __safeDI_widget() -> DefaultWidget {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_widget(_ scope_analytics: Analytics, __safeDI_shell_widgetSendableBuilder: SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>) -> any Widget {
+			                @inline(never) func __safeDI_widget() -> DefaultWidget {
 			                    let `my gadget`: any Gadget = __safeDI_shell_widgetSendableBuilder.`my gadget`(SafeDIScope_Gadget.DefaultWidget_Scope.`my gadget_Values`())
 			                    return DefaultWidget(`my gadget`: `my gadget`)
 			                }
 			                let widget: any Widget = __safeDI_widget()
 			                return widget
 			            }
-			            @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Shell(up: Shell.__safeDI_WidgetSendableCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Shell.__safeDI_WidgetSendableCarrier<any Widget> {
 			                .init(innerBuilder: { __safeDI_widgetBuilder_Inner(up: up.innerBuilder()) })
 			            }
-			            @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner(up: Inner.__safeDI_WidgetCarrier<SafeDIScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget>>) -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_analytics, __safeDI_shell_widgetSendableBuilder: up.widget(scope_analytics)) })
 			            }
 			            return Shell(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Shell(up: __safeDI_gadgetSendableBuilder_shell_widgetSendableBuilder))
@@ -4408,7 +4402,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_session session: Session, __safeDI_gadgetSendableBuilder: __safeDI_GadgetSendableCarrier<any Gadget>) {
-			        @Sendable nonisolated func __safeDI_holderMaker() -> Holder {
+			        @inline(never) @Sendable nonisolated func __safeDI_holderMaker() -> Holder {
 			            let __safeDI_gadgetSendableBuilder_holderMaker = __safeDI_gadgetSendableBuilder.holderMaker()
 			            let `my gadget`: any Gadget = __safeDI_gadgetSendableBuilder_holderMaker.`my gadget`()
 			            return Holder(`my gadget`: `my gadget`)
@@ -4475,7 +4469,7 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_widgetSendableBuilder: __safeDI_WidgetSendableCarrier<any Widget>) {
 		        let analytics = Analytics()
-		        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
+		        @inline(never) @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 		            let __safeDI_widgetSendableBuilder_panelBuilder = __safeDI_widgetSendableBuilder.panelBuilder()
 		            let `my widget`: any Widget = __safeDI_widgetSendableBuilder_panelBuilder.`my widget`()
 		            return Panel(`my widget`: `my widget`)
@@ -4498,16 +4492,16 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			extension Host {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
+			        @inline(never) @Sendable nonisolated func __safeDI_widgetSendableBuilder_Inner() -> Inner.__safeDI_WidgetSendableCarrier<any Widget> {
 			            .init(panelBuilder: { __safeDI_widgetBuilder_Inner_Panel_Scope() })
 			        }
-			        @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
+			        @inline(never) @Sendable nonisolated func __safeDI_widgetBuilder_Inner_Panel_Scope() -> Inner.__safeDI_WidgetCarrier_Panel<any Widget> {
 			            .init(`my widget`: {
 			                let `my widget`: any Widget = DefaultWidget()
 			                return `my widget`
 			            })
 			        }
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_ECB382D43E04D2FE.self\(seamCallComment(seam: "Inner", module: "Feature"))
 			            return Inner(__safeDI_widgetSendableBuilder: __safeDI_widgetSendableBuilder_Inner())
 			        }
@@ -4551,15 +4545,15 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			extension Host {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_63280DED1B6F8D3F.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            func __safeDI_widgetBuilder_Inner_widget(_ scope__scope: Analytics, _ scope__analytics: Analytics) -> any Widget {
+			            @inline(never) func __safeDI_widgetBuilder_Inner_widget(_ scope__scope: Analytics, _ scope__analytics: Analytics) -> any Widget {
 			                let scope = scope__scope
 			                let analytics = scope__analytics
 			                let widget: any Widget = DefaultWidget(scope: scope, analytics: analytics)
 			                return widget
 			            }
-			            func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: { scope_scope, scope_analytics in __safeDI_widgetBuilder_Inner_widget(scope_scope, scope_analytics) })
 			            }
 			            return Inner(__safeDI_widgetBuilder: __safeDI_widgetBuilder_Inner())
@@ -4605,9 +4599,9 @@ struct SafeDIToolSeamSendableFillTests: ~Copyable {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        let scope = Analytics()
-			        func __safeDI_inner() -> Inner {
+			        @inline(never) func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_DF0C971D70DD0421.self\(seamCallComment(seam: "Inner", module: "Feature"))
-			            func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
+			            @inline(never) func __safeDI_widgetBuilder_Inner() -> Inner.__safeDI_WidgetCarrier<any Widget> {
 			                .init(widget: {
 			                    let widget: any Widget = DefaultWidget(scope: scope)
 			                    return widget

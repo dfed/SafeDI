@@ -87,6 +87,11 @@ extension MockLowering {
 		/// The nodes of the tree that build a type, each before its children (`MockTreeNames.propertyNodes`).
 		var propertyNodes = [ScopeGenerator.MockTreeNames.PropertyNode]()
 
+		/// The name of the override of each property instantiated only if available that nothing fulfills
+		/// (`MockRootParameters.unavailableDependencyOverrideProperties`), which the type that declares the property binds it
+		/// from.
+		var unavailableDependencyOverrideNames = [Property: String]()
+
 		/// A builder `mock()` takes for every builder of one hole type and family its tree's calls pass up
 		/// (`MockRootParameters.SeamMockBuilder`).
 		struct PassedUpBuilder {
@@ -98,6 +103,9 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
+			/// The parameter's default: a builder that returns `nil` for a builder of places instantiated only if available,
+			/// whose type is optional, the value production gives a place nothing fulfills.
+			let defaultExpression: String?
 			// The places of a seam's own internal mock the builder builds, each the uncovered dependency
 			// it stands for, named as its parameter would have been (`ScopeGenerator.seamMockBuilders`).
 			let places: [ScopeGenerator.MockRootParameters.UncoveredParameter]
@@ -118,7 +126,7 @@ extension MockLowering {
 		// received parameters by its label, in label order.
 		var placeOnlyBuilderDeclarations: [(label: String, declaration: String)] {
 			passedUpBuilders.compactMap { builder in
-				builder.properties.isEmpty ? (builder.label, "\(builder.label): \(builder.typeSource)") : nil
+				builder.properties.isEmpty ? (builder.label, "\(builder.label): \(builder.typeSource)\(builder.defaultExpression.map { " = \($0)" } ?? "")") : nil
 			}
 		}
 
@@ -297,6 +305,7 @@ extension ScopeGenerator {
 				internalName: builder.internalName,
 				properties: builder.passedUpProperties,
 				typeSource: builder.parameterType.asSource,
+				defaultExpression: builder.family.holeType.builtType.isOptional ? ReservedName.nilBuilderSource : nil,
 				places: builder.places,
 				family: builder.family,
 				adapters: builder.adapters.map { .init(property: $0.property, name: $0.name, typeSource: $0.typeDescription.asSource) },
@@ -410,7 +419,7 @@ extension ScopeGenerator {
 		for builder in passedUpBuilders {
 			guard let property = builder.properties.first else { continue }
 			let position = flatReceivedParameters.firstIndex { $0.property.label > builder.label } ?? flatReceivedParameters.endIndex
-			flatReceivedParameters.insert(.init(property: property, defaultExpression: nil, typeSource: builder.typeSource, name: builder.label), at: position)
+			flatReceivedParameters.insert(.init(property: property, defaultExpression: builder.defaultExpression, typeSource: builder.typeSource, name: builder.label), at: position)
 		}
 		var signature = MockLowering.RootSignature(
 			forwardedParameters: forwardedParameters,
@@ -432,6 +441,9 @@ extension ScopeGenerator {
 		signature.passedUpBuilders = passedUpBuilders
 		signature.seamMockBuilders = parameters.seamMockBuilders
 		signature.propertyNodes = tree.names.propertyNodes
+		for override in onlyIfAvailableOverrides where parameters.unavailableDependencyOverrideProperties.contains(override.receivedProperty) {
+			signature.unavailableDependencyOverrideNames[override.receivedProperty] = override.name
+		}
 		// The overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		return signature
@@ -501,7 +513,7 @@ extension ScopeGenerator {
 		/// The generators of the children that build a type, each at its position among them.
 		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], under parentIndex: Int?, insideSendableFunction: Bool) -> [Visit] {
 			generator.orderedChildGenerators.enumerated().compactMap { generationIndex, child in
-				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
+				guard case let .property(_, property, _, _, _, _) = child.scopeData, !child.isUnavailableDependency else { return nil }
 				let position = Position(declarationIndex: dependencies.firstIndex(where: { $0.property.label == property.label }) ?? Int.max, generationIndex: generationIndex)
 				nodes.append(Node(parentIndex: parentIndex, position: position, namesDeclared: []))
 				return Visit(
@@ -540,14 +552,26 @@ extension ScopeGenerator {
 			}
 		}
 
-		/// The properties the sites of holes among a generator's children bind, which no parameter covers
+		/// The properties the sites of holes among a generator's children bind, and those it binds to `nil` because they are
+		/// instantiated only if available and nothing fulfills their type, neither of which a parameter covers
 		/// (`ScopeGenerator.uncoveredInstantiatedDependencies(ofMockedType:treePropertyNodes:holeSiteProperties:)`).
 		func holeSiteProperties(of generator: ScopeGenerator) -> [Property] {
 			generator.orderedChildGenerators.compactMap { child in
-				guard case let .hole(property, _, .some) = child.scopeData else { return nil }
-				return property
+				switch child.scopeData {
+				case let .hole(property, _, .some):
+					property
+				case let .property(_, property, _, _, _, _):
+					child.isUnavailableDependency ? property : nil
+				case .hole, .alias, .fill, .root:
+					nil
+				}
 			}
 		}
+		/// The properties a generator's type instantiates only if available that nothing fulfills.
+		func unavailableDependencyProperties(of generator: ScopeGenerator) -> [Property] {
+			generator.orderedChildGenerators.lazy.filter(\.isUnavailableDependency).compactMap(\.property)
+		}
+		var unavailableProperties = unavailableDependencyProperties(of: self)
 		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, under: nil, insideSendableFunction: false)
 		let rootHoleSiteProperties = holeSiteProperties(of: self)
 		var builtProperties = Set<Property>(rootHoleSiteProperties)
@@ -596,6 +620,11 @@ extension ScopeGenerator {
 			}
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
+			if !visit.isInsideSendableFunction {
+				for property in unavailableDependencyProperties(of: visit.generator) where !unavailableProperties.contains(property) {
+					unavailableProperties.append(property)
+				}
+			}
 			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, under: visit.nodeIndex, insideSendableFunction: visit.isInsideSendableFunction)
 			// Most types build every dependency they instantiate, so the labels their children build are gathered only for a
 			// type that instantiates one.
@@ -651,6 +680,7 @@ extension ScopeGenerator {
 			builderFunctionNames: builderFunctionNames,
 		)
 		names.propertyNodes = propertyNodes
+		names.unavailableDependencyProperties = unavailableProperties
 		names.rootHoleSiteProperties = rootHoleSiteProperties
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
 		if readsFills, !passedUpBuilderProperties.isEmpty {

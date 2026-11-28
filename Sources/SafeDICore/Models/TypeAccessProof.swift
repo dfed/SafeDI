@@ -778,17 +778,17 @@ public struct TypeAccessProof: Sendable {
 	private static let allowlistedNames = WellKnownTypeNames.swift.union(WellKnownTypeNames.foundation).union(WellKnownTypeNames.safeDI)
 
 	/// Whether `type`, spelled without generic arguments, is one of the standard types `allowlistedNames` names, spelled
-	/// alone or qualified by its module's name, or the `Builder` a SafeDI wrapper declares (`Instantiator.Builder`,
-	/// `SafeDI.Instantiator.Builder`), which the same comment would otherwise name.
+	/// alone or qualified by its module's name, or the `Builder` a SafeDI wrapper declares (`Instantiator.Builder`), which
+	/// the same comment would otherwise name. A SafeDI wrapper qualified by its module's name is read as the wrapper alone
+	/// (`TypeDescription.member(named:of:generics:)`).
 	private static func isAllowlisted(_ type: TypeDescription) -> Bool {
 		switch type {
 		case let .simple(name, _):
 			allowlistedNames.contains(name)
-		case let .nested("Builder", .simple(wrapperName, []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName),
-		     .nested("Builder", .nested(let wrapperName, .simple("SafeDI", []), []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName):
+		case let .nested("Builder", .simple(wrapperName, []), _) where WellKnownTypeNames.safeDIWrappersDeclaringBuilder.contains(wrapperName):
 			true
 		case let .nested(name, .simple(moduleName, []), _):
-			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch" || moduleName == "SafeDI") && allowlistedNames.contains(name)
+			(moduleName == "Swift" || moduleName == "Foundation" || moduleName == "Dispatch") && allowlistedNames.contains(name)
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .some, .tuple, .unknown, .variadic, .void:
 			false
 		}
@@ -936,9 +936,9 @@ public struct TypeAccessProof: Sendable {
 			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
-				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
-				let rightKey = (right.location?.filePath ?? "\u{10FFFF}", right.location?.line ?? 0, right.location?.column ?? 0)
-				return leftKey < rightKey || (leftKey == rightKey && left.carrier < right.carrier)
+				left.location == right.location
+					? left.carrier < right.carrier
+					: Dependency.DeclarationLocation.precedesInSourceOrder(left.location, right.location)
 			}
 			.map { mention in
 				let carrierProof = proof(of: mention.carrier)
@@ -994,9 +994,9 @@ public struct TypeAccessProof: Sendable {
 			.filter { $0.ownLevel.capped(by: proof(of: $0.carrier)) == level }
 			.filter { seen.insert(MemberKey(carrier: $0.carrier, member: $0.member, location: $0.location)).inserted }
 			.sorted { left, right in
-				let leftKey = (left.location?.filePath ?? "\u{10FFFF}", left.location?.line ?? 0, left.location?.column ?? 0)
-				let rightKey = (right.location?.filePath ?? "\u{10FFFF}", right.location?.line ?? 0, right.location?.column ?? 0)
-				return leftKey < rightKey || (leftKey == rightKey && left.carrier < right.carrier)
+				left.location == right.location
+					? left.carrier < right.carrier
+					: Dependency.DeclarationLocation.precedesInSourceOrder(left.location, right.location)
 			}
 			.map { Prover(carrier: $0.carrier, member: $0.member, argumentLabels: $0.argumentLabels, level: level, location: $0.location, cap: nil) }
 	}

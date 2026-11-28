@@ -88,7 +88,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_db db: Db, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
-		        @Sendable nonisolated func __safeDI_k() -> K {
+		        @inline(never) @Sendable nonisolated func __safeDI_k() -> K {
 		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k()
 		            let api: any Api = __safeDI_apiSendableBuilder_k.api()
 		            return K(api: api)
@@ -134,7 +134,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
+		                    self.init(api: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -152,7 +152,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.k = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(k: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }

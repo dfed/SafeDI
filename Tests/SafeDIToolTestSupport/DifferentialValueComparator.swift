@@ -2518,6 +2518,9 @@ extension GraphFuzzerFixture {
 		if let probe = publicMockUnbuildableValueProbe(generatedFiles: generatedFiles) {
 			probes.append(probe)
 		}
+		if let probe = publicMockOuterFulfillerProbe(generatedFiles: generatedFiles) {
+			probes.append(probe)
+		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		let typesTakingOwnOptionalName = publicMockTypesTakingOwnOptionalName
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
@@ -2672,6 +2675,17 @@ extension GraphFuzzerFixture {
 		let isUnreadable = swiftFileContent.contains { $0.contains("let unbuildableFilter: \(GraphFuzzerPublicMockDraw.unreadableUnbuildableValueType)\n") }
 		let value = isUnreadable ? "[1, 2, 3]" : "\(typeNamePrefix)UnbuildableFilter()"
 		return DifferentialValueProbe("\(screenName).mock(unbuildableFilter: \(value))")
+	}
+
+	/// A probe calling the generated `mock()` of `OuterScreen`, the consumer the public mock corpus's draw of a dependency
+	/// only the calling module can construct declares (`GraphFuzzerPublicMockDrawFeature.outerFulfillerPublicMockCall`), with
+	/// the `outerLabel` it takes as a required parameter, so that no other probe calls it: the probe compares whether each
+	/// path hands `OuterAlpha` and `OuterBeta` one `OuterClock`. `nil` when the graph has no such consumer, or the tool
+	/// generated no mock of it.
+	private func publicMockOuterFulfillerProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
+		let screenName = typeNamePrefix + "OuterScreen"
+		guard generatedFiles.keys.contains(where: { $0 == "\(screenName)+SafeDIMock.swift" || $0.hasSuffix("/\(screenName)+SafeDIMock.swift") }) else { return nil }
+		return DifferentialValueProbe("\(screenName).mock(outerLabel: \"probe\")")
 	}
 
 	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the

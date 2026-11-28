@@ -66,9 +66,6 @@ public enum MockLowering {
 		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
 		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
-		/// Whether SafeDI supplied the module's default isolation to the type (`Instantiable.usesModuleDefaultIsolation`), so
-		/// that its plain-form configuration takes that isolation too (`configurationStruct(amongConfigurationsTypedSendable:)`).
-		var takesModuleDefaultIsolation = false
 
 		/// The configuration's fields for the node's children, in the order its initializer takes them.
 		var childFields: [ChildField] {
@@ -144,6 +141,10 @@ public enum MockLowering {
 		let constructionAttributes: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
+		/// Whether the construction is an actor's initializer, which takes each argument into the actor's isolation: the
+		/// construction function takes each `sending`, and so does the builder that overrides it
+		/// (`MockLowering.BuilderParameters`).
+		let sendsArguments: Bool
 		// A node beneath a repeated configured ancestor records only the construction it builds
 		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
 		/// Whether the record describes the type's module-level configuration too, as the node that records the
@@ -207,8 +208,9 @@ public enum MockLowering {
 
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree. The walk rethrows what the steps it shares with the
-	/// emitter throw.
-	func lowerMockRoot(context: MockContext) async throws -> MockLowering.Result {
+	/// emitter throw. `worldRoot` is the root of the mock root's world, where a test observes node records
+	/// (`nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`).
+	func lowerMockRoot(context: MockContext, worldRoot: ConstructionScope? = nil) async throws -> MockLowering.Result {
 		// A mock root's scope is always a root's.
 		guard case let .root(instantiable, _) = scopeData else { return MockLowering.Result(code: "") }
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
@@ -220,7 +222,7 @@ extension ScopeGenerator {
 		{
 			return MockLowering.Result(code: Self.mockWithoutTree(of: instantiable, context: context))
 		} else {
-			return try await lowerMockRootWithTree(of: instantiable, context: context)
+			return try await lowerMockRootWithTree(of: instantiable, context: context, worldRoot: worldRoot)
 		}
 	}
 

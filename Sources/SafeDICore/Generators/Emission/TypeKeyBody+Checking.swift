@@ -68,6 +68,9 @@ extension TypeKeyLayout {
 			for argument in record.callCycleArguments {
 				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
 				var values = [first]
+				for edge in bodies[body].otherEdges {
+					values.append(normalized(pathValue(of: argument, inBody: edge.parent, before: edge.position)))
+				}
 				for closer in closersByTarget[body] ?? [] {
 					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
 				}
@@ -81,24 +84,34 @@ extension TypeKeyLayout {
 	/// Whether every read of every place reads in the type key's code the declaration it reads in the path key's.
 	mutating func checkEveryRead() -> Bool {
 		normalizeCycleParameters()
+		// Whether each read is `nil` in every member of its class, asked once per class rather than once per member: the
+		// answer is the class's, and asking it for every member walked every member again.
+		var isNilByRead = [NilReadKey: Bool]()
 		for body in bodies.indices {
 			let owner = classByBody[body]
 			let statements = bodies[body].statements
 			if let record = bodies[body].record {
 				for (position, argument) in record.arguments.enumerated() where record.argumentValues[position] == nil {
-					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNilAtEveryMember(owner: owner) { $0.arguments[position] }) else { return false }
+					let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: -1, position: position)) {
+						isNilAtEveryMember(owner: owner) { $0.arguments[position] }
+					}
+					guard checkRead(argument, inBody: body, before: statements.count, owner: owner, isNilAtEveryMember: isNil) else { return false }
 				}
 			}
 			for (index, statement) in statements.enumerated() {
 				switch statement {
 				case let .inline(record):
 					for position in record.arguments.indices where record.argumentValues[position] == nil {
-						let isNil = isNilAtEveryMember(owner: owner, inlineStatement: index, argument: position)
+						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
+							isNilAtEveryMember(owner: owner, inlineStatement: index, argument: position)
+						}
 						guard checkRead(record.arguments[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
 				case let .alias(record):
 					for position in record.listedReads.indices {
-						let isNil = isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
+							isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+						}
 						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil),
 						      isNil || readsDeclarationOfSameType(record.listedReads[position], inBody: body, before: index, owner: owner)
 						else { return false }
@@ -121,8 +134,26 @@ extension TypeKeyLayout {
 		return true
 	}
 
+	/// A read of a class's statement at `statement` (-1 for the arguments of the class's own place), the read at
+	/// `position` of it.
+	struct NilReadKey: Hashable {
+		let owner: Int
+		let statement: Int
+		let position: Int
+	}
+
+	static func memoized(_ answers: inout [NilReadKey: Bool], _ key: NilReadKey, _ answer: () -> Bool) -> Bool {
+		if let known = answers[key] {
+			return known
+		}
+		let computed = answer()
+		answers[key] = computed
+		return computed
+	}
+
 	func isNilAtEveryMember(owner: Int, read: (BuiltPlaceRecord) -> PlaceRead) -> Bool {
 		guard owner != 0 else { return false }
+		GenerationWork.record(membersByClass[owner].count, by: .checkingReadsAtEveryMember)
 		return membersByClass[owner].allSatisfy { member in
 			bodies[member].record.map { read($0).source == .nil } ?? false
 		}
@@ -148,8 +179,10 @@ extension TypeKeyLayout {
 	}
 
 	/// The statement at `index` of each member of `owner`'s class, or of the root's body.
-	func statements(at index: Int, ofEveryMemberOf owner: Int) -> [Statement] {
-		(owner == 0 ? [0] : membersByClass[owner]).map { bodies[$0].statements[index] }
+	func statements(at index: Int, ofEveryMemberOf owner: Int) -> LazyMapSequence<[Int], Statement> {
+		let members = owner == 0 ? [0] : membersByClass[owner]
+		GenerationWork.record(members.count, by: .checkingReadsAtEveryMember)
+		return members.lazy.map { bodies[$0].statements[index] }
 	}
 
 	func checkRead(_ read: PlaceRead, inBody body: Int, before index: Int, owner: Int, isNilAtEveryMember: Bool) -> Bool {
@@ -174,15 +207,77 @@ extension TypeKeyLayout {
 	func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
+		var siblingEdges: [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]?
+		if let closer, closesOnSibling(closer, from: body) {
+			guard let edges = edgesOfSibling(place, closedOnBy: closer, from: body) else { return false }
+			siblingEdges = edges
+		}
 		for label in reads[membersByClass[callee][0]] where outcomes[callee][label] == .passed {
-			let expected: PathValue = if closer != nil {
-				normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place))
-			} else {
-				normalized(resolution(of: label, atPlace: place))
-			}
 			let declaration = typeLookUp(label, inClass: owner, before: index)
-			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
+			let actual = normalized(evaluate(declaration, inBody: body))
+			if let siblingEdges {
+				// A member of a loop of builders calls a sibling's function: at each of its own places, the sibling its body's
+				// own parent declares, which reads there what that parent holds before it. The closer passes what its function
+				// was passed for the label, which each place's call passes from that same parent, or a declaration of its own.
+				guard !bodies[place].cycleParameterLabels.contains(label) else { return false }
+				let readsOwnParameter = declaration == .read(owner: owner, label: label) && !bodies[body].cycleParameterLabels.contains(label)
+				for pair in siblingEdges {
+					let passed = readsOwnParameter ? normalized(resolution(of: label, atPlace: body, edge: pair.edge)) : actual
+					guard passed == normalized(resolution(of: label, atPlace: place, edge: pair.sibling)) else { return false }
+				}
+			} else if closer == nil {
+				// The call is an edge of the place: it passes what the place resolves the label to there.
+				guard actual == normalized(resolution(of: label, atPlace: place, edge: (parent: body, position: index))) else { return false }
+			} else if bodies[place].cycleParameterLabels.contains(label) {
+				guard actual == normalized(closerValue(of: label, closing: (body: body, index: index), onPlace: place)) else { return false }
+			} else if !passesOwnParameter(declaration, inBody: body, of: place) {
+				// A closer that hands on what the place it calls was passed passes, beneath each edge of that place, what that
+				// edge resolves the label to, which the call at the edge is checked for. Any other value is the one every
+				// edge of the place resolves the label to.
+				for edge in bodies[place].edges {
+					guard actual == normalized(resolution(of: label, atPlace: place, edge: edge)) else { return false }
+				}
+			}
 		}
 		return true
+	}
+
+	/// Whether `closer`, a statement of `body`, calls the function of a statement of the body that declares `body`'s own
+	/// place: a member of a loop of builders calling a sibling's. Any other closer calls an enclosing place's function or a
+	/// statement the view's key pins (`KeyedDeclaration.absolute`).
+	func closesOnSibling(_ closer: ClosingPlaceRecord, from body: Int) -> Bool {
+		guard closer.rebindsLoopMember, body != 0, case let .statement(declaringBody, _, _) = resolvedFunction(named: closer.closedOnFunctionName, from: body) else { return false }
+		return declaringBody == bodies[body].parent
+	}
+
+	/// Where `closer`, a statement of `body` that calls a sibling's function (`closesOnSibling(_:from:)`), calls the function
+	/// of `place`: each edge of `body` with the edge of `place` that the edge's parent declares under the name, which the
+	/// closer calls beneath that edge. `nil` where an edge's parent declares no place of `place`'s view under it.
+	func edgesOfSibling(_ place: Int, closedOnBy closer: ClosingPlaceRecord, from body: Int) -> [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]? {
+		var pairs = [(edge: (parent: Int, position: Int), sibling: (parent: Int, position: Int))]()
+		for edge in bodies[body].edges {
+			guard case let .statement(siblingBody, index, _) = resolvedFunction(named: closer.closedOnFunctionName, from: edge.parent),
+			      siblingBody == edge.parent,
+			      index < bodies[siblingBody].statements.count,
+			      case let .built(sibling) = bodies[siblingBody].statements[index],
+			      sibling == place
+			else { return nil }
+			pairs.append((edge, (siblingBody, index)))
+		}
+		return pairs
+	}
+
+	/// Whether `declaration`, which `typeLookUp` found in the class of `body`, holds there what the function of `place`, a
+	/// view enclosing `body` along its first edges, was passed as its parameter of the label.
+	func passesOwnParameter(_ declaration: TypeDeclaration, inBody body: Int, of place: Int) -> Bool {
+		var declaration = declaration
+		var body = body
+		while case let .read(owner, label) = declaration {
+			guard body != place else { return owner == classByBody[place] }
+			guard !bodies[body].cycleParameterLabels.contains(label) else { return false }
+			declaration = typeLookUp(label, inClass: classByBody[bodies[body].parent], before: bodies[body].position)
+			body = bodies[body].parent
+		}
+		return false
 	}
 }

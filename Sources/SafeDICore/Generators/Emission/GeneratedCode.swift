@@ -120,12 +120,31 @@ struct GeneratedCode: Sendable {
 	/// Whether this level, under the indentations around it, is a place the type key can lay out with every place of its
 	/// tree (`TypeKeyLayout.laysOut(_:)`), which the place records as it is built.
 	var isPlaceTheTypeKeyLaysOut: Bool {
-		var code = self
-		while case let .indented(inner, _) = code.node {
-			code = inner
-		}
-		guard case let .children(children) = code.storage, case let .place(_, laysOut) = children.kind else { return false }
+		guard case let .children(children) = unindented.storage, case let .place(_, laysOut) = children.kind else { return false }
 		return laysOut
+	}
+
+	/// Whether the type key can lay out every statement this level stands for in a body, as `TypeKeyLayout.statementCodes(of:)`
+	/// reads it: the place it is, or each place of a sequence of places, from what each place recorded as it was built. It
+	/// reads the levels' storage, so asking it makes nothing: every place is built with it.
+	///
+	/// A level that is no sequence is one statement: a place, or a piece that is no place. A body's statements hold no other
+	/// node: `.lines` and `.sendableFunction` stand only inside a builder function's own code, beneath its place
+	/// (`BuilderFunctionGraph`), `.omittingRootFunctions` only around a root's body, and `.rootFunction` only among the
+	/// statements of a body that makes a seam call, whose place the type key never plans.
+	var statementsAreLaidOutByTypeKey: Bool {
+		guard case let .children(children) = unindented.storage, case .sequence = children.kind else { return isPlaceTheTypeKeyLaysOut }
+		// A sequence that holds anything but places is one statement, with no record, as a piece that is no place is.
+		return children.codes.allSatisfy(\.isPlaceTheTypeKeyLaysOut)
+	}
+
+	/// This level without the indentations around it.
+	private var unindented: GeneratedCode {
+		var code = self
+		while case let .children(children) = code.storage, case .indented = children.kind {
+			code = children.codes[0]
+		}
+		return code
 	}
 
 	/// What this level of the plan is.

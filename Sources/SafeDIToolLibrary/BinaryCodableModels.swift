@@ -524,6 +524,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
 				BinaryLayoutField("conformanceListNamesSendable", \.conformanceListNamesSendable),
 				BinaryLayoutField("conformanceListNamesOtherTypes", \.conformanceListNamesOtherTypes),
+				BinaryLayoutField("unstatedGlobalActorIsolation", \.unstatedGlobalActorIsolation),
 				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
 				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
@@ -570,6 +571,7 @@ extension Instantiable: BinarySchemaMember {
 		isInsideCompilerDecidedBlock = fieldFlags.next()
 		conformanceListNamesSendable = fieldFlags.next()
 		conformanceListNamesOtherTypes = fieldFlags.next()
+		unstatedGlobalActorIsolation = try reader.readOptional(flaggedIn: &fieldFlags) as UnstatedGlobalActorIsolation?
 		dependencyLabelsInUnselectedClauses = try reader.read()
 		dependencyLabelsInsideConditionalBlocks = try reader.read()
 		try fieldFlags.finish()
@@ -612,6 +614,7 @@ extension Instantiable: BinarySchemaMember {
 			fieldFlags.append(isInsideCompilerDecidedBlock)
 			fieldFlags.append(conformanceListNamesSendable)
 			fieldFlags.append(conformanceListNamesOtherTypes)
+			writer.writeOptional(unstatedGlobalActorIsolation, flaggedIn: &fieldFlags)
 			writer.write(dependencyLabelsInUnselectedClauses)
 			writer.write(dependencyLabelsInsideConditionalBlocks)
 		}
@@ -689,6 +692,101 @@ extension Instantiable.DependencyLabelInUnselectedClause: BinarySchemaMember {
 		writer.writeOptional(clauseLocation, flaggedIn: &fieldFlags)
 		fieldFlags.append(isDeclaredDirectlyInClause)
 		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("typeName", \.typeName),
+				BinaryLayoutField("attributeRange", \.attributeRange),
+				BinaryLayoutField("findings", \.findings),
+				BinaryLayoutField("attributeFixingEveryFinding", \.attributeFixingEveryFinding),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			typeName: reader.read(),
+			attributeRange: reader.read(),
+			findings: reader.read(),
+			attributeFixingEveryFinding: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(typeName)
+		writer.write(attributeRange)
+		writer.write(findings)
+		writer.write(attributeFixingEveryFinding)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation.Finding: BinarySchemaMember {
+	static let writesFieldFlags = true
+
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("generatedDeclaration", \.generatedDeclaration),
+				BinaryLayoutField("handWrittenMockName", \.handWrittenMockName),
+				BinaryLayoutField("argumentLabel", \.argumentLabel),
+				BinaryLayoutField("attributeFixingFinding", \.attributeFixingFinding),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
+		try self.init(
+			generatedDeclaration: reader.read(),
+			handWrittenMockName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			argumentLabel: reader.read(),
+			attributeFixingFinding: reader.read(),
+		)
+		try fieldFlags.finish()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		writer.write(generatedDeclaration)
+		writer.writeOptional(handWrittenMockName, flaggedIn: &fieldFlags)
+		writer.write(argumentLabel)
+		writer.write(attributeFixingFinding)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
+	}
+}
+
+extension Instantiable.UnstatedGlobalActorIsolation.GeneratedDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .rootInitializer: .rootInitializer
+		case .seamInitializers: .seamInitializers
+		case .mock: .mock
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .rootInitializer: writer.writeTag(Tag.rootInitializer)
+		case .seamInitializers: writer.writeTag(Tag.seamInitializers)
+		case .mock: writer.writeTag(Tag.mock)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case rootInitializer
+		case seamInitializers
+		case mock
 	}
 }
 
@@ -1003,6 +1101,9 @@ extension Dependency: BinarySchemaMember {
 		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(source)
+		if case .aliased = source {
+			writer.noteAliasDeclaration(at: declarationLocation)
+		}
 		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
 		writer.writeOptional(identifierRange, flaggedIn: &fieldFlags)
 		writer.writeOptional(typeAnnotationRange, flaggedIn: &fieldFlags)
@@ -1075,59 +1176,90 @@ extension Dependency.SourceRange: BinaryPosition {}
 extension Dependency.DeclarationLocation: BinaryPosition {}
 
 extension Dependency.SourceRange: BinarySchemaMember {
+	/// Each field as its number is written; a range stored elsewhere writes only its start line, `-1`, and the positions
+	/// file holds the four (`BinaryWriter.writeRange(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("startLine", \.startLine),
-				BinaryLayoutField("startColumn", \.startColumn),
-				BinaryLayoutField("endLine", \.endLine),
-				BinaryLayoutField("endColumn", \.endColumn),
+				BinaryLayoutField("startLine", \.binaryStartLine),
+				BinaryLayoutField("startColumn", \.binaryStartColumn),
+				BinaryLayoutField("endLine", \.binaryEndLine),
+				BinaryLayoutField("endColumn", \.binaryEndColumn),
 			],
-			unwrittenProperties: [],
+			// Written as the four fields.
+			unwrittenProperties: ["placement"],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			startLine: reader.read(),
-			startColumn: reader.read(),
-			endLine: reader.read(),
-			endColumn: reader.read(),
-		)
+		self = try reader.readRange()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(startLine)
-		writer.write(startColumn)
-		writer.write(endLine)
-		writer.write(endColumn)
+		writer.writeRange(self)
+	}
+
+	/// The range's start and end where it holds them; a range stored elsewhere is written as a start line of -1 alone.
+	private var startAndEnd: (startLine: Int, startColumn: Int, endLine: Int, endColumn: Int)? {
+		guard case let .here(startLine, startColumn, endLine, endColumn) = placement else { return nil }
+		return (startLine, startColumn, endLine, endColumn)
+	}
+
+	var binaryStartLine: Int {
+		startAndEnd?.startLine ?? -1
+	}
+
+	var binaryStartColumn: Int {
+		startAndEnd?.startColumn ?? 0
+	}
+
+	var binaryEndLine: Int {
+		startAndEnd?.endLine ?? 0
+	}
+
+	var binaryEndColumn: Int {
+		startAndEnd?.endColumn ?? 0
 	}
 }
 
 extension Dependency.DeclarationLocation: BinarySchemaMember {
+	/// A location no file ranked is written as its file, line and column. A ranked one writes, in place of the line, its
+	/// order negated and doubled, less one where its line and column are stored elsewhere, which then writes nothing
+	/// more, and otherwise followed by its line and column (`BinaryWriter.writeLocation(_:)`).
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
 				BinaryLayoutField("filePath", \.filePath),
-				BinaryLayoutField("line", \.line),
-				BinaryLayoutField("column", \.column),
+				BinaryLayoutField("lineOrOrder", \.binaryLineOrOrder),
+				BinaryLayoutField("column", \.binaryColumn),
 			],
-			unwrittenProperties: [],
+			// Written as `lineOrOrder` and `column`.
+			unwrittenProperties: ["order", "placement"],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(
-			filePath: reader.read(),
-			line: reader.read(),
-			column: reader.read(),
-		)
+		self = try reader.readLocation()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(filePath)
-		writer.write(line)
-		writer.write(column)
+		writer.writeLocation(self)
+	}
+
+	/// The line where nothing ranked the location, and otherwise its order, negated and doubled, less one where the
+	/// line and column are stored elsewhere.
+	var binaryLineOrOrder: Int {
+		switch placement {
+		case let .here(line, _):
+			order == 0 ? line : -2 * order
+		case .storedElsewhere:
+			-2 * order + 1
+		}
+	}
+
+	/// The column, written after the line of a location that holds it, and 0, never written, for one stored elsewhere.
+	var binaryColumn: Int {
+		lineAndColumn?.column ?? 0
 	}
 }
 
@@ -1145,10 +1277,12 @@ extension Property: BinarySchemaMember {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// The stored hash is not written: Swift seeds hashing differently in every process, so the
 		// initializer computes it again from the label and type description.
-		try self.init(
-			label: reader.read(),
-			typeDescription: reader.read(),
-		)
+		self = try reader.readSharingValuesOfOneStringAndSharedValue { reader throws(BinaryDecodingError) in
+			try Self(
+				label: reader.read(),
+				typeDescription: reader.read(),
+			)
+		}
 	}
 
 	func write(to writer: inout BinaryWriter) {
@@ -1230,7 +1364,7 @@ extension TypeDescription: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		if writer.sharesSignatureValues {
-			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+			writer.writeSharedByBytes(self) { writeUnshared(to: &$0) }
 		} else {
 			writeUnshared(to: &writer)
 		}
@@ -1418,8 +1552,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				// A signature names the same few types at many places.
-				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingValues),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				BinaryLayoutField("publicMockPlans", \.publicMockPlans),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1442,6 +1576,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			instantiableTypeNamesInAnyClause: fileWithoutView.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: fileWithoutView.plainTypeDeclarations,
 			seamSignatures: fileWithoutView.seamSignatures,
+			publicMockPlans: fileWithoutView.publicMockPlans,
 			view: reader.read(),
 		)
 	}
@@ -1462,18 +1597,29 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: (reader.read() as BinarySharingSignatureValues<[StoredSeamSignature]>).value,
+			seamSignatures: reader.read() as ModuleSeamSignatures,
+			publicMockPlans: reader.read() as ModulePublicMockPlans,
 			view: .empty,
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		write(to: &writer) { writer in writer.write(seamSignatures) }
+		write(to: &writer) { writer in
+			writer.write(seamSignatures)
+			writer.write(publicMockPlans)
+		}
 	}
 
-	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures`, which it writes as their array
-	/// does, each type description at the outermost level of each written once.
+	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures` and `publicMockPlans`.
 	func write(to writer: inout BinaryWriter, writingSeamSignatures writeSeamSignatures: (inout BinaryWriter) -> Void) {
+		writeFieldsBeforeSeamSignatures(to: &writer)
+		writeSeamSignatures(&writer)
+		writer.write(view)
+	}
+
+	/// Writes the fields before the seam signatures: the module's own declarations, which hold every position the file
+	/// writes, since the signatures and plans are written with positions absent and a view holds none.
+	func writeFieldsBeforeSeamSignatures(to writer: inout BinaryWriter) {
 		writer.write(moduleName)
 		writer.write(ownEntryChecksum)
 		writer.write(packageName)
@@ -1486,13 +1632,35 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
-		// As `seamSignaturesSharingValues` writes them.
-		writer.writeSharingSignatureValues(writeSeamSignatures)
-		writer.write(view)
+	}
+}
+
+extension ModuleSeamSignatures: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("seamTypes", \.seamTypes),
+				BinaryLayoutField("encoding", \.encodingWithPositions),
+			],
+			// Written as `encoding`.
+			unwrittenProperties: ["storage"],
+		)
 	}
 
-	private var seamSignaturesSharingValues: BinarySharingSignatureValues<[StoredSeamSignature]> {
-		BinarySharingSignatureValues(seamSignatures)
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(seamTypes: reader.read(), encoding: (reader.read() as BinaryEncoding).bytes)
+	}
+
+	/// Writes the seams, then the encoding of their signatures (``encoding(writingPositionsAsAbsent:)``), which shares the
+	/// values a signature repeats among the module's signatures alone: a run that reads one module's decodes no other's.
+	func write(to writer: inout BinaryWriter) {
+		writer.write(seamTypes)
+		writer.write(BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: writer.writesPositionsAsAbsent)))
+	}
+
+	/// The encoding as a writer that writes positions writes it.
+	private var encodingWithPositions: BinaryEncoding {
+		BinaryEncoding(bytes: encoding(writingPositionsAsAbsent: false))
 	}
 }
 
@@ -1586,7 +1754,8 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("mockImports", \.mockImports),
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingValues),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				BinaryLayoutField("publicMockPlans", \.publicMockPlans),
 			],
 			unwrittenProperties: [],
 		)
@@ -1599,7 +1768,8 @@ extension ViewedModule: BinarySchemaMember {
 			mockImports: reader.read(),
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: (reader.read() as BinarySharingSignatureValues<[StoredSeamSignature]>).value,
+			seamSignatures: reader.read() as ModuleSeamSignatures,
+			publicMockPlans: reader.read() as ModulePublicMockPlans,
 		)
 	}
 
@@ -1609,10 +1779,7 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(mockImports)
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
-		writer.write(seamSignaturesSharingValues)
-	}
-
-	private var seamSignaturesSharingValues: BinarySharingSignatureValues<[StoredSeamSignature]> {
-		BinarySharingSignatureValues(seamSignatures)
+		writer.write(seamSignatures)
+		writer.write(publicMockPlans)
 	}
 }

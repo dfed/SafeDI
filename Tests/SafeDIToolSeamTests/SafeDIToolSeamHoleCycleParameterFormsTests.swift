@@ -91,6 +91,48 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableCycleLabel_whenFillReceivesThroughRenameFormTheRequiredParameterCannotCarry() async {
+		// `Reader` requires `tag: Tag`, so the parameter is `tag: Tag`; `LiveApi` renames `tag: LazilyInstantiated<Tag>` only
+		// if available, a receive of that form, which `B`'s declaration provides and the parameter cannot carry.
+		await expectRejectedAsInline(
+			readerReceive: "@Received public let tag: Tag",
+			liveApiReceive: "@Received(fulfilledByDependencyNamed: \"tag\", ofType: LazilyInstantiated<Tag>.self, onlyIfAvailable: true) public let lazyTag: LazilyInstantiated<Tag>?",
+		) { fixtures in
+			"""
+			\(fixtures["Feature"]!["Reader.swift"]):7:5: error: @Received property `tag: Tag` is received in chain: A -> Reader. A dependency cycle builds `A` again beneath `B`, which declares `tag: LazilyInstantiated<Tag>` with the same label, and SafeDI hands each `A` one value of `tag`. `A` and the types it builds receive `tag` as `tag: LazilyInstantiated<Tag>` and `tag: Tag`, which one value cannot carry together. Receive `tag: LazilyInstantiated<Tag>` and `tag: Tag` under different labels to fix.
+			\(fixtures["Feature"]!["B.swift"]):8:5: note: `tag: LazilyInstantiated<Tag>` is declared here
+			"""
+		}
+	}
+
+	// MARK: Inline tree
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoInlineTreeOfSeam_whenSeamsTreeReceivesEachLabelItDeclaresInOneForm() async throws {
+		// `Reader` and `LiveApi` receive `tag` in one form, which one parameter always carries, so `App` learns from the
+		// scopes alone that `Hub`'s tree holds no label to report, and builds no generator of it.
+		let inlineTrees = try await inlineTreesOfForeignSeams(
+			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
+			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
+		)
+		#expect(inlineTrees == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineTreeOfSeam_whenSeamsTreeReceivesLabelItDeclaresInTwoForms() async throws {
+		// `Reader` requires `tag: LazilyInstantiated<Tag>` and `LiveApi` receives `tag: Tag?`: two forms of a label `B`
+		// declares, which only the tree's generators can judge, so `App` builds `Hub`'s tree, once.
+		let inlineTrees = try await inlineTreesOfForeignSeams(
+			readerReceive: "@Received public let tag: LazilyInstantiated<Tag>",
+			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
+		)
+		#expect(inlineTrees == ["App: Hub"])
+	}
+
 	// MARK: Accepted
 
 	@Test
@@ -132,15 +174,15 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-				        func __safeDI_tag() -> Tag {
+				        @inline(never) func __safeDI_tag() -> Tag {
 				            Tag()
 				        }
 				        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-				        func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>?) -> A {
+				        @inline(never) func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>?) -> A {
 				            let reader = Reader(tag: tag)
-				            func __safeDI_bBuilder() -> B {
-				                func __safeDI_tag() -> Tag {
+				            @inline(never) func __safeDI_bBuilder() -> B {
+				                @inline(never) func __safeDI_tag() -> Tag {
 				                    Tag()
 				                }
 				                let tag = LazilyInstantiated<Tag>(__safeDI_tag)
@@ -236,18 +278,18 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
-				        func __safeDI_tag() -> Tag {
+				        @inline(never) func __safeDI_tag() -> Tag {
 				            Tag()
 				        }
 				        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
-				        func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>) -> A {
+				        @inline(never) func __safeDI_aBuilder(tag: LazilyInstantiated<Tag>) -> A {
 				            let reader = Reader(tag: tag)
 				            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 				            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 				            return A(reader: reader, api: api, bBuilder: bBuilder)
 				        }
-				        func __safeDI_bBuilder() -> B {
+				        @inline(never) func __safeDI_bBuilder() -> B {
 				            let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 				            let aBuilder = Instantiator<A> {
 				                __safeDI_aBuilder(tag: tag)
@@ -369,6 +411,32 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			sourceLocation: sourceLocation,
 		)
+	}
+
+	/// The inline trees of other modules' seams that the runs of the build with `LiveApi` in `App` build, each as the
+	/// run's module and the seam's type, in order.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func inlineTreesOfForeignSeams(readerReceive: String, liveApiReceive: String) async throws -> [String] {
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		let modules = Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive)
+		var filesToDelete = filesToDelete
+		try await GenerationLayerObservation.$observer.withValue({ runModuleName, layer in
+			switch layer {
+			case let .inlineTreeOfForeignSeam(type):
+				continuation.yield("\(runModuleName ?? "nil"): \(type.asSource)")
+			case .seamSignatures, .accessProof, .dependencyTree, .mockScopes:
+				break
+			}
+		}) {
+			_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		self.filesToDelete = filesToDelete
+		continuation.finish()
+		var inlineTrees = [String]()
+		for await inlineTree in stream {
+			inlineTrees.append(inlineTree)
+		}
+		return inlineTrees
 	}
 
 	/// Expects the build with `LiveApi` in `App` to throw `diagnostics` in `App`, and the same graph with `LiveApi` in

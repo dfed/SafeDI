@@ -438,7 +438,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(panel: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }

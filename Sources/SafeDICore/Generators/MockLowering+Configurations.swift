@@ -243,14 +243,6 @@ extension MockLowering {
 }
 
 extension MockLowering {
-	/// The attribute SafeDI spells on the `SafeDIOverrides` and plain-form `SafeDIMockConfiguration` of a type it supplied the
-	/// module's default isolation to, the isolation `#SafeDIConfiguration(defaultIsolation: MainActor.self)` declares.
-	static let moduleDefaultIsolationAttribute = "@MainActor"
-	/// The default of a member that holds a configuration: a configuration that takes the module's default isolation takes
-	/// such a member `nil` by default instead, resolved to this in its initializer's body, since Swift 5 mode evaluates a
-	/// default argument outside the initializer's isolation.
-	static let configurationDefaultValue = ".init()"
-
 	/// The member of a configuration that configures a node bound as `bindingName` that closes a cycle on a node of
 	/// `concreteType`: that type's configuration, as the emitter nests the configuration of a node that repeats one around it
 	/// (`ScopeGenerator.configurationField`).
@@ -397,17 +389,13 @@ extension MockLowering.ConfigurationRecord {
 	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, one per
 	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's storage.
 	// A configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
-	// A plain-form configuration of a type SafeDI supplied the module's default isolation to is `@MainActor`, each child's
-	// configuration defaulted to `nil` and resolved in the initializer's body; a `@Sendable`-typed one keeps its form.
 	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>) -> String {
 		let requiresSendable = typeNames.contains(concreteType.asSource)
-		let takesModuleDefaultIsolation = takesModuleDefaultIsolation && !requiresSendable
 		let indent = ScopeGenerator.standardIndent
 		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		let parameterIndent = "\(innerIndent)\(ScopeGenerator.standardIndent)"
 		var parameters = [String]()
 		var fields = [ConfigurationStorage.Field]()
-		var values = [String]()
 		for childField in childFields {
 			// A child's field in a configuration `@Sendable`-typed is `@Sendable`, proven `Sendable` (`configurationField`).
 			let (typeSource, defaultValue, isProvenSendable) = if requiresSendable, let sendableForm = childField.sendableForm {
@@ -415,13 +403,7 @@ extension MockLowering.ConfigurationRecord {
 			} else {
 				(childField.typeSource, childField.defaultValue, false)
 			}
-			if takesModuleDefaultIsolation, defaultValue == MockLowering.configurationDefaultValue {
-				parameters.append("\(parameterIndent)\(childField.name): \(typeSource)? = nil")
-				values.append("\(childField.name) ?? \(MockLowering.configurationDefaultValue)")
-			} else {
-				parameters.append("\(parameterIndent)\(childField.name): \(typeSource) = \(defaultValue)")
-				values.append(childField.name)
-			}
+			parameters.append("\(parameterIndent)\(childField.name): \(typeSource) = \(defaultValue)")
 			fields.append(ConfigurationStorage.Field(
 				name: childField.name,
 				typeSource: typeSource,
@@ -437,7 +419,6 @@ extension MockLowering.ConfigurationRecord {
 				: defaultField.configurationParameter(indent: parameterIndent)
 			parameters.append(parameter)
 			fields.append(field)
-			values.append(field.name)
 		}
 		let builderType = "(\(requiresSendable ? "@Sendable " : "")\(concreteBuilderClosureType))?"
 		parameters.append("\(parameterIndent)_ \(ReservedName.configurationBuilderPropertyName): \(builderType) = nil")
@@ -449,7 +430,6 @@ extension MockLowering.ConfigurationRecord {
 			documentation: Self.builderDocumentation,
 			isProvenSendable: requiresSendable,
 		))
-		values.append(ReservedName.configurationBuilderPropertyName)
 		let storage = ConfigurationStorage(fields: fields)
 		// A configuration built in a `@Sendable` function whose every field is proven `Sendable` is `nonisolated` and
 		// `Sendable`, so a `@Sendable nonisolated` function can take it and read its members in a module whose
@@ -462,12 +442,12 @@ extension MockLowering.ConfigurationRecord {
 			"\(indent)/// Configuration for how this type is constructed within a mock tree.",
 			isSendable
 				? "\(indent)nonisolated struct \(ScopeGenerator.mockConfigurationStructName): Sendable {"
-				: "\(indent)\(takesModuleDefaultIsolation ? "\(MockLowering.moduleDefaultIsolationAttribute) " : "")struct \(ScopeGenerator.mockConfigurationStructName) {",
+				: "\(indent)struct \(ScopeGenerator.mockConfigurationStructName) {",
 		]
 		lines.append("\(innerIndent)init(")
 		lines.append(parameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
-		lines.append(contentsOf: storage.initialization(to: values, indent: parameterIndent))
+		lines.append(contentsOf: storage.initialization(to: fields.map(\.name), indent: parameterIndent))
 		lines.append("\(innerIndent)}")
 		lines.append("")
 		lines.append(contentsOf: storage.readers(indent: innerIndent))

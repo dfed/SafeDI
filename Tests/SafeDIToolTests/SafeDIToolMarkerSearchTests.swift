@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// How SafeDITool decides from a file's text whether to parse it: only a file whose bytes contain `@Instantiable`
-/// or `#SafeDIConfiguration` can declare SafeDI content.
+/// How SafeDITool decides from a file's text whether to parse it: only a file whose bytes contain `Instantiable`
+/// (in `@Instantiable` or `@SafeDI.Instantiable`) or `#SafeDIConfiguration` can declare SafeDI content.
 struct SafeDIToolMarkerSearchTests: ~Copyable {
 	// MARK: Initialization
 
@@ -58,6 +58,24 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		)
 
 		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable) == [.simple(name: "Service")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_readsAndPlansEveryFile_whenFilesSpellMacroOnlyQualifiedBySafeDI() async throws {
+		// No file contains `@Instantiable`: each spells `@SafeDI.Instantiable`. `scan` plans the root's and the mock's
+		// outputs, which `executeSafeDIToolTest` checks are the files `generate` writes, and `generate` reads every file.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: SafeDIToolQualifiedSpellingFixtures.fixtures(rootArguments: "isRoot: true, generateMock: SafeDI.MockGeneration.internal"),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles?.keys.sorted() == ["Root+SafeDI.swift", "Root+SafeDIMock.swift", "SafeDIMockConfiguration.swift"])
+		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable).sorted() == [
+			.simple(name: "Profile"), .simple(name: "Root"), .simple(name: "Screen"), .simple(name: "Session"), .simple(name: "Settings"),
+		])
 	}
 
 	@Test

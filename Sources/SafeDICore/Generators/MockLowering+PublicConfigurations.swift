@@ -281,6 +281,7 @@ extension MockLowering.PublicConstructionRecord {
 			// What the hand-written mock returns, for a node built with it
 			// (`MockLowering.PublicConstructionRecord.constructionReturnType`).
 			constructionReturnType: construction.constructionReturnType,
+			sendsArguments: node.instantiable.declarationType == .actorType && !node.usesMockInitializer,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
 			builderParameterTypes: construction.builderParameterTypes,
 			childMembers: children.compactMap(ChildMember.init(of:)),
@@ -296,7 +297,12 @@ extension MockLowering.PublicConstructionRecord {
 	/// The type of the builder that overrides the construction: optional, handed each argument, returning the concrete type,
 	/// `@Sendable` where the configuration is `@Sendable`-typed.
 	func builderType(requiresSendable: Bool) -> String {
-		"(\(requiresSendable ? "@Sendable " : "")(\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
+		"(\(requiresSendable ? "@Sendable " : "")(\(builderParameterTypes.map { sending($0.asSource) }.joined(separator: ", "))) -> \(concreteType.asSource))?"
+	}
+
+	/// `parameter` spelled `sending` where the construction is an actor's initializer.
+	private func sending(_ parameter: String) -> String {
+		sendsArguments ? "sending \(parameter)" : parameter
 	}
 
 	/// The construction function, indented as a member of its type's extension: it calls the builder when it is set, and
@@ -314,14 +320,14 @@ extension MockLowering.PublicConstructionRecord {
 			if let defaultField = defaultFields.first(where: { $0.label == argument.label }) {
 				let valueType = defaultField.publicValueType
 				if valueType.isOptional {
-					parameters.append("\(name.spelledAsArgumentLabel): \(valueType.asSource)")
+					parameters.append("\(name.spelledAsArgumentLabel): \(sending(valueType.asSource))")
 				} else {
-					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(valueType).asSource)")
+					parameters.append("\(name.spelledAsArgumentLabel): \(sending(TypeDescription.optional(valueType).asSource))")
 					resolutions.append("\(indent)\(indent)let \(name) = \(name) ?? (\(defaultField.publicDefaultExpression))")
 				}
 				values.append(defaultField.isAutoclosure ? "\(name)()" : name)
 			} else {
-				parameters.append("\(name.spelledAsArgumentLabel): \(argument.typeDescription.asFunctionParameter.asSource)")
+				parameters.append("\(name.spelledAsArgumentLabel): \(sending(argument.typeDescription.asFunctionParameter.asSource))")
 				values.append(name)
 			}
 		}

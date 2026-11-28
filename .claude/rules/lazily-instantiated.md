@@ -3,12 +3,7 @@ paths:
   - "Sources/SafeDICore/Generators/**/*"
   - "Sources/SafeDICore/Models/{Scope,Property,Dependency,CycleParameter}.swift"
   - "Sources/SafeDICore/Utilities/DeferredRelease.swift"
-  - "Tests/**/*Cycle*.swift"
-  - "Tests/**/*DeepTree*.swift"
-  - "Tests/**/*SendableBuilder*.swift"
-  - "Tests/**/*DiagnosticOrder*.swift"
-  - "Tests/**/*OnlyIfAvailable*.swift"
-  - "Tests/**/*LazilyInstantiated*.swift"
+  - "Tests/**/*{Cycle,DeepTree,SendableBuilder,DiagnosticOrder,OnlyIfAvailable,LazilyInstantiated}*.swift"
   - "Sources/SafeDI/DelayedInstantiation/*LazilyInstantiated.swift"
 ---
 

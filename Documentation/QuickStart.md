@@ -40,7 +40,7 @@ In `Package.swift`:
          .library(name: "Root", targets: ["Root"]),
      ],
 +    dependencies: [
-+        .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
++        .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.2"),
 +    ],
      targets: [
          .target(
@@ -268,7 +268,7 @@ Add SafeDI to your `MODULE.bazel`:
 
 ```diff
  bazel_dep(name = "rules_swift", version = "3.6.1")
-+bazel_dep(name = "safedi", version = "2.3.5")
++bazel_dep(name = "safedi", version = "2.4.2")
 ```
 
 Declare every module with `safedi_swift_library` in place of `swift_library`, `Networking` included: under Bazel, SafeDI reads only the modules it runs on. Beside each library, `safedi_swift_library` declares a target named after it with `_safedi` added, such as `Networking_safedi`, which runs SafeDI on the module and records the types it declares. In each module, add `@safedi//:SafeDI` to `deps`, and list the `_safedi` target of each module it depends on directly in `safedi_deps`, so that SafeDI reads the types those modules declare.
@@ -357,7 +357,7 @@ Depend on the same SafeDI version in `Tuist/Package.swift`, so that `tuist insta
  let package = Package(
      name: "MyApp",
 +    dependencies: [
-+        .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5"),
++        .package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.2"),
 +    ],
  )
 ```

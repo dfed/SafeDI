@@ -1066,7 +1066,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			return writer.encoded
 		}
 
-		#expect(try #require(base.modules["Feed"]?.moduleInfoFile?.seamSignatures).count == 1)
+		#expect(try #require(base.modules["Feed"]?.moduleInfoFile?.seamSignatures).decoded.count == 1)
 		#expect(try ownDeclarationBytes(of: base, "Session") != ownDeclarationBytes(of: moved, "Session"))
 		#expect(try Self.withoutFixtureRoot(ownSignatureBytes(of: base, "Feed"), base) == Self.withoutFixtureRoot(ownSignatureBytes(of: moved, "Feed"), moved))
 		#expect(try Self.withoutFixtureRoot(viewBytes(of: base, "App"), base) == Self.withoutFixtureRoot(viewBytes(of: moved, "App"), moved))

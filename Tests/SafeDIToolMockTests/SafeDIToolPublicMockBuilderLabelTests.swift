@@ -94,7 +94,7 @@ struct SafeDIToolPublicMockBuilderLabelTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.a = { _ in __safeDI_builder }
+		                self.init(a: { _ in __safeDI_builder })
 		            }
 		        }
 		    }

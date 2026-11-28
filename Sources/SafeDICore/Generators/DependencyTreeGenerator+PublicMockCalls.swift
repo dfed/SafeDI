@@ -29,11 +29,11 @@ struct PublicMockPlans: Sendable {
 
 	/// The plan of `type`'s public mock, or `nil` when none was computed or its module could not generate it; throws what
 	/// computing it threw.
-	func plan(of type: TypeDescription) throws -> OwnPublicMockPlan? {
+	func plan(of type: TypeDescription) throws -> StoredPublicMockPlan? {
 		try plansByType[type]?.get()
 	}
 
-	mutating func add(plan: OwnPublicMockPlan?, of type: TypeDescription) {
+	mutating func add(plan: StoredPublicMockPlan?, of type: TypeDescription) {
 		plansByType[type] = .success(plan)
 	}
 
@@ -46,7 +46,7 @@ struct PublicMockPlans: Sendable {
 		plansByType.merge(plans.plansByType) { _, added in added }
 	}
 
-	private var plansByType = [TypeDescription: Result<OwnPublicMockPlan?, any Error>]()
+	private var plansByType = [TypeDescription: Result<StoredPublicMockPlan?, any Error>]()
 }
 
 extension DependencyTreeGenerator {
@@ -171,18 +171,20 @@ extension DependencyTreeGenerator {
 		var publicMockCalls = [TypeDescription: PublicMockCall]()
 		// The first type in type order whose plan its module cannot compute reports its error.
 		for (type, foreignPublicMock) in calledTypes {
-			guard let ownPlan = try foreignPublicMockPlans.plan(of: type) else { continue }
+			guard let plan = try foreignPublicMockPlans.plan(of: type) else { continue }
+			// The leaf's dependencies are declared where this run reads the mocked type's declaration.
+			let declarationLocation = typeDescriptionToScopeMap[type]?.instantiable.declarationLocation
 			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
 			// The narrowest tier the module reaches: every module reaches the `public` one.
-			let tier = ownPlan.plan.tiers.last { $0.satisfies(requirement) } ?? .public
-			let tierParameters = ownPlan.plan.parameters(ofTier: tier)
+			let tier = plan.tiers.last { $0.satisfies(requirement) } ?? .public
+			let tierParameters = plan.parameters(ofTier: tier)
 			publicMockCalls[type] = PublicMockCall(
 				type: type,
 				tier: tier,
 				passedParameters: tierParameters.compactMap { parameter in
 					switch parameter.role {
 					case let .forwarded(property):
-						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: false, builder: nil)
+						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: declarationLocation), isBuiltWhenNil: false, builder: nil)
 					case let .received(property, isRequired):
 						// A required parameter the declaring module named apart from another of its label – a dependency it cannot
 						// build – has no default to leave it to, so the leaf receives it under the parameter's name, which the
@@ -193,7 +195,7 @@ extension DependencyTreeGenerator {
 							dependency: Dependency(
 								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
 								source: .received(onlyIfAvailable: !isRequired),
-								declarationLocation: ownPlan.instantiable.declarationLocation,
+								declarationLocation: declarationLocation,
 							),
 							isBuiltWhenNil: parameter.isBuiltWhenNil,
 							builtWrapper: parameter.builtWrapper,
@@ -205,10 +207,10 @@ extension DependencyTreeGenerator {
 				},
 				// Every parameter a narrower tier takes is a received dependency or a default-valued parameter: a narrower
 				// required one keeps the public tier from being generated.
-				omittedParameters: ownPlan.plan.parameters.filter { parameter in
+				omittedParameters: plan.parameters.filter { parameter in
 					guard parameter.access < tier, case .received = parameter.role else { return false }
 					return true
-				} + ownPlan.plan.noTierParameters,
+				} + plan.noTierParameters,
 				takesOverrides: tierParameters.contains { parameter in
 					if case .overrides = parameter.role {
 						true
@@ -216,20 +218,20 @@ extension DependencyTreeGenerator {
 						false
 					}
 				},
-				guardTypeName: ownPlan.plan.guardTypeName,
+				guardTypeName: plan.guardTypeName,
 				comment: foreignPublicMock.callComment,
 				declaringModule: foreignPublicMock.declaringModule,
 				callerModule: emittingModule.identity,
 				requirement: requirement,
 				declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
 				callerModuleMockCondition: seams.currentModuleMockCondition,
-				receiversByLabel: ownPlan.receiversByLabel,
+				receiversByLabel: plan.receiversByLabel,
 				// A builder's `Builder` type, which a calling internal mock that passes its places up takes, is a function too.
-				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
+				typesDeclaredEscaping: Set(plan.typesDeclaredEscaping).intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
 				calledBuilders: CalledBuilders(
-					holes: ownPlan.plan.holes.map { $0.atTier(tier) },
-					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
-					scopeEnums: ownPlan.plan.scopeEnums,
+					holes: plan.holes.map { $0.atTier(tier) },
+					builders: plan.builders.map { $0.atTier(tier) },
+					scopeEnums: plan.scopeEnums,
 				),
 			)
 		}
@@ -239,9 +241,9 @@ extension DependencyTreeGenerator {
 	/// Computes the plan of the public mock each module of `calledTypes` generated for each of its types `plans` lacks,
 	/// as that module computed it, from the declarations it sees: one call of a generator over each module's declarations
 	/// builds that module's mock world once, for all of its types. A module SafeDI knows no name of has no plan.
-	/// A deliberate gap beside a foreign seam's signature, which a module info carries (`computeForeignSeamRoots()`): a
-	/// plan is computed again here, only for a mock whose constructions this module cannot reach, and is a whole
-	/// generator's.
+	/// Under module info a module's file carries the plans its own run computed (`ForeignPublicMock.storedPlans`), as it
+	/// carries a seam's signature (`computeForeignSeamRoots()`), and those are read rather than computed; the SwiftPM
+	/// plugin's target graph reads no module info, so it computes.
 	/// - Parameter modulesReadByRunOfModule: See `EmittingModule.init`.
 	private func computePublicMockPlans(
 		of calledTypes: [(type: TypeDescription, foreignPublicMock: SeamResolution.ForeignPublicMock)],
@@ -256,6 +258,19 @@ extension DependencyTreeGenerator {
 		}
 		for (moduleName, calls) in typesByModuleName.sorted(by: { $0.key < $1.key }) {
 			let foreignPublicMock = calls.foreignPublicMock
+			// The plans the module's own run computed, which its module info carries, are read rather than computed again:
+			// computing one builds the module's mock world, and each plan beneath it in turn. A plan depends on whether its
+			// run compiles the mocks it generates, so a run that differs from the module's in that computes it.
+			var storedPlansByType = [TypeDescription: StoredPublicMockPlan]()
+			if let storedPlans = foreignPublicMock.storedPlans, storedPlans.compilesGeneratedMocks == compilesGeneratedMocks {
+				storedPlansByType = try Dictionary(storedPlans.read().map { ($0.mockedType, $0) }) { first, _ in first }
+			}
+			for type in calls.types {
+				guard let storedPlan = storedPlansByType[type] else { continue }
+				plans.add(plan: storedPlan, of: type)
+			}
+			let typesToCompute = calls.types.filter { storedPlansByType[$0] == nil }
+			guard !typesToCompute.isEmpty else { continue }
 			// Resolved only for a module whose public mock a plan needs, once per module.
 			let visible = try foreignPublicMock.visibleDeclarations()
 			let generator = DependencyTreeGenerator(
@@ -293,7 +308,7 @@ extension DependencyTreeGenerator {
 			// The generator computes for this run, or for the run this generator computes for in turn.
 			let run = GenerationLayerObservation.runOfOtherModulesGenerator ?? GenerationLayerObservation.Run(moduleName: seams.currentModule.moduleName)
 			let modulePlans = await GenerationLayerObservation.$runOfOtherModulesGenerator.withValue(run) {
-				await generator.publicMockPlans(ofOwnTypes: calls.types)
+				await generator.publicMockPlans(ofOwnTypes: typesToCompute)
 			}
 			plans.add(modulePlans)
 		}
@@ -332,7 +347,7 @@ extension DependencyTreeGenerator {
 			plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
 		)
 		// A computation over the callers' view that fails reports its own error, as the callers' generation would.
-		let callersPlan = try await callersGenerator.publicMockPlans(ofOwnTypes: [type]).plan(of: type)
+		let callersPlan = try await callersGenerator.publicMockPlan(ofOwnType: type)
 		guard callersPlan?.plan.guardTypeName != ownPlan.plan.guardTypeName else { return nil }
 		struct ParameterShape: Hashable {
 			let name: String
@@ -386,7 +401,7 @@ extension DependencyTreeGenerator {
 		for type in types {
 			do {
 				let plan = try await publicMockPlan(ofOwnType: type, mockScopes: &mockScopes, publicMockContext: publicMockContext, foreignPublicMockPlans: &foreignPublicMockPlans)
-				plans.add(plan: plan, of: type)
+				plans.add(plan: plan.map(StoredPublicMockPlan.init), of: type)
 			} catch {
 				plans.add(error: error, of: type)
 			}
@@ -432,15 +447,41 @@ extension DependencyTreeGenerator {
 			generatedMockReason: .generateMock,
 			mockScopes: rootMockScopes,
 			publicMockContext: publicMockContext,
-			// The declaring module's own run checked its constructions.
-			emittingModule: nil,
+			// The mock promotes what the declaring module can construct, as that module's own run decided it, so the plan
+			// is of the mock that run generates. That run checked its constructions.
+			emittingModule: emittingModuleToCheck,
+			checksConstructions: false,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
 			constructionMemo: &constructionMemo,
 		)
-		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
+		return await Self.ownPublicMockPlan(of: instantiable, mockRoot: mockRoot, mockDefaults: mockScopes.flatParameterMockDefaults, publicMockContext: publicMockContext)
+	}
+
+	/// The whole plan of the public mock of one of this generator's own types, which the callers' view compares with the
+	/// module's own: the plan of `publicMockPlans(ofOwnTypes:)` before it is reduced to what a calling module reads.
+	private func publicMockPlan(ofOwnType type: TypeDescription) async throws -> OwnPublicMockPlan? {
+		var mockScopes: MockScopes?
+		var foreignPublicMockPlans = PublicMockPlans()
+		return try await publicMockPlan(
+			ofOwnType: type,
+			mockScopes: &mockScopes,
+			publicMockContext: makePublicMockContext(proof: ownAccessProof().proof),
+			foreignPublicMockPlans: &foreignPublicMockPlans,
+		)
+	}
+
+	/// The plan of the public mock of `instantiable`, whose mock root is `mockRoot`, as its module computes it for the
+	/// modules that call the mock.
+	static func ownPublicMockPlan(
+		of instantiable: Instantiable,
+		mockRoot: ScopeGenerator,
+		mockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
+		publicMockContext: PublicMockContext,
+	) async -> OwnPublicMockPlan {
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockDefaults)
 		return OwnPublicMockPlan(
 			instantiable: instantiable,
 			plan: ScopeGenerator.publicMockPlan(

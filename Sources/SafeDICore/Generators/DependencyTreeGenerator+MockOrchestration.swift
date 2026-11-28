@@ -19,14 +19,51 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
-	/// Generates mock code for all `@Instantiable` types.
+	/// Generates mock code for all `@Instantiable` types. A mock keeps its local functions inlinable, where a seam’s tree
+	/// does not (`LocalFunctionInlining`).
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), or `nil`
 	///   when the module declares no public mock.
 	func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>?,
 		additionalMocksToGenerate: Set<String>,
+		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
+	) async throws -> MockGenerationResult {
+		guard NodeRecordsObservation.observer != nil else {
+			return try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: nil,
+			)
+		}
+		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
+		// local, so that a run no test observes threads nothing through the mock roots' construction.
+		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
+		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
+			try await generateMockCode(
+				mockConditionalCompilation: mockConditionalCompilation,
+				currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+				additionalMocksToGenerate: additionalMocksToGenerate,
+				storesPublicMockPlans: storesPublicMockPlans,
+				publicMockContext: publicMockContext,
+				worldRootRecording: worldRootRecording,
+			)
+		}
+	}
+
+	/// - Parameter worldRootRecording: Where the root of each mock root's world arrives, by mocked type, where a test
+	///   observes node records.
+	private func generateMockCode(
+		mockConditionalCompilation: String?,
+		currentModuleSourceFilePaths: Set<String>?,
+		additionalMocksToGenerate: Set<String>,
+		storesPublicMockPlans: Bool,
+		publicMockContext: PublicMockContext?,
+		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -49,6 +86,8 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// The public mocks the module's own files declare, whose plans its module info carries.
+		var ownPublicMockTypes = Set<TypeDescription>()
 		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
 		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenMockRoots)
 		var mockRootErrors = [DependencyTreeGeneratorError]()
@@ -111,6 +150,9 @@ extension DependencyTreeGenerator {
 					guard findings.isEmpty else {
 						mockRootErrors.append(.publicMockCannotBeGenerated(findings))
 						continue
+					}
+					if isDeclaredInCurrentModule {
+						ownPublicMockTypes.insert(instantiable.concreteInstantiable)
 					}
 				}
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
@@ -198,8 +240,8 @@ extension DependencyTreeGenerator {
 		// across every root that references the type, so the annotation has to agree, and each root's lowering reads the
 		// union. They are read from the generator trees.
 		let sendableConfigurationTypeNames = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
-			let (_, mockRoot) = instantiableAndMockRoot
-			return mockRoot.sendableConfigurationTypeNames()
+			let (instantiable, mockRoot) = instantiableAndMockRoot
+			return mockRoot.sendableConfigurationTypeNames(ofMockRootOf: instantiable)
 		}.reduce(into: Set<String>()) { union, names in
 			union.formUnion(names)
 		}
@@ -216,10 +258,18 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 		)
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		var recordedWorldRoots = [TypeDescription: ConstructionScope]()
+		if let worldRootRecording {
+			worldRootRecording.continuation.finish()
+			for await (mockedType, worldRoot) in worldRootRecording.stream {
+				recordedWorldRoots[mockedType] = worldRoot
+			}
+		}
+		let worldRoots = recordedWorldRoots
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
@@ -257,6 +307,16 @@ extension DependencyTreeGenerator {
 			GeneratedRoot(typeDescription: root.typeDescription, sourceFilePath: root.sourceFilePath, code: code, fulfillers: root.fulfillers)
 		}
 
+		// The plan of each of the module's own public mocks, as a module that calls the mock reads it, made from the mock
+		// root this run built once every check has passed, so that no module above builds the mock's tree to compute it
+		// (`computePublicMockPlans(of:into:modulesReadByRunOfModule:)`).
+		var storedPublicMockPlans = [StoredPublicMockPlan]()
+		if storesPublicMockPlans, let publicMockContext {
+			for (instantiable, mockRoot) in mockRoots where ownPublicMockTypes.contains(instantiable.concreteInstantiable) {
+				await storedPublicMockPlans.append(StoredPublicMockPlan(Self.ownPublicMockPlan(of: instantiable, mockRoot: mockRoot, mockDefaults: flatParameterMockDefaults, publicMockContext: publicMockContext)))
+			}
+		}
+
 		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
 		Self.releaseInBackground(mockRoots.map(\.scopeGenerator))
 		mockRoots = []
@@ -264,6 +324,7 @@ extension DependencyTreeGenerator {
 			generatedRoots: generatedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 			mockConfigurationFulfillers: mockConfigurationFulfillers,
+			storedPublicMockPlans: storedPublicMockPlans,
 		)
 	}
 
@@ -649,6 +710,7 @@ extension DependencyTreeGenerator {
 	///     reports what a type needs, not what keeps one module from compiling its mock, so it checks no access. This is
 	///     the one check of a single mock root that the two callers do not share; the access that decides which flat
 	///     parameters default is asked of `mockScopes` instead, by both.
+	///   - checksConstructions: See `createMockRootScopeGenerator`.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	///   - scopesWithValidatedDeclarations: See `createMockRootScopeGenerator`.
 	func createMockRoot(
@@ -658,6 +720,7 @@ extension DependencyTreeGenerator {
 		mockScopes: MockScopes,
 		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
+		checksConstructions: Bool = true,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
@@ -692,6 +755,7 @@ extension DependencyTreeGenerator {
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			publicMockContext: publicMockContext,
 			emittingModule: emittingModule,
+			checksConstructions: checksConstructions,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
@@ -955,6 +1019,11 @@ extension DependencyTreeGenerator {
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
+					} else if dependency.isInstantiatedOnlyIfAvailable, !buildsHoles || !Self.canBeHole(dependency) {
+						// No declaration the module sees fulfills the type, fake included: an internal mock binds the property
+						// where production binds `nil`, from an override that defaults to `nil`. A public mock's is a hole
+						// (below), whose builder defaults to one that returns `nil`, but for a type spelled as no hole can be.
+						scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 					} else if buildsHoles, Self.canBeHole(dependency) {
 						// No declaration the module sees fulfills the type, fake included: a public mock takes a builder for
 						// it, which this site calls with the values in scope here.
@@ -975,7 +1044,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded:
 					continue

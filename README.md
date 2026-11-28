@@ -118,7 +118,7 @@ For previews and tests that need real data, pass forwarded values directly and u
 
 ## Getting started
 
-To add SafeDI to a Swift package, add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.5")` to its dependencies. The [quick start](Documentation/QuickStart.md) sets up SafeDI in an app of several modules, in a Swift package, an Xcode project, Bazel, or Tuist: adding SafeDI to the build, declaring your types, creating the tree, and using mocks in tests and previews.
+To add SafeDI to a Swift package, add `.package(url: "https://github.com/dfed/SafeDI.git", from: "2.4.2")` to its dependencies. The [quick start](Documentation/QuickStart.md) sets up SafeDI in an app of several modules, in a Swift package, an Xcode project, Bazel, or Tuist: adding SafeDI to the build, declaring your types, creating the tree, and using mocks in tests and previews.
 
 Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md) is the reference for everything else, including [installation](Documentation/Manual.md#installation) in Xcode projects, Swift packages, Bazel, Tuist, and custom build systems.
 

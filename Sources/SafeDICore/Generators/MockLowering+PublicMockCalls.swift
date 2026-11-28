@@ -300,6 +300,7 @@ extension MockLowering.Walk {
 				}
 				arguments.append(labeled(".init(\(ReservedName.noScopeArgumentLabel): \(dependency.property.label))", as: argument))
 			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
+				// safedi-source-rule: allow stringScan — not cold, and bounded: it runs once for each builder struct that a call of another module’s public mock passes, as often as the mock bodies write such a call, and each run reads only that one struct’s text (its fills), never the generated file. Removed by the roadmap’s row 5 (mock bodies: one writer).
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
 				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
 				if overrideBuilders != nil {
@@ -468,8 +469,8 @@ extension MockLowering.Walk {
 		var bodyLines = [String]()
 		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
 		bodyLines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { $0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]) })
-		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
-			bodyLines.append(String(line))
+		if !fillCode.isEmpty {
+			bodyLines.append(contentsOf: GeneratedCodeText.lines(of: fillCode))
 		}
 		bodyLines.append(publicMockCall.guardLine(for: instantiable.concreteInstantiable))
 		// Each receive of the call's leaf the mock names apart is bound again under its label (`emitReceiverBindings`), a
@@ -666,7 +667,7 @@ extension MockLowering {
 			let wrapperLines = MockLowering.wrapperBindingLines(of: typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			let construction = String(MockLowering.joinedLines(wrapperLines).dropFirst(bindingPrefix.count))
 			let value = builder.inlinePlaceValue(construction: construction, overrideExpression: overrideRead, wrappingBuilderIn: unwrappedType.spelledForConstruction)
-			return "\(bindingPrefix)\(value)".split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			return GeneratedCodeText.lines(of: "\(bindingPrefix)\(value)")
 		}
 	}
 }

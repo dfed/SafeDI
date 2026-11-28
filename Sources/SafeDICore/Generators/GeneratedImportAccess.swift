@@ -52,16 +52,16 @@ import SwiftSyntax
 /// hands the tool too, says nothing of the module's own imports (`ImportStatement.sourceFilePath`).
 ///
 /// A type a declaration names is attributed to the modules that declare it as SafeDI read them, to SafeDI for its
-/// wrappers, to no module for the standard library's types, and to the module a qualified spelling names. A type SafeDI
-/// read no declaration of in a module it knows may come from any module the file imports, so it is attributed to
-/// Foundation for Foundation's well-known types and to each module the module's own files import at that declaration's
-/// level or wider, but to no module they import only narrower, whose types none of their own declarations of that level
-/// can name either. A generated declaration also names types a dependency's declarations name, such as a type a seam's
-/// tree receives, whose module the module's own files need not import at all, so an unread type is also attributed to
-/// each module that a dependency's file declaring an `@Instantiable` that names it, in a dependency or an initializer
-/// parameter, imports at `package` or wider, the levels through which the declarations another module calls can name
-/// it; but not a type Foundation is known to declare, which such a file's other imports say nothing about. Attributing a
-/// type to a module that does not declare it costs a warning that the import is unused.
+/// wrappers, and to the module a qualified spelling names. A type SafeDI read no declaration of in a module it knows,
+/// the standard library's and Foundation's among them, may come from any module the file imports, so it is attributed
+/// to each module the module's own files import at that declaration's level or wider, but to no module they import only
+/// narrower, whose types none of their own declarations of that level can name either. A generated declaration also
+/// names types a dependency's declarations name, such as a type a seam's tree receives, whose module the module's own
+/// files need not import at all, so an unread type is also attributed to each module that a dependency's file declaring
+/// an `@Instantiable` that names it, in a dependency or an initializer parameter, imports at `package` or wider, the
+/// levels through which the declarations another module calls can name it. No type is attributed by how its name is
+/// spelled: any module may declare a `Calendar` or a `Result`. Attributing a type to a module that does not declare it
+/// costs a warning that the import is unused, which spelling the type qualified by its module's name avoids.
 public struct GeneratedImportAccess: Sendable {
 	// MARK: Initialization
 
@@ -309,6 +309,7 @@ public struct GeneratedImportAccess: Sendable {
 	/// The types the declarations of `code`, a generated file's code, name where an import's level matters.
 	func namedTypes(inGeneratedCode code: String) -> NamedTypes {
 		// Only a declaration that spells one of these can name a type through a `public` or `package` import.
+		// safedi-source-rule: allow stringScan — once per generated file (its unconditional code and its mock code), over that file’s code.
 		guard code.contains("public ") || code.contains("package ") || code.contains("@usableFromInline") else {
 			return NamedTypes(publicTypeNames: [], packageTypeNames: [])
 		}
@@ -381,8 +382,6 @@ public struct GeneratedImportAccess: Sendable {
 				declaringModules.contains(.named(moduleName))
 			} else if WellKnownTypeNames.safeDI.contains(typeName) {
 				moduleName == "SafeDI"
-			} else if WellKnownTypeNames.swift.contains(typeName) {
-				false
 			} else if importedModuleNames.contains(typeName) {
 				// A type qualified by its module's name.
 				moduleName == typeName
@@ -393,16 +392,12 @@ public struct GeneratedImportAccess: Sendable {
 	}
 
 	/// Whether the module named `moduleName` may declare the type named `typeName`, which no declaration SafeDI read
-	/// declares in a module it knows, named by a declaration of `level` or wider: Foundation for its well-known types,
-	/// and any module but SafeDI, whose types SafeDI knows, that the module's own files import at `level` or wider, or,
-	/// for a type that is not one of Foundation's well-known types, that a dependency's file declaring an `@Instantiable`
-	/// that names it imports at `package` or wider.
+	/// declares in a module it knows, named by a declaration of `level` or wider: any module but SafeDI, whose types
+	/// SafeDI knows, that the module's own files import at `level` or wider, or that a dependency's file declaring an
+	/// `@Instantiable` that names it imports at `package` or wider.
 	private func mayDeclareUnreadType(named typeName: String, moduleName: String, atLevel level: AccessLevel) -> Bool {
 		if moduleName == "SafeDI" {
 			false
-		} else if WellKnownTypeNames.foundation.contains(typeName) {
-			// A dependency's file that names one of Foundation's types says nothing of which other module declares it.
-			moduleName == "Foundation" || ownFilesImport(moduleName, atLevelOrWider: level)
 		} else {
 			ownFilesImport(moduleName, atLevelOrWider: level)
 				|| dependencyFileModuleNamesByTypeName[typeName]?.contains(moduleName) == true
@@ -417,7 +412,8 @@ public struct GeneratedImportAccess: Sendable {
 }
 
 /// The names of the types every module can name without declaring them: Swift's, Foundation's and Dispatch's, and
-/// SafeDI's own.
+/// SafeDI's own. Only SafeDI's attribute a type to a module: the others keep a generated comment from naming them
+/// (`TypeAccessProof.isAllowlisted(_:)`).
 enum WellKnownTypeNames {
 	/// The standard library's types, which no import provides.
 	static let swift: Set<String> = [

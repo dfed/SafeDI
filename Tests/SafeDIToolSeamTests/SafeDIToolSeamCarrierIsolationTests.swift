@@ -144,29 +144,33 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
-		        func __safeDI_screenBuilder(id: Int) -> Screen {
+		        @inline(never) func __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
+		        @inline(never) func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let model = Model(id: id)
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id, model)
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(id, model, api)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder(__safeDI_apiBuilder_detailBuilder: __safeDI_apiBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Screen(id: id, model: model, api: api, detailBuilder: detailBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(id: $0)
 		        }
-		        @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
+		        @inline(never) @Sendable nonisolated func __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_ApiCarrier_Detail<any Api>) -> Detail {
+		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
+		            return Detail(api: api)
+		        }
+		        @inline(never) @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
 		            let __safeDI_apiSendableBuilder_workBuilder = __safeDI_apiSendableBuilder.workBuilder()
 		            let model = Model(id: id)
 		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_workBuilder.detailBuilder(id, model)
-		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
-		                return Detail(api: api)
+		            let detailBuilder = Instantiator<Detail> {
+		                __safeDI_detailBuilder_(__safeDI_apiSendableBuilder_detailBuilder: __safeDI_apiSendableBuilder_detailBuilder)
 		            }
-		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
 		            return Work(id: id, model: model, detailBuilder: detailBuilder)
 		        }
 		        let workBuilder = SendableInstantiator<Work> {

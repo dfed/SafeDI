@@ -1049,13 +1049,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesTypeDeclaredInExtensionOnPublicTier_whenExtensionAndTypeArePublic(integration: MultiModuleIntegration) async throws {
-		// EX1: a large production app’s shape: `ChatService.TurnTakingMode`, declared `public` in an unspelled extension of the `public`
-		// `ChatService` in a file without a SafeDI marker, is `public` exactly; no comment, since SafeDI reads it.
+		// EX1: a shape from real use: `SessionService.DeliveryMode`, declared `public` in an unspelled extension of the `public`
+		// `SessionService` in a file without a SafeDI marker, is `public` exactly; no comment, since SafeDI reads it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(
-				receives: ["@Received let mode: ChatService.TurnTakingMode"],
-				extraFeatureFiles: ["ChatService.swift": "public final class ChatService {\n    public init() {}\n}\n\nextension ChatService {\n    public enum TurnTakingMode {\n        case automatic\n        case manual\n    }\n}"],
-				hostForwards: ["mode: ChatService.TurnTakingMode"],
+				receives: ["@Received let mode: SessionService.DeliveryMode"],
+				extraFeatureFiles: ["SessionService.swift": "public final class SessionService {\n    public init() {}\n}\n\nextension SessionService {\n    public enum DeliveryMode {\n        case automatic\n        case manual\n    }\n}"],
+				hostForwards: ["mode: SessionService.DeliveryMode"],
 			),
 			integration: integration,
 			filesToDelete: &filesToDelete,
@@ -1069,14 +1069,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_mode mode: ChatService.TurnTakingMode) {
+			    public init(__safeDI_mode mode: SessionService.DeliveryMode) {
 			        let cache = Cache()
 			        self.init(mode: mode, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C474C12E18F8A008 {}
+			    public enum __safeDI_Screen_DED89EA9D64DB0D9 {}
 			}
 			""",
 		])
@@ -2626,7 +2626,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_window: @autoclosure @escaping () -> Window) {
 		        let window = LazilyInstantiated<Window>(__safeDI_window)
-		        func __safeDI_screen() -> Screen {
+		        @inline(never) func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_564C5E6539CF6AA0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Screen(__safeDI_window: window.instance)
 		        }
@@ -2736,7 +2736,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.brush = { _ in __safeDI_builder() }
+		                    self.init(brush: { _ in __safeDI_builder() })
 		                }
 		            }
 		        }
@@ -2750,7 +2750,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.badgeBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(badgeBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -3625,7 +3625,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.package])
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.line) == [2])
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.lineAndColumn?.line) == [2])
 		}
 	}
 
@@ -4056,7 +4056,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesPublicTier_whenAnotherFileDeclaresTypeWhereMockConditionIsInactive(integration: MultiModuleIntegration) async throws {
-		// IFM15 (Dan's shape): `Core`'s mock-only block declares `Endpoint` with no `#else`, and another file declares it
+		// IFM15 (a real adopter's shape): `Core`'s mock-only block declares `Endpoint` with no `#else`, and another file declares it
 		// under `#if !DEBUG`, both `public`: every build declares it `public`, so the seam's `public` initializer requires it.
 		for isReleaseConfiguration in [false, true] {
 			let output = try await executeSafeDIToolMultiModuleTest(
@@ -6077,7 +6077,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesBuilderTypeQualifiedBySafeDIOnPublicTierWithoutComment_whenSeamReceivesIt() async throws {
-		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too.
+		// SB5: `SafeDI.Instantiator<Badge>.Builder` is SafeDI's too, read as the bare `Instantiator<Badge>.Builder`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.screenModules(
 				receives: ["@Received let badgeBuilder: SafeDI.Instantiator<Badge>.Builder"],
@@ -6100,14 +6100,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			extension Screen {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping SafeDI.Instantiator<Badge>.Builder) {
+			    public init(__safeDI_badgeBuilder badgeBuilder: @escaping Instantiator<Badge>.Builder) {
 			        let cache = Cache()
 			        self.init(badgeBuilder: badgeBuilder, cache: cache)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C97EBD6D04347108 {}
+			    public enum __safeDI_Screen_879C7A483E974080 {}
 			}
 			""",
 		])

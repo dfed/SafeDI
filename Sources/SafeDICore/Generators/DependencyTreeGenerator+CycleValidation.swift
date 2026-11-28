@@ -922,6 +922,17 @@ extension DependencyTreeGenerator {
 		/// Those of `passedByPublicMockCalls` some called mock builds when passed `nil`, which a mock that can build one
 		/// builds once and passes to every call, as the inline mock promotes it (M8.8b).
 		let builtWhenNilByPublicMockCalls: Set<Property>
+
+		/// Whether `other` holds the same properties, and spells those of `received` as this does: `received` keeps the
+		/// most explicit spelling of each property, which a pass over a cycle can change without changing the set.
+		func isSpelled(as other: ReceivedProperties) -> Bool {
+			received == other.received
+				&& onlyIfAvailable == other.onlyIfAvailable
+				&& requiredAliasFulfillingProperties == other.requiredAliasFulfillingProperties
+				&& passedByPublicMockCalls == other.passedByPublicMockCalls
+				&& builtWhenNilByPublicMockCalls == other.builtWhenNilByPublicMockCalls
+				&& Set(received.map(\.typeDescription.asSource)) == Set(other.received.map(\.typeDescription.asSource))
+		}
 	}
 
 	/// Memoizes `collectReceivedProperties` across the mock roots of one mock scope map.
@@ -942,6 +953,14 @@ extension DependencyTreeGenerator {
 		/// Whether a walk enters the fills of a seam's call too, as it enters a public mock call's: what a fill of a seam's
 		/// caller receives, its nested seam calls' fills included (`Scope.fillLabelsReadOnlyIfAvailable`).
 		var walksSeamCallFills = false
+		/// The scopes `completeReceivedPropertiesByComponent` leaves to the walk that re-enters them: those of a cycle
+		/// in which a receiver requires an `onlyIfAvailable` alias a scope of the cycle declares, and those whose trees
+		/// reach one.
+		var scopesLeftToWalk = Set<ObjectIdentifier>()
+		/// Whether a scope's received properties are completed by component before any walk, and what is told of each
+		/// scope whose received properties are collected: both the tests', read once per cache.
+		let completesByComponent = ValidationWalkObservation.completesReceivedPropertiesByComponent
+		let observer = ValidationWalkObservation.observer
 	}
 
 	/// A scope's received properties as one walk found them.
@@ -962,7 +981,131 @@ extension DependencyTreeGenerator {
 		from scope: Scope,
 		cache: inout ReceivedPropertiesCache,
 	) -> ReceivedProperties {
-		walkReceivedProperties(from: scope, cache: &cache).receivedProperties
+		if let complete = cache.complete[ObjectIdentifier(scope)] {
+			return complete
+		} else {
+			if cache.completesByComponent {
+				completeReceivedPropertiesByComponent(from: scope, cache: &cache)
+			}
+			return walkReceivedProperties(from: scope, cache: &cache).receivedProperties
+		}
+	}
+
+	/// Completes, in `cache`, the received properties of every scope of the tree `rootScope` creates that needs no walk
+	/// per path: once per scope outside every cycle, and once per pass over a cycle's scopes until no scope's changes.
+	///
+	/// The walk that follows (`walkReceivedProperties`) takes nothing from a scope it re-enters, and keeps what it found
+	/// beneath that scope only until the scope's walk finishes, so across a dense cycle of instantiators it walks every
+	/// path through the cycle. What a scope receives is what its own dependencies receive and what each child's tree
+	/// receives that the scope does not provide, each property judged by itself and by whether a receiver requires it,
+	/// so a property that reaches a scope around a cycle has already reached it along the path without the cycle, and
+	/// the scopes of a cycle (a strongly connected component of the scopes, found as Tarjan finds them, children in the
+	/// walk's order) receive the least sets that satisfy that rule, whichever of them a walk enters first. The one part
+	/// of a result that is not always judged property by property is what a tree requires through `onlyIfAvailable`
+	/// aliases (`ReceivedProperties.requiredAliasFulfillingProperties`). While no receiver requires an alias a scope of
+	/// the cycle declares, it is: a scope then only passes up what its children's trees require, less the labels it
+	/// declares. A scope's alias becomes required by what its children's trees receive and require, which a walk that
+	/// re-entered a scope lacks part of and the passes only add to, so an alias no pass finds required no walk finds
+	/// required. Where the passes end with one required, which trees of the cycle require its fulfilling property
+	/// depends on the scope a walk enters first: the passes' results are dropped, and the cycle, and every scope whose
+	/// tree reaches it, is left to the walk (`ReceivedPropertiesCache.scopesLeftToWalk`).
+	private static func completeReceivedPropertiesByComponent(
+		from rootScope: Scope,
+		cache: inout ReceivedPropertiesCache,
+	) {
+		guard !cache.scopesLeftToWalk.contains(ObjectIdentifier(rootScope)) else { return }
+		struct Visit {
+			let walk: UnfinishedReceivedPropertiesWalk
+			let successors: [Scope]
+			var nextSuccessorIndex = 0
+			var lowestReachedIndex: Int
+			var reachesScopeLeftToWalk = false
+		}
+		var visits = [Visit]()
+		var visitIndexByScope = [ObjectIdentifier: Int]()
+		// The visits whose component is not complete yet, and those whose successors are not all visited yet.
+		var openComponentVisitIndices = [Int]()
+		var unfinishedVisitIndices = [Int]()
+		func visit(_ scope: Scope) {
+			let walk = UnfinishedReceivedPropertiesWalk(scope: scope, walkDepth: 0, walksSeamCallFills: cache.walksSeamCallFills)
+			visitIndexByScope[ObjectIdentifier(scope)] = visits.count
+			openComponentVisitIndices.append(visits.count)
+			unfinishedVisitIndices.append(visits.count)
+			visits.append(Visit(walk: walk, successors: walk.scopesWalked, lowestReachedIndex: visits.count))
+		}
+		visit(rootScope)
+		while let visitIndex = unfinishedVisitIndices.last {
+			if visits[visitIndex].nextSuccessorIndex < visits[visitIndex].successors.count {
+				let successor = visits[visitIndex].successors[visits[visitIndex].nextSuccessorIndex]
+				visits[visitIndex].nextSuccessorIndex += 1
+				let successorID = ObjectIdentifier(successor)
+				if cache.complete[successorID] != nil {
+					continue
+				} else if cache.scopesLeftToWalk.contains(successorID) {
+					visits[visitIndex].reachesScopeLeftToWalk = true
+				} else if let successorVisitIndex = visitIndexByScope[successorID] {
+					// Every visit whose component is closed is complete or left to the walk, so this one's is open.
+					visits[visitIndex].lowestReachedIndex = min(visits[visitIndex].lowestReachedIndex, successorVisitIndex)
+				} else {
+					visit(successor)
+				}
+			} else {
+				unfinishedVisitIndices.removeLast()
+				if let parentVisitIndex = unfinishedVisitIndices.last {
+					visits[parentVisitIndex].lowestReachedIndex = min(visits[parentVisitIndex].lowestReachedIndex, visits[visitIndex].lowestReachedIndex)
+				}
+				guard visits[visitIndex].lowestReachedIndex == visitIndex else { continue }
+				// This visit is the first of its component: the component's visits are those opened since.
+				var componentVisitIndices = [Int]()
+				while let openVisitIndex = openComponentVisitIndices.popLast() {
+					componentVisitIndices.append(openVisitIndex)
+					if openVisitIndex == visitIndex {
+						break
+					}
+				}
+				// A scope that creates only itself again needs one pass, as a scope outside every cycle does: what it
+				// receives from itself it has already received, less what it declares, and a walk that re-enters it
+				// takes nothing from it either.
+				let isCycle = componentVisitIndices.count > 1
+				var isLeftToWalk = false
+				for componentVisitIndex in componentVisitIndices {
+					let componentVisit = visits[componentVisitIndex]
+					if componentVisit.reachesScopeLeftToWalk {
+						isLeftToWalk = true
+					}
+					for successor in componentVisit.successors where cache.scopesLeftToWalk.contains(ObjectIdentifier(successor)) {
+						isLeftToWalk = true
+					}
+				}
+				if !isLeftToWalk {
+					// The component's visits, last visited first: children before the scopes that create them, but for
+					// the edges that close its cycles, which the passes after the first settle.
+					var changed = true
+					while changed {
+						changed = false
+						isLeftToWalk = false
+						for componentVisitIndex in componentVisitIndices {
+							let completed = visits[componentVisitIndex].walk.completing(in: &cache)
+							if completed.changed {
+								changed = isCycle
+							}
+							if completed.requiresOwnOnlyIfAvailableAlias {
+								// Only where the passes end does this decide: what the trees require grows with each pass.
+								isLeftToWalk = isCycle
+							}
+						}
+					}
+				}
+				if isLeftToWalk {
+					// What the passes completed of a cycle whose own alias a receiver requires is no walk's result.
+					for componentVisitIndex in componentVisitIndices {
+						let scopeID = ObjectIdentifier(visits[componentVisitIndex].walk.scope)
+						cache.complete[scopeID] = nil
+						cache.scopesLeftToWalk.insert(scopeID)
+					}
+				}
+			}
+		}
 	}
 
 	/// Walks the tree `scope` creates, children before the scopes that create them, and the trees of the fills a call of
@@ -1063,7 +1206,8 @@ extension DependencyTreeGenerator {
 					// from a deferred parameter of the caller's scope too (`fillUnderConstruction`).
 					let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
 					let boundLabels = Set(hole.fields.filter { scope.publicMockCall != nil || !$0.isDeferredParameter }.map(\.property.label))
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks))))
+					// The fill declares the property it builds too (`ScopeGenerator.propertiesBeingBuilt(byFillOf:)`).
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks)).union(ScopeGenerator.propertiesBeingBuilt(byFillOf: hole))))
 				}
 			}
 			self.fills = fills
@@ -1079,6 +1223,44 @@ extension DependencyTreeGenerator {
 		let fills: [(scope: Scope, fieldForms: Set<Property>)]
 		/// The index in `fills` of the next fill whose tree to walk.
 		var nextFillIndex = 0
+
+		/// The scopes whose trees the walk walks from this one, in its order: each instantiated child's, then each
+		/// fill's.
+		var scopesWalked: [Scope] {
+			propertiesToGenerate.compactMap(\.builtScope) + fills.map(\.scope)
+		}
+
+		/// Completes this scope's received properties in `cache` from the complete ones of the scopes walked from it,
+		/// taking nothing from one that has none yet, as a copy of this walk that has walked nothing finds them: one pass
+		/// of `completeReceivedPropertiesByComponent`.
+		/// - Returns: Whether the scope had none, or others, before, and whether a receiver in a child's tree then
+		///   requires an `onlyIfAvailable` alias the scope declares.
+		func completing(in cache: inout ReceivedPropertiesCache) -> (changed: Bool, requiresOwnOnlyIfAvailableAlias: Bool) {
+			var walk = self
+			func record(_ scope: Scope) {
+				walk.record(WalkedReceivedProperties(
+					receivedProperties: cache.complete[ObjectIdentifier(scope)]
+						?? ReceivedProperties(received: [], onlyIfAvailable: [], requiredAliasFulfillingProperties: [], passedByPublicMockCalls: [], builtWhenNilByPublicMockCalls: []),
+					unfinishedWalkDepthsReentered: [],
+				))
+			}
+			for childScope in propertiesToGenerate.compactMap(\.builtScope) {
+				record(childScope)
+			}
+			for fillIndex in fills.indices {
+				walk.nextFillIndex = fillIndex + 1
+				record(fills[fillIndex].scope)
+			}
+			let previous = cache.complete[ObjectIdentifier(scope)]
+			let completed = walk.finished(cache: &cache).receivedProperties
+			return (
+				changed: previous.map { !$0.isSpelled(as: completed) } ?? true,
+				requiresOwnOnlyIfAvailableAlias: !declarations.requiredOnlyIfAvailableAliases(
+					childRequiredReceived: walk.childRequiredReceived,
+					childRequiredAliasFulfillingProperties: walk.childRequiredAliasFulfillingProperties,
+				).isEmpty,
+			)
+		}
 
 		let declarations: ScopeDeclarations
 		// Properties declared at this scope (instantiated/aliased children). A lazily instantiated
@@ -1235,6 +1417,7 @@ extension DependencyTreeGenerator {
 			)
 
 			let id = ObjectIdentifier(scope)
+			cache.observer?(.collectedReceivedPropertiesOfScope)
 			cache.unfinishedWalkDepths[id] = nil
 			if !cache.incomplete.isEmpty {
 				// Results that lack what this scope receives are stale now that its walk has finished, whatever shallower

@@ -45,10 +45,9 @@ struct ModuleFixture {
 	///     SwiftPM's `sourceModuleRecursiveDependencies` does. The module's compile can import the transitive
 	///     closure, as rules_swift propagates module visibility.
 	///   - isCheckoutPackage: Whether the module's package is one SwiftPM fetched, laid out under
-	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when the one
-	///     path component above its package directory is `checkouts` (a checkout target nested deeper slips
-	///     past that check, as the example builds showed) and leaves its files out of the CSV of a consumer in another
-	///     package, so such a consumer reads its declarations only through a configuration's
+	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when SwiftPM reports
+	///     its package's origin as a repository or a registry, and leaves its files out of the CSV of a consumer in
+	///     another package, so such a consumer reads its declarations only through a configuration's
 	///     `additionalDirectoriesToInclude`; a consumer that is a module of the same checkout package reads them.
 	///     The harness lays such a module out to match and applies the rule by this flag. Bazel knows no
 	///     checkouts: `.moduleInfo` reads the module's `.safedi` as it does any dependency's.
@@ -409,6 +408,10 @@ func executeSafeDIToolMultiModuleTest(
 	}
 	let writtenModulesByName = Dictionary(uniqueKeysWithValues: writtenModules.map { ($0.fixture.name, $0) })
 
+	// Under Bazel's flow each module also runs over module info files that store their positions in files of their own
+	// (`--module-info-positions-in-own-file`), which must generate, warn and fail exactly as the run over whole files does.
+	// A test that hands a module another run's file, or rewrites a written file, has no split twin.
+	let splitsPositions = integration == .moduleInfo && moduleInfoOverrides.isEmpty && !discardsStoredSeamSignatures
 	var outputs = [String: ModuleTestOutput]()
 	// What `modulesBeneath` gave for each module it was asked about, which a record's inputs hold.
 	var modulesBeneathByModuleName = [String: [String]]()
@@ -525,8 +528,8 @@ func executeSafeDIToolMultiModuleTest(
 			}
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
 			compilerSwiftFilePaths = scansDuringGenerate ? inputSwiftFilePaths : inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
-			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`,
-			// and every one of the module's own package, which is under `checkouts` when that package is fetched.
+			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency of a package that is not
+			// fetched, and every one of the module's own package, which can be fetched.
 			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
 				.filter { !$0.fixture.isCheckoutPackage || $0.packageDirectory.path == module.packageDirectory.path }
@@ -599,14 +602,26 @@ func executeSafeDIToolMultiModuleTest(
 				// Every seam tree made again from its first signature pass must generate what a tree built anew does (`ReusedSeamTreeChecks`).
 				generateOutput = try await HoleSiteRecordObservation.$observer.withValue(HoleSiteRecordObservation.checkingRecords(handingOn: HoleSiteRecordObservation.observer)) {
 					try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-						try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-									try await ConstructionInternerOrder.applying(.fromEnvironment) {
-										try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
-											try await tool.generate()
+						try await NodeRecordsChecks.checking {
+							try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+								try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+									// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+									// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+									try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+										try await ConstructionInternerOrder.applying(.fromEnvironment) {
+											try await ReusedSeamTreeChecks.comparing(handingOn: SeamTreeReuseObservation.comparesBuiltTrees) {
+												// Every root’s imports from its union fact must equal the walk of its generator tree’s (`TypeFactsImportsChecks`).
+												try await TypeFactsImportsChecks.comparing(handingOn: TypeFactsImportsObservation.comparesWalk) {
+													// Every root’s received values from its per-type graph must equal the walk of its generator tree’s
+													// (`TypeFactsReceivedValueSuppliesChecks`).
+													try await TypeFactsReceivedValueSuppliesChecks.comparing(handingOn: TypeFactsReceivedValueSuppliesObservation.comparesWalk) {
+														// The fold that decides whether any route is walked must send every graph the walk rejects to the walk (`FulfillmentFoldChecks`).
+														try await ValidationWalkObservation.$foldComparison.withValue(FulfillmentFoldChecks.comparison(handingOn: ValidationWalkObservation.foldComparison)) {
+															try await tool.generate()
+														}
+													}
+												}
+											}
 										}
 									}
 								}
@@ -618,6 +633,9 @@ func executeSafeDIToolMultiModuleTest(
 				// A run that read a stored seam signature and failed reports what a run computing every signature reports.
 				if !discardsStoredSeamSignatures {
 					try await expectErrorMatchesRunComputingEverySeamSignature(error, arguments: generateArguments, sourceLocation: sourceLocation)
+				}
+				if splitsPositions {
+					try await SplitPositionsRun.expectMatches(.failure(error), arguments: generateArguments, moduleName: moduleName, fixtureRoot: fixtureRoot, sourceLocation: sourceLocation)
 				}
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
@@ -631,7 +649,24 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
+		if let generateOutput {
+			// With the stored blocks it read, the run must not throw where computing everything does not (`StoredBlockDecodeChecks`).
+			StoredBlockDecodeChecks.expectNoDiscardedRun(throwing: generateOutput.errorOfDiscardedRunThatReadStoredBlocks, inRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
+		if splitsPositions, let generateArguments, let generateOutput {
+			// The same run over module info files that store their positions apart must generate and warn alike.
+			try await SplitPositionsRun.expectMatches(
+				.success((warnings: generateOutput.warnings, generatedFiles: generatedSwiftFiles(in: outputDirectory))),
+				arguments: generateArguments,
+				moduleName: moduleName,
+				fixtureRoot: fixtureRoot,
+				sourceLocation: sourceLocation,
+			)
+		}
 		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let writtenFile = moduleInfoFile {
+			StoredBlockDecodeChecks.expectStoredBlocksReadBackAsWritten(in: writtenFile, writtenByRunOfModuleNamed: moduleName, sourceLocation: sourceLocation)
+		}
 		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
 			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
 			moduleInfoFile = writtenFile.withoutSeamSignatures
@@ -848,4 +883,69 @@ private func expectErrorMatchesRunComputingEverySeamSignature(_ error: any Error
 		computingError = error
 	}
 	#expect(computingError.map { "\($0)" } == "\(error)", "a run reading stored seam signatures reports what a run computing them reports", sourceLocation: sourceLocation)
+}
+
+/// The run of a module over module info files that store their positions apart, beside the run over whole files.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+enum SplitPositionsRun {
+	/// The directory the split runs write their module info and positions files to, beside the whole files' `ModuleInfo`.
+	static func moduleInfoDirectory(under fixtureRoot: URL) -> URL {
+		fixtureRoot.appendingPathComponent("ModuleInfoSplit")
+	}
+
+	/// Runs `generate` with `arguments` respelled to read and write the split module info files, writing its code to a
+	/// directory of its own, and expects it to warn and generate as `wholeRun` did, or to throw its description.
+	static func expectMatches(
+		_ wholeRun: Result<(warnings: [SourceDiagnostic], generatedFiles: [String: String]), any Error>,
+		arguments: [String],
+		moduleName: String,
+		fixtureRoot: URL,
+		sourceLocation: SourceLocation,
+	) async throws {
+		let wholeModuleInfoDirectory = fixtureRoot.appendingPathComponent("ModuleInfo").path
+		let splitModuleInfoDirectory = moduleInfoDirectory(under: fixtureRoot)
+		let wholeOutputDirectory = fixtureRoot.appendingPathComponent("Output").appendingPathComponent(moduleName).path
+		let splitOutputDirectory = fixtureRoot.appendingPathComponent("OutputSplit").appendingPathComponent(moduleName)
+		try FileManager.default.createDirectory(at: splitModuleInfoDirectory, withIntermediateDirectories: true)
+		try FileManager.default.createDirectory(at: splitOutputDirectory, withIntermediateDirectories: true)
+		func respelled(_ argument: String) -> String {
+			argument
+				.replacingOccurrences(of: wholeModuleInfoDirectory + "/", with: splitModuleInfoDirectory.path + "/")
+				.replacingOccurrences(of: wholeOutputDirectory + "/", with: splitOutputDirectory.path + "/")
+		}
+		var splitArguments = [String]()
+		for (index, argument) in arguments.enumerated() {
+			let isListOfModuleInfoFiles = index > 0 && ["--dependent-module-info-file-path", "--transitive-module-info-file-path"].contains(arguments[index - 1])
+			if isListOfModuleInfoFiles {
+				try respelled(String(contentsOfFile: argument, encoding: .utf8)).write(toFile: respelled(argument), atomically: true, encoding: .utf8)
+			}
+			splitArguments.append(respelled(argument))
+		}
+		if splitArguments.contains("--module-info-output") {
+			splitArguments.append("--module-info-positions-in-own-file")
+		}
+		// Detached, so the run inherits none of the observers a test sets around its own run, which count each layer and
+		// step of one run.
+		let splitRun: Result<Generate.Output, any Error> = await Task.detached {
+			do {
+				return try await .success(Generate.parse(splitArguments).generate())
+			} catch {
+				return .failure(error)
+			}
+		}.value
+		switch (wholeRun, splitRun) {
+		case let (.success(whole), .success(split)):
+			#expect(split.warnings.map(\.formatted) == whole.warnings.map(\.formatted), "Module \(moduleName) warns otherwise over module info files that store their positions apart.", sourceLocation: sourceLocation)
+			let splitFiles = try generatedSwiftFiles(in: splitOutputDirectory)
+			#expect(splitFiles == whole.generatedFiles, "Module \(moduleName) generates other code over module info files that store their positions apart.", sourceLocation: sourceLocation)
+		case let (.failure(whole), .failure(split)):
+			// An error that names a module info file names the split one where the whole run names its own.
+			let splitDescription = "\(split)".replacingOccurrences(of: splitModuleInfoDirectory.path + "/", with: wholeModuleInfoDirectory + "/")
+			#expect(splitDescription == "\(whole)", "Module \(moduleName) fails otherwise over module info files that store their positions apart.", sourceLocation: sourceLocation)
+		case let (.success, .failure(split)):
+			Issue.record("Module \(moduleName) fails over module info files that store their positions apart: \(split)", sourceLocation: sourceLocation)
+		case let (.failure(whole), .success):
+			Issue.record("Module \(moduleName) succeeds over module info files that store their positions apart, where it fails over whole files: \(whole)", sourceLocation: sourceLocation)
+		}
+	}
 }

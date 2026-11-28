@@ -50,7 +50,7 @@ extension DependencyTreeGenerator {
 					}
 					continue
 				}
-				for dependency in instantiable.dependencies where dependency.isInstantiated {
+				for dependency in instantiable.dependencies where dependency.isInstantiated && instantiates(dependency) {
 					typesToVisit.append(dependency.asInstantiatedType)
 				}
 			}
@@ -66,9 +66,10 @@ extension DependencyTreeGenerator {
 				for typeDescription in typesReached(from: [seamType]).sorted() {
 					guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else { continue }
 					for dependency in instantiable.dependencies where dependency.isInstantiated
+						&& !dependency.isInstantiatedOnlyIfAvailable
 						&& Self.canBeHole(dependency)
 						&& typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly != false
-						&& reportedLocations.insert(dependency.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
+						&& reportedLocations.insert(dependency.declarationLocation.map(\.identity) ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
 					{
 						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency))
 					}
@@ -112,11 +113,47 @@ extension DependencyTreeGenerator {
 				// This is bad, but we'll handle this error in `validateReachableTypeDescriptions()`.
 				continue
 			}
-			for dependency in instantiable.dependencies where dependency.isInstantiated {
+			for dependency in instantiable.dependencies where dependency.isInstantiated && instantiates(dependency) {
 				typeDescriptionsToVisit.append(dependency.asInstantiatedType)
 			}
 		}
 		return reachableTypeDescriptions
+	}
+
+	/// Whether a production tree instantiates `dependency`, an `@Instantiated` one: always, unless it is declared with
+	/// `onlyIfAvailable: true` and no production declaration this module reads fulfills its type – none at all, or only a
+	/// `mockOnly` one, which only mocks build. Such a dependency reaches no type, so its type is never reported as one no
+	/// declaration fulfills, no scope builds it, and generated code passes `nil` for it.
+	func instantiates(_ dependency: Dependency) -> Bool {
+		!dependency.isInstantiatedOnlyIfAvailable
+			|| typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly == false
+	}
+
+	/// What a scope generates for `dependency`, an `@Instantiated(onlyIfAvailable: true)` one no production declaration
+	/// fulfills (`instantiates(_:)`): a scope of its own that builds nothing and binds the property to `nil`
+	/// (`Scope.isUnavailableDependency`), never erased, since there is no value to erase. The trees of a module that generates
+	/// no seam bind it so. In a module that generates or calls one, the property is a hole (`populatePropertiesToGenerate`):
+	/// a seam's tree takes a builder that returns the optional, and a root's tree, which takes none, binds `nil`
+	/// (`SeamHoles.takesBuilders`). Every mock binds it so too, a public mock's and a seam's own included, which take no
+	/// builder for it, a deliberate gap from the seam's initializer ("Instantiated only if available" in
+	/// `.claude/rules/test-design.md`).
+	static func unavailableDependency(_ dependency: Dependency) -> Scope.PropertyToGenerate {
+		.instantiated(
+			dependency.property,
+			Scope(
+				instantiable: Instantiable(
+					instantiableType: dependency.asInstantiatedType,
+					isRoot: false,
+					initializer: nil,
+					additionalInstantiables: nil,
+					dependencies: [],
+					declarationType: .structType,
+					access: AccessDeclaration(level: .public),
+				),
+				isUnavailableDependency: true,
+			),
+			erasedToConcreteExistential: false,
+		)
 	}
 
 	func createTypeDescriptionToScopeMapping() throws -> [TypeDescription: Scope] {
@@ -157,6 +194,8 @@ extension DependencyTreeGenerator {
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
+					} else if !instantiates(dependency) {
+						scope.propertiesToGenerate.append(Self.unavailableDependency(dependency))
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
 					scope.propertiesToGenerate.append(.aliased(
@@ -164,7 +203,7 @@ extension DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
+						declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
 					))
 				case .forwarded, .received:
 					continue

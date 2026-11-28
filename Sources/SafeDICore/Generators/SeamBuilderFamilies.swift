@@ -76,6 +76,9 @@ extension DependencyTreeGenerator {
 		var holesWithBuilders = [(hole: SeamSignature.Hole, builder: SeamSignature.Builder)]()
 		/// How the seam's tree hands each inner seam's enum up from a call whose case is nested by type.
 		var callRoutes = [SeamSignature.CallRoute]()
+		/// The member call each step of the route of each of the seam's own sites makes, in the route's order
+		/// (`SeamSignature.Hole.RouteStep.Member`).
+		var routeMembersBySite = [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]()
 	}
 
 	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
@@ -226,8 +229,19 @@ extension DependencyTreeGenerator {
 			widestTier: seamTypeAccess,
 		)
 		let stemByHoleType = tierNames.stemByHoleType
+		// Each tier's two labels of each hole type, spelled once: spelled at each use, a label was spelled again for every
+		// comparison of the sort below and for every place, case and route that names it.
+		var labelsByTier = [AccessLevel: [SeamSignature.HoleType: (plain: String, sendable: String)]]()
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool, in names: TierNames) -> String {
-			names.label(ofStem: stemByHoleType[holeType, default: ""], isSendable: isSendable)
+			let labels: (plain: String, sendable: String)
+			if let spelledLabels = labelsByTier[names.tier]?[holeType] {
+				labels = spelledLabels
+			} else {
+				let stem = stemByHoleType[holeType, default: ""]
+				labels = (plain: names.label(ofStem: stem, isSendable: false), sendable: names.label(ofStem: stem, isSendable: true))
+				labelsByTier[names.tier, default: [:]][holeType] = labels
+			}
+			return isSendable ? labels.sendable : labels.plain
 		}
 		func label(of holeType: SeamSignature.HoleType, isSendable: Bool) -> String {
 			label(of: holeType, isSendable: isSendable, in: tierNames.tiers[0])
@@ -251,6 +265,7 @@ extension DependencyTreeGenerator {
 		let orderedHoleTypes = holeTypes.sorted { label(of: $0, isSendable: false) < label(of: $1, isSendable: false) }
 		var ownEnums = [SeamSignature.ScopeEnum]()
 		var callRoutes = [SeamSignature.CallRoute]()
+		var routeMembersBySite = [SeamSignature.Hole.Site: [SeamSignature.Hole.RouteStep.Member?]]()
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
@@ -296,6 +311,10 @@ extension DependencyTreeGenerator {
 					memberBindingKeysByLabel[label(of: holeType, isSendable: isSendable), default: []].formUnion(byType.memberBindingKeysByFamily[isSendable, default: []])
 				}
 				callRoutes += byType.callRoutes
+				// A site is one hole type's, so no two types name it; as its enum place below, a site's members are the last given.
+				for (site, members) in byType.routeMembersBySite {
+					routeMembersBySite[site] = members
+				}
 				for (site, enumPlace) in byType.enumPlaceBySite {
 					holesBySite[site]?.enumPlace = enumPlace
 					holesBySite[site]?.scopeTypeName = enumPlace.enumTypeName
@@ -404,27 +423,34 @@ extension DependencyTreeGenerator {
 		// The names the fills of a call whose fill leads to a place take the scope value the inner seam handed them under, one
 		// per call and builder filled, whatever hole type it leads to, apart from every name above; for a seam's builder struct,
 		// one per type of the struct of the fill's own level, each after the label of the builder whose route leads there.
-		var innerScopes = [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, rootBuilderLabel: String)]()
+		var innerScopes = [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, callPath: [Property], rootBuilderLabel: String)]()
 		for hole in holesBySite.values {
 			guard let enumPlace = hole.enumPlace else { continue }
 			let rootBuilderLabel = label(of: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder)
-			innerScopes += enumPlace.route.compactMap(\.innerScope).map { ($0, rootBuilderLabel) }
+			innerScopes += enumPlace.route.compactMap(\.innerScope).map { ($0, $0.callPath(onRouteTo: hole.sitePath), rootBuilderLabel) }
 		}
 		for callRoute in callRoutes {
 			let rootBuilderLabel = label(of: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable)
-			innerScopes += callRoute.route.compactMap(\.innerScope).map { ($0, rootBuilderLabel) }
+			innerScopes += callRoute.route.compactMap(\.innerScope).map { ($0, $0.callPath(onRouteTo: callRoute.sitePath), rootBuilderLabel) }
 		}
 		// One per path and case: `__safeDI_<builder>_<case>`, after the label of the builder whose root enum the route starts at.
 		let memberBindingNamesByLabel = memberBindingNames(of: memberBindingKeysByLabel, reservedNames: reservedForBindings)
 		let innerScopeNames = Self.innerScopeNames(of: innerScopes, reservedNames: reservedForBindings)
-		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep] {
-			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
-			return route.map { step in
+		func namedRoute(_ route: [SeamSignature.Hole.RouteStep], to sitePath: [Property]) -> [SeamSignature.Hole.RouteStep] {
+			route.map { step in
 				step.named(
 					nil,
-					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType)] },
-					memberBindingName: step.member.flatMap { memberNameByKey[ValuesBindingKey(path: $0.bindingPath, caseName: step.caseName)] },
+					innerScopeName: step.innerScope.flatMap { innerScopeNames[InnerScopeKey(callPath: $0.callPath(onRouteTo: sitePath), innerKey: $0.innerKey, enumType: $0.enumType)] },
 				)
+			}
+		}
+		// Each step's member call bound under its name, and no member call for a step whose call has no name.
+		func namedMembers(_ members: [SeamSignature.Hole.RouteStep.Member?], of route: [SeamSignature.Hole.RouteStep], to sitePath: [Property], ofHoleType holeType: SeamSignature.HoleType, isSendable: Bool) -> [SeamSignature.Hole.RouteStep.Member?] {
+			let memberNameByKey = memberBindingNamesByLabel[label(of: holeType, isSendable: isSendable), default: [:]]
+			return zip(members, route).map { member, step in
+				member.flatMap { member in
+					memberNameByKey[ValuesBindingKey(path: member.bindingPath(onRouteTo: sitePath), caseName: step.caseName)].map { member.named($0) }
+				}
 			}
 		}
 		for site in holesBySite.keys {
@@ -436,16 +462,18 @@ extension DependencyTreeGenerator {
 				valuesTypeName: enumPlace.valuesTypeName,
 				memberValuesTypeName: enumPlace.memberValuesTypeName,
 				isBuiltBySendableBuilder: enumPlace.isBuiltBySendableBuilder,
-				route: namedRoute(enumPlace.route, ofHoleType: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder),
+				route: namedRoute(enumPlace.route, to: hole.sitePath),
 				values: enumPlace.values,
 			)
+			routeMembersBySite[site] = namedMembers(routeMembersBySite[site] ?? [], of: enumPlace.route, to: hole.sitePath, ofHoleType: hole.holeType, isSendable: enumPlace.isBuiltBySendableBuilder)
 		}
 		callRoutes = callRoutes.map { callRoute in
 			SeamSignature.CallRoute(
 				sitePath: callRoute.sitePath,
 				innerKey: callRoute.innerKey,
 				rootKey: callRoute.rootKey,
-				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
+				route: namedRoute(callRoute.route, to: callRoute.sitePath),
+				routeMembers: namedMembers(callRoute.routeMembers, of: callRoute.route, to: callRoute.sitePath, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
 				memberValuesType: callRoute.memberValuesType,
 				handsFillLevelStruct: callRoute.handsFillLevelStruct,
@@ -511,7 +539,7 @@ extension DependencyTreeGenerator {
 				keysToVisit.append(contentsOf: innerKeys.reversed())
 			}
 		}
-		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes)
+		return ShapedBuilders(holes: orderedHoles, builders: builders, scopeEnums: scopeEnums, builderBySite: builderBySite, holesWithBuilders: holesWithBuilders, callRoutes: callRoutes, routeMembersBySite: routeMembersBySite)
 	}
 
 	/// A call whose fill leads to a place, the builder filled, and the type of the scope value it hands: what one inner scope's
@@ -528,16 +556,16 @@ extension DependencyTreeGenerator {
 	/// of the builder whose route leads to each, with `_` appended while a name in `reservedNames`, or one of a call on the way
 	/// to this one, has it. Calls are named shortest path first, then in the order of their spelling, so no name depends on
 	/// the order the routes are met in.
-	private static func innerScopeNames(of innerScopes: [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, rootBuilderLabel: String)], reservedNames: Set<String>) -> [InnerScopeKey: String] {
+	private static func innerScopeNames(of innerScopes: [(innerScope: SeamSignature.Hole.RouteStep.InnerScope, callPath: [Property], rootBuilderLabel: String)], reservedNames: Set<String>) -> [InnerScopeKey: String] {
 		var builderLabelByKey = [InnerScopeKey: String]()
 		var rootBuilderLabelByKey = [InnerScopeKey: String]()
 		var countByCallAndBuilder = [[Property]: [SeamSignature.ScopeEnum.Key: Set<TypeDescription>]]()
-		for (innerScope, rootBuilderLabel) in innerScopes {
-			let key = InnerScopeKey(callPath: innerScope.callPath, innerKey: innerScope.innerKey, enumType: innerScope.enumType)
+		for (innerScope, callPath, rootBuilderLabel) in innerScopes {
+			let key = InnerScopeKey(callPath: callPath, innerKey: innerScope.innerKey, enumType: innerScope.enumType)
 			builderLabelByKey[key] = innerScope.builderLabel
 			// The label that sorts first, so no name depends on the order the routes are met in.
 			rootBuilderLabelByKey[key] = min(rootBuilderLabelByKey[key] ?? rootBuilderLabel, rootBuilderLabel)
-			countByCallAndBuilder[innerScope.callPath, default: [:]][innerScope.innerKey, default: []].insert(innerScope.enumType)
+			countByCallAndBuilder[callPath, default: [:]][innerScope.innerKey, default: []].insert(innerScope.enumType)
 		}
 		func sortKey(of key: InnerScopeKey) -> String {
 			key.callPath.map(\.asSource).joined(separator: " ") + " " + key.innerKey.spelling + " " + key.enumType.asSource
@@ -768,20 +796,27 @@ extension DependencyTreeGenerator {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
+		// A builder of a place instantiated only if available returns an optional: its stem is its type's followed by
+		// `Optional` in every seam, so a required builder of the same type added later renames neither.
 		var stems = holeTypes.map { holeType in
-			holeType.instantiatedType == holeType.builtType
+			let stemOfType = holeType.instantiatedType == holeType.builtType.unwrapped
 				? stem(of: holeType.instantiatedType)
-				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
+				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType.unwrapped))"
+			return holeType.builtType.isOptional ? stemOfType + "Optional" : stemOfType
 		}
 		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
 		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
 		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
 		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
 		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
-		// square of the hole types.
+		// square of the hole types. An optional builder's stem that collides is named apart first, so a required builder
+		// keeps its name beside it.
 		var labelCounts = BuilderLabelCounts(stems: stems)
-		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
-		if !colliding.isEmpty {
+		for namesApartOptionalStems in [true, false] {
+			let colliding = holeTypes.indices.filter {
+				(!namesApartOptionalStems || holeTypes[$0].builtType.isOptional) && labelCounts.collides(stems[$0])
+			}
+			guard !colliding.isEmpty else { continue }
 			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
@@ -793,7 +828,7 @@ extension DependencyTreeGenerator {
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
-			for index in stems.indices {
+			for index in namesApartOptionalStems ? colliding : Array(stems.indices) {
 				while labelCounts.collides(stems[index]) {
 					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"
@@ -844,14 +879,32 @@ extension DependencyTreeGenerator {
 	}
 
 	private static func loweredLeadingCapitals(of stem: String) -> String {
-		let characters = Array(stem)
+		// An ASCII stem, as nearly every identifier is, is read by its bytes: each is one `Character`, upper or lowercase
+		// exactly where it is a Latin letter of that case, and lowered by its letter alone, so the result is the one the
+		// reading by `Character` gives, without decoding a grapheme per letter.
+		if stem.utf8.allSatisfy({ $0 < 0x80 }) {
+			var bytes = Array(stem.utf8)
+			let lowerCount = countOfLeadingCapitalsToLower(in: bytes, isUppercase: { $0 >= 0x41 && $0 <= 0x5A }, isLowercase: { $0 >= 0x61 && $0 <= 0x7A })
+			for index in 0..<lowerCount {
+				bytes[index] += 0x20
+			}
+			return lowerCount > 0 ? String(decoding: bytes, as: UTF8.self) : stem
+		} else {
+			let characters = Array(stem)
+			let lowerCount = countOfLeadingCapitalsToLower(in: characters, isUppercase: \.isUppercase, isLowercase: \.isLowercase)
+			return lowerCount > 0 ? String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...]) : stem
+		}
+	}
+
+	/// How many of `elements`' leading capitals `loweredLeadingCapitals(of:)` lowers: every one, but the last when a
+	/// lowercase letter follows it and it is not the first.
+	private static func countOfLeadingCapitalsToLower<Element>(in elements: [Element], isUppercase: (Element) -> Bool, isLowercase: (Element) -> Bool) -> Int {
 		var capitalCount = 0
-		while capitalCount < characters.count, characters[capitalCount].isUppercase {
+		while capitalCount < elements.count, isUppercase(elements[capitalCount]) {
 			capitalCount += 1
 		}
-		guard capitalCount > 0 else { return stem }
-		let lowerCount = capitalCount < characters.count && characters[capitalCount].isLowercase ? max(capitalCount - 1, 1) : capitalCount
-		return String(characters[..<lowerCount]).lowercased() + String(characters[lowerCount...])
+		guard capitalCount > 0 else { return 0 }
+		return capitalCount < elements.count && isLowercase(elements[capitalCount]) ? max(capitalCount - 1, 1) : capitalCount
 	}
 
 	/// The identifier a seam is named by inside a fill's or a dispatcher's name.
@@ -1010,7 +1063,7 @@ extension DependencyTreeGenerator {
 			// The enums are marked in a copy, assigned once, since each assignment computes the signature's call shape again.
 			var signature = seamRoot.signature
 			signature.scopeEnums = markingIndirectCases(of: seamRoot.signature.scopeEnums, componentByKey: componentByKey)
-			return ScopeGenerator.SeamRoot(signature: signature, unreadTypeComment: seamRoot.unreadTypeComment)
+			return ScopeGenerator.SeamRoot(signature: signature, callRoutes: seamRoot.callRoutes, routeMembersBySite: seamRoot.routeMembersBySite, unreadTypeComment: seamRoot.unreadTypeComment)
 		}
 	}
 

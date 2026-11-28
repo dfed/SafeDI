@@ -239,6 +239,9 @@ public enum ReservedName: Hashable, Sendable {
 	/// The argument label of the initializer of a level's builder struct that wraps a builder that takes nothing, which a
 	/// seam's readable initializer passes the builder a person wrote to.
 	static let noScopeArgumentLabel = "\(builderFunctionNamePrefix)noScope"
+	/// The builder generated code passes, and a mock defaults to, for places instantiated only if available that nothing
+	/// fulfills: it returns `nil`, the value production binds there.
+	static let nilBuilderSource = "{ nil }"
 
 	/// The parameter name under which that initializer takes the builder: apart from every property label, since a
 	/// member can be named `builder`.

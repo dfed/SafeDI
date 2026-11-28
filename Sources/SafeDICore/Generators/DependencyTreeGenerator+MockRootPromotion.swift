@@ -36,7 +36,11 @@ extension DependencyTreeGenerator {
 	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), which a public
 	///   mock's root reads, or `nil` when the module declares no public mock.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
-	///   is checked, or `nil` to check none.
+	///   is checked, or `nil` to check none. It also decides which dependencies the mock promotes: one the calls in its
+	///   tree build when passed `nil` is promoted only where the module can construct it.
+	/// - Parameter checksConstructions: Whether an inaccessible construction is an error. A module that computes the plan
+	///   of another module's public mock passes `false` with that module: the declaring module's own run checked its
+	///   constructions, and the plan must promote what that run promoted.
 	func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -46,6 +50,7 @@ extension DependencyTreeGenerator {
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
+		checksConstructions: Bool = true,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
@@ -442,7 +447,7 @@ extension DependencyTreeGenerator {
 
 		// `mock()` defaults a flat parameter only to a hand-written mock this module can call
 		// (`flatParameterMockDefaults(in:emittingModule:)`), so the defaults construct nothing that is checked here.
-		if let emittingModule {
+		if checksConstructions, let emittingModule {
 			// The mock of a type declared in this module refers to its tree from the type's declaration; the mock of a
 			// type this module lists in `additionalMocksToGenerate`, from the `#SafeDIConfiguration` that lists it.
 			let rootReferenceLocation = instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
@@ -478,6 +483,9 @@ extension DependencyTreeGenerator {
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
+		// The root of the mock root's world, which node records are made of
+		// (`ScopeGenerator.nodeRecordsMockStatements(of:worldRoot:bindsOnlyNodes:)`), where a test observes them.
+		NodeRecordsObservation.recordsMockWorldRoot?(instantiable.concreteInstantiable, ConstructionScope(table: mockRootTable, record: mockRootRecord))
 		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
 		// them shares the mock roots' memo.
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {

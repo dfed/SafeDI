@@ -166,6 +166,51 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_plansSeamRootsChildrenAtOnce_whenModuleGeneratesSeam() async throws {
+		// The seam is a root of its own module's generation, so its body plans its three children at once, as a root of the
+		// dependency tree does; each child plans its leaf alone. With the seam's body planning one child after another, no
+		// body reports.
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.seamWithThreeChildren,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "App"],
+			)
+		}
+		continuation.finish()
+		var childCounts = [Int]()
+		for await childCount in stream {
+			childCounts.append(childCount)
+		}
+		#expect(childCounts == [3])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_plansSeamRootsChildrenOneAfterAnother_whenModuleGeneratesMoreTreesThanBodyPlansAtOnce() async throws {
+		// Five seams, one more than a body plans children at once, each planned on a task of its own: each seam's body
+		// plans its two children one after another, so no body reports.
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await ConcurrentChildCode.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.fiveSeamsOfTwoChildren,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "App"],
+			)
+		}
+		continuation.finish()
+		var childCounts = [Int]()
+		for await childCount in stream {
+			childCounts.append(childCount)
+		}
+		#expect(childCounts == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesChildrenInTheirDeclarationOrder_whenTwentyChildrenFinishOutOfOrder() async throws {
 		// The root's 20 children are planned four at a time, and the task of the child started last finishes first each time,
 		// so they finish 3, 4, …, 19, then 2, 1, 0. Each child's code is written at its own child, in declaration order.
@@ -277,6 +322,134 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 
 	/// A root of the dependency tree whose six children, `Child0` to `Child5`, receive one to six leaves, declared in the
 	/// order 5, 2, 4, 0, 3, 1.
+	private static let fiveSeamsOfTwoChildren = [
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen0: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen1: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen2: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen3: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen4: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		}
+		""",
+		"""
+		@Instantiable
+		public final class First: Instantiable {
+		    public init() {}
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Second: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
+
+	private static let seamWithThreeChildren = [
+		"""
+		@Instantiable(generateDependencyTree: true)
+		public final class Screen: Instantiable {
+		    public init(first: First, second: Second, third: Third) {
+		        self.first = first
+		        self.second = second
+		        self.third = third
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
+		    @Instantiated let third: Third
+		}
+		""",
+		"""
+		@Instantiable
+		public final class First: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Second: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Third: Instantiable {
+		    public init(leaf: Leaf) {
+		        self.leaf = leaf
+		    }
+
+		    @Instantiated let leaf: Leaf
+		}
+		""",
+		"""
+		@Instantiable
+		public final class Leaf: Instantiable {
+		    public init() {}
+		}
+		""",
+	]
+
 	private static let sixChildrenDeclaredLargestFirst = [
 		"""
 		@Instantiable(isRoot: true)

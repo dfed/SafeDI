@@ -682,8 +682,9 @@ struct SafeDIToolMockSendableConfigurationIsolationTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        let __safeDI_client__overrides = safeDIOverrides.client
 			        func __safeDI_client() -> Client {
-			            return if let safeDIBuilder = safeDIOverrides.client.safeDIBuilder { safeDIBuilder(safeDIOverrides.client.timeout(), safeDIOverrides.client.policy(), safeDIOverrides.client.name()) } else { Client(timeout: safeDIOverrides.client.timeout(), policy: safeDIOverrides.client.policy(), name: safeDIOverrides.client.name()) }
+			            return if let safeDIBuilder = __safeDI_client__overrides.safeDIBuilder { safeDIBuilder(__safeDI_client__overrides.timeout(), __safeDI_client__overrides.policy(), __safeDI_client__overrides.name()) } else { Client(timeout: __safeDI_client__overrides.timeout(), policy: __safeDI_client__overrides.policy(), name: __safeDI_client__overrides.name()) }
 			        }
 			        let client: Client = __safeDI_client()
 			        let __safeDI_clientBuilder__overrides = safeDIOverrides.clientBuilder

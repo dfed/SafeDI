@@ -33,6 +33,20 @@ enum PlaceRecord: Sendable {
 	case alias(AliasPlaceRecord)
 }
 
+extension PlaceRecord {
+	/// The property the place binds.
+	var boundProperty: Property {
+		switch self {
+		case let .built(record):
+			record.property
+		case let .closer(record):
+			record.property
+		case let .alias(record):
+			record.property
+		}
+	}
+}
+
 /// A read a construction or a call makes: the argument it passes, the label it reads, the property its receiver declares,
 /// and where the path key reads it from.
 struct PlaceRead: Hashable, Sendable {
@@ -81,6 +95,19 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
 	/// as small to copy as one that holds none of it.
 	var sharingFields: PlaceSharingFields?
+	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
+	/// that every other place leaves `nil`.
+	var callFields: CallFields?
+
+	/// The statement the place's builder function begins with, before its children.
+	var leadingStatement: CallGuard? {
+		callFields?.leadingStatement
+	}
+
+	/// What the construction hands each closure parameter after `arguments`.
+	var closureArguments: [ClosureArgumentEntry] {
+		callFields?.closureArguments ?? []
+	}
 
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {
@@ -150,6 +177,9 @@ struct ClosingPlaceRecord: Sendable {
 	/// Unlike a built place's, these and their count are part of the closer's structural key: the closer's call must match
 	/// the function it closes on.
 	var passedArguments = [PassedArgument]()
+	/// Whether the place is a member of a loop of builders wrapped again inside a sibling's function
+	/// (`ScopeGenerator.LoopRebinding`).
+	var rebindsLoopMember = false
 }
 
 /// A place written as text, as the path key writes it: a rename of a value, or another place whose code the engine copies

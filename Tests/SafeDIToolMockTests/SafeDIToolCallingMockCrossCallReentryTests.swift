@@ -74,7 +74,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -121,7 +121,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -257,7 +257,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -304,7 +304,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -452,7 +452,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -499,7 +499,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -635,7 +635,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -682,7 +682,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -820,7 +820,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.serviceBuilder = { _ in __safeDI_builder }
+		                self.init(serviceBuilder: { _ in __safeDI_builder })
 		            }
 		        }
 		    }
@@ -867,7 +867,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Int, __safeDI_Built>.Builder) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1004,7 +1004,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -1051,7 +1051,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1191,7 +1191,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -1238,7 +1238,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1382,7 +1382,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -1429,7 +1429,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1479,7 +1479,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1632,7 +1632,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -1679,7 +1679,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1729,7 +1729,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -1879,7 +1879,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -1929,7 +1929,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                }
 
 		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                    self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		                }
 		            }
 		        }
@@ -1943,7 +1943,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.binderBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(binderBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2145,7 +2145,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -2192,7 +2192,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2320,7 +2320,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.page = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(page: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }
@@ -2454,7 +2454,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -2531,7 +2531,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -2728,7 +2728,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.store = { _ in __safeDI_builder() }
+		                self.init(store: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -2769,7 +2769,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
+		                self.init(service: { _ in __safeDI_builder() })
 		            }
 		        }
 		    }
@@ -2846,7 +2846,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            }
 
 		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.pageBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                self.init(pageBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 		            }
 		        }
 		    }
@@ -3148,7 +3148,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.api = { _ in __safeDI_builder() }
+			                self.init(api: { _ in __safeDI_builder() })
 			            }
 			        }
 			    }
@@ -3226,7 +3226,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                }
 
 			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
+			                    self.init(api: { _ in __safeDI_builder() })
 			                }
 			            }
 			        }
@@ -3240,7 +3240,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			            }
 
 			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                self.init(a: { _ in .init(__safeDI_noScope: __safeDI_builder) })
 			            }
 			        }
 			    }

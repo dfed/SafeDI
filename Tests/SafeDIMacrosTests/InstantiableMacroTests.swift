@@ -6420,6 +6420,16 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    public static func customMock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
 			)
 		}
 
@@ -6529,6 +6539,72 @@ import Testing
 				    public static func customMock() -> MyService {
 				        MyService()
 				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func producesDiagnostic_fixItAddsOnlyTheArgument_whenAnotherFixItEditsTheTypesMembers() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(customMockName: "customMock")
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    public static func customMock(dependency: Dependency) -> ExampleService {
+				        ExampleService(dependency: dependency)
+				    }
+
+				    @Instantiated let dependency: Dependency = Dependency()
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    public static func customMock(dependency: Dependency) -> ExampleService {
+				        ExampleService(dependency: dependency)
+				    }
+
+				    let dependency: Dependency = Dependency()
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`dependency` must not have a default value: SafeDI passes every @Instantiated, @Received, and @Forwarded property in through the initializer. Remove `= Dependency()`.",
+						line: 11,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `= Dependency()`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "`customMockName` requires `generateMock: true` or `mockOnly: true`.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    public static func customMock(dependency: Dependency) -> ExampleService {
+				        ExampleService(dependency: dependency)
+				    }
+
+				    @Instantiated let dependency: Dependency
 				}
 				""",
 			)
@@ -9383,14 +9459,6 @@ import Testing
 							FixItSpec(message: "Remove `generateMock: true`"),
 						],
 					),
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
-						line: 3,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
-						],
-					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
@@ -9465,6 +9533,60 @@ import Testing
 				@Instantiable(isRoot: true)
 				public struct ExampleService: Instantiable {
 				    public init() {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItRemovesOnlyTheArgument_whenAnotherFixItEditsTheTypesMembers() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateDependencyTree: true)
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    @Instantiated let dependency: Dependency = Dependency()
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    let dependency: Dependency = Dependency()
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`dependency` must not have a default value: SafeDI passes every @Instantiated, @Received, and @Forwarded property in through the initializer. Remove `= Dependency()`.",
+						line: 7,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `= Dependency()`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "`isRoot` and `generateDependencyTree` cannot both be `true`: a root’s dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateDependencyTree: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true)
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+
+				    @Instantiated let dependency: Dependency
 				}
 				""",
 			)
@@ -9722,14 +9844,6 @@ import Testing
 							FixItSpec(message: "Remove `generateMock: true`"),
 						],
 					),
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
-						line: 3,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
-						],
-					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
@@ -9904,14 +10018,6 @@ import Testing
 						column: 1,
 						fixIts: [
 							FixItSpec(message: "Remove `generateMock: true`"),
-						],
-					),
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@Instantiable`.",
-						line: 4,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"),
 						],
 					),
 				],

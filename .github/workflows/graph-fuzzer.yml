@@ -63,7 +63,7 @@ on:
         required: false
         default: 'corpus'
       shards:
-        description: The number of jobs to split the graphs across, or `auto` for two with the seam feature (`generateDependencyTree`), whose graphs cost the most, and one otherwise.
+        description: The number of jobs to split the graphs across, or `auto` for four with the seam feature (`generateDependencyTree`), whose graphs cost the most, and one otherwise.
         type: choice
         options: ['auto', '1', '2', '3', '4']
         default: 'auto'
@@ -118,8 +118,13 @@ jobs:
     strategy:
       fail-fast: false
       # One matrix entry per shard; each job reads its index and the count from `strategy`.
+      # `auto` gives the seam corpus four. With two, shard 0 fuzzed for 61 to
+      # 63 minutes after a 26-minute build, against the job's 90: run 340 of
+      # this workflow was cancelled at the limit, and run 345 finished with
+      # under a minute to spare. Four halve each shard's graphs, which should
+      # leave a shard near 57 minutes; that is not measured yet.
       matrix:
-        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '2' || '1') || inputs.shards] }}
+        shard: ${{ fromJSON('{"1":[0],"2":[0,1],"3":[0,1,2],"4":[0,1,2,3]}')[(inputs.shards || 'auto') == 'auto' && (inputs.features == 'generateDependencyTree' && '4' || '1') || inputs.shards] }}
     defaults:
       run:
         shell: bash
@@ -247,7 +252,8 @@ jobs:
     if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 55
+    # Above the suite step's limit by more than the job's other steps take.
+    timeout-minutes: 100
     permissions:
       contents: read
     defaults:
@@ -272,8 +278,10 @@ jobs:
         # 2.3.1 trim (Verify run 44714429086, 2026-11-20), where the seam
         # smoke seeds alone ran 1,442 s; an added oracle that runs the tool
         # again on some graphs made every fuzzer test 8 to 12% slower and
-        # passed the old limit of 25 minutes (run 44738763289).
-        timeout-minutes: 50
+        # passed the old limit of 25 minutes (run 44738763289). Over eight
+        # later runs it took 20.6 to 45.5 minutes (Verify runs 45808222191
+        # and 45815169776; 30.1 in 45850201388), so the limit is twice 45.
+        timeout-minutes: 90
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
@@ -315,7 +323,7 @@ jobs:
     # Above the fuzzer step's limit by more than the longest the job's other
     # steps have taken: one job ran 20.0 minutes, 11 of them initializing
     # its container (run 43879263598).
-    timeout-minutes: 40
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -367,10 +375,13 @@ jobs:
       # process it starts gets an LLVM_PROFILE_FILE of its own in the test's
       # temporary directory. A shard's fuzzer has taken up to 14.1 minutes over
       # five dispatches (run 43995669689, the seam corpus's seeds 250+250;
-      # 13.95 in run 43945139805); the step's limit is twice that and under the
-      # job's, so a shard that runs out of time still uploads what it has.
+      # 13.95 in run 43945139805). Over eight later runs the slowest shard of
+      # each took 14.4 to 23.8 minutes (Verify runs 45850201388 and
+      # 45801718822; 20.7 in 45815169776); the step's limit is twice 23.8 and
+      # under the job's, so a shard that runs out of time still uploads what
+      # it has.
       - name: Run Graph Fuzzer
-        timeout-minutes: 28
+        timeout-minutes: 48
         env:
           SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
           SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
@@ -494,8 +505,12 @@ jobs:
         with:
           pattern: graph-fuzzer-report-*
           path: reports
+      # `reports/report.txt` is where the one report lies when one shard alone
+      # uploaded: a pattern that matches one artifact unpacks it into the path
+      # itself. The script keeps the paths that exist, and names the shards
+      # whose reports are absent.
       - name: Combine Shard Reports
-        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt reports/report.txt
       # Prints what the shards' reports say the pins should be, for a session
       # that cannot download this run's artifacts: the analysis's report, then
       # its pins.json as lines that

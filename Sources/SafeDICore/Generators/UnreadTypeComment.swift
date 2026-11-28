@@ -60,6 +60,7 @@ public struct UnreadTypeComment: Sendable {
 			guard let firstMarkerLine = markerLines.first else { return nil }
 			var typeNames = Set<String>()
 			for markerLine in markerLines {
+				// safedi-source-rule: allow stringScan — splits the bytes of one marker line, once per marker, in a run that writes the comment.
 				for typeName in bytes[markerLine.markerStart + markerPrefixBytes.count..<markerLine.lineEnd].split(separator: markerSeparatorByte) {
 					typeNames.insert(String(decoding: typeName, as: UTF8.self))
 				}
@@ -99,6 +100,7 @@ public struct UnreadTypeComment: Sendable {
 			let pieceMarkerLines = piece.withUTF8 { bytes in
 				let pieceMarkerLines = Self.markerLines(in: bytes)
 				for markerLine in pieceMarkerLines {
+					// safedi-source-rule: allow stringScan — splits the bytes of one marker line, once per marker, in a run that writes the comment.
 					for typeName in bytes[markerLine.markerStart + markerPrefixBytes.count..<markerLine.lineEnd].split(separator: markerSeparatorByte) {
 						typeNames.insert(String(decoding: typeName, as: UTF8.self))
 					}
