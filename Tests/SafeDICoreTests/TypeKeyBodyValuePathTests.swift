@@ -644,10 +644,6 @@ struct TypeKeyBodyValuePathTests {
 		// A passed argument's key (`PassedArgument.shape`).
 		case passedArgumentType
 		case passedArgumentParameterName
-		// The statement a place's function begins with (`BuiltPlaceRecord.leadingStatement`).
-		case enteredPlaceSlot
-		case enteredPlaceNearestOfTypeSlot
-		case enteredPlaceWithoutSlot
 
 		func configure(_ c: inout BuiltPlaceRecord, isSecond: Bool) {
 			let cfg = ValuePath.passedArgument("cfg")
@@ -701,12 +697,6 @@ struct TypeKeyBodyValuePathTests {
 				c.passedArguments = [passed("cfg"), passed("alt", type: isSecond ? "OtherCfg" : "Cfg")]
 			case .passedArgumentParameterName:
 				c.passedArguments = [passed("cfg"), passed(isSecond ? "other" : "alt")]
-			case .enteredPlaceSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? "other" : "c", nearestOfTypeSlot: nil)), closureArguments: [])
-			case .enteredPlaceNearestOfTypeSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: "c", nearestOfTypeSlot: isSecond ? "nearestC" : nil)), closureArguments: [])
-			case .enteredPlaceWithoutSlot:
-				c.callFields = CallFields(leadingStatement: .enteredPlace(EnteredPlace(slot: isSecond ? nil : "c", nearestOfTypeSlot: "nearestC")), closureArguments: [])
 			}
 		}
 	}

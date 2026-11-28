@@ -112,7 +112,7 @@ extension NodeRecords {
 			node: PlanNode(),
 		)
 		record.argumentValues = argumentValues
-		record.callFields = CallFields(leadingStatement: scope.seamCall.map { .callGuard($0.callGuard(for: construction.concreteType)) }, closureArguments: records.closureArguments, builtClosures: records.builtClosures)
+		record.callFields = CallFields(leadingStatement: scope.seamCall?.callGuard(for: construction.concreteType), closureArguments: records.closureArguments, builtClosures: records.builtClosures)
 		// What the root dispatcher hands of the caller's scope, which the call's function captures.
 		let reads = construction.arguments + records.callerReads
 		var alias = AliasPlaceRecord(property: construction.property, fulfillingProperty: nil, text: "", reads: reads)
