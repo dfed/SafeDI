@@ -34,7 +34,7 @@ enum MockTreeNamesChecks {
 		}
 		let testName = Test.current?.name ?? "unknown test"
 		let enclosingObserver = MockTreeNamesObservation.observer
-		return try await MockTreeNamesObservation.$observer.withValue({ report in
+		return try await MockTreeNamesObservation.$observer.withValue(TaskLocalFunction { report in
 			let outcome = if let refusal = report.refusal {
 				"refused \(refusal)"
 			} else if report.differences.isEmpty {

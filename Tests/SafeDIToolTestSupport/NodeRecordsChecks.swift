@@ -69,7 +69,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingDispatcherObserver = DispatcherRecordObservation.observer
 		// A dispatcher's declaration, spelled from the call's records alone, must be the text the tree writes.
-		let dispatcherObserver: @Sendable (DispatcherRecordObservation) -> Void = { dispatcher in
+		let dispatcherObserver = TaskLocalFunction<@Sendable (DispatcherRecordObservation) -> Void> { dispatcher in
 			if dispatcher.spelledFromRecord != dispatcher.text {
 				Issue.record(Comment(rawValue: "The records of a dispatcher spell\n\(dispatcher.spelledFromRecord)\nwhere the tree writes\n\(dispatcher.text)"))
 			}
@@ -77,7 +77,7 @@ enum NodeRecordsChecks {
 		}
 		let enclosingFillObserver = FillSignatureObservation.observer
 		// A fill's function, up to its tree, spelled from the fill's record alone, must be the text the tree writes.
-		let fillObserver: @Sendable (FillSignatureObservation) -> Void = { fill in
+		let fillObserver = TaskLocalFunction<@Sendable (FillSignatureObservation) -> Void> { fill in
 			if fill.spelledFromRecord != fill.written {
 				Issue.record(Comment(rawValue: "The record of a fill spells\n\(fill.spelledFromRecord.joined(separator: "\n"))\nwhere the tree writes\n\(fill.written.joined(separator: "\n"))"))
 			}

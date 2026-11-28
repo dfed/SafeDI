@@ -1085,7 +1085,7 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 		let (stream, continuation) = AsyncStream.makeStream(of: MockTreeNamesReport.self)
 		var filesMade = [URL]()
 		defer { filesToDelete += filesMade }
-		try await MockTreeNamesObservation.$observer.withValue({ continuation.yield($0) }) {
+		try await MockTreeNamesObservation.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 			try await body(&filesMade)
 		}
 		continuation.finish()

@@ -48,7 +48,7 @@ extension DependencyTreeGenerator {
 		// What each mock root's promotion decides before its tree is built, which the tree names comparison reads.
 		let promotionRecording = AsyncStream.makeStream(of: MockRootPromotion.self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
-			try await MockTreeNamesObservation.$recordsMockRootPromotion.withValue({ promotionRecording.continuation.yield($0) }) {
+			try await MockTreeNamesObservation.$recordsMockRootPromotion.withValue(TaskLocalFunction { promotionRecording.continuation.yield($0) }) {
 				try await generateMockCode(
 					mockConditionalCompilation: mockConditionalCompilation,
 					currentModuleSourceFilePaths: currentModuleSourceFilePaths,

@@ -469,10 +469,10 @@ struct MockRootPromotion: Sendable {
 /// world answers (`MockTreeNamesFromWorld`), handed to `observer`, which only a test sets: a run that sets none builds no
 /// world for it and compares nothing.
 public enum MockTreeNamesObservation {
-	@TaskLocal public static var observer: (@Sendable (MockTreeNamesReport) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (MockTreeNamesReport) -> Void>?
 	/// Handed what `createMockRootScopeGenerator` decides of each mock root before its tree is built, where an `observer` is
 	/// set (`DependencyTreeGenerator.generateMockCode`).
-	@TaskLocal static var recordsMockRootPromotion: (@Sendable (MockRootPromotion) -> Void)?
+	@TaskLocal static var recordsMockRootPromotion: TaskLocalFunction<@Sendable (MockRootPromotion) -> Void>?
 
 	/// Every field of `tree` beside the same field of `world`, each projected to text.
 	static func fields(of tree: ScopeGenerator.TreeNames, besideThoseOf world: ScopeGenerator.TreeNames) -> [MockTreeNamesReport.Field] {
