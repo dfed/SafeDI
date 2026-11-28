@@ -2470,6 +2470,114 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesReceivedFunctionOnce_whenLoopMemberFunctionTakesCycleParameterAndRootAlsoBuildsTheStepThatClosesIt() async throws {
+		// The root builds `Step` too, so the loop `Step`'s body rebinds is written at two places, which the type key lays out once: `__safeDI_screenBuilder_received` passes the root's `session` to the function it calls.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Session"),
+			Self.type("Settings"),
+			Self.type("Screen", "@Received let session: Session", "@Received let settings: Settings", "@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail", "@Instantiated let history: LazilyInstantiated<History>"),
+			Self.type("Detail", "@Received let screenBuilder: Instantiator<Screen>"),
+			Self.type("History", "@Received let session: Session", "@Received let screenBuilder: Instantiator<Screen>"),
+			Self.type("Step", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let session: Session", "@Instantiated let settings: LazilyInstantiated<Settings>", "@Instantiated let screenBuilder: Instantiator<Screen>", "@Instantiated let stepBuilder: Instantiator<Step>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let session = Session()
+			        func __safeDI_settings() -> Settings {
+			            Settings()
+			        }
+			        let settings = LazilyInstantiated<Settings>(__safeDI_settings)
+			        func __safeDI_screenBuilder(session: Session) -> Screen {
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+			            let detail = Detail(screenBuilder: screenBuilder)
+			            let history = LazilyInstantiated<History> {
+			                __safeDI_history(session: session, screenBuilder: screenBuilder)
+			            }
+			            return Screen(session: session, settings: settings.instance, stepBuilder: stepBuilder, detail: detail, history: history)
+			        }
+			        func __safeDI_stepBuilder() -> Step {
+			            let session = Session()
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            return Step(session: session, screenBuilder: screenBuilder)
+			        }
+			        func __safeDI_history(session: Session, screenBuilder: Instantiator<Screen>) -> History {
+			            History(session: session, screenBuilder: screenBuilder)
+			        }
+			        func __safeDI_screenBuilder_received() -> Screen {
+			            __safeDI_screenBuilder(session: session)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
+			        let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+			        self.init(session: session, settings: settings, screenBuilder: screenBuilder, stepBuilder: stepBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesReceivedFunctionOnce_whenTypeBuiltAtTwoPlacesDeclaresLoopWhoseMemberFunctionTakesCycleParameter() async throws {
+		// `Hub` is built at two places, so the loop it declares is written at both, which the type key lays out once: `__safeDI_screenBuilder_received` passes `Hub`'s own `session` to the function it calls.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Session"),
+			Self.type("Screen", "@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let detail: Detail"),
+			Self.type("Detail", "@Received let screenBuilder: Instantiator<Screen>"),
+			Self.type("Step", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+			Self.type("Hub", "@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+			Self.type("Lobby", "@Instantiated let hub: Hub"),
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let hub: Hub", "@Instantiated let lobby: Lobby"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_hub() -> Hub {
+			            let session = Session()
+			            func __safeDI_screenBuilder_received() -> Screen {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder_received)
+			            return Hub(session: session, screenBuilder: screenBuilder)
+			        }
+			        func __safeDI_screenBuilder(session: Session) -> Screen {
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+			            let detail = Detail(screenBuilder: screenBuilder)
+			            return Screen(session: session, stepBuilder: stepBuilder, detail: detail)
+			        }
+			        func __safeDI_stepBuilder() -> Step {
+			            let session = Session()
+			            let screenBuilder = Instantiator<Screen> {
+			                __safeDI_screenBuilder(session: session)
+			            }
+			            return Step(session: session, screenBuilder: screenBuilder)
+			        }
+			        let hub: Hub = __safeDI_hub()
+			        func __safeDI_lobby() -> Lobby {
+			            let hub: Hub = __safeDI_hub()
+			            return Lobby(hub: hub)
+			        }
+			        let lobby: Lobby = __safeDI_lobby()
+			        self.init(hub: hub, lobby: lobby)
+			    }
+			}
+			""",
+		])
+	}
+
 	// MARK: Tests – Receives through a cycle-closing scope
 
 	@Test

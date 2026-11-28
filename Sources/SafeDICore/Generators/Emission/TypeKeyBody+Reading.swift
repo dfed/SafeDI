@@ -40,7 +40,7 @@ extension TypeKeyLayout {
 		var frames = [(body: 0, children: rootChildren, next: 0)]
 		// Closers on the function of a statement the walk has not reached yet: a member of a loop of builders rebinds the
 		// members declared after it in the loop's body.
-		var closersOnLaterStatements = [(body: Int, position: Int, declaringBody: Int, index: Int)]()
+		var closersOnLaterStatements = [(body: Int, position: Int, declaringBody: Int, index: Int, callsTextFunction: Bool)]()
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
 				frames.removeLast()
@@ -164,15 +164,23 @@ extension TypeKeyLayout {
 					case let .enclosing(target):
 						statement = .closer(closer, target: target)
 						recordCloser(closer, at: (body: body, index: position), closing: target)
-					case let .statement(declaringBody, index, _),
-					     let .callingFunction(declaringBody, index, _):
+					case let .statement(declaringBody, index, _):
 						if index < bodies[declaringBody].statements.count {
-							guard let target = Self.functionBody(of: bodies[declaringBody].statements[index]) else { return false }
+							guard case let .built(target) = bodies[declaringBody].statements[index] else { return false }
 							statement = .closer(closer, target: target)
 							recordCloser(closer, at: (body: body, index: position), closing: target)
 						} else {
 							statement = .closer(closer, target: 0)
-							closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index))
+							closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index, callsTextFunction: false))
+						}
+					case let .callingFunction(declaringBody, index, _):
+						if index < bodies[declaringBody].statements.count {
+							guard case let .function(_, target) = bodies[declaringBody].statements[index] else { return false }
+							statement = .closer(closer, target: target)
+							recordCloser(closer, at: (body: body, index: position), closing: target)
+						} else {
+							statement = .closer(closer, target: 0)
+							closersOnLaterStatements.append((body: body, position: position, declaringBody: declaringBody, index: index, callsTextFunction: true))
 						}
 					case nil:
 						return false
@@ -213,14 +221,21 @@ extension TypeKeyLayout {
 			bodies[body].statements.append(statement)
 		}
 		for closer in closersOnLaterStatements {
-			let declaringStatement = bodies[closer.declaringBody].statements[closer.index]
 			// A closer may call a function a later place written as text declares only from within the run of statements that
 			// declare functions it is in (`declaresOnlyFunctions(inBody:between:and:)`).
-			if case .function = declaringStatement {
-				guard declaresOnlyFunctions(inBody: closer.declaringBody, between: enclosingPosition(of: closer.body, in: closer.declaringBody), and: closer.index) else { return false }
+			let target: Int
+			if closer.callsTextFunction {
+				// Such a closer rebinds a member of a loop at the top of the member's function, whose body the declaring body holds.
+				guard bodies[closer.body].parent == closer.declaringBody,
+				      declaresOnlyFunctions(inBody: closer.declaringBody, between: bodies[closer.body].position, and: closer.index),
+				      case let .function(_, functionBody) = bodies[closer.declaringBody].statements[closer.index]
+				else { return false }
+				target = functionBody
+			} else {
+				guard case let .built(placeBody) = bodies[closer.declaringBody].statements[closer.index] else { return false }
+				target = placeBody
 			}
-			guard let target = Self.functionBody(of: declaringStatement),
-			      case let .closer(record, _) = bodies[closer.body].statements[closer.position]
+			guard case let .closer(record, _) = bodies[closer.body].statements[closer.position]
 			else { return false }
 			bodies[closer.body].statements[closer.position] = .closer(record, target: target)
 			recordCloser(record, at: (body: closer.body, index: closer.position), closing: target)
@@ -317,29 +332,6 @@ extension TypeKeyLayout {
 			bound.insert(closer.property.label)
 		}
 		return domain
-	}
-
-	/// The body of the function `statement` declares: a place's own, or the one a place written as text declares; `nil`
-	/// for any other statement.
-	static func functionBody(of statement: Statement) -> Int? {
-		switch statement {
-		case let .built(body),
-		     let .function(_, body):
-			body
-		case .inline,
-		     .closer,
-		     .alias:
-			nil
-		}
-	}
-
-	/// The index in `ancestor`'s body of the statement that holds `body`, which `ancestor` encloses.
-	func enclosingPosition(of body: Int, in ancestor: Int) -> Int {
-		var body = body
-		while bodies[body].parent != ancestor {
-			body = bodies[body].parent
-		}
-		return bodies[body].position
 	}
 
 	/// Whether every statement of `body` after `start` and before `end` declares a function and binds nothing, so a function
@@ -662,20 +654,6 @@ extension TypeKeyLayout {
 		}
 		guard case let .place(plan) = code.node else { return nil }
 		return plan.record
-	}
-
-	func label(of statement: Statement) -> String {
-		switch statement {
-		case let .built(body):
-			bodies[body].record?.property.label ?? ""
-		case let .inline(record):
-			record.property.label
-		case let .closer(record, _):
-			record.property.label
-		case let .alias(record),
-		     let .function(record, _):
-			record.property.label
-		}
 	}
 
 	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.

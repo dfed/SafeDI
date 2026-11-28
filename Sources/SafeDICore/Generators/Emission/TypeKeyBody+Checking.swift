@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 extension TypeKeyLayout {
 	// MARK: Checking every read
 
@@ -152,7 +151,7 @@ extension TypeKeyLayout {
 					// read here; its own statements are its body's, checked as every body's are.
 					for position in record.listedReads.indices {
 						let isNil = Self.memoized(&isNilByRead, NilReadKey(owner: owner, statement: index, position: position)) {
-							isNilAtEveryMember(owner: owner, aliasStatement: index, read: position)
+							isNilAtEveryMember(owner: owner, functionStatement: index, read: position)
 						}
 						guard checkRead(record.listedReads[position], inBody: body, before: index, owner: owner, isNilAtEveryMember: isNil) else { return false }
 					}
@@ -205,18 +204,19 @@ extension TypeKeyLayout {
 	/// Whether the read at `position` of the text place at `index` is `nil` in every member of `owner`'s class, as
 	/// `isNilAtEveryMember(owner:inlineStatement:argument:)` judges an inline place's.
 	func isNilAtEveryMember(owner: Int, aliasStatement index: Int, read position: Int) -> Bool {
-		for statement in statements(at: index, ofEveryMemberOf: owner) {
-			switch statement {
-			case let .alias(record),
-			     let .function(record, _):
-				guard record.listedReads[position].source == .nil else { return false }
-			case .built,
-			     .closer,
-			     .inline:
-				break
-			}
+		for case let .alias(record) in statements(at: index, ofEveryMemberOf: owner) where record.listedReads[position].source != .nil {
+			return false
 		}
 		return true
+	}
+
+	/// Whether the read at `position` of the statement at `index`, which declares a function a place written as text declares,
+	/// is `nil` in every member of `owner`'s class, as `isNilAtEveryMember(owner:aliasStatement:read:)` judges a text place's.
+	func isNilAtEveryMember(owner: Int, functionStatement index: Int, read position: Int) -> Bool {
+		!statements(at: index, ofEveryMemberOf: owner).contains { statement in
+			guard case let .function(record, _) = statement else { return false }
+			return record.listedReads[position].source != .nil
+		}
 	}
 
 	/// The statement at `index` of each member of `owner`'s class, or of the root's body.

@@ -208,12 +208,11 @@ extension TypeKeyLayout {
 	func spelledCallingFunction(_ function: CallingFunction, ofClass owner: Int, functionCode: [GeneratedCode]) -> GeneratedCode? {
 		let statements = statements(ofClass: owner)
 		guard case let .closer(returnedCall, target) = statements.last,
-		      var body = spelledStatements(ofClass: owner, upTo: statements.count - 1, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
-		      let call = spelledArguments(toCallOf: classByBody[target], inClass: owner, at: statements.count - 1)
+		      let body = spelledStatements(ofClass: owner, upTo: statements.count - 1, indentation: ScopeGenerator.standardIndent, functionCode: functionCode),
+		      let call = spelledArguments(toCallOf: classByBody[target], inClass: owner, at: statements.count - 1),
+		      // A returned call whose arguments need bindings of their own is not laid out yet.
+		      call.bindings.isEmpty
 		else { return nil }
-		if !call.bindings.isEmpty {
-			body.append(.indented(.text(String(call.bindings.dropLast())), by: ScopeGenerator.standardIndent))
-		}
 		let forwardedArguments = returnedCall.forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled }
 		return BuilderNode(
 			name: function.name,
