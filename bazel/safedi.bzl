@@ -117,6 +117,14 @@ from the library's label. Give `safedi_swift_library` a `package_name`
 to compile the library with `-package-name`, which `package`
 declarations need.
 
+## Default isolation
+
+`safedi_compile` reports the last `-default-isolation` flag among
+`copts` and rules_swift's `--@rules_swift//swift:copt` (or `exec_copt`)
+to SafeDITool, which warns when the module's `#SafeDIConfiguration`
+declares another default isolation. The generated code is the same
+either way. A default isolation set another way is not reported.
+
 ## Unsupported SafeDI features
 
 - `#SafeDIConfiguration(additionalDirectoriesToInclude:)` is **not
@@ -181,6 +189,26 @@ def _compilation_conditions_from_copts(copts):
         elif copt.startswith("-D"):
             conditions.append(copt[len("-D"):])
     return conditions
+
+def _default_isolation_from_copts(copts, default_isolation):
+    """Returns the value of the last `-default-isolation` flag in `copts`.
+
+    Returns `default_isolation` when no such flag is there. swiftc takes
+    the flag's value as the next argument or after `=`, and the last flag
+    wins.
+    """
+    flag_expecting_value = None
+    for copt in copts:
+        if flag_expecting_value == "-default-isolation":
+            default_isolation = copt
+            flag_expecting_value = None
+        elif flag_expecting_value != None:
+            flag_expecting_value = None
+        elif copt == "-default-isolation" or copt in _FLAGS_FORWARDING_NEXT_ARGUMENT:
+            flag_expecting_value = copt
+        elif copt.startswith("-default-isolation="):
+            default_isolation = copt[len("-default-isolation="):]
+    return default_isolation
 
 def _safedi_compile_impl(ctx):
     for dependency in ctx.attr.deps:
@@ -286,6 +314,17 @@ def _safedi_compile_impl(ctx):
     if active_compilation_conditions:
         arguments += ["--active-compilation-conditions"] + active_compilation_conditions
 
+    # The default isolation swiftc compiles the module with, when copts
+    # set one. SafeDITool generates the same code whatever it is, and
+    # warns when the module's `#SafeDIConfiguration` declares another.
+    # rules_swift passes the command-line copts after the target's.
+    default_isolation = _default_isolation_from_copts(
+        command_line_copts,
+        _default_isolation_from_copts(ctx.attr.copts, ""),
+    )
+    if default_isolation:
+        arguments += ["--build-default-isolation", default_isolation]
+
     # The module and package that declare this module's `@Instantiable`
     # types, which SafeDITool records in the `.safedi` artifact.
     arguments += ["--module-name", ctx.attr.module_name]
@@ -373,7 +412,8 @@ automatically in the `dbg` and `fastbuild` compilation modes, and
             default = [],
             doc = """Swift compiler options matching the wrapped
 `swift_library.copts`. Each `-D` flag among them reports a compilation
-condition; other options are ignored.""",
+condition, and the last `-default-isolation` flag reports the module's
+default isolation; other options are ignored.""",
         ),
         "module_name": attr.string(
             mandatory = True,

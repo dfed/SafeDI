@@ -35,17 +35,27 @@ enum BuildSettingCompilationConditions {
 	/// The option that carries `${OTHER_SWIFT_FLAGS}`.
 	static let otherSwiftFlagsOptionName = "build-setting-other-swift-flags"
 
-	/// The conditions the compiler receives, or `nil` when either setting is missing or was not expanded.
+	/// What the build settings report once the build system expanded both of them.
+	struct Expanded {
+		/// The conditions the compiler receives: those in `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and those the `-D`
+		/// flags in `OTHER_SWIFT_FLAGS` define.
+		let conditions: Set<String>
+		/// The default isolation the last `-default-isolation` flag in `OTHER_SWIFT_FLAGS` sets, which the compiler
+		/// receives after the one a build setting adds, or `nil` when no such flag is there.
+		let defaultIsolation: BuildDefaultIsolation?
+	}
+
+	/// What the compiler receives, or `nil` when either setting is missing or was not expanded.
 	///
 	/// Each value arrives wrapped in square brackets so an empty setting still reads as a value.
 	///
 	/// - Parameters:
 	///   - activeCompilationConditions: `[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]` as received.
 	///   - otherSwiftFlags: `[${OTHER_SWIFT_FLAGS}]` as received; its `-D` flags are conditions too.
-	static func conditions(
+	static func expanded(
 		activeCompilationConditions bracketedActiveCompilationConditions: String?,
 		otherSwiftFlags bracketedOtherSwiftFlags: String?,
-	) throws -> Set<String>? {
+	) throws -> Expanded? {
 		guard let bracketedActiveCompilationConditions,
 		      let bracketedOtherSwiftFlags
 		else {
@@ -58,7 +68,11 @@ enum BuildSettingCompilationConditions {
 		else {
 			return nil
 		}
-		return Set(arguments(in: activeCompilationConditions)).union(definedConditions(in: arguments(in: otherSwiftFlags)))
+		let swiftFlags = swiftFlags(in: arguments(in: otherSwiftFlags))
+		return Expanded(
+			conditions: Set(arguments(in: activeCompilationConditions)).union(swiftFlags.conditions),
+			defaultIsolation: swiftFlags.defaultIsolation,
+		)
 	}
 
 	// MARK: Private
@@ -79,9 +93,12 @@ enum BuildSettingCompilationConditions {
 		value.contains("${") || value.contains("$(")
 	}
 
-	/// The conditions `-D` flags define, as the Swift driver reads them.
-	private static func definedConditions(in flags: [String]) -> Set<String> {
+	/// The conditions `-D` flags define, and the default isolation the last `-default-isolation` flag sets, as the Swift
+	/// driver reads them. The driver takes the flag's value as the next argument or after `=`, and rejects a value other
+	/// than `MainActor` or `nonisolated`, so a last flag with another value reports nothing.
+	private static func swiftFlags(in flags: [String]) -> (conditions: Set<String>, defaultIsolation: BuildDefaultIsolation?) {
 		var conditions = Set<String>()
+		var defaultIsolation: BuildDefaultIsolation?
 		var index = flags.startIndex
 		while index < flags.endIndex {
 			let flag = flags[index]
@@ -93,12 +110,20 @@ enum BuildSettingCompilationConditions {
 			} else if flag.hasPrefix("-D"), flag.count > 2 {
 				conditions.insert(String(flag.dropFirst(2)))
 				index += 1
+			} else if flag == defaultIsolationFlag, index + 1 < flags.endIndex {
+				defaultIsolation = BuildDefaultIsolation(flags[index + 1])
+				index += 2
+			} else if flag.hasPrefix(defaultIsolationFlag + "=") {
+				defaultIsolation = BuildDefaultIsolation(String(flag.dropFirst(defaultIsolationFlag.count + 1)))
+				index += 1
 			} else {
 				index += 1
 			}
 		}
-		return conditions
+		return (conditions, defaultIsolation)
 	}
+
+	private static let defaultIsolationFlag = "-default-isolation"
 
 	/// Splits a build setting's value into arguments much as the shell does: whitespace separates
 	/// arguments, quotes group them, and a backslash escapes the character after it, inside single

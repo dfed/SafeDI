@@ -475,7 +475,7 @@ Text you write in a field wins for that field, and SafeDI never reads it: any te
 | nonisolated | `MainActor.self` | As if each empty attribute field held `"@MainActor"`. Code that calls these initializers and mocks runs on the main actor. |
 | main actor | `nil` | Generated code is inferred `nonisolated` where it spells nothing, and fails to compile where it builds a main-actor type. Declare the setting. |
 
-<!-- Mismatch warning: one paragraph about the warning `generate` reports when the build setting it can see disagrees with `defaultIsolation` goes here. -->
+Where the build reports its default isolation to SafeDI, SafeDI warns when it disagrees with `defaultIsolation`: a module compiled with `-default-isolation MainActor` whose configuration doesn’t declare `MainActor.self`, or has no `#SafeDIConfiguration` at all, and a module compiled with `-default-isolation nonisolated` that declares `MainActor.self`. The warning never changes the generated code. A package built by Swift Build (opened in Xcode, or built with `swift build --build-system swiftbuild`) reports the `-default-isolation` flag SwiftPM derives from `.defaultIsolation(…)`; SwiftPM’s native build system (plain `swift build`) reports nothing, so there SafeDI cannot warn.
 
 What the setting cannot fix:
 - A `Sendable` wrapper (`SendableInstantiator`, `SendableErasedInstantiator`) cannot build a main-actor type: its builder runs off the main actor.

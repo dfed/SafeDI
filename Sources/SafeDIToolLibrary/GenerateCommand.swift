@@ -60,6 +60,8 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(name: .customLong(BuildSettingCompilationConditions.otherSwiftFlagsOptionName), help: "The target’s `OTHER_SWIFT_FLAGS` build setting wrapped in square brackets, written as the literal `[${OTHER_SWIFT_FLAGS}]`. Its `-D` flags are active conditions. Used only together with `--build-setting-active-compilation-conditions`.") var buildSettingOtherSwiftFlags: String?
 
+	@Option(name: .customLong(BuildDefaultIsolation.optionName), help: "The default actor isolation the build system compiles this module with apart from `OTHER_SWIFT_FLAGS`: `MainActor` or `nonisolated`, as Bazel’s `-default-isolation` copts or Xcode’s `SWIFT_DEFAULT_ACTOR_ISOLATION` set it. Any other value reports nothing. A `-default-isolation` flag in an expanded '--build-setting-other-swift-flags' reaches the compiler later, so it wins. SafeDI generates the same code whatever the build reports, and warns when the module’s `#SafeDIConfiguration` declares another default isolation.") var buildDefaultIsolation: String?
+
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is written only when its bytes change, so a build that compares modification times recompiles only what changed.") var combinedOutput: String?
 
 	@Flag(help: "Requires '--combined-output'. When set, the '--combined-output' file holds only the dependency trees, and the generated mocks and mock configuration are spread over 32 more files beside it, named as '--combined-output' is with `_Mocks1` … `_Mocks32` before its `.swift` extension, so that the compiler can compile them in parallel and an edit recompiles only the files whose mocks it changed. Each mock goes whole into the file a hash of its type’s name picks, and the mock configuration into the first, so the same inputs give the same files on every run and an edit that changes one mock rewrites only that mock’s file. Every file is written, holding only its header when no mock lands in it, and only when its bytes change.") var splitCombinedOutputMocks = false
@@ -284,10 +286,11 @@ public struct Generate: AsyncParsableCommand {
 		// through the manifest, which a build tool plugin collects before the build and which can name
 		// conditions the compiler does not define: Xcode hands plugins a package's debug-configuration
 		// defines in Release too.
-		let buildSettingConditions = try BuildSettingCompilationConditions.conditions(
+		let expandedBuildSettings = try BuildSettingCompilationConditions.expanded(
 			activeCompilationConditions: buildSettingActiveCompilationConditions,
 			otherSwiftFlags: buildSettingOtherSwiftFlags,
 		)
+		let buildSettingConditions = expandedBuildSettings?.conditions
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
@@ -388,6 +391,8 @@ public struct Generate: AsyncParsableCommand {
 			// Judged at the paths the module's additional files were found at: as scan resolved them when the module
 			// comes from scan's cache, and as this run resolved them otherwise.
 			+ (sourceConfiguration?.unreadableAdditionalDirectoryWarnings(for: parsed.module.additionalDirectories) ?? [])
+			// The build's default isolation never changes the generated code, which follows the configuration.
+			+ [BuildDefaultIsolation.reported(option: buildDefaultIsolation, expandedBuildSettings: expandedBuildSettings)?.mismatchWarning(declaredBy: sourceConfiguration)].compactMap(\.self)
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
