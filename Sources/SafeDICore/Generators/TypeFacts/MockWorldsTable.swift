@@ -162,16 +162,19 @@ struct MockWorldsTable: Sendable {
 	}
 
 	/// What a test observes of the table, once each world is built from it: `sharedGraphDeclarations` the table's ID of
-	/// each declaration of the shared graph (`MockWorldsSharedGraph`), in its order, `worlds` each world's records, by the
+	/// each declaration of the shared graph (`MockWorldsSharedGraph`), in its order, `sharedVariantCount` how many variants
+	/// it holds, `graphDeclarationCounts` how many declarations each world's own graph holds, `worlds` each world's records, by the
 	/// order of `mockedTypes`, `nil` for a world whose records were refused, `declarationKeysByWorld` each world's key of
 	/// each of its variants' declarations (`MockWorld.declarationKeyByVariant`), `recordCountsWithoutTable` how many records
 	/// each world's node records hold where made without the table, and `differences` every way a world's records differ
 	/// from the records the world builds without the table.
-	func report(sharedGraphDeclarations: [Int32], worldRecords: [[BuiltPlaceRecord]?], declarationKeysByWorld: [[Int32]], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
+	func report(sharedGraphDeclarations: [Int32], sharedVariantCount: Int, graphDeclarationCounts: [Int], worldRecords: [[BuiltPlaceRecord]?], declarationKeysByWorld: [[Int32]], recordCountsWithoutTable: [Int], differences: [String]) -> MockWorldsTableReport {
 		MockWorldsTableReport(
 			declarationCount: interning.declarationCount,
 			shareableDeclarationCount: shareableByDeclaration.count(where: \.self),
 			sharedGraphDeclarations: sharedGraphDeclarations,
+			sharedVariantCount: sharedVariantCount,
+			graphDeclarationCounts: graphDeclarationCounts,
 			sharedRecordCount: sharedRecords.count,
 			rows: sharedRecords.map { sharedRecord in
 				let declaration = declaration(ofID: sharedRecord.declaration)
@@ -284,10 +287,12 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		public let declarationKeys: [Int32]
 	}
 
-	public init(declarationCount: Int, shareableDeclarationCount: Int, sharedGraphDeclarations: [Int32], sharedRecordCount: Int, rows: [String], differences: [String], worlds: [World]) {
+	public init(declarationCount: Int, shareableDeclarationCount: Int, sharedGraphDeclarations: [Int32], sharedVariantCount: Int, graphDeclarationCounts: [Int], sharedRecordCount: Int, rows: [String], differences: [String], worlds: [World]) {
 		self.declarationCount = declarationCount
 		self.shareableDeclarationCount = shareableDeclarationCount
 		self.sharedGraphDeclarations = sharedGraphDeclarations
+		self.sharedVariantCount = sharedVariantCount
+		self.graphDeclarationCounts = graphDeclarationCounts
 		self.sharedRecordCount = sharedRecordCount
 		self.rows = rows
 		self.differences = differences
@@ -301,6 +306,12 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 	/// The table's ID of each declaration of the shared graph (`MockWorldsSharedGraph`), in the graph's order: every
 	/// shareable declaration, each once, built once for the run.
 	public let sharedGraphDeclarations: [Int32]
+	/// How many variants the shared graph holds: one per shared declaration and answers to its reads from above that
+	/// some world calls it with, each found once for the run.
+	public let sharedVariantCount: Int
+	/// How many declarations each world's own graph holds, in the order of `worlds`: those that are not shareable and the
+	/// frontier beneath them, or every declaration of a world built whole.
+	public let graphDeclarationCounts: [Int]
 	/// How many records the worlds share, one per row: each built once for the run.
 	public let sharedRecordCount: Int
 	/// Each row, in ID order: its declaration's ID and property (the type, for a declaration with none), and whether every

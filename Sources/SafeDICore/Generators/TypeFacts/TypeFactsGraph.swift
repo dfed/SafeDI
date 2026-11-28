@@ -163,6 +163,14 @@ struct TypeFactsGraph: Sendable {
 	///   - forMockGeneration: Whether the world is a mock root's, whose receives only if available read what the mock root
 	///     binds or pins (`ReadChannel.mock`), and whose types are built with their hand-written mocks.
 	init(root: ConstructionScope, forMockGeneration: Bool) {
+		self.init(root: root, forMockGeneration: forMockGeneration, sharedBelow: nil)
+	}
+
+	/// A mock world's top graph where `shared` is given: each shareable declaration it reaches (`MockWorldsTable`) is a
+	/// leaf of it, a frontier, whose subtree's facts are the shared graph's, copied by value into its rows, so the graph
+	/// holds only the declarations that are not shareable and the frontier beneath them. A frontier's own facts but its
+	/// rows, its edges' and its variants' calls are the shared graph's to answer (`MockWorldGraph`).
+	init(root: ConstructionScope, forMockGeneration: Bool, sharedBelow shared: MockWorldsSharedGraph?) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
@@ -170,6 +178,7 @@ struct TypeFactsGraph: Sendable {
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
 		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
+			guard shared?.node(of: declaration) == nil else { return [] }
 			let edges = declaration.edges
 			for edge in edges {
 				if let filledHole = edge.filledHole {
@@ -180,7 +189,21 @@ struct TypeFactsGraph: Sendable {
 			}
 			return edges.map(\.target)
 		}
-		let facts = Self.declarationFacts(of: graph, edgeEntries: edgeEntries, edgeIsFill: edgeIsFill, fillHoles: fillHoles, forMockGeneration: forMockGeneration)
+		let sharedNodeByNode = shared.map { shared in graph.nodes.map { shared.node(of: $0) ?? -1 } } ?? []
+		let facts = Self.declarationFacts(of: graph, edgeEntries: edgeEntries, edgeIsFill: edgeIsFill, fillHoles: fillHoles, forMockGeneration: forMockGeneration) { node in
+			guard let shared, sharedNodeByNode[node] >= 0 else { return nil }
+			return shared.frontierRows(ofNode: Int(sharedNodeByNode[node]))
+		}
+		self.sharedNodeByNode = sharedNodeByNode
+		var ownReadOffsets = [Int32(0)]
+		ownReadOffsets.reserveCapacity(facts.ownReadsByNode.count + 1)
+		var ownReadColumn = [Int32]()
+		for ownReads in facts.ownReadsByNode {
+			ownReadColumn += ownReads
+			ownReadOffsets.append(Int32(ownReadColumn.count))
+		}
+		self.ownReadColumn = ownReadColumn
+		self.ownReadOffsets = ownReadOffsets
 		let constructions = facts.constructions
 		let kinds = facts.kinds
 		let nodeProperties = facts.nodeProperties
@@ -265,6 +288,7 @@ struct TypeFactsGraph: Sendable {
 		answerTexts = answers.texts
 		answerKeys = answers.keys
 		answerProperties = answers.properties
+		answerKinds = answers.kinds
 		variants = answers.variants
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
@@ -288,7 +312,17 @@ struct TypeFactsGraph: Sendable {
 	/// `init(root:forMockGeneration:)` reads of a world's graph, and what the mock worlds' shared graph
 	/// (`MockWorldsSharedGraph`) holds of the shareable declarations, whose graph is a forest. Every ID it gives is a
 	/// position in `graph`'s order or in the order its interners first meet a value.
-	static func declarationFacts(of graph: OrderedGraph<TypeFactsDeclaration>, edgeEntries: [Int32], edgeIsFill: [Bool], fillHoles: [(edge: Int32, hole: SeamSignature.Hole)], forMockGeneration: Bool) -> DeclarationFacts {
+	///
+	/// A node `frontierRows` gives rows of is a frontier of a mock world's top graph: a leaf of it whose subtree's rows, by
+	/// value, are its own, which no declaration of its own hides, since its graph holds none of its edges.
+	static func declarationFacts(
+		of graph: OrderedGraph<TypeFactsDeclaration>,
+		edgeEntries: [Int32],
+		edgeIsFill: [Bool],
+		fillHoles: [(edge: Int32, hole: SeamSignature.Hole)],
+		forMockGeneration: Bool,
+		frontierRows: (_ node: Int) -> TypeFactsFrontierRows? = { _ in nil },
+	) -> DeclarationFacts {
 		let nodes = graph.nodes
 		var properties = TypeFactsInterner<Property>()
 		var types = TypeFactsInterner<TypeDescription>()
@@ -310,82 +344,15 @@ struct TypeFactsGraph: Sendable {
 		let constructions = nodes.map { Self.construction(of: $0, forMockGeneration: forMockGeneration) }
 
 		// The receives of each node, its declarations, and the properties they compare.
-		var ownRequired = [[Int32]]()
-		var ownOnlyIfAvailable = [[Int32]]()
-		var ownOnlyIfAvailableUnwrapped = [[Int32]]()
-		var declared = [[Int32]]()
-		var ownEscapingTypes = [[Int32]]()
-		ownRequired.reserveCapacity(nodes.count)
-		for node in nodes {
-			var required = [Int32]()
-			var onlyIfAvailable = [Int32]()
-			var onlyIfAvailableUnwrapped = [Int32]()
-			var declaredByNode = [Int32]()
-			var escaping = [Int32]()
-			switch node.key.leaf {
-			case .alias:
-				if let fulfillingProperty = node.aliasFulfillingProperty {
-					if node.isOnlyIfAvailableAlias {
-						onlyIfAvailable.append(properties.id(of: fulfillingProperty))
-						onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
-					} else {
-						required.append(properties.id(of: fulfillingProperty))
-					}
-				}
-			case .hole:
-				break
-			case .none:
-				let record = node.scope
-				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives
-				// but the instances of the wrappers among them, which its tree reads from those wrappers.
-				var forwarded = Set(record.forwardedLazilyInstantiatedInstanceProperties)
-				if node.property != nil {
-					for dependency in record.instantiable.dependencies where dependency.source == .forwarded {
-						forwarded.insert(dependency.property)
-					}
-				}
-				let declaredProperties = record.propertiesToDeclare.union(forwarded)
-				for property in declaredProperties.sorted() {
-					declaredByNode.append(properties.id(of: property))
-				}
-				for dependency in record.instantiable.dependencies {
-					switch dependency.source {
-					case .instantiated, .forwarded:
-						continue
-					case let .received(isOnlyIfAvailable):
-						if isOnlyIfAvailable {
-							onlyIfAvailable.append(properties.id(of: dependency.property))
-							onlyIfAvailableUnwrapped.append(properties.id(of: dependency.property.asUnwrappedProperty))
-						} else {
-							required.append(properties.id(of: dependency.property))
-						}
-					case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
-						let forms = isOnlyIfAvailable ? fulfillingProperty.formsReadByOnlyIfAvailableReceive : [fulfillingProperty]
-						guard !forms.contains(where: declaredProperties.contains) else { continue }
-						if isOnlyIfAvailable {
-							onlyIfAvailable.append(properties.id(of: fulfillingProperty))
-							onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
-						} else {
-							required.append(properties.id(of: fulfillingProperty))
-						}
-					}
-				}
-				let escapingTypes = Self.ownTypesDeclaredEscaping(of: record)
-				for type in escapingTypes {
-					escaping.append(types.id(of: type))
-				}
-			}
-			ownRequired.append(required)
-			ownOnlyIfAvailable.append(onlyIfAvailable)
-			ownOnlyIfAvailableUnwrapped.append(onlyIfAvailableUnwrapped)
-			declared.append(declaredByNode)
-			ownEscapingTypes.append(escaping)
-		}
-		// A seam call whose tree requires a pass-through through an alias received only if available requires it too.
-		var ownRequiredThroughAlias = nodes.map { node -> [Int32] in
-			guard node.key.leaf == .none, let seamCall = node.scope.seamCall else { return [] }
-			return seamCall.requiredThroughAliasProperties.sorted().map { properties.id(of: $0) }
-		}
+		let frontiers = nodes.indices.map(frontierRows)
+		let ownFacts = Self.ownFacts(of: nodes, frontiers: frontiers, builtTypes: builtTypes, properties: &properties, types: &types)
+		let ownRequired = ownFacts.required
+		let ownOnlyIfAvailable = ownFacts.onlyIfAvailable
+		let ownOnlyIfAvailableUnwrapped = ownFacts.onlyIfAvailableUnwrapped
+		let declared = ownFacts.declared
+		let ownEscapingTypes = ownFacts.escapingTypes
+		let ownTypesBeneath = ownFacts.typesBeneath
+		var ownRequiredThroughAlias = ownFacts.requiredThroughAlias
 		// Every child's property, and the fulfilling property of each alias, compared by the folds.
 		let childProperties = nodes.map { node -> (instance: Int32, aliasFulfilling: Int32) in
 			let instance = node.property.flatMap { property in
@@ -484,7 +451,8 @@ struct TypeFactsGraph: Sendable {
 				graph: graph,
 				// A requirement stops at the nearest declaration of its label, the scope's own included.
 				own: BitRows(rowCount: nodes.count, columnCount: propertyByAliasColumn.count) { node, insert in
-					for column in ownRequiredThroughAlias[node].map({ aliasColumnOfProperty[Int($0)] }) where !hiddenByDeclaredLabels.contains(column, inRow: node) {
+					// A frontier's row is its subtree's, whose own declarations hid what they hide.
+					for column in ownRequiredThroughAlias[node].map({ aliasColumnOfProperty[Int($0)] }) where frontiers[node] != nil || !hiddenByDeclaredLabels.contains(column, inRow: node) {
 						insert(column)
 					}
 				},
@@ -532,11 +500,7 @@ struct TypeFactsGraph: Sendable {
 		let noneHidden = BitRows(rowCount: nodes.count, columnCount: types.values.count) { _, _ in }
 		let typesBeneath = ReadsFromAbove(
 			graph: graph,
-			own: BitRows(rowCount: nodes.count, columnCount: types.values.count) { node, insert in
-				if nodes[node].key.leaf == .none {
-					insert(builtTypes[node])
-				}
-			},
+			own: BitRows(rowCount: nodes.count, columnCount: types.values.count) { node, insert in ownTypesBeneath[node].forEach(insert) },
 			hidden: noneHidden,
 			followsEdge: followsEdge,
 		).rows
@@ -753,8 +717,11 @@ struct TypeFactsGraph: Sendable {
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
 		var readInterner = TypeFactsInterner<Read>()
-		let ownReadsByNode = nodes.map { node in
-			Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels).map { readInterner.id(of: $0) }
+		let ownReadsByNode = zip(nodes, frontiers).map { node, frontier in
+			guard let frontier else {
+				return Self.ownReads(of: node, forMockGeneration: forMockGeneration, labels: &labels).map { readInterner.id(of: $0) }
+			}
+			return frontier.reads.map { read in readInterner.id(of: Read(read.channel, label: read.label.map { labels.id(of: $0) } ?? -1)) }
 		}
 		let own = BitRows(rowCount: nodes.count, columnCount: readInterner.values.count) { index, insert in
 			ownReadsByNode[index].forEach(insert)
@@ -797,6 +764,9 @@ struct TypeFactsGraph: Sendable {
 			own: own,
 			hidden: hidden,
 			aliasHiddenColumnCount: aliasHiddenColumnCount,
+			ownReadsByNode: ownReadsByNode,
+			onlyIfAvailableRows: onlyIfAvailableRows,
+			onlyIfAvailableUnwrappedIncludingRequired: onlyIfAvailableUnwrappedIncludingRequired,
 		)
 	}
 
@@ -834,6 +804,135 @@ struct TypeFactsGraph: Sendable {
 		let own: BitRows
 		let hidden: BitRows
 		let aliasHiddenColumnCount: Int
+		/// The reads each node makes itself, in the order it makes them: what a mock world's dense view interns its reads by
+		/// (`MockWorldGraph`), as the world's graph does.
+		let ownReadsByNode: [[Int32]]
+		/// What each subtree receives only if available, and the unwrapped forms of what it receives only if available or
+		/// requires, before the rows `receives` derives from them: what a frontier of a top graph copies.
+		let onlyIfAvailableRows: BitRows
+		let onlyIfAvailableUnwrappedIncludingRequired: BitRows
+	}
+
+	/// What each node receives and declares itself, interned: a frontier's are its subtree's rows (`TypeFactsFrontierRows`).
+	/// A function of its own, apart from `declarationFacts`, whose frame a debug build would otherwise grow past what a
+	/// cooperative thread's stack holds.
+	private static func ownFacts(
+		of nodes: [TypeFactsDeclaration],
+		frontiers: [TypeFactsFrontierRows?],
+		builtTypes: [Int32],
+		properties: inout TypeFactsInterner<Property>,
+		types: inout TypeFactsInterner<TypeDescription>,
+	) -> OwnFacts {
+		var ownRequired = [[Int32]]()
+		var ownOnlyIfAvailable = [[Int32]]()
+		var ownOnlyIfAvailableUnwrapped = [[Int32]]()
+		var declared = [[Int32]]()
+		var ownEscapingTypes = [[Int32]]()
+		var ownTypesBeneath = [[Int32]]()
+		var ownRequiredThroughAlias = [[Int32]]()
+		ownRequired.reserveCapacity(nodes.count)
+		for (index, (node, frontier)) in zip(nodes, frontiers).enumerated() {
+			if let frontier {
+				ownRequired.append(frontier.required.map { properties.id(of: $0) })
+				ownOnlyIfAvailable.append(frontier.onlyIfAvailable.map { properties.id(of: $0) })
+				ownOnlyIfAvailableUnwrapped.append(frontier.onlyIfAvailableUnwrappedIncludingRequired.map { properties.id(of: $0) })
+				ownRequiredThroughAlias.append(frontier.requiredAliasFulfilling.map { properties.id(of: $0) })
+				declared.append([])
+				ownEscapingTypes.append(frontier.typesDeclaredEscaping.map { types.id(of: $0) })
+				ownTypesBeneath.append(frontier.typesBeneath.map { types.id(of: $0) })
+				continue
+			}
+			var required = [Int32]()
+			var onlyIfAvailable = [Int32]()
+			var onlyIfAvailableUnwrapped = [Int32]()
+			var declaredByNode = [Int32]()
+			var escaping = [Int32]()
+			switch node.key.leaf {
+			case .alias:
+				if let fulfillingProperty = node.aliasFulfillingProperty {
+					if node.isOnlyIfAvailableAlias {
+						onlyIfAvailable.append(properties.id(of: fulfillingProperty))
+						onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
+					} else {
+						required.append(properties.id(of: fulfillingProperty))
+					}
+				}
+			case .hole:
+				break
+			case .none:
+				let record = node.scope
+				// A world's root is handed its forwarded properties by no scope above it, so they hide nothing its tree receives
+				// but the instances of the wrappers among them, which its tree reads from those wrappers.
+				var forwarded = Set(record.forwardedLazilyInstantiatedInstanceProperties)
+				if node.property != nil {
+					for dependency in record.instantiable.dependencies where dependency.source == .forwarded {
+						forwarded.insert(dependency.property)
+					}
+				}
+				let declaredProperties = record.propertiesToDeclare.union(forwarded)
+				for property in declaredProperties.sorted() {
+					declaredByNode.append(properties.id(of: property))
+				}
+				for dependency in record.instantiable.dependencies {
+					switch dependency.source {
+					case .instantiated, .forwarded:
+						continue
+					case let .received(isOnlyIfAvailable):
+						if isOnlyIfAvailable {
+							onlyIfAvailable.append(properties.id(of: dependency.property))
+							onlyIfAvailableUnwrapped.append(properties.id(of: dependency.property.asUnwrappedProperty))
+						} else {
+							required.append(properties.id(of: dependency.property))
+						}
+					case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+						let forms = isOnlyIfAvailable ? fulfillingProperty.formsReadByOnlyIfAvailableReceive : [fulfillingProperty]
+						guard !forms.contains(where: declaredProperties.contains) else { continue }
+						if isOnlyIfAvailable {
+							onlyIfAvailable.append(properties.id(of: fulfillingProperty))
+							onlyIfAvailableUnwrapped.append(properties.id(of: fulfillingProperty.asUnwrappedProperty))
+						} else {
+							required.append(properties.id(of: fulfillingProperty))
+						}
+					}
+				}
+				let escapingTypes = Self.ownTypesDeclaredEscaping(of: record)
+				for type in escapingTypes {
+					escaping.append(types.id(of: type))
+				}
+			}
+			ownRequired.append(required)
+			ownOnlyIfAvailable.append(onlyIfAvailable)
+			ownOnlyIfAvailableUnwrapped.append(onlyIfAvailableUnwrapped)
+			declared.append(declaredByNode)
+			ownEscapingTypes.append(escaping)
+			ownTypesBeneath.append(node.key.leaf == .none ? [builtTypes[index]] : [])
+			// A seam call whose tree requires a pass-through through an alias received only if available requires it too.
+			if node.key.leaf == .none, let seamCall = node.scope.seamCall {
+				ownRequiredThroughAlias.append(seamCall.requiredThroughAliasProperties.sorted().map { properties.id(of: $0) })
+			} else {
+				ownRequiredThroughAlias.append([])
+			}
+		}
+		return OwnFacts(
+			required: ownRequired,
+			onlyIfAvailable: ownOnlyIfAvailable,
+			onlyIfAvailableUnwrapped: ownOnlyIfAvailableUnwrapped,
+			declared: declared,
+			escapingTypes: ownEscapingTypes,
+			typesBeneath: ownTypesBeneath,
+			requiredThroughAlias: ownRequiredThroughAlias,
+		)
+	}
+
+	/// Each node's own receives, declarations and types, by interned ID, one list per node in node order.
+	private struct OwnFacts {
+		let required: [[Int32]]
+		let onlyIfAvailable: [[Int32]]
+		let onlyIfAvailableUnwrapped: [[Int32]]
+		let declared: [[Int32]]
+		let escapingTypes: [[Int32]]
+		let typesBeneath: [[Int32]]
+		let requiredThroughAlias: [[Int32]]
 	}
 
 	/// Each node's cycle identity, dense in first-reach order: the property as cycle validation sees it and the
@@ -860,6 +959,19 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each answer ID's declaration, by the world's property ID: what `providesFormRead(by:_:beneath:)` compares.
 	let answerProperties: [Int32]
+
+	/// Each answer ID's declared kind: what a mock world's call into the shared graph hands it with each key
+	/// (`MockWorldsSharedGraph.variants(seededBy:)`).
+	let answerKinds: [Property.PropertyType]
+
+	/// Each node's position in the mock worlds' shared graph where it is a frontier of a mock world's top graph, -1 where
+	/// it is not; empty for every other graph.
+	let sharedNodeByNode: [Int32]
+
+	/// The reads each node makes itself, by read ID, in the order it makes them, one run per node at `ownReadOffsets`: a
+	/// frontier's are its subtree's. What `ownReads(of:)` slices.
+	let ownReadColumn: [Int32]
+	let ownReadOffsets: [Int32]
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
@@ -912,7 +1024,19 @@ struct TypeFactsGraph: Sendable {
 	/// bindings of that label bound before the edge (`bindingsBefore`), and the edge's child answers its own label as
 	/// the property it is built as, being built. Interned at the edge, where the graph is built from the table; the
 	/// worklist sees IDs only.
-	private static func answers(of graph: OrderedGraph<TypeFactsDeclaration>, reads: ReadsFromAbove, readTable: [Read], labels: TypeFactsInterner<String>, bindings: [TypeFactsWorldBinding], bindingOffsets: [Int32], bindingsBefore: [Int32], properties: TypeFactsInterner<Property>) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
+	/// The answers and variants of `graph`'s bodies: from its root, or, where `seeding` is given, from its seeds, whose
+	/// answers are interned first, each as the key it is, in order.
+	static func answers(
+		of graph: OrderedGraph<TypeFactsDeclaration>,
+		reads: ReadsFromAbove,
+		readTable: [Read],
+		labels: TypeFactsInterner<String>,
+		bindings: [TypeFactsWorldBinding],
+		bindingOffsets: [Int32],
+		bindingsBefore: [Int32],
+		properties: TypeFactsInterner<Property>,
+		seeding: VariantSeeding? = nil,
+	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], texts: [String], keys: [Int32], properties: [Int32], kinds: [Property.PropertyType]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
@@ -967,11 +1091,7 @@ struct TypeFactsGraph: Sendable {
 		for index in graph.nodes.indices {
 			edgeTargets.append(contentsOf: graph.edges(from: index))
 		}
-		let variants = TypeFactsVariants(
-			graph: graph,
-			reads: reads,
-			rootAnswer: { _ in nil },
-			binding: { edge, readID in
+		func binding(edge: Int, readID: Int32) -> VariantBinding? {
 				// Every read the graph interns asks about a label: `ownReads` makes only value, optional and mock reads.
 				let read = readTable[Int(readID)]
 				let node = Int(sourceByEdge[edge])
@@ -1008,26 +1128,59 @@ struct TypeFactsGraph: Sendable {
 					"\(read.channel.name) \(declarationForms)"
 				}
 				return VariantBinding(answer: answer(text: text, beingBuilt: beingBuilt, keyText: keyText, kind: kind, property: property), declaration: Int32(node))
-			},
-			// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
-			// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
-			family: { _, family in family },
-			key: { readID, answer in
-				switch readTable[Int(readID)].channel {
-				case .optional, .optionalValue:
-					// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
-					// twin the path entered, and wherever else the label is bound (rule 3, case 2).
-					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])) {
-						optionalParameterKey(of: kinds[Int(answer)])
-					} else {
-						optionalParameterKey(of: nil)
-					}
-				case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
-					answer < 0 ? answer : keys[Int(answer)]
+		}
+		func key(readID: Int32, answer: Int32) -> Int32 {
+			switch readTable[Int(readID)].channel {
+			case .optional, .optionalValue:
+				// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
+				// twin the path entered, and wherever else the label is bound (rule 3, case 2).
+				if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])) {
+					optionalParameterKey(of: kinds[Int(answer)])
+				} else {
+					optionalParameterKey(of: nil)
 				}
-			},
-		)
-		return (variants, isBeingBuilt, texts, keys, answerProperties)
+			case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+				answer < 0 ? answer : keys[Int(answer)]
+			}
+		}
+		let variants: TypeFactsVariants
+		if let seeding {
+			// Each seed's answers are keys already, interned as the key they are; a negative key is no answer.
+			let seedAnswerIDs = seeding.answers.map { seedAnswer in
+				answer(text: seedAnswer.text, beingBuilt: seedAnswer.isBeingBuilt, keyText: seedAnswer.text, kind: seedAnswer.kind, property: seedAnswer.property.flatMap(properties.existingID(of:)) ?? -1)
+			}
+			let seeds = seeding.seeds.map { seed in
+				TypeFactsVariants.Seed(node: seed.node, family: seed.family, keys: seed.keys.map { $0 < 0 ? $0 : seedAnswerIDs[Int($0)] })
+			}
+			variants = TypeFactsVariants(graph: graph, reads: reads, seeds: seeds, binding: binding(edge:readID:), key: key(readID:answer:))
+		} else {
+			variants = TypeFactsVariants(
+				graph: graph,
+				reads: reads,
+				rootAnswer: { _ in nil },
+				binding: binding(edge:readID:),
+				// Production bodies have one variant, `@Sendable` a mark folded over call edges; the family a seam's cases,
+				// builders and mock bodies key by is the edge facts' `opens`, which no producer feeds here yet.
+				family: { _, family in family },
+				key: key(readID:answer:),
+			)
+		}
+		return (variants, isBeingBuilt, texts, keys, answerProperties, kinds)
+	}
+
+	/// What a worklist of variants starts from instead of a root (`answers(of:…seeding:)`): its seeds, whose keys are each a
+	/// negative key or a position in `answers`, and those answers, each by the key text it is.
+	struct VariantSeeding: Sendable {
+		struct Answer: Hashable, Sendable {
+			let text: String
+			let isBeingBuilt: Bool
+			let kind: Property.PropertyType
+			/// The property it declares, by value, or `nil` where its world's graph names none.
+			let property: Property?
+		}
+
+		let answers: [Answer]
+		let seeds: [TypeFactsVariants.Seed]
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
@@ -1146,6 +1299,11 @@ struct TypeFactsGraph: Sendable {
 		return "\(node.property?.asValidatedForDependencyCycles.asSource ?? "root") for \(node.scope.instantiable.concreteInstantiable.asSource)"
 	}
 
+	/// The reads `node` makes itself, by read ID, in the order it makes them.
+	func ownReads(of node: Int) -> ArraySlice<Int32> {
+		ownReadColumn[Int(ownReadOffsets[node])..<Int(ownReadOffsets[node + 1])]
+	}
+
 	/// What the graph's folds hold, beside the nodes it keeps for text and the spellings it keeps for lookups: the 32-bit
 	/// elements of its columns (each 64-bit word of a bit set counts two, each edge's and binding's facts eight, a byte or
 	/// a flag one), which a test counts per node and per edge.
@@ -1154,6 +1312,7 @@ struct TypeFactsGraph: Sendable {
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
 		count += cycleIDs.count + twins.count + parentOffsets.count + 3 * parents.count
 		count += 7 * fills.count + 2 * fillPathEntries.count + propertyFacts.columnElementCount + readTable.count
+		count += ownReadColumn.count + ownReadOffsets.count + sharedNodeByNode.count + answerKinds.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		return count

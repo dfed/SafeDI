@@ -496,23 +496,41 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
+		Self.owedFacts(
+			of: declaration,
+			isMockWorld: forMockGeneration,
+			parents: { (declaration: DeclarationID) in parents(of: declaration) },
+			edgeFacts: { (declaration: DeclarationID) in edgeFacts(from: declaration) },
+			isFill: { graph.nodes[Int($0)].key.isFill },
+		)
+	}
+
+	/// The facts producers still owe `declaration`'s answers, in a world whose declarations have `parents`, `edgeFacts`
+	/// and `isFill`: what a world's graph and a mock world's dense view (`MockWorldGraph`) both answer.
+	static func owedFacts(
+		of declaration: DeclarationID,
+		isMockWorld: Bool,
+		parents: (DeclarationID) -> ArraySlice<TypeFactsParent>,
+		edgeFacts: (DeclarationID) -> ArraySlice<TypeFactsEdge>,
+		isFill: (DeclarationID) -> Bool,
+	) -> TypeFactsOwedFacts {
 		var owed: TypeFactsOwedFacts = []
-		if forMockGeneration {
+		if isMockWorld {
 			owed.formUnion([.mockRootPin, .mockRootRecord, .mockRootBinding])
 		}
 		// A member of a loop of builders: an edge into it is in a loop.
-		for parent in parents(of: declaration) where edgeFacts(from: parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
+		for parent in parents(declaration) where edgeFacts(parent.parent).contains(where: { $0.child == declaration && $0.loop >= 0 }) {
 			owed.insert(.madeAgain)
 		}
 		// A declaration is beneath a fill where any of its routes enters one: a walk up its parents.
 		var visited: Set = [declaration]
 		var pending = [declaration]
 		while let current = pending.popLast() {
-			guard !graph.nodes[Int(current)].key.isFill else {
+			guard !isFill(current) else {
 				owed.insert(.fillBeingBuilt)
 				break
 			}
-			for parent in parents(of: current) where visited.insert(parent.parent).inserted {
+			for parent in parents(current) where visited.insert(parent.parent).inserted {
 				pending.append(parent.parent)
 			}
 		}

@@ -300,7 +300,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
 	// MARK: PropertyType
 
-	public enum PropertyType: CaseIterable {
+	public enum PropertyType: CaseIterable, Sendable {
 		/// A `let` property.
 		case constant
 		/// An `Instantiator` property.

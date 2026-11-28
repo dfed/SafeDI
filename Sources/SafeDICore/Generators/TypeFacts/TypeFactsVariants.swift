@@ -105,6 +105,46 @@ struct TypeFactsVariants: Sendable {
 		key: (_ read: Int32, _ answer: Int32) -> Int32,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
+		var rootKeys = [Int32]()
+		var rootSources = [AnswerSource]()
+		reads.rows.forEachColumn(inRow: 0) { read, _ in
+			let answer = rootAnswer(read)
+			rootKeys.append(key(read, answer?.answer ?? -1))
+			rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
+		}
+		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys)], rootSources: rootSources, binding: binding, family: family, key: key, bucket: bucket)
+	}
+
+	/// The variants a worklist finds from `seeds`, each a variant made first, in order, with its keys as given: what the
+	/// mock worlds' shared graph builds from every world's calls into it (`MockWorldsSharedGraph.variants(seededBy:)`),
+	/// whose graph is a forest. A seed equal to one before it is that variant (`seedVariants`).
+	init(
+		graph: OrderedGraph<some Hashable & Sendable>,
+		reads: ReadsFromAbove,
+		seeds: [Seed],
+		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
+		key: (_ read: Int32, _ answer: Int32) -> Int32,
+	) {
+		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: { _, family in family }, key: key, bucket: TypeFactsVariants.hash)
+	}
+
+	/// A variant a worklist starts from: its node, family and keys, one per read of the node's reads from above.
+	struct Seed: Sendable {
+		let node: Int32
+		let family: VariantFamily
+		let keys: [Int32]
+	}
+
+	private init(
+		graph: OrderedGraph<some Hashable & Sendable>,
+		reads: ReadsFromAbove,
+		seeds: [Seed],
+		rootSources: [AnswerSource],
+		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
+		key: (_ read: Int32, _ answer: Int32) -> Int32,
+		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int,
+	) {
 		var columns = Columns()
 		var bucketByHash = [Int: Int32]()
 		var nextInBucket = [Int32]()
@@ -128,12 +168,11 @@ struct TypeFactsVariants: Sendable {
 			return made
 		}
 
-		reads.rows.forEachColumn(inRow: 0) { read, _ in
-			let answer = rootAnswer(read)
-			scratchKeys.append(key(read, answer?.answer ?? -1))
-			columns.rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
+		columns.rootSources = rootSources
+		seedVariants = seeds.map { seed in
+			scratchKeys = seed.keys
+			return variant(of: seed.node, family: seed.family)
 		}
-		_ = variant(of: 0, family: .plain)
 		var next = 0
 		while next < columns.nodes.count {
 			let caller = next
@@ -182,6 +221,9 @@ struct TypeFactsVariants: Sendable {
 	var count: Int {
 		columns.nodes.count
 	}
+
+	/// The variant each seed is, in the order of the seeds: `[0]` for a world's root.
+	let seedVariants: [Int32]
 
 	func node(of variant: Int) -> Int32 {
 		columns.nodes[variant]

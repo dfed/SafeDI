@@ -81,9 +81,26 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case recordsThrew
 }
 
-/// What a world's records read of a node beside the frozen interface (`TypeFactsWorld`): the scope it builds and the
-/// property it builds as, from which a node's construction facts come until the facts' columns hold them.
-protocol NodeRecordSources: TypeFactsWorld {
+/// What a world's records read of it: of the frozen interface (`TypeFactsWorld`), each declaration's kind,
+/// construction, edges, parents, reads and owed facts, and its variants' calls and sources, as `TypeFactsWorld` states
+/// them; and beside it the scope a node builds and the property it builds as, from which a node's construction facts come
+/// until the facts' columns hold them. A world's graph is one (`TypeFactsGraph`), and so is a mock world's dense view of
+/// its top graph and the shared graph (`MockWorldGraph`).
+protocol NodeRecordSources {
+	var declarationCount: Int { get }
+	func kind(of declaration: DeclarationID) -> TypeFactsKind
+	func construction(of declaration: DeclarationID) -> TypeFactsConstruction
+	func isOnCycle(_ declaration: DeclarationID) -> Bool
+	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
+	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
+	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
+	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
+	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
+	func read(_ read: ReadID) -> Read
+	var variantCount: Int { get }
+	func declaration(of variant: VariantID) -> DeclarationID
+	func calls(of variant: VariantID) -> ArraySlice<VariantID>
+	func sources(ofCall edgeIndex: Int, of variant: VariantID) -> ArraySlice<AnswerSource>
 	func scope(of declaration: DeclarationID) -> ConstructionScope
 	/// The property the declaration is built as, `nil` for the root.
 	func property(of declaration: DeclarationID) -> Property?
