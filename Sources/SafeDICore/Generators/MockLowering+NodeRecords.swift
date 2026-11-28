@@ -78,6 +78,18 @@ extension ScopeGenerator {
 			report(refusal: .mockRootBindsOtherThanNodes, everyRefusal: [.mockRootBindsOtherThanNodes], isLaidOut: false, recordCount: 0)
 			return nil
 		}
+		// Beneath an actor's argument, the walk reads a configuration of the `Sendable` form whole into a local before the
+		// function that builds its node (`MockLowering.Walk.isInsideActorArgument`), where the records read the overrides
+		// the function was handed. The values are the same, but the text is not, so such a root keeps the walk's statements.
+		let readsSendableFieldBeneathActor = (0..<Int32(world.declarationCount)).contains { NodeRecords.isActorBuiltWithInitializer($0, in: world) }
+			&& (1..<Int32(world.declarationCount)).contains { declaration in
+				sendableConfigurationTypeNames.contains(world.scope(of: declaration).instantiable.concreteInstantiable.asSource)
+					&& !NodeRecords.mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
+			}
+		guard !readsSendableFieldBeneathActor else {
+			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
+			return nil
+		}
 		// Where the world's cycles enter places, `mock()` declares their struct and binds a value of it with none entered
 		// before its nodes, which its body and every function that takes no places hand a function that takes them
 		// (`NodeRecords+MockCycle.swift`).

@@ -433,6 +433,28 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 			""",
 			"sendable",
 		),
+		// Beneath an actor's argument, the walk reads a configuration of the `Sendable` form whole into a local before the
+		// function that builds its node.
+		(
+			"""
+			@Instantiable(generateMock: true)
+			public actor Root: Instantiable {
+			    public init(client: Client, clientBuilder: SendableInstantiator<Client>) {
+			        self.client = client
+			        self.clientBuilder = clientBuilder
+			    }
+
+			    @Instantiated let client: Client
+			    @Instantiated let clientBuilder: SendableInstantiator<Client>
+			}
+
+			@Instantiable
+			public final class Client: Instantiable, Sendable {
+			    public init(timeout: Int = 30) {}
+			}
+			""",
+			"mockDefaultValuedParameter",
+		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenSendableNodeIsOfShapeNoRecordMakesYet(fixture: String, refusal: String) async throws {
