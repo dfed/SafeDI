@@ -103,6 +103,17 @@ extension TypeKeyLayout {
 					}
 				}
 				loopMembersDeclaredAsThePathKeyDoes.append(contentsOf: members)
+			} else if isNested, members.count > 1, let nesting = nestingAsThePathKeyDoes(members, memberSet: memberSet) {
+				// The path key declares each function of a cycle in the body of the place that builds it, nested as deep as
+				// that place, and a call that closes the cycle names one of them: only the function a body outside the
+				// component calls is declared there.
+				hoistedFunctions[CallSite(owner: owner, index: index), default: []].append(nesting.entry)
+				for (member, site) in nesting.nested {
+					placementOwner[member] = site.owner
+					placementIndex[member] = site.index
+					placementDepth[member] = placementDepth[site.owner] + 1
+					attachedFunction[site] = member
+				}
 			} else if isAttached {
 				attachedFunction[CallSite(owner: owner, index: index)] = members[0]
 			} else {
@@ -120,6 +131,34 @@ extension TypeKeyLayout {
 			}
 		}
 		return true
+	}
+
+	/// The member of `members`, a component of the calls between classes, that a body outside it calls, and each other
+	/// member with the statement of a member's body that builds it, entry first and each member after the one whose body
+	/// builds it: or `nil` where the component has several entries, or a member that no one statement of the component
+	/// builds, which the path key would write in several places. A closing call names a function and builds nothing.
+	func nestingAsThePathKeyDoes(_ members: [Int], memberSet: Set<Int>) -> (entry: Int, nested: [(member: Int, site: CallSite)])? {
+		let entries = members.filter { callSitesByClass[$0].contains { !memberSet.contains($0.owner) } }
+		guard entries.count == 1, let entry = entries.first else { return nil }
+		var builtByOwner = [Int: [(member: Int, site: CallSite)]]()
+		for member in members where member != entry {
+			let buildingSites = callSitesByClass[member].filter { site in
+				guard memberSet.contains(site.owner), case .built = statements(ofClass: site.owner)[site.index] else { return false }
+				return true
+			}
+			guard buildingSites.count == 1, let site = buildingSites.first else { return nil }
+			builtByOwner[site.owner, default: []].append((member, site))
+		}
+		var nested = [(member: Int, site: CallSite)]()
+		var pending = [entry]
+		while let owner = pending.popLast() {
+			for built in builtByOwner[owner] ?? [] {
+				nested.append(built)
+				pending.append(built.member)
+			}
+		}
+		guard nested.count == members.count - 1 else { return nil }
+		return (entry, nested)
 	}
 }
 
