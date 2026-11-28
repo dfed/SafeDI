@@ -7035,7 +7035,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 		)
 		return arguments.map {
-			PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
+			PlaceRead(argument: $0.argument, passing: $0.dependency)
 		}
 	}
 

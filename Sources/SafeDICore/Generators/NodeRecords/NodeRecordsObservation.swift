@@ -176,7 +176,8 @@ public enum NodeRecordsObservation {
 	static func differOnlyWhereTreeReadsNilOfLabel(_ tree: [PlaceRead], _ nodeRecords: [PlaceRead]) -> Bool {
 		guard tree.count == nodeRecords.count else { return false }
 		for (treeRead, nodeRecordsRead) in zip(tree, nodeRecords) where treeRead != nodeRecordsRead {
-			let treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			var treeReadWithRecordsSource = PlaceRead(argumentLabel: treeRead.argumentLabel, label: treeRead.label, property: treeRead.property, source: .binding(label: treeRead.label), staysOutsideSendableFunctions: treeRead.staysOutsideSendableFunctions)
+			treeReadWithRecordsSource.isOnlyIfAvailable = treeRead.isOnlyIfAvailable
 			guard treeRead.source == .nil, treeReadWithRecordsSource == nodeRecordsRead else { return false }
 		}
 		return true
