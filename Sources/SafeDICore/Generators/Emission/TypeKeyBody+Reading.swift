@@ -486,19 +486,6 @@ extension TypeKeyLayout {
 		return plan.record
 	}
 
-	func label(of statement: Statement) -> String {
-		switch statement {
-		case let .built(body):
-			bodies[body].record?.property.label ?? ""
-		case let .inline(record):
-			record.property.label
-		case let .closer(record, _):
-			record.property.label
-		case let .alias(record):
-			record.property.label
-		}
-	}
-
 	/// The property `statement` declares under `label`: its own, or, for a place written as text, one of the others it binds.
 	func property(of statement: Statement, label: String) -> Property? {
 		switch statement {

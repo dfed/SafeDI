@@ -69,8 +69,21 @@ enum TypeFactsFillSendability {
 		let dispatchers: [Dispatcher]
 	}
 
-	/// Whether each edge's fill builds its tree in a `@Sendable` function, by edge position; `false` for an edge that is no
-	/// fill.
+	/// What the fold finds: of each fill, and of each node.
+	struct Columns {
+		/// Whether each edge's fill builds its tree in a `@Sendable` function, by edge position; `false` for an edge that is
+		/// no fill.
+		let fillBuildsInSendableFunction: [Bool]
+		/// Whether each node's builder function is `@Sendable` (`ScopeGenerator.buildsInSendableFunction`) where the walk
+		/// first reaches the node: its property is a `Sendable` wrapper's, or a cycle closed beneath it from inside a
+		/// `@Sendable` function that does not enclose it refers to it. `false` for the root, which no builder function builds.
+		/// Two places of one node can differ, where a cycle is entered at another of its nodes, which a node's column cannot
+		/// say; and an edge to a node already finished does not hand on the cycles closed beneath it, which the tree's place
+		/// there closes again (check 40 of the per-type facts' checks counts both).
+		let nodeBuildsInSendableFunction: [Bool]
+	}
+
+	/// Whether each fill and each node builds in a `@Sendable` function.
 	/// - Parameters:
 	///   - opensSendableFunction: Whether each node builds in a `@Sendable` function of its own by the kind of its property:
 	///     a `Sendable` wrapper's.
@@ -81,7 +94,7 @@ enum TypeFactsFillSendability {
 		opensSendableFunction: [Bool],
 		calls: [Call],
 		keyCount: Int,
-	) -> [Bool] {
+	) -> Columns {
 		let nodeCount = graph.nodes.count
 		var callByNode = [Int32](repeating: -1, count: nodeCount)
 		for (index, call) in calls.enumerated() {
@@ -285,6 +298,9 @@ enum TypeFactsFillSendability {
 			}
 		}
 		GenerationWork.record(work, by: .foldingFillSendability)
-		return column
+		let nodeColumn = (0..<nodeCount).map { node in
+			node != 0 && (opensSendableFunction[node] || isMadeSendableByCycle[node])
+		}
+		return Columns(fillBuildsInSendableFunction: column, nodeBuildsInSendableFunction: nodeColumn)
 	}
 }

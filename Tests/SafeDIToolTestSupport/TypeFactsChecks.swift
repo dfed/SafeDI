@@ -669,7 +669,7 @@ enum TypeFactsChecks {
 	}
 
 	/// The last check's number; 38 is unused, so its count stays 0.
-	static let lastCheck = 39
+	static let lastCheck = 40
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///
@@ -709,6 +709,12 @@ enum TypeFactsChecks {
 	///     memo's property, and its deferral, the `SendableLazilyInstantiated` its tree reads beside the value applied
 	///     (`ScopeGenerator.FillDispatcher.sendableWrapperReads(ofLabelsHandedAsMemo:labelsReadOnlyAsPlaceField:among:)`),
 	///     the fill's edge found by its key as in 37.
+	/// 40. Each place that closes no cycle builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction`)
+	///     exactly where its node's column says so (`TypeFactsGraph.buildsInSendableFunction`): a `Sendable` wrapper's
+	///     function, or one a cycle closed beneath it from inside a `@Sendable` function that does not enclose it makes
+	///     `@Sendable`, which 20 and 21 read from the edge alone. Its findings are places of a node whose cycle is entered at
+	///     another of its nodes, and places beneath an edge to a node the fold finished before, whose closed cycles the
+	///     fold does not hand on (`TypeFactsFillSendability.Columns.nodeBuildsInSendableFunction`).
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
@@ -895,6 +901,11 @@ enum TypeFactsChecks {
 			count(explained ? 19 : 18)
 			if generator.typesDeclaredEscaping != facts.typesDeclaredEscaping {
 				add(explained ? 19 : 18, "place \(index) \(place.declaration) declares \(generator.typesDeclaredEscaping) escaping where its node's union is \(facts.typesDeclaredEscaping)")
+			}
+			// Check 40.
+			count(40)
+			if generator.buildsInSendableFunction != facts.buildsInSendableFunction {
+				add(40, "place \(index) \(place.declaration) builds in a `@Sendable` function \(generator.buildsInSendableFunction) where its node's column says \(facts.buildsInSendableFunction)")
 			}
 			// Check 20 and 21.
 			if let parent = place.parent, let parentNode = places[parent].node, let edge = nodes[parentNode].edges.firstIndex(of: node) {
