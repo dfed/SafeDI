@@ -131,6 +131,7 @@ extension DependencyTreeGenerator {
 			differences += drafts.levelFieldDifferences(from: places)
 			differences += assembly.differences(from: places)
 			differences += assembly.caseDifferences(of: drafts, from: places)
+			differences += assembly.placesInTreeDifferences(of: drafts, from: places)
 			return differences
 		}
 		return report

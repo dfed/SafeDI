@@ -22,6 +22,28 @@
 // up, each naming its owner level and naming route by the assembled levels. Test only, until the assembled graph replaces
 // the walk's under a test switch.
 
+/// A seam's assembled cases, with the index of each by what drafted it.
+struct SeamPlacesCaseAssembly {
+	/// An own case by one of its sites' owner declaration and hole edge, and its family.
+	struct OwnKey: Hashable {
+		let declaration: DeclarationID
+		let edge: Int32
+		let isSendable: Bool
+	}
+
+	/// A passed-up case by the level of its call, its family and the called case it refers to.
+	struct PassedUpKey: Hashable {
+		let owner: SeamPlacesLevelID
+		let isSendable: Bool
+		let calledCase: SeamSignature.Places.CalledCase
+	}
+
+	let cases: [SeamSignature.Places.Case]
+	let unassembled: [String]
+	let ownCaseByKey: [OwnKey: Int]
+	let passedUpCaseByKey: [PassedUpKey: Int]
+}
+
 extension SeamPlacesLevelAssembly {
 	/// The assembled levels of a drafted route, root first: each drafted level as it is built in line, and after a call
 	/// whose next edge is a fill, the fill's entry level. `nil` where a level of the route was not assembled.
@@ -42,13 +64,18 @@ extension SeamPlacesLevelAssembly {
 	/// that present the same places, those whose references lead to one own case of one seam (`origin(of:through:)`),
 	/// name the first of them, and only that first one has a naming route: the least route to its owner. The cases whose
 	/// levels were not assembled are left out, and named in `unassembled`.
-	func cases(of drafts: SeamPlacesDrafts) -> (cases: [SeamSignature.Places.Case], unassembled: [String]) {
+	func cases(of drafts: SeamPlacesDrafts) -> SeamPlacesCaseAssembly {
 		var cases = [SeamSignature.Places.Case]()
 		var unassembled = [String]()
+		var ownCaseByKey = [SeamPlacesCaseAssembly.OwnKey: Int]()
+		var passedUpCaseByKey = [SeamPlacesCaseAssembly.PassedUpKey: Int]()
 		for draftCase in drafts.cases {
 			guard let owner = inLineLevelByDraft[draftCase.owner], let namingRoute = assembledRoute(draftCase.namingRoute) else {
 				unassembled.append("own case of level \(draftCase.owner.variant).\(draftCase.owner.edge)")
 				continue
+			}
+			for site in draftCase.sites {
+				ownCaseByKey[SeamPlacesCaseAssembly.OwnKey(declaration: drafts.world.declaration(of: site.owner.variant), edge: site.owner.edge, isSendable: draftCase.isBuiltInSendableFunction)] = cases.count
 			}
 			cases.append(SeamSignature.Places.Case(
 				ownerLevel: owner,
@@ -77,6 +104,7 @@ extension SeamPlacesLevelAssembly {
 				continue
 			}
 			calledBuildersByCase[cases.count] = calledBuilders
+			passedUpCaseByKey[SeamPlacesCaseAssembly.PassedUpKey(owner: draftCase.owner, isSendable: draftCase.isBuiltInSendableFunction, calledCase: calledCase)] = cases.count
 			cases.append(SeamSignature.Places.Case(
 				ownerLevel: owner,
 				isBuiltInSendableFunction: draftCase.isBuiltInSendableFunction,
@@ -103,7 +131,7 @@ extension SeamPlacesLevelAssembly {
 				firstCasePresentingSamePlaces: first,
 			)
 		}
-		return (cases, unassembled)
+		return SeamPlacesCaseAssembly(cases: cases, unassembled: unassembled, ownCaseByKey: ownCaseByKey, passedUpCaseByKey: passedUpCaseByKey)
 	}
 
 	/// The own case of the seam that holds the places the case at `index` of `cases`, a seam's graph, presents: the case
@@ -142,7 +170,8 @@ extension SeamPlacesLevelAssembly {
 	/// level and naming route, spelled by the levels' keys, and the first case presenting the same places by its spelling;
 	/// then whether the order agrees. The first line is a count report. Test only.
 	func caseDifferences(of drafts: SeamPlacesDrafts, from places: SeamSignature.Places) -> [String] {
-		let (assembledCases, unassembled) = cases(of: drafts)
+		let caseAssembly = cases(of: drafts)
+		let (assembledCases, unassembled) = (caseAssembly.cases, caseAssembly.unassembled)
 		func spelledKey(_ key: SeamSignature.Places.LevelKey) -> String {
 			"\(key.builtType?.asSource ?? "fill") before \(key.nextProperty?.label ?? "none")"
 		}
