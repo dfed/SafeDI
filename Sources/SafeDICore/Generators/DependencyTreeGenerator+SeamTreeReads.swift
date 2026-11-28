@@ -335,6 +335,15 @@ extension DependencyTreeGenerator {
 						for field in hole.fields where boundLabels.contains(field.property.label) && (field.bindsMemo || (field.isDeferredParameter && hole.innerSeamType != nil)) && !(labelsBoundByValue.contains(field.property.label) && field.deferral != .deferred(isSendable: true)) {
 							fillMemos[field.property.label, default: FillMemo(edge: edge, fulfiller: child, fields: [])].fields.append(field)
 						}
+						// A memo some route hands the fill through the levels on a carried route (`Scope.Fill.labelsHandedAsMemo`) is bound
+						// in place of the place's field, so the facts' row holds the memo's value forms, and not the place's field, of a
+						// label the hole carries in a field no deferred parameter's.
+						let fillProvidedSet = Set(fillProvidedProperties)
+						for field in hole.fields where !field.isDeferredParameter && !fillProvidedSet.contains(field.property) {
+							for value in fillProvidedProperties where value.label == field.property.label && !value.typeDescription.isOptional {
+								fillMemos[value.label, default: FillMemo(edge: edge, fulfiller: child, fields: [])].handedMemoValues.append(value)
+							}
+						}
 						framesToVisit.append(Frame(node: child, providedProperties: childProvidedProperties.union(fillProvidedProperties), fillMemos: fillMemos, cycleIdentitiesAbove: [], closesCycle: false))
 					} else {
 						framesToVisit.append(Frame(node: child, providedProperties: childProvidedProperties, fillMemos: childFillMemos, cycleIdentitiesAbove: childCycleIdentities, closesCycle: childCycleIdentities.contains(graph.cycleIDs[child])))
@@ -376,12 +385,17 @@ extension DependencyTreeGenerator {
 		/// The fields of one label a fill binds from its site's struct as the memo of a deferred parameter, along the fill's
 		/// edge, whose child is the fill's built type. The facts hold no row of what else makes a fill bind a memo, so the
 		/// fields are the hole's, not a case's (`ScopeGenerator.caseFields(of:)`), and none is bound for a label hidden by a
-		/// call that re-enters the seam (`fillDeferredLabelsHiddenByReenteringCalls`) or handed as a memo on a carried route
-		/// (`Scope.Fill.labelsHandedAsMemo`); no seam test tells those apart yet.
+		/// call that re-enters the seam (`fillDeferredLabelsHiddenByReenteringCalls`); no seam test tells those apart yet. A
+		/// memo handed on a carried route is read from the fill edge's row (`handedMemoValues`).
 		private struct FillMemo {
 			let edge: Int
 			let fulfiller: Int
 			var fields: [SeamSignature.Hole.Field]
+			/// The values of the memos the fill is handed on a carried route, of the label. The facts hold no memo's deferral,
+			/// which the tree decides from what the fill's tree reads (`ScopeGenerator.fillSendableWrapperReads`), so a handed
+			/// memo serves a read of either wrapper kind; a fill reading the other kind than its memo is rejected
+			/// (`sendableWrapperReadBesidePlainMemo`).
+			var handedMemoValues = [Property]()
 
 			/// Whether one of the memos serves a read of `property`, a `LazilyInstantiated` or `SendableLazilyInstantiated`,
 			/// as `ScopeGenerator.fillBoundMemo(servingWrapperRead:)` decides: a memo of the read's own kind, of its instance,
@@ -393,6 +407,8 @@ extension DependencyTreeGenerator {
 					field.deferral == deferral
 						&& field.property.asUnwrappedProperty == instance.asUnwrappedProperty
 						&& readsFromAbove.reads(field.property, beneath: fulfiller)
+				} || handedMemoValues.contains { value in
+					value.asUnwrappedProperty == instance.asUnwrappedProperty && readsFromAbove.reads(value, beneath: fulfiller)
 				}
 			}
 		}
