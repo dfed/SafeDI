@@ -149,14 +149,6 @@ extension TypeFactsGraph {
 		func closes(_ declaration: Int32, on other: Int32) -> Bool {
 			declaration == other || cycle(of: declaration) == cycle(of: other)
 		}
-		// A seam's call inside one of the seam's own fills passes the fills it was handed: the fill is not built again, so
-		// its edge closes no cycle and reaches nothing. So does a call of a declaration being built above a fill on the path
-		// to it: inside the fill the tree calls the seam again, handing on the fills its call was handed, and closes no
-		// cycle on the function above.
-		func reenters(_ child: Int32, in path: [Int32]) -> Bool {
-			guard let position = path.lastIndex(where: { closes(child, on: $0) }) else { return false }
-			return graph.nodes[Int(child)].key.isFill || path[(position + 1)...].contains { graph.nodes[Int($0)].key.isFill }
-		}
 		// The groups of declarations whose functions can close on one another: components joined through twins.
 		var groupOfComponent = [ComponentID: ComponentID]()
 		func group(ofComponent component: ComponentID) -> ComponentID {
@@ -229,7 +221,7 @@ extension TypeFactsGraph {
 					let hiddenBeneath = hidden.union(declaredForms[Int(declaration)])
 					let declaredBeneath = declaration == place.declaration ? declaredBelow : merging(declaredBelow, declaredLabels[Int(declaration)])
 					let pathBeneath = path + [declaration]
-					for child in edges(from: declaration) where !reenters(child, in: pathBeneath) {
+					for child in edges(from: declaration) where !reentersFill(child, in: pathBeneath, closesOn: { closes(child, on: $0) }) {
 						if closes(child, on: place.declaration) {
 							body.labelsDeclaredBeforeACloser = merging(body.labelsDeclaredBeforeACloser, declaredBeneath)
 						} else if let position = pathBeneath.firstIndex(where: { closes(child, on: $0) }) {
