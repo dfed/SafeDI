@@ -46,10 +46,11 @@ public enum PlanCallsObservation {
 
 /// Lets a test compare, for each root whose plan keys its bodies by the per-type facts' variants
 /// (`DependencyTreeGenerator.VariantBodies.keysBodiesByFacts`), what the facts decide with what the plan's own rules
-/// decide of the same call: which body a call takes, and the order its function takes its parameters in.
+/// decide of the same call: which body a call takes.
 public enum PlanFactsKeyObservation {
-	/// Called for each call whose two answers differ, with a line that names the call and both answers.
-	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ difference: String) -> Void>?
+	/// Called for each call the facts key, with what is decided of it and the facts' and the plan's answers, which a test
+	/// compares: handed both answers alike, every call runs the comparison, whether or not the two differ.
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ decided: String, _ factsAnswer: String, _ plansAnswer: String) -> Void>?
 }
 
 extension DependencyTreeGenerator {
@@ -320,7 +321,7 @@ extension DependencyTreeGenerator {
 							calledNearestDeclarations.build(functionProperty)
 						}
 						let key = VariantBodyKey(scope: ObjectIdentifier(calledScope), property: functionProperty, twinsBeingBuilt: context.twinsBeingBuilt)
-						let calledVariant = variantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, of: body.copy, builtAs: $0) }
+						let calledVariant = variantsByBody[bodyToWalk].flatMap { variant(calledAt: context.path, builtAs: $0) }
 						let (calledBody, arguments) = try self.calledBody(
 							of: calledCopy,
 							calledScope: calledScope,
@@ -415,8 +416,12 @@ extension DependencyTreeGenerator {
 			// A body a comparison with today's tree built before the plan has no variant yet: the first call of the plan
 			// the plan's key answers with it gives it one.
 			let position = keyingVariant.map { bodiesByVariant[$0] ?? positionByPlansKey.flatMap { variantsByBody[$0] == nil ? $0 : nil } } ?? positionByPlansKey
-			if keyingVariant != nil, position != positionByPlansKey, let observer = PlanFactsKeyObservation.observer {
-				observer("The facts give `\(copy.instantiable.concreteInstantiable.asSource)` built as `\(key.property?.asSource ?? "the root")` \(position.map { "the body \(bodies[$0].description)" } ?? "a body of its own") where the plan’s key gives it \(positionByPlansKey.map { "the body \(bodies[$0].description)" } ?? "a body of its own")")
+			if keyingVariant != nil, let observer = PlanFactsKeyObservation.observer {
+				observer(
+					"the body of `\(copy.instantiable.concreteInstantiable.asSource)` built as `\(key.property?.asSource ?? "the root")`",
+					position.map { "the body at \($0), \(bodies[$0].description)" } ?? "a body of its own",
+					positionByPlansKey.map { "the body at \($0), \(bodies[$0].description)" } ?? "a body of its own",
+				)
 			}
 			if let position {
 				if let keyingVariant, bodiesByVariant[keyingVariant] == nil {
@@ -577,24 +582,17 @@ extension DependencyTreeGenerator {
 			return true
 		}
 
-		/// The facts' variant of the call place at `path` in the body of `copy`, which is the variant `callingVariant`:
+		/// The facts' variant of the call place at `path` in a body that is the variant `callingVariant`:
 		/// at each scope from the body's own down, the variant its variant calls at the edge of the child that leads to
 		/// the call. The facts' graph has an edge for each of a scope's properties to generate, in their order, before
 		/// the edges of its fills, so a child's edge is its index. `nil` where the facts do not key the plan.
-		private func variant(calledAt path: [Int], of copy: Scope, builtAs callingVariant: Int) -> Int? {
+		private func variant(calledAt path: [Int], builtAs callingVariant: Int) -> Int? {
 			var variant: Int? = callingVariant
-			var scope: Scope? = copy
 			for index in path {
-				let propertiesToGenerate = scope?.propertiesToGenerate ?? []
 				variant = variant.flatMap { variant in facts.flatMap { facts in
 					let callees = facts.variants.callees(of: variant)
 					return index < callees.count ? Int(callees[callees.startIndex + index]) : nil
 				} }
-				if propertiesToGenerate.indices.contains(index), case let .instantiated(_, childScope, _) = propertiesToGenerate[index] {
-					scope = childScope
-				} else {
-					scope = nil
-				}
 			}
 			return variant
 		}
@@ -605,11 +603,10 @@ extension DependencyTreeGenerator {
 		private func parameterLabels(ofFunctionBuiltAs property: Property, calledTree: CalledTree, variant: Int?) -> [String] {
 			let plansOrder = calledTree.labelsInOrderFirstReceived.filter { $0 != property.label }
 			guard let facts, let variant else { return plansOrder }
-			let factsOrder = facts.parameterOrder(of: facts.variants.node(of: variant)).map { facts.labelTexts[Int($0)] }
-			if factsOrder != plansOrder.filter(factsOrder.contains), let observer = PlanFactsKeyObservation.observer {
-				observer("The facts order the parameters of the function built as `\(property.asSource)` \(factsOrder) where the plan’s walk orders them \(plansOrder)")
-			}
-			return factsOrder
+			// The facts' order is the tree's (`ScopeGenerator.inOrderTheBodyFirstReceives`), which the cycle function
+			// parameters check compares in every test; the plan's walk skips a scope that closes a cycle, so it can meet a
+			// label later than the tree does, and is no measure of the facts.
+			return facts.parameterOrder(of: facts.variants.node(of: variant)).map { facts.labelTexts[Int($0)] }
 		}
 
 		/// The labels `scope`'s tree reads from above it, sorted: hiding is by label, so a read is answered by the nearest
