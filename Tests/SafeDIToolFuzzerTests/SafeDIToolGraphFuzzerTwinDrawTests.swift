@@ -50,7 +50,7 @@ struct SafeDIToolGraphFuzzerTwinDrawTests {
 		#expect(TwinShape.shapes(of: fixture) == seed.shapes)
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let outcome: GraphFuzzerToolOutcome = if seed.corpus == .base {
-			try await PlanBodiesObservation.$observer.withValue({ root, _, _, twinValues in
+			try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, _, _, twinValues in
 				if root.hasSuffix("TwinRoot"), !twinValues.isEmpty {
 					continuation.yield(root)
 				}

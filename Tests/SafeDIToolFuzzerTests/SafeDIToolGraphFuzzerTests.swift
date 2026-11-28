@@ -6652,7 +6652,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// (`PlanBodiesObservation`): the report's last line counts those roots, those that hold a twin, which stay built
 		// per path, and the bodies their plans build. A graph is run several times, so the counts are of roots of runs.
 		let (planStream, planContinuation) = AsyncStream.makeStream(of: (bodyCount: Int, holdsTwin: Bool).self)
-		try await PlanBodiesObservation.$observer.withValue({ _, bodiesOfPlan, _, twinValues in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { _, bodiesOfPlan, _, twinValues in
 			planContinuation.yield((bodiesOfPlan.count, !twinValues.isEmpty))
 		}) {
 			try await longRun()

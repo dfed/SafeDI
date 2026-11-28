@@ -440,7 +440,7 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func planCodesAndFixtures(of swiftFileContent: String) async throws -> (codes: [String: String?], fixtures: FixturePaths) {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, String?).self)
-		let output = try await PlanCodeObservation.$observer.withValue({ root, code in
+		let output = try await PlanCodeObservation.$observer.withValue(TaskLocalFunction { root, code in
 			continuation.yield((root, code))
 		}) {
 			try await executeSafeDIToolTest(

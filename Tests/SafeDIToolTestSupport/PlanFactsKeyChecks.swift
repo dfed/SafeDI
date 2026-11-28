@@ -26,10 +26,10 @@ enum PlanFactsKeyChecks {
 	/// otherwise than the plan's own rules do (`PlanFactsKeyObservation`), and hands each difference to
 	/// `enclosingObserver` too.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ difference: String) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ difference: String) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await PlanFactsKeyObservation.$observer.withValue({ difference in
+		try await PlanFactsKeyObservation.$observer.withValue(TaskLocalFunction { difference in
 			Issue.record(Comment(rawValue: difference))
 			enclosingObserver?(difference)
 		}) {

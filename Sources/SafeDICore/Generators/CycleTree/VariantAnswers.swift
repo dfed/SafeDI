@@ -25,7 +25,7 @@ public enum TwinIdentityObservation {
 	/// Called for each production root whose tree holds a twin value (`CallPlaceShadow.twinValues`), with
 	/// the root's type, each rule's twin values, as `<type> as <property>`, sorted, and the places of today's tree, in walk
 	/// order, that a scope closing a cycle calls where the plan's call names another function.
-	@TaskLocal public static var observer: (@Sendable (_ root: String, _ shadowsTwinValues: [String], _ plansTwinValues: [String], _ callsOfOtherFunction: [String]) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (_ root: String, _ shadowsTwinValues: [String], _ plansTwinValues: [String], _ callsOfOtherFunction: [String]) -> Void>?
 }
 
 extension DependencyTreeGenerator {

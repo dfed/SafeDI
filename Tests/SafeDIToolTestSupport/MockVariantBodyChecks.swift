@@ -30,7 +30,7 @@ enum MockVariantBodyChecks {
 	static func comparing<Result>(_ operation: () async throws -> Result) async throws -> Result {
 		let enclosingObserver = MockVariantBodyObservation.observer
 		let enclosingPlanObserver = MockVariantBodyObservation.planObserver
-		return try await MockVariantBodyObservation.$observer.withValue({ mockRoot, place, todaysUnavailableProperties, bodysUnavailableProperties in
+		return try await MockVariantBodyObservation.$observer.withValue(TaskLocalFunction { mockRoot, place, todaysUnavailableProperties, bodysUnavailableProperties in
 			if todaysUnavailableProperties != bodysUnavailableProperties {
 				Issue.record(Comment(rawValue: """
 				The body of \(place) in the mock of \(mockRoot) passes nil to other receives than today's build of the place:
@@ -40,7 +40,7 @@ enum MockVariantBodyChecks {
 			}
 			enclosingObserver?(mockRoot, place, todaysUnavailableProperties, bodysUnavailableProperties)
 		}) {
-			try await MockVariantBodyObservation.$planObserver.withValue({ mockRoot, bodiesOfPlan, todaysBodiesPlanLacks in
+			try await MockVariantBodyObservation.$planObserver.withValue(TaskLocalFunction { mockRoot, bodiesOfPlan, todaysBodiesPlanLacks in
 				if !todaysBodiesPlanLacks.isEmpty {
 					Issue.record(Comment(rawValue: """
 					The plan of the mock of \(mockRoot) builds no body that places of today's tree take:

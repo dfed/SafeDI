@@ -27,10 +27,10 @@ enum PlanSendableChecks {
 	/// Runs `operation` while comparing the two, handing each comparison to `enclosingObserver` too, and records an issue
 	/// for each root whose plan and layout mark other bodies.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ root: String, _ marksOfPlan: [Bool], _ familyOfLayout: [Bool]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await PlanSendableObservation.$observer.withValue({ root, marksOfPlan, familyOfLayout in
+		try await PlanSendableObservation.$observer.withValue(TaskLocalFunction { root, marksOfPlan, familyOfLayout in
 			if marksOfPlan != familyOfLayout {
 				Issue.record(Comment(rawValue: """
 				The plan of \(root) marks other bodies `@Sendable` than the type key lays out so:
