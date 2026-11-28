@@ -850,6 +850,8 @@ def e26(text,walk):
 def declared_again(name):
     """matches a line that declares a name: a let, var or for (a tuple too), a closure's parameter, or a
     function's parameter"""
+    # a function's parameter is matched only on the func line: the generator writes a nested function's
+    # parameters there; mock()'s own, one per line, are not matched
     name=re.escape(name)
     return re.compile(r'\b(?:let|var|for)\s+\(?(?:[\w`, ]*,\s*)?`?'+name+r'`?\b|\{ *(?:[\w`, ]*, *)?`?'+name+r'`?(?: *,[\w`, ]*)? in\b|\bfunc [^(]+\((?:.*, )?(?:\w+ )?`?'+name+r'`?: ')
 def bind_handed_parameter(lines,name,parameter,label,taken):
