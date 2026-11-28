@@ -72,7 +72,9 @@ extension NodeRecords {
 
 	/// The labels the types of `world`, which holds a cycle, receive, plainly, only if available or through a rename: read
 	/// from above wherever they are, a superset of what the function a call closes a cycle on reads from above it.
-	/// - Throws: `cycleReceivesBuilder` where a type receives a builder.
+	/// - Throws: `cycleReceivesBuilder` where a type of a production world receives a builder. A mock root's world lays
+	///   out its loops of builders from the records (`loopRebindings(of:in:mockLoopLevels:ownFunctionArguments:)`), so the
+	///   label is one more it receives.
 	static func labelsReceived(inWorldWithCycle world: some NodeRecordSources) throws(NodeRecordRefusal) -> Set<String> {
 		var labels = Set<String>()
 		for declaration in 0..<Int32(world.declarationCount) {
@@ -87,7 +89,7 @@ extension NodeRecords {
 				}
 			}
 			for read in reads {
-				guard read.asUnwrappedProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
+				guard world.isMockWorld || read.asUnwrappedProperty.propertyType.isConstant else { throw .cycleReceivesBuilder }
 				labels.insert(read.label)
 			}
 		}
