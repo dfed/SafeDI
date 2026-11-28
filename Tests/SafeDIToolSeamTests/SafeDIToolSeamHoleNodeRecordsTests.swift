@@ -87,8 +87,9 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_makesHolesPlacesAsTheSeamsTreeWritesThem_whenAHoleIsReachedThroughASendableLazyWrapper() async throws {
-		// `panel`'s `@Sendable` builder function first calls the member of the builder struct that leads to `api`'s place.
-		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let panel: SendableLazilyInstantiated<Panel>"])
+		// `holder`'s `@Sendable` builder function first calls the member of the builder struct that leads to `api`'s place,
+		// through the holder's `SendableInstantiator<Panel>` (a `SendableLazilyInstantiated` holds a `Sendable` type).
+		let reports = try await reportsOfOffice(officeDeclarations: ["@Instantiated let holder: SendableLazilyInstantiated<SendableHolder>"])
 		#expect(reports.map(\.refusal) == [nil])
 		#expect(reports.map(\.differences) == [[]])
 	}
@@ -137,6 +138,7 @@ struct SafeDIToolSeamHoleNodeRecordsTests: ~Copyable {
 				seamFixtureType(named: "Looping", declarations: ["@Instantiated let api: any Api", "@Instantiated let childBuilder: Instantiator<Child>"]),
 				seamFixtureType(named: "Child", declarations: ["@Instantiated let grandBuilder: Instantiator<Grand>"]),
 				seamFixtureType(named: "Grand", declarations: ["@Instantiated let childBuilder: Instantiator<Child>"]),
+				seamFixtureType(named: "SendableHolder", declarations: ["@Instantiated let panelBuilder: SendableInstantiator<Panel>"], conformances: ", Sendable"),
 				seamFixtureType(named: "LazyPanel", declarations: ["@Instantiated let api: LazilyInstantiated<any Api>"]),
 				seamFixtureType(named: "Watcher", declarations: ["@Received(onlyIfAvailable: true) let panel: Panel?", "@Instantiated let api: any Api"]),
 				seamFixtureType(named: "Renamer", declarations: ["@Received(fulfilledByDependencyNamed: \"panel\", ofType: Panel.self) let renamedPanel: Panel", "@Instantiated let api: any Api"]),
