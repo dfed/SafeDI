@@ -96,7 +96,7 @@ extension ScopeGenerator {
 		// walk and the mock's tiers both take from it.
 		var publicMockRoot: (plan: PublicMockPlan, context: PublicMockContext)?
 		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext {
-			let rootBindingNames = walk.rootLevelBindingNames(of: orderedChildren.map(\.generator))
+			let rootBindingNames = MockLowering.levelBindingNames(of: orderedChildren.map(\.generator.mockLevelNode), besideParametersKeepingTheirLabels: walk.rootParametersKeepingTheirLabels)
 			let plan = publicMockPlan(
 				of: instantiable,
 				signature: signature,
@@ -315,6 +315,8 @@ extension ScopeGenerator {
 				),
 				outerDeclarations: outerDeclarations,
 				walkSurface: surface,
+				levelNamesTaken: walk.rootLevelNamesTaken,
+				renamesAbove: walk.renames,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			) {
 				surface = layout.surface
@@ -498,7 +500,7 @@ extension MockLowering {
 		var sendableAutoclosureBindings = [Property: ScopeGenerator.SendableAutoclosureParameter]()
 		/// The names the property nodes of the mock root's level are bound under.
 		var rootPropertyNodeBindingNames = Set<String>()
-		/// The names apart the aliases of the mock root's level are bound under (`nameRootAliasesApart(among:bindingNames:)`).
+		/// The names apart the aliases of the mock root's level are bound under (`MockLowering.rootLevelBindingNames(of:besideNamesTaken:)`).
 		var rootAliasBindingNamesApart = Set<String>()
 		/// The labels of the dependencies the tree receives that the mock cannot build, which an alias of the mock root's
 		/// level is named apart from.
@@ -509,9 +511,16 @@ extension MockLowering {
 		/// root's level under one of their labels is named apart from them
 		/// (`ScopeGenerator.disambiguatePropertyLabels(forProperties:besideParametersKeepingTheirLabels:reservedNames:)`).
 		var rootParametersKeepingTheirLabels = [Property]()
-		/// The properties of the mock root's level named apart from a parameter that keeps its label, which may bind a name
-		/// apart from a label `mock()` binds.
-		var rootPropertiesNamedApartFromParameters = Set<Property>()
+		/// What the mock root's level names its nodes apart from, read from `mock()`'s signature.
+		var rootLevelNamesTaken: MockLowering.RootLevelNamesTaken {
+			MockLowering.RootLevelNamesTaken(
+				parametersKeepingTheirLabels: rootParametersKeepingTheirLabels,
+				flatReceivedLabels: rootFlatReceivedLabels,
+				overrideNames: rootOverrideNames,
+				rootLabels: rootLabels,
+				namesDeclaredInBuilderFunctions: rootNamesDeclaredInBuilderFunctions,
+			)
+		}
 		var labels = Set<String>()
 		// The `@Instantiated` dependencies the mock cannot build, each a parameter of `mock()`.
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which `mock()` takes, so the types that
@@ -597,10 +606,10 @@ extension MockLowering {
 			defer { propertiesGeneratedLater = enclosingPropertiesGeneratedLater }
 			var nodes = [TreeNode]()
 			var scope = scope
-			var bindingNames = levelBindingNames(of: generators)
-			if bodyLabels.isEmpty {
-				nameRootAliasesApart(among: generators, bindingNames: &bindingNames)
-			}
+			let levelNodes = generators.map(\.mockLevelNode)
+			let bindingNames = bodyLabels.isEmpty
+				? MockLowering.rootLevelBindingNames(of: levelNodes, besideNamesTaken: rootLevelNamesTaken)
+				: MockLowering.levelBindingNames(of: levelNodes, besideParametersKeepingTheirLabels: [])
 			// Every node of the level and beneath it reads the level's names apart, until a declaration hides one.
 			let enclosingRenames = renames
 			defer { renames = enclosingRenames }
@@ -714,76 +723,6 @@ extension MockLowering {
 			}
 			endLoopUnit(appendingTo: &lines)
 			return nodes
-		}
-
-		/// The name each of `generators`, one level's nodes, is bound under, `nil` for a node that is no property node: its
-		/// label, or, where property nodes of the level share it, a name apart, as
-		/// `ScopeGenerator.disambiguatePropertyLabels(forProperties:)` names it.
-		private mutating func levelBindingNames(of generators: [ScopeGenerator]) -> [String?] {
-			let propertyNodes: [Property?] = generators.map { generator in
-				guard case let .property(_, property, _, _, _, _) = generator.scopeData else { return nil }
-				return property
-			}
-			var seenLabels = Set<String>()
-			var collidingLabels = Set<String>()
-			for case let property? in propertyNodes where !seenLabels.insert(property.label).inserted {
-				collidingLabels.insert(property.label)
-			}
-			// The mock root's level names its nodes apart from the parameters that keep their labels too.
-			let parametersKeepingTheirLabels = bodyLabels.isEmpty ? rootParametersKeepingTheirLabels : []
-			let parameterLabels = Set(parametersKeepingTheirLabels.map(\.label))
-			let collidingParameterLabels = parameterLabels.intersection(seenLabels)
-			collidingLabels.formUnion(collidingParameterLabels)
-			guard !collidingLabels.isEmpty else { return propertyNodes.map { $0?.label } }
-			let collidingProperties = propertyNodes.compactMap { property in property.flatMap { collidingLabels.contains($0.label) ? $0 : nil } }
-			let names = ScopeGenerator.identifierSafeNames(
-				for: collidingProperties.map { property in
-					let instantiatedType = property.typeDescription.asInstantiatedType
-					return (label: property.label, suffixTypes: [instantiatedType.simplified, instantiatedType, property.typeDescription])
-				},
-				besideEntriesKeepingTheirNames: parametersKeepingTheirLabels.compactMap { parameter in
-					guard collidingLabels.contains(parameter.label) else { return nil }
-					let instantiatedType = parameter.typeDescription.asInstantiatedType
-					return (label: parameter.label, suffixTypes: [instantiatedType.simplified, instantiatedType, parameter.typeDescription])
-				},
-				reservedNames: seenLabels.subtracting(collidingLabels).union(parameterLabels),
-			)
-			let nameByProperty = Dictionary(zip(collidingProperties, names), uniquingKeysWith: { first, _ in first })
-			if bodyLabels.isEmpty {
-				rootPropertiesNamedApartFromParameters.formUnion(collidingProperties.filter { collidingParameterLabels.contains($0.label) || rootOverrideNames.contains($0.label) })
-			}
-			return propertyNodes.map { property in property.map { nameByProperty[$0] ?? $0.label } }
-		}
-
-		/// Names apart each alias of the mock root's level, among `generators`, whose label a property node of the level, or a
-		/// flat received parameter of `mock()`, binds, as `ScopeGenerator.renamingAliases` does: `<label>_<simplified type>`,
-		/// `_` appended while the name is taken, set as the alias's entry of `bindingNames`.
-		/// The names the mock root's level, `generators`, binds its nodes under, as the walk names them when it reaches the
-		/// level; named on a copy, so the walk's own record of the names it keeps apart starts empty.
-		func rootLevelBindingNames(of generators: [ScopeGenerator]) -> [String?] {
-			var walk = self
-			return walk.levelBindingNames(of: generators)
-		}
-
-		private mutating func nameRootAliasesApart(among generators: [ScopeGenerator], bindingNames: inout [String?]) {
-			let propertyNodeNames = Set(zip(generators, bindingNames).compactMap { generator, bindingName in
-				generator.mockLoweringBuiltProperty == nil ? nil : bindingName
-			})
-			let aliases: [(index: Int, property: Property)] = generators.enumerated().compactMap { index, generator in
-				guard case let .alias(property, _, _, _, _) = generator.scopeData else { return nil }
-				return (index, property)
-			}
-			// The root binds each override of what its tree receives only if available under its name
-			// before the tree, as it binds its property nodes (`MockRootTopLevelNames.rootBindingNames`).
-			let redeclaredNames = propertyNodeNames.union(rootFlatReceivedLabels).union(rootOverrideNames)
-			var takenNames = propertyNodeNames.union(rootLabels).union(aliases.map(\.property.label)).union(rootNamesDeclaredInBuilderFunctions)
-			for alias in aliases where redeclaredNames.contains(alias.property.label) {
-				var name = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)".spelledAsJoinedIdentifier
-				while !takenNames.insert(name).inserted {
-					name = "\(name)_".spelledAsJoinedIdentifier
-				}
-				bindingNames[alias.index] = name
-			}
 		}
 
 		/// The node of `generator`, built after the nodes `scope` holds, whose statements are appended to `lines`; `nil` for a

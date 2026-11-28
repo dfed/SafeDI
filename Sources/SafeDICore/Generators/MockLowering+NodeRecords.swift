@@ -34,7 +34,7 @@ extension ScopeGenerator {
 	/// The function awaits nothing and is kept out of the frame of the mock's walk, which every root's lowering holds.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose walk reports it.
 	@inline(never)
-	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property], walkSurface: MockLowering.RootSurface, handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]]) -> (statements: String, surface: MockLowering.RootSurface)? {
+	static func nodeRecordsMockStatements(of instantiable: Instantiable, worldRoot: ConstructionScope, bindsOnlyNodes: Bool, sendableConfigurationTypeNames: Set<String>, rootNames: MockRootNames, outerDeclarations: [Property], walkSurface: MockLowering.RootSurface, levelNamesTaken: MockLowering.RootLevelNamesTaken, renamesAbove: [String: [TypeDescription: String]], handWrittenMockDefaultParameters: [TypeDescription: [ScopeGenerator.DefaultParameter]]) -> (statements: String, surface: MockLowering.RootSurface)? {
 		let world = TypeFactsGraph(root: worldRoot, forMockGeneration: true, mockRootNames: rootNames)
 		func report(refusal: NodeRecordRefusal?, everyRefusal: [NodeRecordRefusal], isLaidOut: Bool, recordCount: Int) {
 			var report = NodeRecordsReport(
@@ -85,7 +85,9 @@ extension ScopeGenerator {
 				+ ["let \(ReservedName.mockEnteredPlacesParameterName) = \(ReservedName.mockEnteredPlacesTypeName)()"]
 		).map { .text("\(TypeKeyBody.rootStatementIndentation)\($0)") }
 		// What the records say the mock declares of its nodes, which must be what its walk says while both are made.
-		guard let surface = nodeRecords.mockRootSurface(in: world, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters), surface.comparedMeaning == walkSurface.comparedMeaning else {
+		guard let surface = nodeRecords.mockRootSurface(in: world, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters), surface.comparedMeaning == walkSurface.comparedMeaning,
+		      NodeRecords.mockRootNamesApart(in: world, besideNamesTaken: levelNamesTaken, renamesAbove: renamesAbove) == rootNames.namesApart
+		else {
 			report(refusal: .mockSurfaceDiffers, everyRefusal: [.mockSurfaceDiffers], isLaidOut: false, recordCount: 0)
 			return nil
 		}
