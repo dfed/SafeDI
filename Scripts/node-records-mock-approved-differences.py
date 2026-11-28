@@ -651,6 +651,7 @@ def e5(text,walk):
             i+=1
     return '\n'.join(lines)
 UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
+TWO_VARIANTS_APPROVED=True
 def e21(text,walk):
     # entry 21: the walk names a nested function apart by its type (__safeDI_x_Type) where the records'
     # function is __safeDI_x or __safeDI_x_, and, where the walk's function is nested out of sight of the one
@@ -681,12 +682,20 @@ def e21(text,walk):
         holding=[d for d in declarations.get(x,()) if d[1]<=i<=d[2]]
         return max(holding,key=lambda d:d[1]) if holding else None
     renamed={};uses={}
+    returns={}
+    for line in lines:
+        f=FUNC.match(line)
+        if f: returns.setdefault(f.group(3),set()).add(f.group(5))
     for i,(ours,theirs) in enumerate(zip(lines,walk_lines)):
         a=name.findall(ours);b=name.findall(theirs)
         if len(a)!=len(b): return text
         for x,y in zip(a,b):
             apart=y.startswith(x.rstrip('_')+'_') and len(y)>len(x)
             plain=x.endswith('_') and not x.endswith('__safeDI_') and y==x[:-1]
+            # two variants of one node (the records' two functions of one label return one type): the design
+            # thread, which keeps the list, reads the lead's 04:02Z ruling as covering them (04:14Z); set the
+            # switch off to hold such pairs different again
+            if plain and not TWO_VARIANTS_APPROVED and returns.get(x,set())&returns.get(x.rstrip('_'),set()): return text
             if not (x==y or ((apart or plain) and y in declared)): return text
             key=(x,declaration(x,i))
             if renamed.setdefault(key,y)!=y: return text
@@ -747,6 +756,11 @@ def drop_nil_parameter(lines,name,parameter,label):
     binds=re.compile(r'^\s*(?:let|var) `?'+re.escape(label)+r'`?\b(.*)$')
     hides=re.compile(r'\{ *(?:[\w`, ]*, *)?`?'+re.escape(label)+r'`?(?: *,[\w`, ]*)? in\b|\bfunc (?!'+re.escape(name)+r'\()[^(]+\((?:.*, )?(?:\w+ )?`?'+re.escape(label)+r'`?: ')
     call=re.compile(r'(?<![\w.])'+re.escape(name)+r'\(')
+    # a binding of the label that does not lead its statement (if let, guard let, case let, for, a tuple) is
+    # not followed, and the function used as a value could be handed anything: both refuse
+    elsewhere=re.compile(r'\S.*\b(?:let|var|for)\s+`?'+re.escape(label)+r'`?\b|\b(?:let|var|for)\s*\([^)]*\b'+re.escape(label)+r'\b')
+    as_value=re.compile(r'(?<![\w.])'+re.escape(name)+r'(?![\w(])')
+    if any(as_value.search(line) for line in lines): return None
     is_parameter=[False]*len(lines)
     declarations=[]
     for i,line in enumerate(lines):
@@ -760,7 +774,9 @@ def drop_nil_parameter(lines,name,parameter,label):
             if not lines[k].strip(): continue
             depth=len(lines[k])-len(lines[k].lstrip())
             if hidden_from is not None and depth<hidden_from: hidden_from=None
-            if hides.search(lines[k]): return None
+            if hides.search(lines[k]) or elsewhere.search(lines[k]): return None
+            # a let or var of the label hides the parameter from its own line to the end of the block it
+            # stands in, nested blocks included; lines before it in that block still read the parameter
             bound=binds.match(lines[k])
             if bound:
                 if read.search(bound.group(1)): return None
@@ -769,7 +785,7 @@ def drop_nil_parameter(lines,name,parameter,label):
                 continue
             again=FUNC.match(lines[k])
             if again and again.group(3)==name: return None
-            is_parameter[k]=hidden_from is None
+            is_parameter[k]=hidden_from is None and not lines[k].lstrip().startswith('#sourceLocation')
     if not declarations: return None
     for i,line in enumerate(lines):
         position=0
@@ -838,6 +854,7 @@ def bind_handed_parameter(lines,name,parameter,label,taken):
     call=re.compile(r'(?<![\w.])'+re.escape(name)+r'\(')
     declarations=[i for i,line in enumerate(lines) if FUNC.match(line) and FUNC.match(line).group(3)==name]
     if not declarations: return None
+    if any(re.search(r'(?<![\w.])'+re.escape(name)+r'(?![\w(])',line) for line in lines): return None
     for i in declarations:
         if parameter not in split_top(FUNC.match(lines[i]).group(4)): return None
     handed=set()
