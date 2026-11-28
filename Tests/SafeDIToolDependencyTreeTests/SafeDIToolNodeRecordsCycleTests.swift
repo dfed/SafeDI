@@ -1230,9 +1230,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenCycleMemberReceivesValueOnlyIfAvailable() async throws {
-		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variants key it as an optional
-		// parameter.
+	mutating func generate_laysOutRootAsTheTreeDoes_whenEveryCallAnswersValueCycleMemberReceivesOnlyIfAvailable() async throws {
+		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variant keys it as an optional
+		// parameter. `Root` declares `session` before the cycle, so every call of `B` answers it: one body, as the tree's.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -1278,6 +1278,61 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        self.init(session: session, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenNoCallAnswersValueCycleMemberReceivesOnlyIfAvailable() async throws {
+		// `B`, on the cycle of `A` and `B`, receives `session` only if available, so its variant keys it as an optional
+		// parameter, and no type declares `session`: every call of `B` passes `nil`.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true) public final class Root: Instantiable {
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					}
+
+					@Instantiable public final class Session: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable public final class A: Instantiable {
+					    @Instantiated let bBuilder: Instantiator<B>
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					}
+
+					@Instantiable public final class B: Instantiable {
+					    @Received(onlyIfAvailable: true) let session: Session?
+					    @Instantiated let aBuilder: Instantiator<A>
+					    public init(session: Session?, aBuilder: Instantiator<A>) { self.session = session; self.aBuilder = aBuilder }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(session: nil, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
 			    }
 			}
 			""",
