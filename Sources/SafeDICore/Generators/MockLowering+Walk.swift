@@ -521,6 +521,7 @@ extension MockLowering {
 				namesDeclaredInBuilderFunctions: rootNamesDeclaredInBuilderFunctions,
 			)
 		}
+
 		var labels = Set<String>()
 		// The `@Instantiated` dependencies the mock cannot build, each a parameter of `mock()`.
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which `mock()` takes, so the types that
