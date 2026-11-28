@@ -75,7 +75,8 @@ struct SeamPlacesSiteDraft: Equatable, Sendable {
 	let owner: SeamPlacesLevelID
 	/// The hole's leaf.
 	let hole: DeclarationID
-	/// What the hole's struct carries, in the order its builder names them.
+	/// The owner level's own declarations bound before the hole, in binding order. The fields of the levels above are
+	/// theirs, reached through `SeamPlacesLevelDraft.parents`, so a site holds no list that grows with its routes.
 	let fields: [SeamPlacesFieldDraft]
 }
 
@@ -218,7 +219,13 @@ struct SeamPlacesDrafts: Sendable {
 					closingLevels.append(level)
 				}
 				if isPlace, world.graph.nodes[Int(target)].key.leaf == .hole {
-					sites.append(SeamPlacesSiteDraft(owner: id, hole: target, fields: []))
+					// The owner level's own declarations bound before the hole; the farther ones are its parents' levels', which
+					// a question about the case answers over the routes to it.
+					let bindings = world.worldBindings(of: Int(declaration))
+					let fields = bindings.prefix(Int(edge.bindingsBefore)).enumerated().map { index, binding in
+						SeamPlacesFieldDraft(label: binding.label, declaredAt: id, binding: Int32(index))
+					}
+					sites.append(SeamPlacesSiteDraft(owner: id, hole: target, fields: fields))
 				}
 				if !edge.isCallEdge {
 					parentsByVariant[Int(callee)].append(id)
