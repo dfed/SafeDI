@@ -757,15 +757,15 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			                lower: lower
 			            )
 			        }
-	
+
 			        var thing_Thing: (() -> Thing)? { __safeDI_storage.thing_Thing }
 			        var thing_Instantiator__Thing: (() -> Thing)? { __safeDI_storage.thing_Instantiator__Thing }
 			        var leaf: Leaf.SafeDIMockConfiguration { __safeDI_storage.leaf }
 			        var upper: Upper.SafeDIMockConfiguration { __safeDI_storage.upper }
 			        var lower: Lower.SafeDIMockConfiguration { __safeDI_storage.lower }
-	
+
 			        private let __safeDI_storage: __safeDI_Storage
-	
+
 			        private final class __safeDI_Storage {
 			            init(
 			                thing_Thing: (() -> Thing)?,
@@ -780,7 +780,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			                self.upper = upper
 			                self.lower = lower
 			            }
-	
+
 			            let thing_Thing: (() -> Thing)?
 			            let thing_Instantiator__Thing: (() -> Thing)?
 			            let leaf: Leaf.SafeDIMockConfiguration
@@ -788,7 +788,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			            let lower: Lower.SafeDIMockConfiguration
 			        }
 			    }
-	
+
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
@@ -829,7 +829,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			#endif
 			""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 		}
-	
+
 		/// Which places of a type that receives a label named apart only if available a required receive above pins.
 		enum PinnedPlace: CaseIterable {
 			/// Its only place.
@@ -839,7 +839,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			/// One of its two places, each built where it is read, by no function of its own.
 			case onePlaceOfTwoBuiltInPlace
 		}
-	
+
 		@Test(arguments: PinnedPlace.allCases)
 		@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 		mutating func mock_buildsTheWalksValues_whenRequiredReceiveAbovePlacePinsLabelNamedApart(place: PinnedPlace) async throws {
@@ -886,11 +886,11 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 				#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
 			}
 		}
-	
+
 		// MARK: Private
-	
+
 		private var filesToDelete: [URL]
-	
+
 		/// `fixture` with a root that builds `Upper` in the second child’s place: `Upper` requires `thing` as the value and
 		/// builds `Lower`, which receives `thing` only if available as an `Instantiator`.
 		private static let fixtureOfReceivePinnedFromAbove: [String: String] = fixture.merging([
@@ -901,7 +901,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.leaf = leaf
 			        self.upper = upper
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let upper: Upper
 			    public var marker = "built"
@@ -914,7 +914,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.thing = thing
 			        self.lower = lower
 			    }
-	
+
 			    @Received let thing: Thing
 			    @Instantiated let lower: Lower
 			    public var marker = "built"
@@ -926,13 +926,13 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			    public init(thing: Instantiator<Thing>?) {
 			        self.thing = thing
 			    }
-	
+
 			    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
 			    public var marker = "built"
 			}
 			""",
 		]) { $1 }
-	
+
 		/// `fixtureOfReceivePinnedFromAbove` with a root that builds `Lower` itself too, beneath no required receive of the
 		/// label, and a `Lower` that builds a child, so that one function builds it in both places.
 		private static let fixtureOfReceivePinnedFromAboveInOnePlace: [String: String] = fixtureOfReceivePinnedFromAbove.merging([
@@ -944,7 +944,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.upper = upper
 			        self.lower = lower
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let upper: Upper
 			    @Instantiated let lower: Lower
@@ -958,7 +958,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.thing = thing
 			        self.tail = tail
 			    }
-	
+
 			    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
 			    @Instantiated let tail: Tail
 			    public var marker = "built"
@@ -968,12 +968,12 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			@Instantiable
 			public final class Tail: Instantiable, Marked {
 			    public init() {}
-	
+
 			    public var marker = "built"
 			}
 			""",
 		]) { $1 }
-	
+
 		/// `fixture` with a root that builds `Third` in the second child’s place: `Third` receives `thing` only if available
 		/// as the value and builds `First`, which requires the value.
 		private static let fixtureOfReceiveOnlyIfAvailable: [String: String] = fixture.merging([
@@ -984,7 +984,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.leaf = leaf
 			        self.third = third
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let third: Third
 			    public var marker = "built"
@@ -997,14 +997,14 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.thing = thing
 			        self.first = first
 			    }
-	
+
 			    @Received(onlyIfAvailable: true) let thing: Thing?
 			    @Instantiated let first: First
 			    public var marker = "built"
 			}
 			""",
 		]) { $1 }
-	
+
 		/// `fixtureOfReceiveOnlyIfAvailable` with a `Third` that receives `thing` only if available as an `Instantiator`,
 		/// which `First`’s required receive of the value beneath it pins, built by `Holder`, which the root builds.
 		private static let fixtureOfReceivePinnedWhereverBuilt: [String: String] = fixtureOfReceiveOnlyIfAvailable.merging([
@@ -1015,7 +1015,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.leaf = leaf
 			        self.holder = holder
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let holder: Holder
 			    public var marker = "built"
@@ -1027,7 +1027,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			    public init(third: Third) {
 			        self.third = third
 			    }
-	
+
 			    @Instantiated let third: Third
 			    public var marker = "built"
 			}
@@ -1039,14 +1039,14 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.thing = thing
 			        self.first = first
 			    }
-	
+
 			    @Received(onlyIfAvailable: true) let thing: Instantiator<Thing>?
 			    @Instantiated let first: First
 			    public var marker = "built"
 			}
 			""",
 		]) { $1 }
-	
+
 		/// A root whose leaf builds two children that each receive `thing`, one as a value and one as an `Instantiator`, so
 		/// `mock()` names the two apart. The root also builds the second child through an `Instantiator`. Each class carries
 		/// a marker an override’s closure sets.
@@ -1055,7 +1055,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			public protocol Marked: AnyObject {
 			    var marker: String { get set }
 			}
-	
+
 			public func marked<Value: Marked>(_ value: Value, _ marker: String) -> Value {
 			    value.marker = marker
 			    return value
@@ -1068,7 +1068,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.leaf = leaf
 			        self.secondBuilder = secondBuilder
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let secondBuilder: Instantiator<Second>
 			    public var marker = "built"
@@ -1081,7 +1081,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.first = first
 			        self.second = second
 			    }
-	
+
 			    @Instantiated let first: First
 			    @Instantiated let second: Second
 			    public var marker = "built"
@@ -1093,7 +1093,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			    public init(thing: Thing) {
 			        self.thing = thing
 			    }
-	
+
 			    @Received let thing: Thing
 			    public var marker = "built"
 			}
@@ -1104,7 +1104,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			    public init(thing: Instantiator<Thing>) {
 			        self.thing = thing
 			    }
-	
+
 			    @Received let thing: Instantiator<Thing>
 			    public var marker = "built"
 			}
@@ -1113,12 +1113,12 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			@Instantiable
 			public final class Thing: Instantiable, Marked {
 			    public init() {}
-	
+
 			    public var marker = "built"
 			}
 			""",
 		]
-	
+
 		/// The files that make `fixture` a root that also builds `Inner`, which builds a `thing` of a third type for its child.
 		private static let fixtureOfLabelBuiltBelowRoot: [String: String] = [
 			"Root.swift": """
@@ -1128,7 +1128,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.leaf = leaf
 			        self.inner = inner
 			    }
-	
+
 			    @Instantiated let leaf: Leaf
 			    @Instantiated let inner: Inner
 			    public var marker = "built"
@@ -1141,7 +1141,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			        self.thing = thing
 			        self.user = user
 			    }
-	
+
 			    @Instantiated let thing: Other
 			    @Instantiated let user: User
 			    public var marker = "built"
@@ -1151,7 +1151,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			@Instantiable
 			public final class Other: Instantiable, Marked {
 			    public init() {}
-	
+
 			    public var marker = "built"
 			}
 			""",
@@ -1161,13 +1161,13 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			    public init(thing: Other) {
 			        self.thing = thing
 			    }
-	
+
 			    @Received let thing: Other
 			    public var marker = "built"
 			}
 			""",
 		]
-	
+
 		/// What `body` returns with every internal mock root node records accept laid out from them, and the report of each
 		/// mock root of the run, in the order of the roots' names.
 		@Test
@@ -1190,7 +1190,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 				        self.thing = thing
 				        self.lowerBuilder = lowerBuilder
 				    }
-	
+
 				    @Instantiated let thing: Part
 				    @Received let lowerBuilder: Instantiator<Lower>
 				}
@@ -1201,7 +1201,7 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 				    public init(thing: Thing?) {
 				        self.thing = thing
 				    }
-	
+
 				    @Received(onlyIfAvailable: true) let thing: Thing?
 				}
 				""",
@@ -1214,13 +1214,13 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 			}
-	
+
 			#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
 			#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 			// Any modifications made to this file will be overwritten on subsequent builds.
 			// Please refrain from editing this file directly.
-	
+
 			#if DEBUG
 			extension Root {
 			    /// Overrides for the mock dependency tree.
@@ -1234,23 +1234,23 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 			            )
 			            self.thing_Thing = thing_Thing
 			        }
-	
+
 			        var lowerBuilder: ((Thing?) -> Lower)? { __safeDI_storage.lowerBuilder }
 			        let thing_Thing: Thing?
-	
+
 			        private let __safeDI_storage: __safeDI_Storage
-	
+
 			        private final class __safeDI_Storage {
 			            init(
 			                lowerBuilder: ((Thing?) -> Lower)?
 			            ) {
 			                self.lowerBuilder = lowerBuilder
 			            }
-	
+
 			            let lowerBuilder: ((Thing?) -> Lower)?
 			        }
 			    }
-	
+
 			    static func mock(
 			        thing: Part,
 			        safeDIOverrides: SafeDIOverrides = .init()
