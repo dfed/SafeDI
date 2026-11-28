@@ -242,7 +242,7 @@ public struct TypeFactsReport: Sendable {
 		}
 		// What each place's mock passes `nil`, from the pins along the nodes from the mock root to the place: a pin keys no
 		// variant, so it is read per place.
-		let pins = forMockGeneration ? TypeFactsMockRootPins(graph: graph.graph, edgeIsFill: graph.edgeFacts.map(\.isFill)) : nil
+		let pins = forMockGeneration ? TypeFactsMockRootPins(graph: graph.graph, root: 0, edgeIsFill: graph.edgeFacts.map(\.isFill)) : nil
 		var pathByPlace = [[Int]?]()
 		pathByPlace.reserveCapacity(places.places.count)
 		for place in places.places {
