@@ -122,7 +122,6 @@ struct TypeKeyBodyLoopPlacementTests {
 		))))
 	}
 
-
 	/// The root's `aBuilder: Instantiator<A>` and `bBuilder: Instantiator<B>`, a loop whose members each make the other
 	/// again, and `let x = 1`, which `B` receives: first, or between the two members where `bindsXBetweenMembers`.
 	private static func rootBody(bindsXBetweenMembers: Bool) -> [GeneratedCode] {
