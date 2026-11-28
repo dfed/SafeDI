@@ -7553,7 +7553,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
 	/// derived on CI.
-	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_090, conversions: 0, fills: 422)
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 246, judgedWithNamed: 211, named: 2_528, conversions: 0, fills: 422)
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
@@ -7563,7 +7563,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 693, judgedDrawingRetentionShape: 131, judgedThroughHandWrittenBuilder: 92, unpairedExperiments: 0)
 
 	static let seamCorpusSeedCount = 2_000
-	static let seamCorpusFixtureHash: UInt64 = 0x1313E68FFFFF5176
+	static let seamCorpusFixtureHash: UInt64 = 0x31D8637B5C6DA7D7
 	static let seamCorpusAcceptedSeedCount = 609
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x38D97AC726E69107
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
@@ -7730,7 +7730,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsSendableWrapper: 14,
 		.carriedLevelFillReadsSendableWrapperAlone: 14,
 		.reenteredFillSendableCall: 13,
-		.seamDependencyChainReadThroughView: 11,
+		.seamDependencyChainReadThroughView: 12,
 		.seamDependencyReadThroughView: 77,
 		.spelledAliasNamingProtocolWithoutAny: 23,
 		.spelledAliasOnlyReceiveOfMockedChild: 13,
