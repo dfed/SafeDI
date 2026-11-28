@@ -60,16 +60,55 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			)
 		}
 		// Each world holds its root, `panel`, `store` and `clock`, of which the last three are the same in every world. A
-		// world builds its root and what its root builds itself, `panel`, and calls the shared `store` from `panel`.
+		// world builds its root and what its root builds itself, `panel`, and calls the shared `store` from `panel`. The
+		// shared graph holds `store` and `clock` once, a variant each, and every world's call lands on `store`'s.
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 6,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
 				shareableDeclarations: ["1: panel: Panel", "2: store: SessionStore", "3: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1),
-					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1),
-					.init(mockedType: "GammaScreen", rootDeclaration: 5, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1),
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0"]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0"]),
+					.init(mockedType: "GammaScreen", rootDeclaration: 5, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0"]),
+				],
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_sharesVariantOnlyBetweenWorldsWhoseCallsHandItOneKey_whenWorldsDeclareValueItReadsInOtherForms() async throws {
+		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.type("AlphaScreen", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel")]),
+					Self.type("BetaScreen", mocked: true, instantiating: [("theme", "LazilyInstantiated<Theme>"), ("panel", "Panel")]),
+					Self.type("GammaScreen", mocked: true, instantiating: [("theme", "Theme"), ("panel", "Panel")]),
+					Self.type("Panel", instantiating: [("store", "Store")]),
+					Self.type("Store", receiving: [("theme", "Theme")]),
+					Self.type("Theme"),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		// `store` reads `theme` from above, which `AlphaScreen` and `GammaScreen` declare by value and `BetaScreen` lazily:
+		// their calls of `store` hand it two keys, so the shared graph holds two variants of it, the first of which both
+		// worlds that declare `theme` by value call.
+		#expect(reports == [
+			MockWorldsTableReport(
+				declarationCount: 7,
+				sharedDeclarationCount: 1,
+				sharedVariantCount: 2,
+				shareableDeclarations: ["1: theme: Theme", "2: panel: Panel", "3: store: Store", "5: theme: LazilyInstantiated<Theme>"],
+				differences: [],
+				worlds: [
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [1], sharedDeclarationParents: ["0 ← top 2"]),
+					.init(mockedType: "GammaScreen", rootDeclaration: 6, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
 				],
 			),
 		])
@@ -96,11 +135,13 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 5,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
 				shareableDeclarations: ["1: panel: Panel", "2: store: SessionStore", "3: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1),
-					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 3, shareableDeclarationCount: 2, topDeclarationCount: 2, frontierDeclarationCount: 1),
+					.init(mockedType: "AlphaScreen", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0"]),
+					.init(mockedType: "BetaScreen", rootDeclaration: 4, declarationCount: 3, shareableDeclarationCount: 2, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [1], sharedDeclarationParents: ["1 ← top 2"]),
 				],
 			),
 		])
@@ -131,10 +172,12 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 9,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
 				shareableDeclarations: ["6: banner: Banner", "7: icon: Icon", "8: badge: Badge"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Dashboard", rootDeclaration: 0, declarationCount: 9, shareableDeclarationCount: 3, topDeclarationCount: 7, frontierDeclarationCount: 1),
+					.init(mockedType: "Dashboard", rootDeclaration: 0, declarationCount: 9, shareableDeclarationCount: 3, topDeclarationCount: 7, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 6", "1 ← shared 0"]),
 				],
 			),
 		])
@@ -175,10 +218,12 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 5,
+				sharedDeclarationCount: 0,
+				sharedVariantCount: 0,
 				shareableDeclarations: [],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 0, topDeclarationCount: 5, frontierDeclarationCount: 0),
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 0, topDeclarationCount: 5, frontierDeclarationCount: 0, sharedVariantsCalled: [], sharedDeclarationParents: []),
 				],
 			),
 		])
@@ -208,11 +253,13 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 7,
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
 				shareableDeclarations: ["1: panel: Panel", "2: helper: Helper", "3: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1),
-					.init(mockedType: "Root", rootDeclaration: 4, declarationCount: 5, shareableDeclarationCount: 2, topDeclarationCount: 3, frontierDeclarationCount: 1),
+					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 1", "1 ← shared 0"]),
+					.init(mockedType: "Root", rootDeclaration: 4, declarationCount: 5, shareableDeclarationCount: 2, topDeclarationCount: 3, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 5", "1 ← shared 0"]),
 				],
 			),
 		])
@@ -273,18 +320,22 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 2,
+				sharedDeclarationCount: 0,
+				sharedVariantCount: 0,
 				shareableDeclarations: [],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Panel", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 0, topDeclarationCount: 2, frontierDeclarationCount: 0),
+					.init(mockedType: "Panel", rootDeclaration: 0, declarationCount: 2, shareableDeclarationCount: 0, topDeclarationCount: 2, frontierDeclarationCount: 0, sharedVariantsCalled: [], sharedDeclarationParents: []),
 				],
 			),
 			MockWorldsTableReport(
 				declarationCount: 5,
+				sharedDeclarationCount: 1,
+				sharedVariantCount: 1,
 				shareableDeclarations: ["4: clock: Clock"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Root", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 1, topDeclarationCount: 4, frontierDeclarationCount: 1),
+					.init(mockedType: "Root", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 1, topDeclarationCount: 4, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 3"]),
 				],
 			),
 		])
@@ -292,7 +343,7 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_makesDeclarationUnshareable_whenItsSubtreeDeclaresLabelItReceivesOnlyIfAvailableThatMockRootMayPin() async throws {
+	mutating func generate_makesDeclarationUnshareable_whenItsSubtreeReceivesOnlyIfAvailableLabelMockRootMayPin() async throws {
 		let reports = try await Self.tableReports(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -307,16 +358,18 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		// `feed` requires `session` and `widget` receives it only if available, so a mock root may pin a receive of it.
-		// `panel` declares it above `widget`, whose read a world's pins would answer beneath `panel`, so `panel` and `page`
-		// above it are built per world; `widget`, `feed` and `session` are each shareable.
+		// `feed` requires `session` and `widget` receives it only if available, so a mock root may pin a receive of it:
+		// `widget`'s mock read is answered by a world's pins, so `widget` and everything above it, `panel` and `page`, are
+		// built per world. `feed` and `session` are shareable, and the world calls each from `panel`, table ID 2.
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 6,
-				shareableDeclarations: ["3: session: Session", "4: widget: Widget", "5: feed: Feed"],
+				sharedDeclarationCount: 2,
+				sharedVariantCount: 2,
+				shareableDeclarations: ["3: session: Session", "5: feed: Feed"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 3, topDeclarationCount: 3, frontierDeclarationCount: 3),
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 6, shareableDeclarationCount: 2, topDeclarationCount: 4, frontierDeclarationCount: 2, sharedVariantsCalled: [0, 1], sharedDeclarationParents: ["0 ← top 2", "1 ← top 2"]),
 				],
 			),
 		])
@@ -344,10 +397,12 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 5,
+				sharedDeclarationCount: 1,
+				sharedVariantCount: 1,
 				shareableDeclarations: ["3: session: LazilyInstantiated<Session>"],
 				differences: [],
 				worlds: [
-					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 1, topDeclarationCount: 4, frontierDeclarationCount: 1),
+					.init(mockedType: "Screen", rootDeclaration: 0, declarationCount: 5, shareableDeclarationCount: 1, topDeclarationCount: 4, frontierDeclarationCount: 1, sharedVariantsCalled: [0], sharedDeclarationParents: ["0 ← top 2"]),
 				],
 			),
 		])
@@ -387,10 +442,12 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 			case 1: 4
 			default: index + 5
 			}
-			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1))
+			worlds.append(.init(mockedType: "Screen" + (index < 10 ? "0" : "") + String(index), rootDeclaration: rootDeclaration, declarationCount: 4, shareableDeclarationCount: 3, topDeclarationCount: 2, frontierDeclarationCount: 1, sharedVariantsCalled: [index.isMultiple(of: 2) ? 0 : 1], sharedDeclarationParents: index.isMultiple(of: 2) ? ["0 ← top 1", "1 ← shared 0"] : ["2 ← top 5", "1 ← shared 2"]))
 		}
 		let expected = [MockWorldsTableReport(
 			declarationCount: 27,
+			sharedDeclarationCount: 3,
+			sharedVariantCount: 3,
 			shareableDeclarations: ["1: storePage: StorePage", "2: store: Store", "3: clock: Clock", "5: feedPage: FeedPage", "6: feed: Feed"],
 			differences: [],
 			worlds: worlds,

@@ -42,8 +42,10 @@
 /// - receives a label only if available that the module's worlds declare lazily anywhere: what a `nil` answer keys as
 ///   there (`TypeFactsGraph`'s rule A) is folded over every call into the declaration in its world;
 /// - receives a label only if available that a mock root may pin (some world both requires the label and receives it
-///   only if available), while a declaration it reaches requires or declares the label: there a world's own pins would
-///   answer the read beneath the frontier, decided over the whole world (`TypeFactsMockRootPins`).
+///   only if available): its mock read (`ReadChannel.mock`) is answered by what the world's root pins above it, a context
+///   of the world's own pin sets, and beneath it by what the world's required receives pin (`TypeFactsMockRootPins`), so
+///   the shared graph, which pins nothing, answers no such read. This is wider than needed, the frontier's call could
+///   carry the context by value, but it keeps every key the shared graph is seeded with world-independent.
 ///
 /// A mock root's own declaration is never shareable, and a world keeps the declarations its root builds itself in its
 /// own graph whatever the table says (`topDeclarations(ofWorld:)`): their records are made for that world alone. These
@@ -113,10 +115,9 @@ struct MockWorldsTable: Sendable {
 		let nodes = graph.nodes
 		var isExcluded = Self.loopDeclarations(of: graph, nodesByComponent: nodesByComponent)
 		isExcluded[0] = true
-		// Each node's receives only if available from above, its required receives and declarations, and the labels it
-		// declares lazily, as the pins and the answers read them.
+		// Each node's receives only if available from above, the labels the module requires, and those it declares lazily,
+		// as the pins and the answers read them.
 		var onlyIfAvailableLabels = [Set<String>](repeating: [], count: nodes.count)
-		var requiredOrDeclaredLabels = [Set<String>](repeating: [], count: nodes.count)
 		var requiredLabels = Set<String>()
 		var lazilyDeclaredLabels = Set<String>()
 		for (index, node) in nodes.enumerated() {
@@ -137,12 +138,10 @@ struct MockWorldsTable: Sendable {
 					onlyIfAvailableLabels[index].insert(receive.property.label)
 				}
 				for (label, _) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall) {
-					requiredOrDeclaredLabels[index].insert(label)
-					requiredLabels.insert(label)
+						requiredLabels.insert(label)
 				}
 				for (property, _) in scope.sortedDeclaredPropertyForms {
-					requiredOrDeclaredLabels[index].insert(property.label)
-					if property.propertyType.isLazilyInstantiated {
+						if property.propertyType.isLazilyInstantiated {
 						lazilyDeclaredLabels.insert(property.label)
 					}
 				}
@@ -151,25 +150,19 @@ struct MockWorldsTable: Sendable {
 		let receivedOnlyIfAvailableLabels = onlyIfAvailableLabels.reduce(into: Set<String>()) { $0.formUnion($1) }
 		let pinnableLabels = requiredLabels.intersection(receivedOnlyIfAvailableLabels)
 
-		// What each component's subtree receives only if available and requires or declares. A component's number is
-		// lower than that of every other component that reaches it.
+		// What each component's subtree receives only if available. A component's number is lower than that of every other
+		// component that reaches it.
 		var subtreeOnlyIfAvailableByComponent = [Set<String>](repeating: [], count: graph.componentCount)
-		var subtreeRequiredOrDeclaredByComponent = [Set<String>](repeating: [], count: graph.componentCount)
 		for (component, componentNodes) in nodesByComponent.enumerated() {
 			var onlyIfAvailable = Set<String>()
-			var requiredOrDeclared = Set<String>()
 			for node in componentNodes {
 				onlyIfAvailable.formUnion(onlyIfAvailableLabels[node])
-				requiredOrDeclared.formUnion(requiredOrDeclaredLabels[node])
 				for target in graph.edges(from: node) where Int(graph.componentByNode[Int(target)]) != component {
 					onlyIfAvailable.formUnion(subtreeOnlyIfAvailableByComponent[Int(graph.componentByNode[Int(target)])])
-					requiredOrDeclared.formUnion(subtreeRequiredOrDeclaredByComponent[Int(graph.componentByNode[Int(target)])])
 				}
 			}
 			subtreeOnlyIfAvailableByComponent[component] = onlyIfAvailable
-			subtreeRequiredOrDeclaredByComponent[component] = requiredOrDeclared
-			let isPinnedBeneath = !onlyIfAvailable.intersection(pinnableLabels).isDisjoint(with: requiredOrDeclared)
-			if isPinnedBeneath || !onlyIfAvailable.isDisjoint(with: lazilyDeclaredLabels) {
+			if !onlyIfAvailable.isDisjoint(with: pinnableLabels) || !onlyIfAvailable.isDisjoint(with: lazilyDeclaredLabels) {
 				for node in componentNodes {
 					isExcluded[node] = true
 				}
@@ -354,11 +347,13 @@ struct MockWorldsTable: Sendable {
 		return (top, frontier)
 	}
 
-	/// What a test observes of the table: `differences` every way a world's facts built from the shared graph differ from
-	/// those of the world built whole.
-	func report(differences: [String]) -> MockWorldsTableReport {
+	/// What a test observes of the table and of the shared graph built from it: `differences` every way a world's facts
+	/// built from the shared graph differ from those of the world built whole.
+	func report(shared: MockWorldsSharedGraph, differences: [String]) -> MockWorldsTableReport {
 		MockWorldsTableReport(
 			declarationCount: interning.declarationCount,
+			sharedDeclarationCount: shared.graph.graph.nodes.count,
+			sharedVariantCount: shared.graph.variants.count,
 			shareableDeclarations: shareableByDeclaration.indices.filter { shareableByDeclaration[$0] }.map { id in
 				let declaration = declaration(ofID: Int32(id))
 				return "\(id): \(declaration.property?.asSource ?? declaration.scope.instantiable.concreteInstantiable.asSource)"
@@ -375,6 +370,18 @@ struct MockWorldsTable: Sendable {
 					shareableDeclarationCount: declarations.count(where: { shareableByDeclaration[Int($0)] }),
 					topDeclarationCount: top.count,
 					frontierDeclarationCount: frontier.count,
+					sharedVariantsCalled: shared.worlds[world].frontierCalls.map { Int($0.sharedVariant) },
+					sharedDeclarationParents: shared.worlds[world].parentsByDeclaration.map { declaration, parents in
+						let parentTexts = parents.map { parent in
+							switch parent {
+							case let .top(id):
+								"top \(id)"
+							case let .shared(node):
+								"shared \(node)"
+							}
+						}
+						return "\(declaration) ← \(parentTexts.joined(separator: ", "))"
+					},
 				)
 			},
 		)
@@ -434,13 +441,15 @@ public enum MockWorldsTableObservation {
 public struct MockWorldsTableReport: Equatable, Sendable {
 	/// One mock root's world.
 	public struct World: Equatable, Sendable {
-		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, topDeclarationCount: Int, frontierDeclarationCount: Int) {
+		public init(mockedType: String, rootDeclaration: Int, declarationCount: Int, shareableDeclarationCount: Int, topDeclarationCount: Int, frontierDeclarationCount: Int, sharedVariantsCalled: [Int], sharedDeclarationParents: [String]) {
 			self.mockedType = mockedType
 			self.rootDeclaration = rootDeclaration
 			self.declarationCount = declarationCount
 			self.shareableDeclarationCount = shareableDeclarationCount
 			self.topDeclarationCount = topDeclarationCount
 			self.frontierDeclarationCount = frontierDeclarationCount
+			self.sharedVariantsCalled = sharedVariantsCalled
+			self.sharedDeclarationParents = sharedDeclarationParents
 		}
 
 		/// The mocked type.
@@ -454,12 +463,21 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 		/// How many declarations the world builds in its own graph: its root, those its root builds, and those not
 		/// shareable.
 		public let topDeclarationCount: Int
-		/// How many shareable declarations its own declarations lead to: its calls into the shared graph.
+		/// How many shareable declarations its own declarations lead to: the declarations it calls in the shared graph.
 		public let frontierDeclarationCount: Int
+		/// The shared variant each call of the world's own variants into the shared graph lands on, in the world's order of
+		/// variants, each variant's calls in edge order.
+		public let sharedVariantsCalled: [Int]
+		/// Each shared declaration the world reaches, by its position in the shared graph, in the order the world first
+		/// reaches them, with the parents the world reaches it through, in the world's order: `top` and the table ID of a
+		/// declaration of the world's own graph, or `shared` and a position in the shared graph.
+		public let sharedDeclarationParents: [String]
 	}
 
-	public init(declarationCount: Int, shareableDeclarations: [String], differences: [String], worlds: [World]) {
+	public init(declarationCount: Int, sharedDeclarationCount: Int, sharedVariantCount: Int, shareableDeclarations: [String], differences: [String], worlds: [World]) {
 		self.declarationCount = declarationCount
+		self.sharedDeclarationCount = sharedDeclarationCount
+		self.sharedVariantCount = sharedVariantCount
 		self.shareableDeclarations = shareableDeclarations
 		self.differences = differences
 		self.worlds = worlds
@@ -467,6 +485,10 @@ public struct MockWorldsTableReport: Equatable, Sendable {
 
 	/// How many distinct declarations the module's mock worlds hold.
 	public let declarationCount: Int
+	/// How many declarations the shared graph holds, each once whatever number of worlds reach it.
+	public let sharedDeclarationCount: Int
+	/// How many variants the shared graph holds: one per body the worlds' calls reach with one key.
+	public let sharedVariantCount: Int
 	/// Each shareable declaration, in ID order: its ID and its property (the type, for a declaration with none).
 	public let shareableDeclarations: [String]
 	/// Each way a world's facts taken from the shared graph differ from those of the world built whole, which a test fails

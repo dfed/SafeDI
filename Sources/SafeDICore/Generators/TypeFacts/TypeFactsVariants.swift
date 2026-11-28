@@ -62,7 +62,7 @@ struct VariantBinding: Equatable, Sendable {
 }
 
 /// The bodies of a world: one variant per (node, family, answers to the node's reads from above, as `key` projects
-/// them), found by a worklist from the root. A call edge hands its callee the caller's answers, replaced by what the
+/// them), found by a worklist from the root, or from the seeds of a graph called from outside it. A call edge hands its callee the caller's answers, replaced by what the
 /// caller binds at that edge, projected onto the callee's reads; a key met again is the variant made before, which is
 /// where a recursive type closes. It ends because answers are compared by value, never by the declaration that gave
 /// them, and each node has finitely many.
@@ -118,7 +118,53 @@ struct TypeFactsVariants: Sendable {
 		refine: ((_ edge: Int, _ read: Int32, _ callerKey: Int32) -> Int32?)? = nil,
 		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int = TypeFactsVariants.hash,
 	) {
+		var rootKeys = [Int32]()
+		var rootSources = [AnswerSource]()
+		reads.rows.forEachColumn(inRow: 0) { read, _ in
+			let answer = rootAnswer(read)
+			rootKeys.append(key(read, answer?.answer ?? -1, 0))
+			rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
+		}
+		self.init(graph: graph, reads: reads, seeds: [Seed(node: 0, family: .plain, keys: rootKeys)], rootSources: rootSources, binding: binding, family: family, key: key, madeAgain: madeAgain, refine: refine, bucket: bucket)
+	}
+
+	/// A body the worklist starts from where no root of the graph is: a call made from outside the graph, of `node` in
+	/// `family`, with one key per read of the node's reads from above, in read order, which the caller interned in the
+	/// graph's answers.
+	struct Seed: Hashable, Sendable {
+		let node: Int32
+		let family: VariantFamily
+		let keys: [Int32]
+	}
+
+	/// The variants of a graph whose bodies are called from outside it, from `seeds` instead of a root: the mock worlds'
+	/// shared graph (`MockWorldsSharedGraph`), each of whose seeds is a call a mock world's top graph makes into it. Two
+	/// seeds of one key are one variant. A seed's variant is called from outside, so it is never called once.
+	init(
+		graph: OrderedGraph<some Hashable & Sendable>,
+		reads: ReadsFromAbove,
+		seeds: [Seed],
+		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
+		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
+	) {
+		self.init(graph: graph, reads: reads, seeds: seeds, rootSources: [], binding: binding, family: family, key: key, madeAgain: nil, refine: nil, bucket: TypeFactsVariants.hash)
+	}
+
+	private init(
+		graph: OrderedGraph<some Hashable & Sendable>,
+		reads: ReadsFromAbove,
+		seeds: [Seed],
+		rootSources: [AnswerSource],
+		binding: (_ edge: Int, _ read: Int32) -> VariantBinding?,
+		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
+		key: (_ read: Int32, _ answer: Int32, _ target: Int32) -> Int32,
+		madeAgain: (edges: MadeAgainEdges, binding: (_ node: Int, _ read: Int32) -> VariantBinding?)?,
+		refine: ((_ edge: Int, _ read: Int32, _ callerKey: Int32) -> Int32?)?,
+		bucket: (_ node: Int32, _ family: VariantFamily, _ keys: [Int32]) -> Int,
+	) {
 		var columns = Columns()
+		columns.rootSources = rootSources
 		var bucketByHash = [Int: Int32]()
 		var nextInBucket = [Int32]()
 		var scratchKeys = [Int32]()
@@ -141,12 +187,11 @@ struct TypeFactsVariants: Sendable {
 			return made
 		}
 
-		reads.rows.forEachColumn(inRow: 0) { read, _ in
-			let answer = rootAnswer(read)
-			scratchKeys.append(key(read, answer?.answer ?? -1, 0))
-			columns.rootSources.append(answer.map { .bound($0.declaration, answer: $0.answer) } ?? .none)
+		var seedVariants = [Int32]()
+		for seed in seeds {
+			scratchKeys = seed.keys
+			seedVariants.append(variant(of: seed.node, family: seed.family))
 		}
-		_ = variant(of: 0, family: .plain)
 		var next = 0
 		/// Appends the call of `target` from `caller`, a variant of `node`, with the answers `binding` gives and the caller's
 		/// own passed through for the rest.
@@ -203,9 +248,14 @@ struct TypeFactsVariants: Sendable {
 		for callee in columns.callees {
 			callsOfVariant[Int(callee)] += 1
 		}
-		isCalledOnce = columns.nodes.indices.map { variant in
-			variant != 0 && callsOfVariant[variant] == 1 && !graph.isOnCycle(Int(columns.nodes[variant]))
+		var isSeedVariant = [Bool](repeating: false, count: columns.nodes.count)
+		for variant in seedVariants {
+			isSeedVariant[Int(variant)] = true
 		}
+		isCalledOnce = columns.nodes.indices.map { variant in
+			!isSeedVariant[variant] && callsOfVariant[variant] == 1 && !graph.isOnCycle(Int(columns.nodes[variant]))
+		}
+		self.seedVariants = seedVariants
 		self.columns = columns
 		self.work = work
 	}
@@ -260,6 +310,9 @@ struct TypeFactsVariants: Sendable {
 	var rootSources: [AnswerSource] {
 		columns.rootSources
 	}
+
+	/// The variant each seed is, in the order of the seeds: the root's alone, 0, in a graph built from its root.
+	let seedVariants: [Int32]
 
 	/// Whether each variant is called by exactly one call and its node is on no cycle: a fact the layout may use later to
 	/// build it in line. It is not whether a body is a function, which today's layout decides by its own rule

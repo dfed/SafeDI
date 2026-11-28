@@ -132,13 +132,21 @@ struct TypeFactsGraph: Sendable {
 	///   - mockRootNames: What a mock root's lowering names that the node records of its world read; empty for a
 	///     production root's world, and read by no fact of the graph.
 	init(root: ConstructionScope, forMockGeneration: Bool, mockRootNames: MockRootNames = MockRootNames()) {
+		self.init(roots: [TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)], forMockGeneration: forMockGeneration, mockRootNames: mockRootNames, seeds: nil)
+	}
+
+	/// A world's graph from its root where `seeds` is `nil`; otherwise the mock worlds' shared graph over `roots`, the
+	/// declarations the mock worlds' top graphs call into, whose variants start from `seeds`, those calls by value
+	/// (`MockWorldsSharedGraph`). The shared graph has no root: it pins nothing (`mockRootPins` is `nil`, since the table
+	/// shares no declaration a pin can reach) and holds no place.
+	init(roots: [TypeFactsDeclaration], forMockGeneration: Bool, mockRootNames: MockRootNames, seeds: [Seed]?) {
 		// Building the graph is an edge: it reads each record's properties and labels once per node, and interns them. The
 		// walk asks for a node's edges once, when it first reaches the node, so in node order, and each edge's entry among
 		// its scope's properties to generate, or among its fills, is appended in edge order.
 		var edgeEntries = [Int32]()
 		var edgeIsFill = [Bool]()
 		var fillHoles = [(edge: Int32, hole: SeamSignature.Hole)]()
-		let graph = OrderedGraph(root: TypeFactsDeclaration(scope: root, property: nil, propertyID: nil, erasedToConcreteExistential: false, isFill: false)) { declaration in
+		let graph = OrderedGraph(roots: roots) { declaration in
 			let edges = declaration.edges
 			for edge in edges {
 				if let filledHole = edge.filledHole {
@@ -418,8 +426,12 @@ struct TypeFactsGraph: Sendable {
 			followsEdge: followsEdge,
 		).rows
 		// A hole is a place only in a seam's own tree or a public mock's: in any other world it is a property passed `nil`.
-		let rootInstantiable = nodes[0].scope.instantiable
-		let holesArePlaces = rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
+		// The shared graph holds no place, and may hold no node.
+		let holesArePlaces = if seeds == nil, let rootInstantiable = nodes.first?.scope.instantiable {
+			rootInstantiable.generatesDependencyTree || (forMockGeneration && rootInstantiable.generateMock == .public)
+		} else {
+			false
+		}
 		// Whether a hole is beneath each node along every edge, fills included: a body whose subtree reads a case, its own or
 		// through a fill it hands a seam it calls, reads it from the carrier of the function that encloses it.
 		let casesBeneath = holesArePlaces && !forMockGeneration ? ReadsFromAbove(
@@ -658,7 +670,15 @@ struct TypeFactsGraph: Sendable {
 			))
 		}
 
-		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read.
+		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read, and so does
+		// a seed's answer, the declaration of a top graph's that answers a read.
+		for seed in seeds ?? [] {
+			for entry in seed.keys {
+				if case let .answer(answer) = entry.key, let property = answer.property {
+					_ = properties.id(of: property)
+				}
+			}
+		}
 		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
@@ -807,7 +827,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let mockRootPins = forMockGeneration ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
+		let mockRootPins = forMockGeneration && seeds == nil ? TypeFactsMockRootPins(graph: graph, edgeIsFill: edgeIsFill, labels: labels) : nil
 		self.mockRootPins = mockRootPins
 		let edgeOpens = edgeFacts.map(\.opens)
 		let answers = Self.answers(
@@ -835,6 +855,7 @@ struct TypeFactsGraph: Sendable {
 			),
 			madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) },
 			mockRootPins: mockRootPins,
+			seeds: seeds,
 		)
 		mockPinContexts = TypeFactsMockRootPins.ContextColumns(contexts: answers.mockPinContexts, answerCount: answers.texts.count)
 		answerIsBeingBuilt = answers.isBeingBuilt
@@ -842,10 +863,16 @@ struct TypeFactsGraph: Sendable {
 		answerTexts = answers.texts
 		answerKeys = answers.keys
 		answerProperties = answers.properties
+		answerKindPositions = answers.kindPositions
+		answerIsInReadForm = answers.isInReadForm
 		variants = answers.variants
 		let oneFunctionGroups = Self.twinGroups(of: answers.variants, cycleIDs: cycleIDs, twins: twins, isOnCycle: graph.isOnCycle, readColumn: readColumn, readOffsets: readOffsets)
 		self.oneFunctionGroups = oneFunctionGroups
-		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: oneFunctionGroups)
+		var initiallyMarked = [Int]()
+		for (seed, variant) in zip(seeds ?? [], answers.variants.seedVariants) where seed.buildsInSendableFunction {
+			initiallyMarked.append(Int(variant))
+		}
+		variantBuildsInSendableFunction = Self.sendableMarks(of: answers.variants, graph: graph, edgeOpens: edgeOpens, oneFunctionGroups: oneFunctionGroups, initiallyMarked: initiallyMarked)
 		let isBeingBuilt = answers.isBeingBuilt
 		let variantsOfAnswers = answers.variants
 		let readsByID = readInterner.values
@@ -888,6 +915,12 @@ struct TypeFactsGraph: Sendable {
 
 	/// Each answer ID's declaration, by the world's property ID: what `providesFormRead(by:_:beneath:)` compares.
 	let answerProperties: [Int32]
+
+	/// Each answer ID's declared kind, by its position among `Property.PropertyType.allCases`, which is not `Sendable`,
+	/// and whether a wrapper answering a read only if available is in the form the callee's subtree reads: what a seed of
+	/// the shared graph carries of a key by value (`MockWorldsSharedGraph`).
+	let answerKindPositions: [Int]
+	let answerIsInReadForm: [Bool]
 
 	/// The variants of the world's bodies, answered by what each node binds at its edges (`answers(of:reads:…)`).
 	let variants: TypeFactsVariants
@@ -1023,7 +1056,8 @@ struct TypeFactsGraph: Sendable {
 		family: (_ edge: Int, _ callerFamily: VariantFamily) -> VariantFamily,
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
 		mockRootPins: TypeFactsMockRootPins?,
-	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32], mockPinContexts: [Int32: TypeFactsMockRootPins.Context]) {
+		seeds: [Seed]?,
+	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32], kindPositions: [Int], isInReadForm: [Bool], mockPinContexts: [Int32: TypeFactsMockRootPins.Context]) {
 		var answerIDByText = [String: Int32]()
 		var texts = [String]()
 		var isBeingBuilt = [Bool]()
@@ -1212,7 +1246,9 @@ struct TypeFactsGraph: Sendable {
 			}
 			rankOffsets[node + 1] = Int32(slotByRank.count)
 		}
-		let rootSlotCount = slotByRank[0..<Int(rankOffsets[1])].count { $0 >= 0 }
+		// The shared graph has no root: its seeds' reads are answered by the calls into it, and the table shares nothing
+		// whose `nil` keys apart (`MockWorldsTable`).
+		let rootSlotCount = seeds == nil ? slotByRank[0..<Int(rankOffsets[1])].count { $0 >= 0 } : 0
 		/// The slot of `read` among `node`'s optional reads from above, nil where it reads no such read.
 		func optionalSlot(of read: Int32, in node: Int) -> Int? {
 			guard isOptionalRead[Int(read)], let rank = reads.rows.rank(of: read, inRow: node) else { return nil }
@@ -1293,6 +1329,63 @@ struct TypeFactsGraph: Sendable {
 				optionalSendableLazilyInstantiatedParameterKey
 			}
 		}
+		func key(_ readID: Int32, _ answer: Int32, _ target: Int32) -> Int32 {
+			switch readTable[Int(readID)].channel {
+			case .optional, .optionalValue:
+				// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
+				// twin the path entered, and wherever else the label is bound (rule 3, case 2).
+				// An answer already in the form every receive of the label declares passes through the one optional
+				// parameter `nil` passes through: only a wrapper answering a read of its value keys apart. The form is the
+				// read's, never a place's, so which places a type has, and their order, decide nothing.
+				if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])),
+				   !isInReadForm[Int(answer)]
+				{
+					optionalParameterKey(of: kinds[Int(answer)])
+				} else if answer >= 0, isInReadForm[Int(answer)] {
+					optionalParameterKey(of: nil)
+				} else {
+					nilKey(of: readID, at: target)
+				}
+			case .alias:
+				// An alias's text follows only the form of the declaration it is bound to: the value itself, or a lazy
+				// wrapper's instance.
+				answer < 0 ? answer : optionalParameterKey(of: kinds[Int(answer)])
+			case .value, .madeAgain, .mock, .carrier, .fill, .family, .override:
+				answer < 0 ? answer : keys[Int(answer)]
+			}
+		}
+		if let seeds {
+			// A seed's keys, by value, interned as the graph's own: each read of the seed's declaration from above takes the
+			// key its call hands it, a read it hands none takes none.
+			let variants = TypeFactsVariants(
+				graph: graph,
+				reads: reads,
+				seeds: seeds.compactMap { seed in
+					guard let node = graph.index(of: seed.declaration) else { return nil }
+					var keyByRead = [Seed.Read: Seed.Key]()
+					for entry in seed.keys {
+						keyByRead[entry.read] = entry.key
+					}
+					var keys = [Int32]()
+					reads.rows.forEachColumn(inRow: node) { readID, _ in
+						let read = readTable[Int(readID)]
+						switch keyByRead[Seed.Read(channel: read.channel, label: read.label >= 0 ? labels.values[Int(read.label)] : nil)] {
+						case let .parameter(key):
+							keys.append(key)
+						case let .answer(seedAnswer):
+							keys.append(answer(text: seedAnswer.text, beingBuilt: seedAnswer.isBeingBuilt, madeAgain: seedAnswer.isMadeAgain, keyText: seedAnswer.text, kind: seedAnswer.kind, property: seedAnswer.property.flatMap(properties.existingID(of:)) ?? -1, inReadForm: seedAnswer.isInReadForm))
+						case nil:
+							keys.append(-1)
+						}
+					}
+					return TypeFactsVariants.Seed(node: Int32(node), family: seed.family, keys: keys)
+				},
+				binding: { edge, readID in binding(at: edge, of: readID) },
+				family: family,
+				key: key,
+			)
+			return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, kinds.map(OnlyIfAvailableForm.position(of:)), isInReadForm, mockPinContexts)
+		}
 		let variants = TypeFactsVariants(
 			graph: graph,
 			reads: reads,
@@ -1304,31 +1397,7 @@ struct TypeFactsGraph: Sendable {
 			},
 			binding: { edge, readID in binding(at: edge, of: readID) },
 			family: family,
-			key: { readID, answer, target in
-				switch readTable[Int(readID)].channel {
-				case .optional, .optionalValue:
-					// Rule 1, where a value or wrapper still being built is passed `nil`, as a read nothing answers is: whichever
-					// twin the path entered, and wherever else the label is bound (rule 3, case 2).
-					// An answer already in the form every receive of the label declares passes through the one optional
-					// parameter `nil` passes through: only a wrapper answering a read of its value keys apart. The form is the
-					// read's, never a place's, so which places a type has, and their order, decide nothing.
-					if answer >= 0, !(isBeingBuilt[Int(answer)] && isTwin(kinds[Int(answer)])),
-					   !isInReadForm[Int(answer)]
-					{
-						optionalParameterKey(of: kinds[Int(answer)])
-					} else if answer >= 0, isInReadForm[Int(answer)] {
-						optionalParameterKey(of: nil)
-					} else {
-						nilKey(of: readID, at: target)
-					}
-				case .alias:
-					// An alias's text follows only the form of the declaration it is bound to: the value itself, or a lazy
-					// wrapper's instance.
-					answer < 0 ? answer : optionalParameterKey(of: kinds[Int(answer)])
-				case .value, .madeAgain, .mock, .carrier, .fill, .family, .override:
-					answer < 0 ? answer : keys[Int(answer)]
-				}
-			},
+			key: key,
 			madeAgain: madeAgain.map { madeAgain in
 				(madeAgain.edges, { node, readID in madeAgainAnswer(at: node, for: readTable[Int(readID)]) })
 			},
@@ -1341,7 +1410,7 @@ struct TypeFactsGraph: Sendable {
 				}
 			},
 		)
-		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, mockPinContexts)
+		return (variants, isBeingBuilt, isMadeAgain, texts, keys, answerProperties, kinds.map(OnlyIfAvailableForm.position(of:)), isInReadForm, mockPinContexts)
 	}
 
 	/// The declarations in the order a walk of the root's edges, depth first, first reaches each. A node keeps its scope
@@ -1761,8 +1830,11 @@ struct TypeFactsGraph: Sendable {
 	/// since a loop's members are all plain or all `Sendable` (a mixed loop is rejected), and a twin group's `Sendable`
 	/// twin requires its type to be `Sendable`, which a plain loop member, holding a plain builder, is not. Check 34 holds
 	/// every made-again call to it.
-	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]]) -> [Bool] {
+	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]], initiallyMarked: [Int] = []) -> [Bool] {
 		var marks = [Bool](repeating: false, count: variants.count)
+		for variant in initiallyMarked {
+			marks[variant] = true
+		}
 		var groupOfVariant = [Int](repeating: -1, count: variants.count)
 		for (group, members) in oneFunctionGroups.enumerated() {
 			for member in members {

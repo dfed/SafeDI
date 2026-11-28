@@ -254,7 +254,8 @@ protocol TypeFactsWorld {
 	/// The labels the node's subtree reads from above it, each once, in read order.
 	func labels(of declaration: DeclarationID) -> ArraySlice<WorldLabelID>
 
-	/// The roots the world is built from: one tonight. A world of several roots (every production root and seam, or every
+	/// The roots the world is built from: one for a world's graph, one per seed for the mock worlds' shared graph
+	/// (`MockWorldsSharedGraph`). A world of several roots (every production root and seam, or every
 	/// mock root, of one validation call) seeds a variant per root from that root's answers and shares the rest where
 	/// they agree; nothing per root lives on a variant.
 	var rootCount: Int { get }
@@ -410,11 +411,11 @@ extension TypeFactsGraph: TypeFactsWorld {
 	}
 
 	var rootCount: Int {
-		1
+		variants.seedVariants.count
 	}
 
-	func rootVariant(_: Int) -> VariantID {
-		0
+	func rootVariant(_ root: Int) -> VariantID {
+		variants.seedVariants[root]
 	}
 
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID> {
