@@ -2969,6 +2969,7 @@ enum GraphFuzzerGenerator {
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
+			wrapperKindsWorkerRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsWorkerRandomSeedMask)
 			actorArgumentRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.actorArgumentRandomSeedMask)
 			instantiatedOnlyIfAvailableRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableRandomSeedMask)
 			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
@@ -3545,6 +3546,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
 		/// every shape of that tree.
 		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingLabelReceivedAsBothWrapperKinds` gives `WrapKindsHost` the builder of
+		/// `WrapKindsWorker`, a by-value reader of the label inside a `@Sendable` builder function.
+		private var wrapperKindsWorkerRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingActorArgumentShapes`' choices: whether a graph gains `ActorStore`'s tree, and every shape of
 		/// that tree.
 		private var actorArgumentRandom: GraphFuzzerRandomNumberGenerator
@@ -8208,6 +8212,11 @@ enum GraphFuzzerGenerator {
 		/// is the oracle. Where the leaf's receive is only if available, the pinner's wrapper provides the source's instance,
 		/// so the mock promotes no wrapper of the leaf's kind and passes the leaf `nil` where the pinner pins it, as
 		/// production does: a mock that promoted it fails the mirror model's count (seeds 9, 175 and 195).
+		/// Where the leaf requires its wrapper, half the time, on a stream of its own (`wrapperKindsWorkerRandom`), the host
+		/// also instantiates `wrapKindsWorkerBuilder: SendableInstantiator<WrapKindsWorker>`, whose `WrapKindsWorker`
+		/// receives the label by value inside that `@Sendable` builder function, where the mock must read the instance
+		/// through the `SendableLazilyInstantiated` it promotes: 2.4.2 read it through whichever kind its order met first, so
+		/// its mock read the `LazilyInstantiated` there, which does not compile (seed 0), or its tree check rejected the graph.
 		/// `wrapperKindsRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingLabelReceivedAsBothWrapperKinds(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.isEmpty, wrapperKindsRandom.percentChance(16), sendability == .mixed else { return declarations }
@@ -8250,11 +8259,18 @@ enum GraphFuzzerGenerator {
 				pinnerProperties.append(source)
 			}
 			append(pinnerName, pinnerProperties)
-			append("\(prefix)WrapKindsHost", generatesMock: true, sourceComesFirst ? [source, pinner] : [pinner, source])
+			var hostProperties = sourceComesFirst ? [source, pinner] : [pinner, source]
+			if leafRequiresWrapper, wrapperKindsWorkerRandom.percentChance(50) {
+				let workerName = "\(prefix)WrapKindsWorker"
+				append(workerName, [PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: tokenName)])
+				hostProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsWorkerBuilder", type: "SendableInstantiator<\(workerName)>"))
+			}
+			append("\(prefix)WrapKindsHost", generatesMock: true, hostProperties)
 			return declarations
 		}
 
 		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
+		private static let wrapperKindsWorkerRandomSeedMask: UInt64 = 0x77726B576F726B72
 
 		// MARK: An actor's argument holding a lazy builder
 

@@ -761,7 +761,7 @@ extension MockLowering {
 			// An alias of the instance of a `LazilyInstantiated` its scope holds reads the wrapper's
 			// instance, from the name the wrapper is bound apart under, as `emitAliasBinding` reads it.
 			let instanceWrapper: Property? = if !isBoundToNil, generator.mockLoweringFulfillingPropertyIsLazilyInstantiatedInstance {
-				[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+				MockLowering.lazyWrapperTypeNames(insideSendableFunction: isInsideSendableFunction)
 					.map { Property(label: fulfillingProperty.label, typeDescription: .simple(name: $0, generics: [fulfillingProperty.typeDescription.unwrapped])) }
 					.first { scope.contains($0) }
 			} else {
@@ -824,7 +824,7 @@ extension MockLowering {
 			// builder function too, since it reads no override.
 			// A closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`); a
 			// closer on a loop of builders passes a member of the level's loops its `_received` function wraps again.
-			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames)
+			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames, insideSendableFunction: isInsideSendableFunction || property.propertyType.isSendable)
 			// A closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -1080,7 +1080,7 @@ extension MockLowering {
 			// What the node's binding passes its builder function's cycle parameters, read where the node
 			// is built, and the parameters, the nearest declarations of their labels in the function. A member of a loop of
 			// builders passes a member of the level's loops its `_received` function wraps again (`receivedFunctionLines`).
-			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: ownLoopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: self.unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames)
+			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: ownLoopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: self.unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames, insideSendableFunction: isInsideSendableFunction || property.propertyType.isSendable)
 			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// A `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
@@ -1114,6 +1114,9 @@ extension MockLowering {
 			let functionLazilyInstantiatedNames = MockLowering.removingRenames(hiddenBy: declarationsHidingRenames, from: lazilyInstantiatedNames)
 			let argumentLazilyInstantiatedNames = generator.cycleParameters.isEmpty ? lazilyInstantiatedNames : functionLazilyInstantiatedNames
 			MockLowering.routeReceives(of: uncoveredInstantiatedProperties, toParametersNamed: uncoveredParameterNames, in: &functionRenames)
+			// Whether the node's builder function is `@Sendable`, where a receive of a lazy wrapper's instance reads the
+			// `Sendable` wrapper the mock binds of its label before the other.
+			let requiresSendable = isInsideSendableFunction || generator.buildsInSendableFunction || isInsideActorArgument
 			var receiverBindings = [(property: Property, name: String)]()
 			var publicWrapperParametersReadByName = [String: String]()
 			let functionPublicMockWrapperParameterNames = buildsPublicMock ? MockLowering.removingRenames(hiddenBy: declarationsHidingRenames, from: publicMockWrapperParameterNames) : [:]
@@ -1129,7 +1132,7 @@ extension MockLowering {
 					// A receive of a lazy wrapper's instance binds the wrapper named apart again, whose instance its
 					// construction reads.
 					let instanceType = dependency.property.typeDescription.unwrapped
-					guard let wrapper = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+					guard let wrapper = MockLowering.lazyWrapperTypeNames(insideSendableFunction: requiresSendable)
 						.lazy
 						.map({ TypeDescription.simple(name: $0, generics: [instanceType]) })
 						.compactMap({ wrapper in names[wrapper].map { (property: Property(label: dependency.property.label, typeDescription: wrapper), name: $0) } })
@@ -1190,7 +1193,7 @@ extension MockLowering {
 					overrideReachable: overrideReachable,
 				),
 				buildsInSendableFunction: generator.buildsInSendableFunction,
-				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction || isInsideActorArgument,
+				requiresSendable: requiresSendable,
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
@@ -1934,10 +1937,20 @@ extension MockLowering {
 		return false
 	}
 
+	/// The lazy wrapper kinds in the order a read of an instance takes them where a mock binds a wrapper of each kind
+	/// around one label's instance: inside a `@Sendable` function the `SendableLazilyInstantiated`, which the function may
+	/// capture, first, and elsewhere the `LazilyInstantiated`, as `ScopeGenerator.nonSendableWrapperCaptures` resolves the
+	/// read.
+	static func lazyWrapperTypeNames(insideSendableFunction: Bool) -> [String] {
+		insideSendableFunction
+			? [Dependency.sendableLazilyInstantiatedType, Dependency.lazilyInstantiatedType]
+			: [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+	}
+
 	/// The name `names` gives the `LazilyInstantiated` or `SendableLazilyInstantiated` of `instanceType`, as
-	/// `ScopeGenerator.disambiguatedLazilyInstantiatedBinding` finds it.
+	/// `ScopeGenerator.disambiguatedLazilyInstantiatedBinding` finds it, for a read outside every `@Sendable` function.
 	private static func wrapperRename(ofInstanceOfType instanceType: TypeDescription, among names: [TypeDescription: String]) -> String? {
-		[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+		lazyWrapperTypeNames(insideSendableFunction: false)
 			.lazy
 			.compactMap { names[TypeDescription.simple(name: $0, generics: [instanceType])] }
 			.first
