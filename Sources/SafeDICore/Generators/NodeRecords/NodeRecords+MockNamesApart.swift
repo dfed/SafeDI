@@ -60,8 +60,8 @@ extension NodeRecords {
 		/// The name of the wrapper each variant that is a rename of such a wrapper reads, as the walk reads it by name.
 		var wrapperNamesReadByRenames: [VariantID: String]
 		/// The receives only if available each variant is passed `nil` for wherever its type is built beneath the mock
-		/// root's bindings of their labels (`MockRootNames.passesNilWhereverBuilt(toReceiveOf:on:)`), and so binds no name
-		/// again for.
+		/// root's bindings of their labels (`MockRootNames.passesNilWhereverBuilt(toReceiveOf:on:)`), unless a sibling
+		/// built before it declares what the receive reads (`OnlyIfAvailableAnswers`).
 		var receivesPassedNil: [Set<Property>]
 
 		/// Leaves each variant only the receives it binds again that it is not passed `nil` for: a receive only if
@@ -145,13 +145,14 @@ extension NodeRecords {
 				functionNames = (namesApart, wrapperNames)
 				for dependency in instantiable.dependencies where dependency.source.isReceived {
 					// A receive only if available that a required receive on its type, or beneath it, pins is passed `nil`
-					// where the label's nearest declaration is the mock root's.
-					guard dependency.source != .received(onlyIfAvailable: true)
-						|| ((namesApart[dependency.property.label]?.isEmpty ?? true) && (wrapperNames[dependency.property.label]?.isEmpty ?? true))
-						|| !world.mockRootNames.passesNilWhereverBuilt(toReceiveOf: dependency.property, on: instantiable.concreteInstantiable)
-					else {
+					// where the label's nearest declaration is the mock root's, unless a sibling built before the node declares
+					// what it reads, which the answers find per call; it binds its name again only there
+					// (`removeReceivesBoundAgain(passedNilBy:)`).
+					if dependency.source == .received(onlyIfAvailable: true),
+					   !((namesApart[dependency.property.label]?.isEmpty ?? true) && (wrapperNames[dependency.property.label]?.isEmpty ?? true)),
+					   world.mockRootNames.passesNilWhereverBuilt(toReceiveOf: dependency.property, on: instantiable.concreteInstantiable)
+					{
 						namesRead.receivesPassedNil[Int(variant)].insert(dependency.property)
-						continue
 					}
 					if let name = Self.name(of: dependency.property, among: wrapperNames) {
 						// A receive of a wrapper `mock()` makes of an instance it takes is passed the wrapper by name.

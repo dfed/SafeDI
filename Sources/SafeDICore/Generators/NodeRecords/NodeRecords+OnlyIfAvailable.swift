@@ -96,7 +96,9 @@ struct OnlyIfAvailableAnswers: Sendable {
 	///     (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`), or what a mock root's body is declared inside,
 	///     the parameters of `mock()` and the overrides it binds before its nodes; empty for any other root.
 	///   - receivesPassedNil: By variant, the receives only if available a mock root's variant is passed `nil` for whatever
-	///     it sees (`NodeRecords.MockNamesReadApart.receivesPassedNil`); empty for any other root.
+	///     the declarations above it bind (`NodeRecords.MockNamesReadApart.receivesPassedNil`), unless a sibling built
+	///     before it declares the property or its unwrapped form, which it then reads, as the walk does
+	///     (`ScopeGenerator.unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`); empty for any other root.
 	init(world: some NodeRecordSources, rootParameters: [Property] = [], receivesPassedNil: [Set<Property>] = []) throws(NodeRecordRefusal) {
 		var labels = Set<String>()
 		// The labels a rename only if available is fulfilled by.
@@ -131,6 +133,8 @@ struct OnlyIfAvailableAnswers: Sendable {
 			rootContext[parameter.label, default: []].append(Binding(property: parameter, state: .available))
 		}
 		contextByVariant[0] = rootContext
+		// By variant, whether a sibling built before each call of it declares each receive it is otherwise passed `nil` for.
+		var siblingDeclaresReceivePassedNilByVariant = [[Property: Bool]](repeating: [:], count: receivesPassedNil.count)
 		var variantsToVisit: [VariantID] = [0]
 		while let variant = variantsToVisit.popLast() {
 			let declaration = world.declaration(of: variant)
@@ -189,6 +193,17 @@ struct OnlyIfAvailableAnswers: Sendable {
 						calleeContext[label] = Self.nearestBindings(bindings, shadowing: contextInside[label])
 					}
 				}
+				if receivesPassedNil.indices.contains(Int(callee)) {
+					for property in receivesPassedNil[Int(callee)] {
+						let siblingDeclaresIt = childBindingsByLabel[property.label, default: []].contains {
+							$0.state == .available && ($0.property == property || $0.property == property.asUnwrappedProperty)
+						}
+						// One function serves every call of the variant, so its calls read the receive alike or the world is refused.
+						guard siblingDeclaresReceivePassedNilByVariant[Int(callee)].updateValue(siblingDeclaresIt, forKey: property) ?? siblingDeclaresIt == siblingDeclaresIt else {
+							throw .onlyIfAvailableAnsweredApart
+						}
+					}
+				}
 				if let existingContext = contextByVariant[Int(callee)] {
 					let labelsOneCallAnswers = Set(existingContext.keys).symmetricDifference(calleeContext.keys)
 					// A member of a cycle takes what its calls answer as its cycle parameters, whose rows are made per call. A
@@ -208,7 +223,10 @@ struct OnlyIfAvailableAnswers: Sendable {
 				}
 			}
 			for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
-				if receivesPassedNil.indices.contains(Int(variant)), receivesPassedNil[Int(variant)].contains(dependency.property) {
+				if receivesPassedNil.indices.contains(Int(variant)),
+				   receivesPassedNil[Int(variant)].contains(dependency.property),
+				   siblingDeclaresReceivePassedNilByVariant[Int(variant)][dependency.property] != true
+				{
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)
 				} else if try Self.binding(reading: dependency.property, in: context) == nil {
 					unavailablePropertiesByVariant[Int(variant)].insert(dependency.property)

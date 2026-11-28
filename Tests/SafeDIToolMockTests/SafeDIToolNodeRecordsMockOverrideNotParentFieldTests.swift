@@ -430,8 +430,8 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_passesNilInReceiversFunction_whenRequiredReceiveBeneathTypePinsLabelItReceivesOnlyIfAvailable() async throws {
 		// `Third` receives `thing` only if available as an `Instantiator`, and `First`, which it builds, requires the
-		// value: wherever `Third` is built, the label is pinned to the value, so its function is passed `nil` and binds no
-		// name again.
+		// value: wherever `Third` is built, the label is pinned to the value. `Holder` builds it beside no declaration of
+		// the label, so its function is passed `nil` and binds no name again.
 		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: Self.fixtureOfReceivePinnedWhereverBuilt, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
@@ -447,20 +447,20 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		            thing_Thing: (() -> Thing)? = nil,
 		            thing_Instantiator__Thing: (() -> Thing)? = nil,
 		            leaf: Leaf.SafeDIMockConfiguration = .init(),
-		            third: Third.SafeDIMockConfiguration = .init()
+		            holder: Holder.SafeDIMockConfiguration = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                thing_Thing: thing_Thing,
 		                thing_Instantiator__Thing: thing_Instantiator__Thing,
 		                leaf: leaf,
-		                third: third
+		                holder: holder
 		            )
 		        }
 
 		        var thing_Thing: (() -> Thing)? { __safeDI_storage.thing_Thing }
 		        var thing_Instantiator__Thing: (() -> Thing)? { __safeDI_storage.thing_Instantiator__Thing }
 		        var leaf: Leaf.SafeDIMockConfiguration { __safeDI_storage.leaf }
-		        var third: Third.SafeDIMockConfiguration { __safeDI_storage.third }
+		        var holder: Holder.SafeDIMockConfiguration { __safeDI_storage.holder }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -469,18 +469,18 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		                thing_Thing: (() -> Thing)?,
 		                thing_Instantiator__Thing: (() -> Thing)?,
 		                leaf: Leaf.SafeDIMockConfiguration,
-		                third: Third.SafeDIMockConfiguration
+		                holder: Holder.SafeDIMockConfiguration
 		            ) {
 		                self.thing_Thing = thing_Thing
 		                self.thing_Instantiator__Thing = thing_Instantiator__Thing
 		                self.leaf = leaf
-		                self.third = third
+		                self.holder = holder
 		            }
 
 		            let thing_Thing: (() -> Thing)?
 		            let thing_Instantiator__Thing: (() -> Thing)?
 		            let leaf: Leaf.SafeDIMockConfiguration
-		            let third: Third.SafeDIMockConfiguration
+		            let holder: Holder.SafeDIMockConfiguration
 		        }
 		    }
 
@@ -510,18 +510,37 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		            let first: First = __safeDI_first(safeDIOverrides: safeDIOverrides.first)
 		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(nil, first) } else { Third(thing: nil, first: first) }
 		        }
-		        let third: Third = __safeDI_third(safeDIOverrides: safeDIOverrides.third)
-		        return Root(leaf: leaf, third: third)
+		        func __safeDI_holder(safeDIOverrides: Holder.SafeDIMockConfiguration) -> Holder {
+		            let third: Third = __safeDI_third(safeDIOverrides: safeDIOverrides.third)
+		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(third) } else { Holder(third: third) }
+		        }
+		        let holder: Holder = __safeDI_holder(safeDIOverrides: safeDIOverrides.holder)
+		        return Root(leaf: leaf, holder: holder)
 		    }
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
 	}
 
-	@Test(arguments: [false, true])
+	/// Where a type that receives a label named apart only if available is built.
+	enum ReceivePlace: CaseIterable {
+		/// It reads the form `mock()` names apart, and nothing pins the label.
+		case readsName
+		/// A required receive beneath it pins the label, and it is built beside no declaration of the label: `nil`.
+		case pinnedBesideNoDeclaration
+		/// A required receive beneath it pins the label, and the root builds it after the child it promotes for the form
+		/// it reads, which it is handed, as the walk hands it a sibling built before it.
+		case pinnedBesidePromotedChild
+	}
+
+	@Test(arguments: ReceivePlace.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsTheWalksValues_whenTypeReceivesLabelNamedApartOnlyIfAvailable(isPinnedWhereverBuilt: Bool) async throws {
-		let fixture = isPinnedWhereverBuilt ? Self.fixtureOfReceivePinnedWhereverBuilt : Self.fixtureOfReceiveOnlyIfAvailable
+	mutating func mock_buildsTheWalksValues_whenTypeReceivesLabelNamedApartOnlyIfAvailable(place: ReceivePlace) async throws {
+		let fixture = switch place {
+		case .readsName: Self.fixtureOfReceiveOnlyIfAvailable
+		case .pinnedBesideNoDeclaration: Self.fixtureOfReceivePinnedWhereverBuilt
+		case .pinnedBesidePromotedChild: Self.fixtureOfReceiveOnlyIfAvailable.merging(Self.fixtureOfReceivePinnedWhereverBuilt.filter { $0.key == "Third.swift" }) { $1 }
+		}
 		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let (output, _) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -550,6 +569,39 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 		for marker in ["thing_Thing", "thing_Instantiator__Thing"] {
 			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenPinnedReceiveIsBuiltBesidePromotedChildAndBesideNoDeclaration() async throws {
+		// The root builds `Third` after the child it promotes for the form `Third` reads, and `Holder` builds it beside no
+		// declaration of the label: the one is handed the name and the other `nil`. One function serves both, so the
+		// world is refused, and the walk writes it.
+		let fixture = Self.fixtureOfReceivePinnedWhereverBuilt.merging([
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable, Marked {
+			    public init(leaf: Leaf, third: Third, holder: Holder) {
+			        self.leaf = leaf
+			        self.third = third
+			        self.holder = holder
+			    }
+
+			    @Instantiated let leaf: Leaf
+			    @Instantiated let third: Third
+			    @Instantiated let holder: Holder
+			    public var marker = "built"
+			}
+			""",
+		]) { $1 }
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		#expect(reports.filter(\.isMockRoot).map(\.refusal) == ["onlyIfAvailableAnsweredApart"])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
 	}
 
 	@Test
@@ -643,8 +695,32 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 	]) { $1 }
 
 	/// `fixtureOfReceiveOnlyIfAvailable` with a `Third` that receives `thing` only if available as an `Instantiator`,
-	/// which `First`’s required receive of the value beneath it pins.
+	/// which `First`’s required receive of the value beneath it pins, built by `Holder`, which the root builds.
 	private static let fixtureOfReceivePinnedWhereverBuilt: [String: String] = fixtureOfReceiveOnlyIfAvailable.merging([
+		"Root.swift": """
+		@Instantiable(generateMock: true)
+		public final class Root: Instantiable, Marked {
+		    public init(leaf: Leaf, holder: Holder) {
+		        self.leaf = leaf
+		        self.holder = holder
+		    }
+
+		    @Instantiated let leaf: Leaf
+		    @Instantiated let holder: Holder
+		    public var marker = "built"
+		}
+		""",
+		"Holder.swift": """
+		@Instantiable
+		public final class Holder: Instantiable, Marked {
+		    public init(third: Third) {
+		        self.third = third
+		    }
+
+		    @Instantiated let third: Third
+		    public var marker = "built"
+		}
+		""",
 		"Third.swift": """
 		@Instantiable
 		public final class Third: Instantiable, Marked {
