@@ -1,4 +1,3 @@
-import Foundation
 // Distributed under the MIT License
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -105,7 +104,6 @@ enum TypeKeyBody {
 		}
 		guard layout.read(rootBody) else { return .failure(.placeNotRead) }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		if ProcessInfo.processInfo.environment["SAFEDI_PROBE"] != nil { print("PROBE \(layout.bodies.count - 1)"); for line in Thread.callStackSymbols.prefix(30) { print("PROBE  " + line) } }
 		guard layout.computeReads() else { return .failure(.readsNotResolved) }
 		guard layout.variantsReadOnlyTheirCycleParameters() else { return .failure(.variantReadsLabelItTakesNoParameterOf) }
 		layout.computeClasses()
