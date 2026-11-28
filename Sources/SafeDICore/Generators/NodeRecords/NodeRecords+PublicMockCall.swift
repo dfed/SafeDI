@@ -228,7 +228,7 @@ extension NodeRecords {
 			children: receivesBoundAgain.map(\.place),
 			node: PlanNode(),
 		)
-		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues)
+		record.sharingFields = PlaceSharingFields(passedArguments: passedArguments, constructionValue: nil, alternatives: alternatives, argumentValues: argumentValues, functionReturnType: nil)
 		// An erased call's function returns the property's type, as an erased construction's does.
 		return isMockErased(declaration, in: world) ? mockErasedDecoration(of: record) : record
 	}

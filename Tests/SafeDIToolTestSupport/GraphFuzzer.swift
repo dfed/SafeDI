@@ -2147,6 +2147,44 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holeScreen")
 	}
 
+	/// Twins over a shared screen beneath a seam (`addingTwinsOverSharedScreen`), one case per `TwinShape`, whose count in
+	/// accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`).
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenInSeam
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+
+	/// The feature of the seam corpus that `shape` is.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerSeamDrawFeature {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .inSeam: .twinsOverSharedScreenInSeam
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		}
+	}
+
+	/// Whether `addingTwinsOverSharedScreen` draws this shape.
+	var isTwinShape: Bool {
+		rawValue.hasPrefix("twinsOverSharedScreen")
+	}
+
 	/// Whether `addingHoleShapes` draws this case of two routes whose fill reads a value one route binds lazily and the
 	/// caller holds by value, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least
 	/// ten each.
@@ -2976,6 +3014,9 @@ enum GraphFuzzerGenerator {
 			instantiatedOnlyIfAvailableErasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.instantiatedOnlyIfAvailableErasureRandomSeedMask)
 			optionalPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.optionalPlaceRandomSeedMask)
 			nestedCycleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.nestedCycleRandomSeedMask)
+			perTypePlanRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanRandomSeedMask)
+			perTypePlanJobRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.perTypePlanJobRandomSeedMask)
+			twinRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.twinRandomSeedMask)
 			renamedLazyReaderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renamedLazyReaderRandomSeedMask)
 			renameSplitRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.renameSplitRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
@@ -3063,6 +3104,10 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingDependencyInstantiatedOnlyIfAvailable(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltAgainThroughSecondLazyCycle(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingScreensLaidOutFromPerTypePlan(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTwinsOverSharedScreen(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingReadersOfRenamedLazyInstance(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
@@ -3579,6 +3624,14 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltAgainThroughSecondLazyCycle`'s choices: whether a graph gains `NestRoot`'s tree, and
 		/// every shape of that tree.
 		private var nestedCycleRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingScreensLaidOutFromPerTypePlan`'s choices: whether a graph gains `PlanRoot`'s tree, and every
+		/// shape of that tree.
+		private var perTypePlanRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingScreensLaidOutFromPerTypePlan`'s tree gains `PlanJob`, and where.
+		private var perTypePlanJobRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTwinsOverSharedScreen`'s choices: whether a graph gains `TwinRoot`'s tree, and every shape of
+		/// that tree.
+		private var twinRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReadersOfRenamedLazyInstance`'s choices: whether a graph gains `RenamedLazyTop`'s tree, and
 		/// every shape of that tree.
 		private var renamedLazyReaderRandom: GraphFuzzerRandomNumberGenerator
@@ -8548,6 +8601,240 @@ enum GraphFuzzerGenerator {
 
 		private static let nestedCycleRandomSeedMask: UInt64 = 0x6E657374437963
 
+		// MARK: Screens laid out from the per-type plan
+
+		/// Adds, to one base corpus graph in twenty, `PlanRoot`'s tree: screens that open one another, in the shape the tool lays out from a root's per-type plan rather than per path
+		/// (`DependencyTreeGenerator.shapeOutsidePerTypePlan(inTreeOf:cache:)` finds nothing in it), which the corpus's other
+		/// draws almost never are. `PlanRoot` instantiates one or two services by value and opens `PlanScreen0` through an
+		/// instantiator. Three to five screens open the next one around a ring through instantiators, and now and then
+		/// another screen too, so every screen is in one cycle. `PlanScreen0` instantiates one or two models, which the other
+		/// screens now and then receive, a value their own cycle declares again each time it builds `PlanScreen0`; a screen
+		/// now and then receives a service only the root declares, and forwards a value of its own (`planId<i>`), which its
+		/// opener's instantiator is called with. A screen now and then builds `PlanPane<i>` by value, which opens a screen
+		/// through an instantiator, a member of the cycle built by value; and one graph in three, one screen builds
+		/// `PlanDetail` by value, which builds `PlanPart`, a tree outside the cycle built once. Each type's properties are in
+		/// an order of their own, and the draw keeps at most `maximumScreenBuildersBeyondRing` builders beyond the ring's,
+		/// a screen's own or a pane's. In a graph of `Sendable` types the screens open one another through
+		/// `SendableInstantiator`s, the only instantiators such a type can store. In a graph whose wrappers may be
+		/// `Sendable`, six in ten of these graphs have one screen build `PlanJob` through a `SendableInstantiator`, whose
+		/// `@Sendable` builder function the plan's code declares: in a
+		/// graph of `Sendable` types `PlanJob` receives a service only the root declares, which that function captures, and
+		/// otherwise nothing, since no other type of the draw is `Sendable` there. The draw holds none of what keeps a root on
+		/// today's tree: no seam, rename, optional, value received only if available, received instantiator, lazy wrapper,
+		/// erasure, function type, label held in two forms, tree outside the cycles built twice, label a screen receives that
+		/// another type of the root's tree declares outside its cycle, or wrapper that is not `Sendable` a `@Sendable`
+		/// function could capture. `perTypePlanRandom` draws only for this pass, after every other, and only in the base
+		/// corpus, whose value oracle compares `PlanRoot()` with its mock; `perTypePlanJobRandom` draws only `PlanJob`, so
+		/// that the draw's other graphs are drawn as before.
+		private mutating func addingScreensLaidOutFromPerTypePlan(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `PlanRoot`'s tree holds no wrapper that is not `Sendable` where a `@Sendable` function could capture it, whatever
+			// the graph's other types hold.
+			guard features.isEmpty,
+			      perTypePlanRandom.percentChance(5)
+			else { return declarations }
+			var declarations = declarations
+			func append(_ name: String, isRoot: Bool = false, _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				// Each type's properties in an order of their own, so that no order the walk relies on is always drawn.
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, perTypePlanRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: isRoot ? ["isRoot: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+				))
+			}
+			// A graph whose types all conform to `Sendable` stores only `Sendable` wrappers, so its screens open one another
+			// through `SendableInstantiator`s.
+			let screenInstantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func screenBuilder(_ screen: Int) -> PropertyDeclaration {
+				PropertyDeclaration(attribute: "@Instantiated", label: "planScreen\(screen)Builder", type: "\(screenInstantiator)<\(prefix)PlanScreen\(screen)>")
+			}
+			let screenCount = perTypePlanRandom.integer(in: 3...5)
+			let serviceCount = perTypePlanRandom.integer(in: 1...2)
+			let modelCount = perTypePlanRandom.integer(in: 1...2)
+			let services = (0..<serviceCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planService\($0)", type: "\(prefix)PlanService\($0)") }
+			let models = (0..<modelCount).map { PropertyDeclaration(attribute: "@Instantiated", label: "planModel\($0)", type: "\(prefix)PlanModel\($0)") }
+			for index in 0..<serviceCount {
+				append("PlanService\(index)", [])
+			}
+			for index in 0..<modelCount {
+				append("PlanModel\(index)", [])
+			}
+			let detailScreen = perTypePlanRandom.percentChance(33) ? perTypePlanRandom.integer(in: 0...(screenCount - 1)) : nil
+			// The builders beyond the ring's, a screen's own or a pane's, each drawn as before and kept only while fewer
+			// than `maximumScreenBuildersBeyondRing` are, so that the graphs within it draw as they did.
+			var screenBuildersBeyondRingCount = 0
+			for screen in 0..<screenCount {
+				var properties = [screenBuilder((screen + 1) % screenCount)]
+				for other in 0..<screenCount where other != screen && other != (screen + 1) % screenCount && perTypePlanRandom.percentChance(20) && screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+					screenBuildersBeyondRingCount += 1
+					properties.append(screenBuilder(other))
+				}
+				if screen == 0 {
+					properties += models
+				} else {
+					properties += models.filter { _ in perTypePlanRandom.percentChance(50) }.map {
+						PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+					}
+					if perTypePlanRandom.percentChance(30) {
+						properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "planId\(screen)", type: "Int"))
+					}
+				}
+				properties += services.filter { _ in perTypePlanRandom.percentChance(40) }.map {
+					PropertyDeclaration(attribute: "@Received", label: $0.label, type: $0.type)
+				}
+				if screen != 0, perTypePlanRandom.percentChance(30) {
+					let paneScreen = perTypePlanRandom.integer(in: 0...(screenCount - 1))
+					let paneReceivesModel = perTypePlanRandom.percentChance(50)
+					if screenBuildersBeyondRingCount < Self.maximumScreenBuildersBeyondRing {
+						screenBuildersBeyondRingCount += 1
+						properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planPane\(screen)", type: "\(prefix)PlanPane\(screen)"))
+						var paneProperties = [screenBuilder(paneScreen)]
+						if paneReceivesModel {
+							paneProperties.append(PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type))
+						}
+						append("PlanPane\(screen)", paneProperties)
+					}
+				}
+				if detailScreen == screen {
+					properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "planDetail", type: "\(prefix)PlanDetail"))
+				}
+				append("PlanScreen\(screen)", properties)
+			}
+			if detailScreen != nil {
+				append("PlanDetail", [
+					PropertyDeclaration(attribute: "@Instantiated", label: "planPart", type: "\(prefix)PlanPart"),
+					PropertyDeclaration(attribute: "@Received", label: models[0].label, type: models[0].type),
+				])
+				append("PlanPart", [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)])
+			}
+			append("PlanRoot", isRoot: true, services + [screenBuilder(0)])
+			// Drawn after every other choice, from a stream of its own and without the shuffle above, so that every graph
+			// without it is drawn as before.
+			if sendability != .nonSendable, perTypePlanJobRandom.percentChance(60) {
+				let jobScreen = perTypePlanJobRandom.integer(in: 0...(screenCount - 1))
+				if let index = declarations.firstIndex(where: { $0.name == "\(prefix)PlanScreen\(jobScreen)" }) {
+					let jobBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "planJobBuilder", type: "SendableInstantiator<\(prefix)PlanJob>")
+					declarations[index].properties.insert(jobBuilder, at: perTypePlanJobRandom.integer(in: 0...declarations[index].properties.count))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)PlanJob",
+					instantiableArguments: [],
+					// Only a graph of `Sendable` types declares a `Sendable` service the job's function can capture.
+					properties: sendability == .sendable ? [PropertyDeclaration(attribute: "@Received", label: services[0].label, type: services[0].type)] : [],
+					declaresHelperTypes: false,
+					additionalConformances: sendability == .mixed ? ["@unchecked Sendable"] : [],
+				))
+			}
+			return declarations
+		}
+
+		/// How many builders beyond the ring's `addingScreensLaidOutFromPerTypePlan` draws at most. The value comparator
+		/// calls each builder twice and follows one until it is twice on a path, so its traversals of the ring grow
+		/// exponentially with these builders: with two, a ring of five screens and `PlanJob` take at most 4,382 of a probe's
+		/// 10,000 (`DifferentialValueLimits.traversalsPerProbe`), and with three, without `PlanJob`, as many as 42,056.
+		private static let maximumScreenBuildersBeyondRing = 2
+
+		private static let perTypePlanRandomSeedMask: UInt64 = 0x506C616E547970
+		private static let perTypePlanJobRandomSeedMask: UInt64 = 0x506C616E4A6F62
+
+		// MARK: Twins over a shared screen
+
+		/// Adds `TwinRoot`'s tree, in which one label is declared as a value by one parent and as a lazy wrapper by another,
+		/// above a screen both parents build, on a cycle: twins (`PerTypePlan.twins`, `CallPlaceShadow.twinValues`), the
+		/// shape `TwinIdentityChecks` judges, which the corpora drew in no root before. `TwinRoot` builds `TwinFirst` by
+		/// value or through an instantiator, and now and then opens `TwinSecond` too. `TwinFirst` declares `twinModel` in
+		/// one form and `TwinSecond` in the other (`LazilyInstantiated`, or `SendableLazilyInstantiated` where the graph's
+		/// wrappers may be `Sendable`), the value first on the path or the wrapper first, and each builds `TwinScreen`,
+		/// which receives `twinModel` by value, required or only if available, and now and then builds `TwinPanel`, which
+		/// receives it too. `TwinModel` opens `TwinSecond` through an instantiator, so the cycle closes on `TwinSecond`'s
+		/// declaration of the model, whichever twin a path built first. Each type's properties are in an order of their
+		/// own. In the seam corpus `TwinRoot` builds `TwinSeam`, a seam whose own tree holds the twins, and in the base
+		/// corpus the root holds them. `twinRandom` draws only for this pass, after every other, so that every graph without
+		/// the tree is drawn as before; the public mock corpus draws the same tree beneath a public mock
+		/// (`GraphFuzzerPublicMockDraw`'s twins).
+		private mutating func addingTwinsOverSharedScreen(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let drawsSeam = features.contains(.generateDependencyTree)
+			guard twinRandom.percentChance(drawsSeam ? 10 : 4) else { return declarations }
+			var declarations = declarations
+			// A graph of `Sendable` types stores only `Sendable` wrappers; a mixed graph draws the wrapper kind per graph.
+			let isSendable = switch sendability {
+			case .nonSendable: false
+			case .sendable: true
+			case .mixed: twinRandom.percentChance(50)
+			}
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, isRoot: Bool = false, arguments: [String] = [], leading: [PropertyDeclaration] = [], _ properties: [PropertyDeclaration]) {
+				var properties = properties
+				for index in properties.indices.reversed() {
+					properties.swapAt(index, twinRandom.integer(in: 0...index))
+				}
+				declarations.append(TypeDeclaration(
+					name: "\(prefix)\(name)",
+					instantiableArguments: (isRoot ? ["isRoot: true"] : []) + arguments,
+					properties: leading + properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let instantiator = isSendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let modelName = "\(prefix)TwinModel"
+			let valueModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: modelName)
+			let lazyModel = PropertyDeclaration(attribute: "@Instantiated", label: "twinModel", type: "\(lazyWrapper)<\(modelName)>")
+			let valueFirst = twinRandom.percentChance(50)
+			let screen = PropertyDeclaration(attribute: "@Instantiated", label: "twinScreen", type: "\(prefix)TwinScreen")
+			let secondBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "twinSecondBuilder", type: "\(instantiator)<\(prefix)TwinSecond>")
+			let screenReceive = twinRandom.percentChance(70)
+				? PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "twinModel", type: modelName + "?")
+			let buildsPanel = twinRandom.percentChance(40)
+			let firstBuiltThroughInstantiator = twinRandom.percentChance(50)
+			let rootOpensSecond = twinRandom.percentChance(40)
+			// Two rolls of their own: four graphs in ten give both parents a declaration of `twinTheme` in one form, by value,
+			// which `TwinModel`, the twins' type, receives, so each twin reads its own parent's theme; of the rest, four in
+			// ten declare it by value on `TwinFirst` and as the lazy wrapper on `TwinSecond`, so the twins read it in two
+			// forms. Where the lazy twin is a `SendableLazilyInstantiated`, one graph in five draws the one form and the rest
+			// the two forms, so that enough graphs read a label in two forms inside a `@Sendable` builder.
+			let themeInSameForm = twinRandom.percentChance(isSendable ? 20 : 40)
+			let themeInMixedForms = twinRandom.percentChance(isSendable ? 100 : 40) && !themeInSameForm
+			let readsTheme = themeInSameForm || themeInMixedForms
+			let themeName = "\(prefix)TwinTheme"
+			let valueTheme = PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: themeName)
+			let firstTheme = readsTheme ? [valueTheme] : []
+			let secondTheme = themeInMixedForms
+				? [PropertyDeclaration(attribute: "@Instantiated", label: "twinTheme", type: "\(lazyWrapper)<\(themeName)>")]
+				: firstTheme
+			append("TwinFirst", leading: firstTheme, [valueFirst ? valueModel : lazyModel, screen])
+			append("TwinSecond", leading: secondTheme, [valueFirst ? lazyModel : valueModel, screen])
+			append("TwinModel", [secondBuilder] + (readsTheme ? [PropertyDeclaration(attribute: "@Received", label: "twinTheme", type: themeName)] : []))
+			if readsTheme {
+				append("TwinTheme", [])
+			}
+			append("TwinScreen", [screenReceive] + (buildsPanel ? [PropertyDeclaration(attribute: "@Instantiated", label: "twinPanel", type: "\(prefix)TwinPanel")] : []))
+			if buildsPanel {
+				append("TwinPanel", [PropertyDeclaration(attribute: "@Received", label: "twinModel", type: modelName)])
+			}
+			var treeProperties = [firstBuiltThroughInstantiator
+				? PropertyDeclaration(attribute: "@Instantiated", label: "twinFirstBuilder", type: "\(instantiator)<\(prefix)TwinFirst>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "twinFirst", type: "\(prefix)TwinFirst")]
+			if rootOpensSecond {
+				treeProperties.append(secondBuilder)
+			}
+			if drawsSeam {
+				append("TwinSeam", arguments: ["generateDependencyTree: true"], treeProperties)
+				append("TwinRoot", isRoot: true, [PropertyDeclaration(attribute: "@Instantiated", label: "twinSeam", type: "\(prefix)TwinSeam")])
+			} else {
+				append("TwinRoot", isRoot: true, treeProperties)
+			}
+			return declarations
+		}
+
+		private static let twinRandomSeedMask: UInt64 = 0x5477696E53686172
+
 		// MARK: Readers of a renamed lazy instance
 
 		/// The base corpus's draw, in one graph of eight, of a choice between declarations of one type, decided by where
@@ -11536,6 +11823,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
 	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
 	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
+	/// Twins over a shared screen in a root's own tree (`addingTwinsOverSharedScreen`), one case per `TwinShape` the base
+	/// corpus draws.
+	case twinsOverSharedScreen
+	case twinsOverSharedScreenValueFirst
+	case twinsOverSharedScreenWrapperFirst
+	case twinsOverSharedScreenSendableWrapper
+	case twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+	case twinsOverSharedScreenScreenBuildsPanel
+	case twinsOverSharedScreenFirstThroughInstantiator
+	case twinsOverSharedScreenTopOpensSecond
+	case twinsOverSharedScreenThemeInSameForm
+	case twinsOverSharedScreenThemeInMixedForms
+	case twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
 	case generateDependencyTree
 
 	/// The features only a graph drawn with the `generateDependencyTree` generator feature has.
@@ -11544,6 +11844,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// The features a graph drawn without any generator feature can have, which the smoke batch must exercise.
 	static var baseCases: [GraphFuzzerFeature] {
 		allCases.filter { !seamCases.contains($0) }
+	}
+
+	/// The feature of the base corpus that `shape` is, where a root's own tree holds the twins.
+	static func twinsOverSharedScreen(_ shape: TwinShape) -> GraphFuzzerFeature? {
+		switch shape {
+		case .drawn: .twinsOverSharedScreen
+		case .valueFirst: .twinsOverSharedScreenValueFirst
+		case .wrapperFirst: .twinsOverSharedScreenWrapperFirst
+		case .sendableWrapper: .twinsOverSharedScreenSendableWrapper
+		case .screenReceivesOnlyIfAvailable: .twinsOverSharedScreenScreenReceivesOnlyIfAvailable
+		case .screenBuildsPanel: .twinsOverSharedScreenScreenBuildsPanel
+		case .firstThroughInstantiator: .twinsOverSharedScreenFirstThroughInstantiator
+		case .topOpensSecond: .twinsOverSharedScreenTopOpensSecond
+		case .themeInSameForm: .twinsOverSharedScreenThemeInSameForm
+		case .themeInMixedForms: .twinsOverSharedScreenThemeInMixedForms
+		case .themeInMixedFormsInsideSendableBuilder: .twinsOverSharedScreenThemeInMixedFormsInsideSendableBuilder
+		case .inSeam: nil
+		}
 	}
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
@@ -12198,6 +12516,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if !mockOnlyExtendedTypeNames.intersection(productionTypeNames).isDisjoint(with: receivedTypes) {
 			features.insert(.mockOnlyExtensionOfReceivedType)
 		}
+		let twinShapes = TwinShape.shapes(of: fixture)
+		if !twinShapes.contains(.inSeam) {
+			features.formUnion(twinShapes.compactMap(GraphFuzzerFeature.twinsOverSharedScreen))
+		}
 		return features
 	}
 
@@ -12815,6 +13137,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		features.formUnion(TwinShape.shapes(of: fixture).map(GraphFuzzerSeamDrawFeature.twinsOverSharedScreen))
 		return features
 	}
 

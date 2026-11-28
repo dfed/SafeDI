@@ -21,7 +21,7 @@
 extension DependencyTreeGenerator {
 	/// The layout of `instantiable`'s code from the node records of its world, the root `constructionScope` builds, and
 	/// what forces its tree (`TreeForcer`): the kind node records refused, then `readersOfEveryTree`. The layout is `nil`
-	/// wherever anything forces the tree.
+	/// wherever anything forces the tree, and for a world that holds a cycle, whose records are only compared.
 	/// Anything the records throw refuses the world (`NodeRecords.refusingWhatRecordsThrow(_:)`), whose tree reports it.
 	static func nodeRecordsLayout(
 		of instantiable: Instantiable,
@@ -33,8 +33,17 @@ extension DependencyTreeGenerator {
 		// world, to name what they refuse.
 		guard readersOfEveryTree.isEmpty || NodeRecordsObservation.observer != nil else { return (nil, readersOfEveryTree) }
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
-		switch NodeRecords.refusingWhatRecordsThrow({ try NodeRecordsLayout(of: instantiable, nodeRecords: NodeRecords(world: world, declaredTypeNames: declaredTypeNames)) }) {
+		switch NodeRecords.refusingWhatRecordsThrow({ () throws -> NodeRecordsLayout? in
+			let nodeRecords = try NodeRecords(world: world, declaredTypeNames: declaredTypeNames)
+			// A world that holds a cycle keeps its tree, or its plan by type, until node records write every production
+			// cycle root as today's tree does: its records are made and compared beside the tree where a test observes
+			// them (`plannedRootCode(of:declaredTypeNames:)`), and what forces the tree is named as the kind they refused
+			// before they made any cycle's records.
+			guard !(0..<Int32(world.declarationCount)).contains(where: world.isOnCycle) else { return nil }
+			return try NodeRecordsLayout(of: instantiable, nodeRecords: nodeRecords)
+		}) {
 		case let .success(layout):
+			guard let layout else { return (nil, [.nodeRecordKind(NodeRecordRefusal.cycle.rawValue)] + readersOfEveryTree) }
 			return (readersOfEveryTree.isEmpty ? layout : nil, readersOfEveryTree)
 		case let .failure(refusal):
 			return (nil, [.nodeRecordKind(refusal.rawValue)] + readersOfEveryTree)
@@ -59,6 +68,9 @@ extension DependencyTreeGenerator {
 	static func plannedRootCode(of rootInfo: RootScopeInfo, declaredTypeNames: DeclaredTypeNames) async throws -> GeneratedCode {
 		let root = rootInfo.instantiable.concreteInstantiable.asSource
 		switch rootInfo.built {
+		case let .perType(code, _):
+			// A root laid out from the per-type plan of its cycles, which node records refuse (`cycle`).
+			return code
 		case let .nodeRecords(layout, comparisonTree):
 			if let comparisonTree, let observer = NodeRecordsObservation.observer {
 				try await observer(comparison(of: layout, with: comparisonTree, of: rootInfo.instantiable))
@@ -101,6 +113,20 @@ extension DependencyTreeGenerator {
 				try await Self.treeCode(of: scopeGenerator, besideRecordsBody: nodeRecords.rootBody)
 			})
 			let (treeCode, comparisons) = planned
+			// A root that keeps its tree's code is still laid out from its records where they differ from the tree's by an
+			// optional parameter's argument, for the comparison alone: a test approves that difference only where the two
+			// texts are equal. A seam's own tree is never laid out here, so the difference fails there.
+			let holdsDifferenceOfOptionalParameter = comparisons.contains { comparison in
+				// safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+				comparison.differences.contains { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") }
+			}
+			let comparedCode: GeneratedCode? = if laidOutCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
+			                                      case let .success(code) = NodeRecords.refusingWhatRecordsThrow({ try laidOutRootCode(of: rootInfo.instantiable, body: nodeRecords.rootBody) })
+			{
+				code
+			} else {
+				laidOutCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
@@ -113,7 +139,7 @@ extension DependencyTreeGenerator {
 					treePlaceCount: comparison.treePlaceCount,
 					treeForcers: rootInfo.treeForcers,
 				)
-				report.comparedTexts = laidOutCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
+				report.comparedTexts = comparedCode.map { NodeRecordsComparedTexts(tree: treeCode.spelled(), nodeRecords: $0.spelled()) }
 				observer(report)
 			}
 			return laidOutCode ?? treeCode

@@ -224,10 +224,14 @@ extension NodeRecords {
 			// in the home level's order, every other field taking its default: the members' functions read only those.
 			let component = Set(levels.componentByMember[member] ?? [])
 			let fields = world.edges(from: home).filter { component.contains($0) && mockLoopOverridesType(of: $0, in: world) != nil }.compactMap(world.property(of:))
-			value = .implicitInitialization(
-				labels: fields.map(\.label),
-				values: fields.map { .member($0.label.spelledAsMemberDeclarationName, of: overrides) },
-			)
+			// Spelled `.init(<label>: overrides.<label>, …)`.
+			var segments: [ValueSegment] = [.text(".init(")]
+			for (index, field) in fields.enumerated() {
+				segments.append(.text("\(index == 0 ? "" : ", ")\(field.label.spelledAsArgumentLabel): "))
+				segments.append(.value(.member(field.label.spelledAsMemberDeclarationName, of: overrides)))
+			}
+			segments.append(.text(")"))
+			value = .spliced(segments)
 		}
 		return PassedArgument(parameterName: parameterName, type: type, value: value, staysOutsideSendableFunctions: true)
 	}
