@@ -172,9 +172,9 @@ extension SeamPlacesDrafts {
 			}
 			return places.uniqued()
 		}
-		// A child's facts as the stored graph keeps them, but its carriers, which the facts hold no column for yet.
+		// A child's facts as the stored graph keeps them.
 		func spelled(childFacts: SeamSignature.Places.ChildFacts) -> String {
-			"child at \(childFacts.position)\(childFacts.isBuilder ? " builder" : "") loop \(childFacts.loop.map(String.init) ?? "none") builds \(childFacts.builtType?.asSource ?? "none")\(childFacts.isPlace ? " place" : "") only if available [\(childFacts.receivesOnlyIfAvailable.map(\.label).joined(separator: " "))]"
+			"child at \(childFacts.position)\(childFacts.isBuilder ? " builder" : "") loop \(childFacts.loop.map(String.init) ?? "none") builds \(childFacts.builtType?.asSource ?? "none")\(childFacts.isPlace ? " place" : "") only if available [\(childFacts.receivesOnlyIfAvailable.map(\.label).joined(separator: " "))] carriers [\(childFacts.carriers.map(\.label).joined(separator: " "))]"
 		}
 		func childFacts(ofBinding property: Property, atVariant variant: VariantID) -> SeamSignature.Places.ChildFacts? {
 			let declaration = world.declaration(of: variant)
@@ -190,6 +190,12 @@ extension SeamPlacesDrafts {
 				guard !siblingFacts.isFill, let siblingProperty = world.graph.nodes[Int(target)].property, receivedOnlyIfAvailable.contains(siblingProperty.asUnwrappedProperty) else { return nil }
 				return (siblingFacts.buildPosition, siblingProperty)
 			}
+			// The siblings that start as carriers and that the child's tree requires, the first two in build order.
+			let required = Set(world.receives.required.columns(inRow: Int(child)).map { world.propertyTable[Int($0)] })
+			let carriers = zip(targets, edgeFacts).compactMap { target, siblingFacts -> (position: Int32, property: Property)? in
+				guard siblingFacts.isCarrier, let siblingProperty = world.graph.nodes[Int(target)].property, required.contains(siblingProperty) else { return nil }
+				return (siblingFacts.buildPosition, siblingProperty)
+			}
 			return SeamSignature.Places.ChildFacts(
 				position: Int(facts.buildPosition),
 				isBuilder: ScopeGenerator.isBuilder(property),
@@ -197,7 +203,7 @@ extension SeamPlacesDrafts {
 				builtType: node.key.leaf == .none ? world.typeTable[Int(world.builtTypes[Int(child)])] : nil,
 				isPlace: node.key.leaf == .hole,
 				receivesOnlyIfAvailable: siblings.sorted { $0.position < $1.position }.map(\.property),
-				carriers: [],
+				carriers: Array(carriers.sorted { $0.position < $1.position }.prefix(2).map(\.property)),
 			)
 		}
 		func spelledPlaces(inTree cases: [Int]) -> [String] {
@@ -242,6 +248,10 @@ extension SeamPlacesDrafts {
 			("builtAfter", storedDeclarations.count { $0.builtAfter != nil }),
 			("cycleParameterOrigin", storedDeclarations.count { $0.cycleParameterOrigin != nil }),
 			("child", storedDeclarations.count { $0.child != nil }),
+			("childCarriers", storedDeclarations.count { !($0.child?.carriers.isEmpty ?? true) }),
+			("childLoop", storedDeclarations.count { $0.child?.loop != nil }),
+			("childOnlyIfAvailable", storedDeclarations.count { !($0.child?.receivesOnlyIfAvailable.isEmpty ?? true) }),
+			("placesInTree", storedDeclarations.count { !($0.buildability?.placesInTree.isEmpty ?? true) }),
 			("boundLater", storedDeclarations.count { !$0.isBoundBeforeNextProperty }),
 			("all", storedDeclarations.count),
 		]

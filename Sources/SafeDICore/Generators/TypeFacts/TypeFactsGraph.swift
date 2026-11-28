@@ -576,6 +576,7 @@ struct TypeFactsGraph: Sendable {
 					isFill: edgeIsFill[edge],
 					bindingsBefore: bindingsBefore[edge],
 					isCallEdge: graph.componentByNode[Int(target)] == graph.componentByNode[index] && graph.isOnCycle(index),
+					isCarrier: carrierEdges.contains(edge),
 				))
 			}
 		}
