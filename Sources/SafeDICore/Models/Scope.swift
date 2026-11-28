@@ -807,10 +807,6 @@ extension ScopeRecord {
 	}
 }
 
-/// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
-/// the generators of the scopes it creates exist.
-/// A case of a place graph, told apart from another graph's case of the same index by the graph's query, whose identity
-/// orders nothing.
 /// A case of a place graph as a set tells it apart: its indices are its own graph's, so two graphs' cases are told apart by
 /// the graph's identity, which orders nothing.
 struct HoldingCaseKey: Hashable {
@@ -827,6 +823,8 @@ struct HoldingCaseKey: Hashable {
 	let caseIndex: Int
 }
 
+/// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
+/// the generators of the scopes it creates exist.
 private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - property: The property the scope builds, with its ID in `scope`'s interner, or `nil` for a root.
