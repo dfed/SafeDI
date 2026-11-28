@@ -45,6 +45,30 @@ extension MockLowering {
 		let namesDeclaredInBuilderFunctions: Set<String>
 	}
 
+	/// The names the mock root's level binds: what its nodes read, and what the root's own bindings are named apart from.
+	struct RootLevelNames: Equatable {
+		/// The names the root binds apart from their labels, by label and then type: what `mock()`'s signature names apart,
+		/// with each node of the level the level names apart.
+		var namesApart: [String: [TypeDescription: String]]
+		/// The names the level's property nodes are bound under, which a rebinding of the mocked type's own receive would
+		/// redeclare.
+		var propertyNodeBindingNames: Set<String>
+		/// The names apart the level's aliases are bound under.
+		var aliasBindingNamesApart: Set<String>
+	}
+
+	/// What the mock root binds beside its nodes and passes the mocked type, from the names its level binds.
+	struct RootBindings {
+		/// The name the mocked type is passed each of its dependencies under where it is not the dependency's label.
+		let renames: [String: [TypeDescription: String]]
+		/// The bindings again, under their labels, of the mocked type's own receives `mock()` takes named apart.
+		let receiverBindingLines: [String]
+		/// The properties `receiverBindingLines` bind.
+		let receivesBoundAgain: [Property]
+		/// Whether each name in `renames` is one a node, an alias, a parameter, an override or a wrapper binds.
+		let namesAreBindings: Bool
+	}
+
 	/// The name each node of one level, `nodes` in generation order, is bound under, `nil` for a node that is no property
 	/// node: its label, or, where property nodes of the level, or `parametersKeepingTheirLabels`, share it, a name apart,
 	/// as `ScopeGenerator.disambiguatePropertyLabels(forProperties:)` names it.
