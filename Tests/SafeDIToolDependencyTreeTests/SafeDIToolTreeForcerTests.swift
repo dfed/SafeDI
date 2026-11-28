@@ -110,6 +110,43 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsNoTree_whenCycleMemberIsBuiltBeneathTwoScreensAndNoScreenReceivesLabel() async throws {
+		// Screens open each other through builders whose labels each screen declares again, `S2` is built beneath `S0`
+		// and beneath `S1`, and no screen receives anything: the node records lay the root out from one body per screen,
+		// and no reader or label passed around the cycle needs its tree.
+		let (forcers, _) = try await treeForcers(of: [
+			"""
+			@Instantiable(isRoot: true) public final class Root: Instantiable {
+			    @Instantiated let home: S0
+			    public init(home: S0) { self.home = home }
+			}
+
+			@Instantiable public final class S0: Instantiable {
+			    @Instantiated let s1Builder: Instantiator<S1>
+			    @Instantiated let s2Builder: Instantiator<S2>
+			    public init(s1Builder: Instantiator<S1>, s2Builder: Instantiator<S2>) { self.s1Builder = s1Builder; self.s2Builder = s2Builder }
+			}
+
+			@Instantiable public final class S1: Instantiable {
+			    @Instantiated let s2Builder: Instantiator<S2>
+			    public init(s2Builder: Instantiator<S2>) { self.s2Builder = s2Builder }
+			}
+
+			@Instantiable public final class S2: Instantiable {
+			    @Instantiated let s1Builder: Instantiator<S1>
+			    public init(s1Builder: Instantiator<S1>) { self.s1Builder = s1Builder }
+			}
+			""",
+		])
+		#expect(forcers == """
+		Root\tnone
+		roots that built a tree: 0 of 1
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsTree_whenRenameOfSharedTypeIsFulfilledByWrapperOnFirstPathAndValueOnSecond() async throws {
 		let (forcers, _) = try await treeForcers(of: Self.renameFulfilledByWrapperAndValue(lazyParentFirst: true))
 		// `Reader`'s rename is called beneath both parents, which answer its `x` as a wrapper's instance and as a value. The
