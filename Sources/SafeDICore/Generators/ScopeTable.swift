@@ -41,7 +41,7 @@ final class ScopeRecord: Sendable {
 			fulfilledBy: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 		)
 	}
 

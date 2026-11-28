@@ -135,9 +135,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 7)
-		            let tracker: LazilyInstantiated<Analytics>? = analytics
-		            #sourceLocation()
+		            let tracker: LazilyInstantiated<Analytics>? = analytics // Declared as Child.tracker
 		            return Child(tracker: tracker)
 		        }
 		        let child: Child = __safeDI_child()
@@ -540,9 +538,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				            X()
 				        }
 				        func __safeDI_readerBuilder(x: LazilyInstantiated<X>) -> Reader {
-				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 6)
-				            let renamed: X = x.instance
-				            #sourceLocation()
+				            let renamed: X = x.instance // Declared as Reader.renamed
 				            return Reader(renamed: renamed)
 				        }
 				        func __safeDI_lazyParent() -> LazyParent {
@@ -558,9 +554,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				            return Holder(reader: reader)
 				        }
 				        func __safeDI_reader(x: X) -> Reader {
-				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 6)
-				            let renamed: X = x
-				            #sourceLocation()
+				            let renamed: X = x // Declared as Reader.renamed
 				            return Reader(renamed: renamed)
 				        }
 				        func __safeDI_valueParent() -> ValueParent {
@@ -586,9 +580,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				            return Holder(reader: reader)
 				        }
 				        func __safeDI_reader(x: X) -> Reader {
-				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 6)
-				            let renamed: X = x
-				            #sourceLocation()
+				            let renamed: X = x // Declared as Reader.renamed
 				            return Reader(renamed: renamed)
 				        }
 				        func __safeDI_valueParent() -> ValueParent {
@@ -601,9 +593,7 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 				            X()
 				        }
 				        func __safeDI_readerBuilder(x: LazilyInstantiated<X>) -> Reader {
-				            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 6)
-				            let renamed: X = x.instance
-				            #sourceLocation()
+				            let renamed: X = x.instance // Declared as Reader.renamed
 				            return Reader(renamed: renamed)
 				        }
 				        func __safeDI_lazyParent() -> LazyParent {

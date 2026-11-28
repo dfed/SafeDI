@@ -402,9 +402,7 @@ struct SafeDIToolPlanCodeTests: ~Copyable {
 		    public convenience init() {
 		        let x = X(screenBuilder: nil)
 		        func __safeDI_screenBuilder() -> Screen {
-		            #sourceLocation(file: "\(fixtures["Root.swift"])", line: 13)
-		            let y: X? = x
-		            #sourceLocation()
+		            let y: X? = x // Declared as Screen.y
 		            let nextBuilder = Instantiator<Next>(__safeDI_nextBuilder)
 		            let detailBuilder = Instantiator<Detail> {
 		                __safeDI_detailBuilder(y: y)

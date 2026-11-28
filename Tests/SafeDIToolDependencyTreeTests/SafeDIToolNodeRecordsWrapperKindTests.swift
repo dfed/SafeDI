@@ -418,9 +418,7 @@ struct SafeDIToolNodeRecordsWrapperKindTests: ~Copyable {
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        func __safeDI_reader() -> Reader {
-			            #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
-			            let store: Session = session.instance
-			            #sourceLocation()
+			            let store: Session = session.instance // Declared as Reader.store
 			            return Reader(store: store)
 			        }
 			        let reader: Reader = __safeDI_reader()

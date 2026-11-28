@@ -1377,6 +1377,14 @@ extension UnsafeBufferPointer<UInt8> {
 	}
 }
 
+/// The scan of the Swift file at `readPath`, named `filePath`, walked under `evaluator` as its module's run walks it, or
+/// `nil` where it cannot be read: what `DiagnosticLocator` reads to find the lines and columns another module's `.safedi`
+/// file leaves out.
+func scanOfFile(readFrom readPath: String, namedAs filePath: String, conditionalCompilation evaluator: ConditionalCompilationEvaluator) -> FileScan? {
+	guard let source = try? swiftFileContents(atPath: readPath) else { return nil }
+	return walk(Parser.parse(source: source), at: filePath, conditionalCompilation: evaluator)
+}
+
 /// Walks one parsed file.
 private func walk(
 	_ syntaxTree: SourceFileSyntax,

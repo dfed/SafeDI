@@ -55,10 +55,10 @@ public struct SourceDiagnostic: Hashable, Sendable {
 		/// The text to put in its place.
 		public let replacement: String
 
-		/// The fix-it formatted as swift-build reads it, for a range in the file at `filePath`, or `nil` when the run did
-		/// not read the range’s lines and columns, which a module info file stores in a positions file of its own.
+		/// The fix-it formatted as swift-build reads it, for a range in the file at `filePath`, or `nil` for a range read from
+		/// another module’s `.safedi` file, which stores no line or column.
 		func formatted(inFileAt filePath: String) -> String? {
-			guard case let .here(startLine, startColumn, endLine, endColumn) = range.placement else { return nil }
+			guard case let .located(startLine, startColumn, endLine, endColumn) = range.span else { return nil }
 			return "\(filePath):\(startLine):\(startColumn)-\(endLine):\(endColumn): fixit: \(escapedReplacement)"
 		}
 
@@ -103,17 +103,15 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	/// the compiler itself uses for location-less diagnostics. A fix-it edits the file its diagnostic points at,
 	/// so a location-less diagnostic prints none.
 	///
-	/// A location whose line and column the run did not read – another module’s, which its module info file stores in a
-	/// positions file of its own – prints as its file alone, as does a fix-it’s range: a run reports such a diagnostic
-	/// only when it could not read that positions file.
+	/// A location read from another module’s `.safedi` file, which stores no line or column, prints as its file alone,
+	/// `<path>: <severity>: <message>`, and a fix-it whose range was read so prints nothing.
 	public var formatted: String {
 		if let location {
-			switch location.placement {
-			case let .here(line, column):
-				(["\(location.filePath):\(line):\(column): \(severity.rawValue): \(message)"]
+			if let position = location.position {
+				(["\(location.filePath):\(position.line):\(position.column): \(severity.rawValue): \(message)"]
 					+ fixIts.compactMap { $0.formatted(inFileAt: location.filePath) })
 					.joined(separator: "\n")
-			case .storedElsewhere:
+			} else {
 				"\(location.filePath): \(severity.rawValue): \(message)"
 			}
 		} else {
@@ -121,15 +119,18 @@ public struct SourceDiagnostic: Hashable, Sendable {
 		}
 	}
 
-	/// Whether the run did not read a line or column the diagnostic prints, which a module info file stores in a
-	/// positions file of its own.
-	public var printsPositionStoredElsewhere: Bool {
+	/// Whether the diagnostic prints a location or a fix-it read without its line and column, from another module’s
+	/// `.safedi` file: what a run that reads that module’s file again could locate.
+	public var printsUnlocatedPosition: Bool {
 		guard let location else { return false }
-		return switch location.placement {
-		case .here:
-			fixIts.contains { $0.range.placement == .storedElsewhere }
-		case .storedElsewhere:
-			true
+		guard location.position != nil else { return true }
+		return fixIts.contains { fixIt in
+			switch fixIt.range.span {
+			case .located:
+				false
+			case .unlocated:
+				true
+			}
 		}
 	}
 
@@ -160,12 +161,12 @@ extension SourceLocatedError {
 }
 
 extension Dependency.DeclarationLocation: Comparable {
-	/// Orders locations by file, then by line and column where both hold them, and otherwise by order, which ranks the
-	/// locations of one file as their lines and columns do (`Dependency.DeclarationLocation.order`).
+	/// Orders locations by file, then by position where both hold one, and otherwise by order, which ranks the locations
+	/// of one file as their positions do (`Dependency.DeclarationLocation.order`).
 	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
 		guard lhs.filePath == rhs.filePath else { return lhs.filePath < rhs.filePath }
-		return if case let .here(lhsLine, lhsColumn) = lhs.placement, case let .here(rhsLine, rhsColumn) = rhs.placement {
-			(lhsLine, lhsColumn) < (rhsLine, rhsColumn)
+		return if let lhsPosition = lhs.position, let rhsPosition = rhs.position {
+			lhsPosition < rhsPosition
 		} else {
 			lhs.order < rhs.order
 		}

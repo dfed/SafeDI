@@ -142,9 +142,6 @@ SafeDIInfo = provider(
         "transitive_module_infos": """A depset of this module's `.safedi`
 file and that of every module beneath it, collected through `deps` as
 rules_swift collects `SwiftInfo.transitive_modules`.""",
-        "transitive_module_positions": """A depset of the positions file
-beside each `.safedi` file of `transitive_module_infos`, which a run
-opens only to report a diagnostic, and otherwise lists unused.""",
     },
 )
 
@@ -195,11 +192,6 @@ def _safedi_compile_impl(ctx):
     # module's run.
     module_info = ctx.actions.declare_file(ctx.label.name + ".safedi") if ctx.attr.is_depended_upon else None
 
-    # The lines and columns of this module's declarations, which SafeDITool
-    # writes beside the `.safedi` (`--module-info-positions-in-own-file`)
-    # and a module above opens only to report a diagnostic located here, so
-    # a line moved in this module reruns no action above it.
-    module_positions = ctx.actions.declare_file(ctx.label.name + ".safedipositions") if module_info else None
     combined = ctx.actions.declare_file(ctx.label.name + ".swift")
 
     # The files `--split-combined-output-mocks` spreads the mocks over,
@@ -232,18 +224,14 @@ def _safedi_compile_impl(ctx):
     # analysis cannot see, so every action gets them all as inputs, and
     # the run lists those it did not open in `unused_inputs`.
     module_infos_beneath = depset(transitive = module_infos_of_dependencies)
-    module_positions_beneath = depset(transitive = [
-        dependency[SafeDIInfo].transitive_module_positions
-        for dependency in ctx.attr.deps
-    ])
 
     arguments = [
         input_csv.path,
         "--combined-output",
         combined.path,
         # rules_swift hands swiftc the same execution-root-relative paths
-        # this rule writes to the CSV, so the generated `#sourceLocation`
-        # directives can name them and stay free of machine-specific paths.
+        # this rule writes to the CSV, so `generate` prints the paths of its
+        # own diagnostics as the CSV spells them, as swiftc prints its own.
         "--compiler-receives-input-paths-unchanged",
         # Every action is given the `.safedi` of every module beneath it
         # (`module_infos_beneath`), so a view can name the modules it
@@ -252,9 +240,15 @@ def _safedi_compile_impl(ctx):
         "--module-info-views-refer-to-modules",
         "--unused-inputs-list-output",
         unused_inputs.path,
+        # A cached action prints its warnings again without running, and a
+        # `.safedi` holds no line or column, so a line moved beneath this
+        # module reruns nothing here: a warning about another module's
+        # declaration prints its file and message, never a line that may
+        # have moved. An error fails the action, which Bazel never caches.
+        "--warnings-may-be-replayed-from-cache",
     ]
     if module_info:
-        arguments += ["--module-info-output", module_info.path, "--module-info-positions-in-own-file"]
+        arguments += ["--module-info-output", module_info.path]
     if mock_files:
         arguments.append("--split-combined-output-mocks")
 
@@ -314,8 +308,8 @@ def _safedi_compile_impl(ctx):
     ctx.actions.run(
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
-        inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath, module_positions_beneath]),
-        outputs = [combined, unused_inputs] + mock_files + ([module_info, module_positions] if module_info else []),
+        inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
+        outputs = [combined, unused_inputs] + mock_files + ([module_info] if module_info else []),
         unused_inputs_list = unused_inputs,
         arguments = arguments,
         mnemonic = "SafeDI",
@@ -331,7 +325,6 @@ def _safedi_compile_impl(ctx):
         SafeDIInfo(
             module_info = module_info,
             transitive_module_infos = depset([module_info] if module_info else [], transitive = module_infos_of_dependencies),
-            transitive_module_positions = depset([module_positions] if module_positions else [], transitive = [module_positions_beneath]),
         ),
     ]
 

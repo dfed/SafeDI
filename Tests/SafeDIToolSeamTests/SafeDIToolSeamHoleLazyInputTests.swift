@@ -836,7 +836,6 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		)
 		let app = Self.app(declarations: Self.uploaderBuildingJobs, jobDeclarations: ["@Received let exportService: any Exporting"], handWrittenFill: nil)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: SafeDIToolSeamBuilderParameterTests.modules(feature: feature, app: app), integration: integration, filesToDelete: &filesToDelete)
-		let seamPath = try #require(output.modules["Feature"]).fixtures.compilerPath(of: "ExportFeature.swift")
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [integration == .moduleInfo ? "Feature.swift" : "ExportFeature+SafeDI.swift": generatedFileHeader + """
 		extension ExportFeature {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -851,9 +850,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_exportService __safeDI_exportService_: @autoclosure @escaping () -> ExportService, __safeDI_uploaderBuilder: __safeDI_UploaderCarrier<any Uploader>) {
-		        #sourceLocation(file: "\(seamPath)", line: 9)
-		        let exportService: any Exporting = __safeDI_exportService_()
-		        #sourceLocation()
+		        let exportService: any Exporting = __safeDI_exportService_() // Declared as ExportFeature.exportService
 		        @inline(never) func __safeDI_screenBuilder() -> ExportScreen {
 		            ExportScreen(exportService: exportService)
 		        }

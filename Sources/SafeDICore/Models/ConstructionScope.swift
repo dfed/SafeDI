@@ -120,7 +120,7 @@ struct ConstructionScope: Sendable {
 			fulfilledBy: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 		)
 	}
 

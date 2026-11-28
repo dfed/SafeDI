@@ -94,7 +94,7 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 			plainTypeDeclarations: [],
 			seamSignatures: written,
 			view: .empty,
-		).moduleInfoDataWritingSeamSignaturesWithoutPositions)
+		).moduleInfoData)
 		// The signatures the file was written from record nothing.
 		StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofSeamSignatures: written, in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)
 		withKnownIssue {
@@ -151,7 +151,7 @@ struct SafeDIToolStoredPlaceGraphChecksTests {
 			seamSignatures: ModuleSeamSignatures([]),
 			publicMockPlans: ModulePublicMockPlans(written, compilesGeneratedMocks: false),
 			view: .empty,
-		).moduleInfoDataWritingSeamSignaturesWithoutPositions)
+		).moduleInfoData)
 		// The plans the file was written from record nothing, and neither does a plan the run computed that the file
 		// leaves out.
 		StoredPlaceGraphChecks.expectGraphsReadBackAsComputed(ofPublicMockPlans: written + [plan(of: "Sheet", cases: [plainCase])], in: file, writtenByRunOfModuleNamed: "Feature", sourceLocation: #_sourceLocation)

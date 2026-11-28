@@ -516,11 +516,6 @@ struct SafeDIToolGraphFuzzerTests {
 			"        self.init(holeSeam: .init(holeService: holeService), holeTicket: holeTicket)\n",
 			"        self.init(holeSeam: .init(holeService: holeService, holeTicket: holeTicket))\n",
 		),
-		// A statement moved out of the `#sourceLocation` run it was in, in one block.
-		(
-			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        let holeService = HoleImpl()\n        #sourceLocation()\n        return HoleSeam(holeService: holeService)\n    }\n",
-			"    func __safeDI_holeSeam() -> HoleSeam {\n        #sourceLocation(file: \"HoleSeam.swift\", line: 3)\n        #sourceLocation()\n        let holeService = HoleImpl()\n        return HoleSeam(holeService: holeService)\n    }\n",
-		),
 		// A statement moved from one function's body to another's.
 		(
 			"    func __safeDI_holeSeam() -> HoleSeam {\n        let holeService = HoleImpl()\n        let holeTicket = HoleTicket()\n        return HoleSeam(holeService: holeService)\n    }\n    func __safeDI_holeOuter() -> HoleOuter {\n        return HoleOuter()\n    }\n",
@@ -1645,27 +1640,21 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyBySourceLocationAndPluginHeader() {
-		// Only a flow that knows the compiler's spelling of an alias's file refers to it with a `#sourceLocation`
-		// directive, and every file the plugin writes opens with its header.
-		let withDirective = Self.rootInitializer.replacingOccurrences(
-			of: "        let authToken: S31_Secret = token\n",
-			with: "        #sourceLocation(file: \"/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift\", line: 8)\n        let authToken: S31_Secret = token\n        #sourceLocation()\n",
-		)
+	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByPluginHeader() {
+		// Every file the plugin writes opens with its header.
 		let withHeader = GraphFuzzerOracle.generatedFileHeaderLines.joined(separator: "\n") + "\n" + Self.rootInitializer
 		let runs = Self.integrationRuns(
-			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withDirective], warnings: []),
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
 			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withHeader], warnings: []),
 		)
-		#expect(withDirective != withHeader)
+		#expect(Self.rootInitializer != withHeader)
 		#expect(runs.integrationsDisagreeFailure == nil)
 	}
 
 	@Test
 	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByCommentsOneFlowWritesForWhatItCannotKnow() {
-		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, a seam call carries a
-		// comment saying what each flow does when the call does not compile, and a run without a target graph names the
-		// types it counts as `public` because it reads no declaration of them.
+		// A seam call carries a comment saying what each flow does when the call does not compile, and a run without a
+		// target graph names the types it counts as `public` because it reads no declaration of them.
 		let withUnreadTypeComment = Self.rootInitializer
 			.replacingOccurrences(
 				of: "    public convenience init() {",
@@ -1673,13 +1662,12 @@ struct SafeDIToolGraphFuzzerTests {
 			)
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self" + MultiModuleIntegration.moduleInfo.seamCallComment(type: "S31_Screen", declaringModule: "FuzzFeature"))
 		let withComments = Self.rootInitializer
-			.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret = token // Declared at Sources/FuzzApp/S31_Root.swift:8")
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self // If this line does not compile, add the SafeDI plugin to the target that declares S31_Screen.")
 		let runs = Self.integrationRuns(
 			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withUnreadTypeComment], warnings: []),
 			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withComments], warnings: []),
 		)
-		#expect(withComments.components(separatedBy: " // ").count == 3)
+		#expect(withComments.components(separatedBy: " // ").count == 2)
 		#expect(withUnreadTypeComment != Self.rootInitializer)
 		#expect(runs.integrationsDisagreeFailure == nil)
 	}
@@ -2965,9 +2953,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let typeErrorSeed: UInt64 = 1_000_000_001
 		let loweringErrorSeed: UInt64 = 1_000_000_002
 		let warningSeed: UInt64 = 1_000_000_003
-		let redirectedWarningSeed: UInt64 = 1_000_000_004
 		let fixtureWarningSeed: UInt64 = 1_000_000_005
-		let redirectedWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: redirectedWarningSeed)
 		let fixtureWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: fixtureWarningSeed)
 		let toolRuns = [
 			// A type error, which the type checker reports.
@@ -2984,19 +2970,9 @@ struct SafeDIToolGraphFuzzerTests {
 			"""),
 			// A warning in the generated file, which compiles.
 			Self.probeGraph(seed: warningSeed, generatedCode: "func drawsWarning() {\n\tlet unused = 1\n}\n"),
-			// A warning the compiler reports at the fixture's declaration, where a `#sourceLocation` directive in
-			// the generated file attributes the line, as the tool's directives name the fixtures it was given.
-			Self.probeGraph(seed: redirectedWarningSeed, generatedCode: """
-			func drawsWarningAtDeclaration() {
-				#sourceLocation(file: "/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift", line: 3)
-				let unused = 1
-				#sourceLocation()
-			}
-
-			"""),
-			// A warning the fixture draws too, which is not the generated code's to avoid. The two graphs above draw the
-			// same message in their generated code and still fail, which pins that only a graph's own fixture excuses
-			// its warning, although every graph is in the one compile.
+			// A warning the fixture draws too, which is not the generated code's to avoid. The graph above draws the same
+			// message in its generated code and still fails, which pins that only a graph's own fixture excuses its
+			// warning, although every graph is in the one compile.
 			Self.probeGraph(
 				seed: fixtureWarningSeed,
 				fixtureDeclarations: "func \(fixtureWarningPrefix)drawsWarning() {\n\tlet unused = 1\n}\n",
@@ -3006,13 +2982,11 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failures = try await GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
-		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed, redirectedWarningSeed])
+		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed])
 		#expect(failures[typeErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[loweringErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[warningSeed]?.kind == .generatedCodeDrawsWarning)
 		#expect(failures[warningSeed]?.details.contains("Broken.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
-		#expect(failures[redirectedWarningSeed]?.kind == .generatedCodeDrawsWarning)
-		#expect(failures[redirectedWarningSeed]?.details.hasPrefix("/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
@@ -3604,33 +3578,23 @@ struct SafeDIToolGraphFuzzerTests {
 		    public convenience init() {
 		        let t1 = S731_T1()
 		        @Sendable nonisolated func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
-		            #sourceLocation(file: "S731_Link0.swift", line: 8)
-		            let t1AliasAlias: S731_T1? = t1Alias
-		            #sourceLocation()
+		            let t1AliasAlias: S731_T1? = t1Alias // Declared as S731_Link0.t1AliasAlias
 		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
 		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
 		        }
 		        @Sendable nonisolated func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
-		            #sourceLocation(file: "S731_Link1.swift", line: 7)
-		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
-		            #sourceLocation()
+		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias // Declared as S731_Link1.t1AliasAliasAlias
 		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
 		        }
 		        @Sendable nonisolated func __safeDI_lazyT0() -> S731_T0 {
-		            #sourceLocation(file: "S731_T0.swift", line: 9)
-		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
-		            #sourceLocation()
-		            #sourceLocation(file: "S731_T0.swift", line: 10)
-		            let t1Alias: S731_T1? = t1
-		            #sourceLocation()
+		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1) // Declared as S731_T0.anyT1Alias
+		            let t1Alias: S731_T1? = t1 // Declared as S731_T0.t1Alias
 		            let link0: S731_Link0 = __safeDI_link0(t1Alias: t1Alias)
 		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
 		        func __safeDI_t2Builder() -> S731_T2 {
-		            #sourceLocation(file: "S731_T2.swift", line: 7)
-		            let t1Alias: S731_T1? = t1
-		            #sourceLocation()
+		            let t1Alias: S731_T1? = t1 // Declared as S731_T2.t1Alias
 		            return S731_T2(t1Alias: t1Alias)
 		        }
 		        let t2Builder = Instantiator<S731_T2>(__safeDI_t2Builder)
@@ -3737,17 +3701,11 @@ struct SafeDIToolGraphFuzzerTests {
 		                if let safeDIBuilder = safeDIOverrides.t2.t1Builder { safeDIBuilder(service) } else { S2420_T1.customMock(service: service) }
 		            }
 		            let t1Builder = Instantiator<S2420_T1>(__safeDI_t1Builder)
-		            #sourceLocation(file: "S2420_T2.swift", line: 10)
-		            let t6Alias: S2420_T6? = t6
-		            #sourceLocation()
+		            let t6Alias: S2420_T6? = t6 // Declared as S2420_T2.t6Alias
 		            func __safeDI_link0() -> S2420_Link0 {
-		                #sourceLocation(file: "S2420_Link0.swift", line: 8)
-		                let t6AliasAlias: S2420_T6? = t6Alias
-		                #sourceLocation()
+		                let t6AliasAlias: S2420_T6? = t6Alias // Declared as S2420_Link0.t6AliasAlias
 		                func __safeDI_link1() -> S2420_Link1 {
-		                    #sourceLocation(file: "S2420_Link1.swift", line: 8)
-		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias
-		                    #sourceLocation()
+		                    let t6AliasAliasAlias: S2420_T6? = t6AliasAlias // Declared as S2420_Link1.t6AliasAliasAlias
 		                    let link2 = if let safeDIBuilder = safeDIOverrides.t2.link0.link1.link2 { safeDIBuilder(t6AliasAliasAlias) } else { S2420_Link2(t6AliasAliasAlias: t6AliasAliasAlias) }
 		                    return if let safeDIBuilder = safeDIOverrides.t2.link0.link1.safeDIBuilder { safeDIBuilder(t6AliasAliasAlias, link2) } else { S2420_Link1(t6AliasAliasAlias: t6AliasAliasAlias, link2: link2) }
 		                }
@@ -3956,9 +3914,7 @@ struct SafeDIToolGraphFuzzerTests {
 		        func __safeDI_passedLabelScope() -> S99_PassedLabelScope {
 		            let passedTracker = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedTracker { safeDIBuilder() } else { S99_PassedLabelTracker() }
 		            func __safeDI_passedSibling() -> S99_PassedLabelSibling {
-		                #sourceLocation(file: "S99_PassedLabelSibling.swift", line: 8)
-		                let passedTrackerAlias: S99_PassedLabelTracker? = passedTracker
-		                #sourceLocation()
+		                let passedTrackerAlias: S99_PassedLabelTracker? = passedTracker // Declared as S99_PassedLabelSibling.passedTrackerAlias
 		                let passedLeaf = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.passedLeaf { safeDIBuilder(passedTrackerAlias) } else { S99_PassedLabelLeaf(passedTrackerAlias: passedTrackerAlias) }
 		                return if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.safeDIBuilder { safeDIBuilder(passedTrackerAlias, passedLeaf) } else { S99_PassedLabelSibling(passedTrackerAlias: passedTrackerAlias, passedLeaf: passedLeaf) }
 		            }
@@ -6551,7 +6507,6 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(unresolved):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(resolved):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "\(linux):8:2: error: one") == "<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
-		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "            #sourceLocation(file: \"\(resolved)\", line: 8)") == "            #sourceLocation(file: \"<fixture-directory>/Graph/Sources/Alpha/S12_T1.swift\", line: 8)")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "chain: S12_Root0 -> S12_T1 at \(unresolved) and \(resolved)") == "chain: S12_Root0 -> S12_T1 at <fixture-directory>/Graph/Sources/Alpha/S12_T1.swift and <fixture-directory>/Graph/Sources/Alpha/S12_T1.swift")
 		#expect(GraphFuzzerMultiModuleProperty.reducingFixtureRootPaths(in: "/Users/someone/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one") == "/Users/someone/Graph/Sources/Alpha/S12_T1.swift:8:2: error: one")
 	}

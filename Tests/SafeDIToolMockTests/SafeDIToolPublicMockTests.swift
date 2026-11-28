@@ -1383,7 +1383,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"""], dependencies: ["Core"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
-		let holderPath = try #require(output.modules["Core"]).fixtures.compilerPath(of: "Holder.swift")
 		let coreImports = """
 		#if canImport(SafeDI)
 		import SafeDI
@@ -1432,9 +1431,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Holder {
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(holderPath)", line: 24)
-		            let ax: X? = x
-		            #sourceLocation()
+		            let ax: X? = x // Declared as Child.ax
 		            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(ax) } else { Grand(ax: ax) }
 		            return Child.__safeDI_init(ax: ax, grand: grand, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 		        }
@@ -1600,9 +1597,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Holder {
 				        func __safeDI_child() -> Child {
-				            #sourceLocation(file: "\(holderPath)", line: 24)
-				            let ax: X? = x
-				            #sourceLocation()
+				            let ax: X? = x // Declared as Child.ax
 				            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(ax) } else { Grand(ax: ax) }
 				            return Child.__safeDI_init(ax: ax, grand: grand, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 				        }
@@ -2654,9 +2649,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        }
 			        let config: Config = if let config { config } else { __safeDI_config() }
 			        func __safeDI_child() -> Child {
-			            #sourceLocation(file: "\(output.fixtures.compilerPath(of: "Child.swift"))", line: 9)
-			            let renamed: Config = config
-			            #sourceLocation()
+			            let renamed: Config = config // Declared as Child.renamed
 			            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(config, renamed) } else { Child(config: config, renamed: renamed) }
 			        }
 			        let child: Child = __safeDI_child()

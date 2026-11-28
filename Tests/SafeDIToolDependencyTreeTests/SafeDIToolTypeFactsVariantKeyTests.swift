@@ -964,9 +964,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_leafBuilder(theme: Theme) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder(theme: theme)
 				            }
@@ -984,9 +982,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder_(theme: LazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder_(theme: theme)
 				            }
@@ -1001,9 +997,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				        }
 				        let second: Second = __safeDI_second()
 				        func __safeDI_leafBuilder__() -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = nil
-				            #sourceLocation()
+				            let renamedTheme: Theme? = nil // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder__)
 				            return Leaf(renamedTheme: renamedTheme, leafBuilder: leafBuilder)
 				        }
@@ -1025,9 +1019,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_leafBuilder() -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = nil
-				            #sourceLocation()
+				            let renamedTheme: Theme? = nil // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
 				            return Leaf(renamedTheme: renamedTheme, leafBuilder: leafBuilder)
 				        }
@@ -1040,9 +1032,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder_(theme: LazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder_(theme: theme)
 				            }
@@ -1057,9 +1047,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				        }
 				        let second: Second = __safeDI_second()
 				        func __safeDI_leafBuilder__(theme: Theme) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder__(theme: theme)
 				            }
@@ -1106,9 +1094,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder(theme: SendableLazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder(theme: theme)
 				            }
@@ -1126,9 +1112,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder_(theme: LazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder_(theme: theme)
 				            }
@@ -1158,9 +1142,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder(theme: LazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder(theme: theme)
 				            }
@@ -1178,9 +1160,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 				            Theme()
 				        }
 				        func __safeDI_leafBuilder_(theme: SendableLazilyInstantiated<Theme>) -> Leaf {
-				            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-				            let renamedTheme: Theme? = theme.instance
-				            #sourceLocation()
+				            let renamedTheme: Theme? = theme.instance // Declared as Leaf.renamedTheme
 				            let leafBuilder = Instantiator<Leaf> {
 				                __safeDI_leafBuilder_(theme: theme)
 				            }
@@ -1229,16 +1209,12 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_midBuilder(theme: Theme) -> Mid {
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 8)
-		            let renamed: Theme = theme
-		            #sourceLocation()
+		            let renamed: Theme = theme // Declared as Mid.renamed
 		            let leaf: Leaf = __safeDI_leaf(renamed: renamed)
 		            return Mid(renamed: renamed, leaf: leaf)
 		        }
 		        func __safeDI_leaf(renamed: Theme) -> Leaf {
-		            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 7)
-		            let renamedAgain: Theme = renamed
-		            #sourceLocation()
+		            let renamedAgain: Theme = renamed // Declared as Leaf.renamedAgain
 		            return Leaf(renamedAgain: renamedAgain)
 		        }
 		        func __safeDI_first() -> First {
@@ -1253,9 +1229,7 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 		            Theme()
 		        }
 		        func __safeDI_midBuilder_(theme: LazilyInstantiated<Theme>) -> Mid {
-		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 8)
-		            let renamed: Theme = theme.instance
-		            #sourceLocation()
+		            let renamed: Theme = theme.instance // Declared as Mid.renamed
 		            let leaf: Leaf = __safeDI_leaf(renamed: renamed)
 		            return Mid(renamed: renamed, leaf: leaf)
 		        }
