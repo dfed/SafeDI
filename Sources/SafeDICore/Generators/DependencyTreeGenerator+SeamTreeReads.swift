@@ -473,11 +473,13 @@ extension DependencyTreeGenerator {
 
 		/// The labels among `labels` that the tree of the fill along `fillEdge` reads inside a `@Sendable` function, where no
 		/// declaration inside the tree hides them, as `ScopeGenerator.labelsReadInsideSendableFunction(among:)` finds them:
-		/// a received dependency, or an alias's fulfilling property its own scope does not declare, beneath an edge that opens
-		/// a `@Sendable` function (`TypeFactsEdge.opens`) or a fill built in one (`TypeFactsFill.buildsInSendableFunction`, the
-		/// tree's `ScopeGenerator.buildsInSendableFunction(ofFill:)`, among `fillEdgesBuiltInSendableFunction`), and a
-		/// parameter a nested seam call takes `@Sendable`. The fill's own function is not one of those: what it binds is a
-		/// local of it, and the tree starts at the fill's built child. The visits made die with the call.
+		/// a received dependency, or an alias's fulfilling property its own scope does not declare, at or beneath the target
+		/// of an edge that opens a `@Sendable` function (`TypeFactsEdge.opens`), whose target a cycle made `@Sendable`
+		/// (`TypeFactsGraph.buildsInSendableFunction`, `buildsTargetInSendableFunction(atEdge:)`), or a fill built in one
+		/// (`TypeFactsFill.buildsInSendableFunction`, the tree's `ScopeGenerator.buildsInSendableFunction(ofFill:)`, among
+		/// `fillEdgesBuiltInSendableFunction`), and a parameter a nested seam call takes `@Sendable`. The fill's own function
+		/// is not one of those: what it binds is a local of it, and the tree starts at the fill's built child, inside a
+		/// `@Sendable` function where that child's own builder function is one. The visits made die with the call.
 		private static func labels(among labels: Set<String>, readInsideSendableFunctionBeneath fillEdge: Int, of graph: TypeFactsGraph, fillEdgesBuiltInSendableFunction: Set<Int32>) -> Set<String> {
 			guard !labels.isEmpty else { return [] }
 			struct Visit: Hashable {
@@ -490,7 +492,7 @@ extension DependencyTreeGenerator {
 			var visitsMade = Set<Visit>()
 			var visitsToMake = [Visit(
 				node: Int(graph.graph.edgeTargets[fillEdge]),
-				isInsideSendableFunction: fillOpens == .sendableInstantiatorBuilder || fillOpens == .sendableLazyWrapper,
+				isInsideSendableFunction: fillOpens == .sendableInstantiatorBuilder || fillOpens == .sendableLazyWrapper || graph.buildsInSendableFunction[Int(graph.graph.edgeTargets[fillEdge])],
 				declaredLabels: [],
 			)]
 			while let visit = visitsToMake.popLast() {
@@ -526,7 +528,7 @@ extension DependencyTreeGenerator {
 					let fillBoundLabels = graph.edgeFacts[edge].isFill ? Set(graph.receives.hiddenFromCaller(atEdge: edge).map { graph.propertyTable[Int($0)].label }).intersection(labels) : []
 					visitsToMake.append(Visit(
 						node: Int(graph.graph.edgeTargets[edge]),
-						isInsideSendableFunction: visit.isInsideSendableFunction || graph.edgeFacts[edge].opens.isSendableFunction || fillEdgesBuiltInSendableFunction.contains(Int32(edge)),
+						isInsideSendableFunction: visit.isInsideSendableFunction || graph.buildsTargetInSendableFunction(atEdge: edge) || fillEdgesBuiltInSendableFunction.contains(Int32(edge)),
 						declaredLabels: childDeclaredLabels.union(fillBoundLabels),
 					))
 				}
@@ -839,8 +841,9 @@ extension DependencyTreeGenerator.ParameterReads {
 	}
 
 	/// Each label `graph`'s tree reads inside a `@Sendable` function: one its subtree beneath an edge that opens such a
-	/// function (`TypeFactsEdge.opens`) reads from above it, where no node on the route from the root to the edge binds
-	/// it and, for a fill's edge, the fill does not bind it from its site's struct. A route is walked only in plain code:
+	/// function (`TypeFactsEdge.opens`), or whose target a cycle made `@Sendable` (`buildsTargetInSendableFunction(atEdge:)`,
+	/// as the tree counts a child's `ScopeGenerator.buildsInSendableFunction`), reads from above it, where no node on the
+	/// route from the root to the edge binds it and, for a fill's edge, the fill does not bind it from its site's struct. A route is walked only in plain code:
 	/// beneath such an edge, what the subtree reads from above it already holds every read beneath. A fill that is no
 	/// `@Sendable` function is not entered: the call hands it what its tree reads from the caller's scope where the call
 	/// is, in plain code (`ScopeGenerator.FillCallerReads`). A visit is a node with the labels the nodes above it bind, of
@@ -866,7 +869,7 @@ extension DependencyTreeGenerator.ParameterReads {
 				// the edge opens), and also where a `@Sendable` function that does not enclose the fill refers to it, as a call
 				// inside a `SendableInstantiator`'s builder that builds the seam again and passes the fill on
 				// (`TypeFactsFill.buildsInSendableFunction`, the tree's `ScopeGenerator.buildsInSendableFunction(ofFill:)`).
-				if edgeFacts.opens.isSendableFunction || fillEdgesBuiltInSendableFunction.contains(Int32(edge)) {
+				if graph.buildsTargetInSendableFunction(atEdge: edge) || fillEdgesBuiltInSendableFunction.contains(Int32(edge)) {
 					for label in labelsOfTarget where !boundLabels.contains(label) && !readsBeneathFills.edge(edge, bindsFromScopeStruct: label) {
 						labels.insert(graph.labelTexts[Int(label)])
 					}
@@ -876,6 +879,16 @@ extension DependencyTreeGenerator.ParameterReads {
 			}
 		}
 		return labels
+	}
+}
+
+extension TypeFactsGraph {
+	/// Whether the edge's target is built in a `@Sendable` builder function of its own, so that its own reads and every
+	/// read beneath it are made inside one, as the tree's walks count a child's `ScopeGenerator.buildsInSendableFunction`:
+	/// the edge opens a `@Sendable` function, or a cycle closed beneath the target from inside a `@Sendable` function
+	/// that does not enclose it made the target's function `@Sendable` (`buildsInSendableFunction`, by node).
+	fileprivate func buildsTargetInSendableFunction(atEdge edge: Int) -> Bool {
+		edgeFacts[edge].opens.isSendableFunction || buildsInSendableFunction[Int(graph.edgeTargets[edge])]
 	}
 }
 

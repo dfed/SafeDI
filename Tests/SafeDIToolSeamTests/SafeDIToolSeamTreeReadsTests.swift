@@ -239,6 +239,18 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillHandedPlainMemoReadsLabelInBuilderFunctionCycleMakesSendable() async throws {
+		// `Desk`'s fill of `Parcel` is handed `Inbox`'s plain memo of `credential`, and builds `Alpha` through
+		// `alphaBuilder`, whose function a cycle closing inside `Beta`'s `SendableInstantiator` refers to, which makes it
+		// `@Sendable`; `Alpha` reads `credential` there, so the fill binds the memo's value, which serves no read of the
+		// wrapper.
+		let comparisons = try await comparisonsAllowingRejection(ofSeam: "Desk", in: Self.modules(besideParcelReader: "", Self.sendableCycleDeclarations, parcelBuilds: "alphaBuilder: Instantiator<Alpha>"))
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsNoDifference_whenFillOfSeamCallRequiresValueOfSeamsCaller() async throws {
 		// `Desk`'s fill of `Drawer`'s place builds `PenImpl`, which requires `clock` of `Desk`'s caller: the tree's
 		// required receives count it, as the facts' must.
@@ -783,6 +795,25 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 	public final class Safe: Instantiable, Sendable {
 	    public init(lockerBuilder: SendableInstantiator<Locker>) { self.lockerBuilder = lockerBuilder }
 	    @Instantiated public let lockerBuilder: SendableInstantiator<Locker>
+	}
+	"""
+
+	/// `Alpha`, of `Feature`, which receives `credential` and builds `Beta` in a `SendableInstantiator`; `Beta` declares
+	/// `credential` and builds `Alpha` again through `alphaBuilder`, closing a lazy cycle. `Beta` is not `Sendable`, since
+	/// the `Instantiator` it holds is not.
+	private static let sendableCycleDeclarations = """
+	@Instantiable
+	public final class Alpha: Instantiable, Sendable {
+	    public init(credential: Credential, betaBuilder: SendableInstantiator<Beta>) { self.credential = credential; self.betaBuilder = betaBuilder }
+	    @Received public let credential: Credential
+	    @Instantiated public let betaBuilder: SendableInstantiator<Beta>
+	}
+
+	@Instantiable
+	public final class Beta: Instantiable {
+	    public init(credential: Credential, alphaBuilder: Instantiator<Alpha>) { self.credential = credential; self.alphaBuilder = alphaBuilder }
+	    @Instantiated public let credential: Credential
+	    @Instantiated public let alphaBuilder: Instantiator<Alpha>
 	}
 	"""
 
