@@ -606,6 +606,33 @@ struct SafeDIToolNodeRecordsMockOverrideNotParentFieldTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keepsTheWalksStatements_whenChildNamedApartAtRootIsAlsoBuiltByCyclesFunction() async throws {
+		// `Feature` names `t1Builder` apart (`t1Builder_Instantiator__T1`, `t1Builder_T1`), and the lazy cycle through `T3`
+		// and `T0` builds the same declaration in `T0`'s body, whose configuration holds the bare label. The walk names the
+		// child apart only in the root's own body, which one record shared by both parents cannot write, so the world is
+		// refused, and the walk writes it.
+		let fixture = [
+			"Root.swift": seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			"Feature.swift": seamFixtureType(named: "Feature", isFinalClass: true, declarations: ["@Received let t3Builder: Instantiator<T3>", "@Received let t1Builder: T1"])
+				.replacingOccurrences(of: "@Instantiable", with: "@Instantiable(generateMock: true)"),
+			"T3.swift": seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let t0Builder: Instantiator<T0>", "@Received let t1Builder: Instantiator<T1>"]),
+			"T0.swift": seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			"T1.swift": seamFixtureType(named: "T1", isFinalClass: true, declarations: []),
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+
+		let feature = reports.filter { $0.isMockRoot && $0.root == "Feature" }
+		#expect(feature.map(\.refusal) == ["mockOverrideNotParentField"])
+		#expect(feature.map(\.isLaidOutFromNodeRecords) == [false])
+		#expect(output.mockFiles["Feature+SafeDIMock.swift"] == walkOutput.mockFiles["Feature+SafeDIMock.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_passesNilInPlace_whenRequiredReceiveAboveEveryPlacePinsLabelNamedApart() async throws {
 		// `Lower` receives `thing` only if available as an `Instantiator`, and `Upper`, which builds it, requires the
 		// value: the label is pinned at that place, not for the type, and it is `Lower`’s only place, so it is passed `nil`.

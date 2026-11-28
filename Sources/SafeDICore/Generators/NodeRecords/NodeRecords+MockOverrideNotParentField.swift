@@ -196,6 +196,13 @@ extension NodeRecords {
 			// The walk binds an optional form the root names apart without its type, so the binding is not optional; a
 			// record's binding declares the property's type.
 			guard declaration != 0 || mockRootNames.nameApart(of: property) == nil || !property.typeDescription.isOptional else { return .mockOverrideNotParentField }
+			// A record binds and overrides a child the root names apart under that name wherever the child is built. Another
+			// parent that builds the same declaration in line, as a cycle's function does, reads its override from that
+			// parent's configuration, which holds the bare label: the walk names the child apart only in the root's own body.
+			// A cycle that closes on the child calls the root's function, which reads the root's name.
+			guard declaration != 0 || mockRootNames.nameApart(of: property) == nil || world.parents(of: child).allSatisfy({ parent in
+				parent.parent == 0 || world.edgeFacts(from: parent.parent).contains { $0.child == child && $0.isCallEdge }
+			}) else { return .mockOverrideNotParentField }
 			guard !labels.insert(property.label).inserted else { continue }
 			// Both children of the label are named apart, or neither is.
 			guard declaration == 0, mockRootNames.namesApart(label: property.label) else { return .mockOverrideNotParentField }
