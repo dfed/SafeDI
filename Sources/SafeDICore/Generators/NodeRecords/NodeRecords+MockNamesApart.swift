@@ -38,15 +38,14 @@ extension NodeRecords {
 		var place: GeneratedCode {
 			// A builder a call passes up is received `@escaping`, which no binding spells.
 			let type = property.typeDescription.strippingEscaping
-			let record: AliasPlaceRecord
-			if let nameApart {
-				record = AliasPlaceRecord(
+			let record = if let nameApart {
+				AliasPlaceRecord(
 					property: Property(label: property.label, typeDescription: type),
 					fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
 					text: "let \(property.label): \(type.asSource) = \(nameApart.label)",
 				)
 			} else {
-				record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.label): \(type.asSource) = nil", reads: [])
+				AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.label): \(type.asSource) = nil", reads: [])
 			}
 			let text = record.text
 			return .indented(
