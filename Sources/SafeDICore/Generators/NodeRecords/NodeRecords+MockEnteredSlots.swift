@@ -57,7 +57,15 @@ extension NodeRecords {
 	/// Whether `declaration`'s function takes and hands on `__safeDI_entered`: it is on a cycle, enters a place, or lies
 	/// between a declaration off every cycle that enters one and a slot beneath it. The root never does.
 	static func takesMockEnteredPlaces(_ declaration: DeclarationID, in slots: MockEnteredSlots) -> Bool {
-		slots.takesEnteredPlacesByDeclaration[Int(declaration)]
+		mockEnteredPlacesForm(of: declaration, in: slots) == .takesAndHandsOn
+	}
+
+	/// The form of `declaration`'s function as to the entered places (`takesMockEnteredPlaces(_:in:)`), a member of the
+	/// shape a record is written in beside its variant's key. The facts cannot key a variant by it: whether a declaration
+	/// lies above a slot is known only once its world's cycles are, so a caller that shares records between worlds reads
+	/// it here and shares no variant whose declarations differ in it.
+	static func mockEnteredPlacesForm(of declaration: DeclarationID, in slots: MockEnteredSlots) -> MockEnteredPlacesForm {
+		slots.takesEnteredPlacesByDeclaration[Int(declaration)] ? .takesAndHandsOn : .takesNoPlaces
 	}
 }
 
@@ -73,9 +81,9 @@ extension NodeRecords {
 ///
 /// Cost: two passes over the declarations, one walk up from the slots, one walk down from the declarations off every
 /// cycle that enter a place, one walk down from the declarations that take the places, one walk down from the edges
-/// the configurations leave out and one up from the declarations that read a field of their configuration, and one
-/// walk up per configuration that has a nearest name, each visiting a declaration once. Memory: a few entries per
-/// declaration and one per slot, for as long as a caller holds it.
+/// the configurations leave out and one up from the declarations that read a field of their configuration, each
+/// following an edge once (`walkStepCount`). No walk is made per configuration, which would cost the configurations
+/// times the declarations. Memory: a few entries per declaration and one per slot, for as long as a caller holds it.
 struct MockEnteredSlots: Sendable {
 	init(world: some NodeRecordSources) {
 		let declarations = 0..<Int32(world.declarationCount)
@@ -125,35 +133,31 @@ struct MockEnteredSlots: Sendable {
 			nearestNameByConfiguration[configuration] = nearestOfTypeSlotName
 			return MockEnteredSlot(name: name, configurationType: configuration.type, nearestOfTypeSlotName: nearestOfTypeSlotName)
 		}
-		// Each declaration off every cycle whose configuration has a nearest name, and beneath which a slot of that
-		// configuration can be reached, enters the nearest place of its type.
-		var nearestEnteredByDeclaration = [String?](repeating: nil, count: world.declarationCount)
-		for (configuration, name) in nearestNameByConfiguration {
-			var isAboveASlotOfConfiguration = [Bool](repeating: false, count: world.declarationCount)
-			var pending = declarations.filter { slotIndexByDeclaration[Int($0)] >= 0 && slots[Int(slotIndexByDeclaration[Int($0)])].nearestOfTypeSlotName == name }
-			while let declaration = pending.popLast() {
-				for parent in world.parents(of: declaration) where !isAboveASlotOfConfiguration[Int(parent.parent)] {
-					isAboveASlotOfConfiguration[Int(parent.parent)] = true
-					pending.append(parent.parent)
-				}
-			}
-			for (declaration, _) in declarationsBuiltAsProperties where isAboveASlotOfConfiguration[Int(declaration)] && slotIndexByDeclaration[Int(declaration)] < 0 && configurationBuilt(by: declaration) == configuration {
-				nearestEnteredByDeclaration[Int(declaration)] = name
-			}
-		}
-		// A declaration hands the places on where it is on a cycle or enters a place, or lies between a declaration off
-		// every cycle that enters one and a slot beneath it.
+		var walkStepCount = 0
 		var isAboveASlot = [Bool](repeating: false, count: world.declarationCount)
 		var pendingUp = declarations.filter { slotIndexByDeclaration[Int($0)] >= 0 }
 		while let declaration = pendingUp.popLast() {
+			walkStepCount += 1
 			for parent in world.parents(of: declaration) where !isAboveASlot[Int(parent.parent)] {
 				isAboveASlot[Int(parent.parent)] = true
 				pendingUp.append(parent.parent)
 			}
 		}
+		// Each declaration off every cycle whose configuration has a nearest name, and beneath which a slot can be
+		// reached, enters the nearest place of its type. Every declaration of a type builds that type's properties, so
+		// in every world the tests and the fuzzer draw the slot beneath it is one of its configuration; a place entered
+		// above no slot of its configuration would be read by no call. One walk from every slot answers for every
+		// configuration, where a walk from each configuration's slots visits the declarations once per configuration.
+		var nearestEnteredByDeclaration = [String?](repeating: nil, count: world.declarationCount)
+		for (declaration, _) in declarationsBuiltAsProperties where isAboveASlot[Int(declaration)] && slotIndexByDeclaration[Int(declaration)] < 0 {
+			nearestEnteredByDeclaration[Int(declaration)] = nearestNameByConfiguration[configurationBuilt(by: declaration)]
+		}
+		// A declaration hands the places on where it is on a cycle or enters a place, or lies between a declaration off
+		// every cycle that enters one and a slot beneath it.
 		var isBeneathAnEntry = [Bool](repeating: false, count: world.declarationCount)
 		var pendingDown = declarations.filter { !world.isOnCycle($0) && (slotIndexByDeclaration[Int($0)] >= 0 || nearestEnteredByDeclaration[Int($0)] != nil) }
 		while let declaration = pendingDown.popLast() {
+			walkStepCount += 1
 			for child in world.edges(from: declaration) where !isBeneathAnEntry[Int(child)] {
 				isBeneathAnEntry[Int(child)] = true
 				pendingDown.append(child)
@@ -167,6 +171,7 @@ struct MockEnteredSlots: Sendable {
 			world.parents(of: declaration).contains { NodeRecords.mockConfigurationLeavesOut(declaration, builtBy: $0.parent, in: world) }
 		}
 		while let declaration = pendingLeftOut.popLast() {
+			walkStepCount += 1
 			guard !isBuiltBeneathEdgeLeftOut[Int(declaration)] else { continue }
 			isBuiltBeneathEdgeLeftOut[Int(declaration)] = true
 			pendingLeftOut.append(contentsOf: world.edges(from: declaration))
@@ -174,6 +179,7 @@ struct MockEnteredSlots: Sendable {
 		var mayBeEnteredLeftOut = [Bool](repeating: false, count: world.declarationCount)
 		var pendingFieldReaders = declarations.filter { isBuiltBeneathEdgeLeftOut[Int($0)] && !NodeRecords.mockConfigurationFieldArguments(of: $0, in: world).isEmpty }
 		while let declaration = pendingFieldReaders.popLast() {
+			walkStepCount += 1
 			guard !mayBeEnteredLeftOut[Int(declaration)] else { continue }
 			mayBeEnteredLeftOut[Int(declaration)] = true
 			pendingFieldReaders.append(contentsOf: world.parents(of: declaration).map(\.parent).filter { isBuiltBeneathEdgeLeftOut[Int($0)] })
@@ -195,6 +201,7 @@ struct MockEnteredSlots: Sendable {
 		var isBuiltBeneathEnteredPlaces = [Bool](repeating: false, count: world.declarationCount)
 		var pendingBeneath = declarations.filter { takesEnteredPlaces[Int($0)] }
 		while let declaration = pendingBeneath.popLast() {
+			walkStepCount += 1
 			for child in world.edges(from: declaration) where !takesEnteredPlaces[Int(child)] && !isBuiltBeneathEnteredPlaces[Int(child)] {
 				isBuiltBeneathEnteredPlaces[Int(child)] = true
 				pendingBeneath.append(child)
@@ -204,6 +211,7 @@ struct MockEnteredSlots: Sendable {
 		self.slots = slots
 		self.slotIndexByDeclaration = slotIndexByDeclaration
 		self.nearestEnteredByDeclaration = nearestEnteredByDeclaration
+		self.walkStepCount = walkStepCount
 	}
 
 	/// In declaration order of each slot's first declaration.
@@ -214,6 +222,9 @@ struct MockEnteredSlots: Sendable {
 	let nearestEnteredByDeclaration: [String?]
 	/// By declaration: whether its function takes and hands on the entered places.
 	let takesEnteredPlacesByDeclaration: [Bool]
+	/// The declarations the five walks that made this took from their work lists, summed: at most five times the
+	/// world's declarations and edges, which a test holds it to.
+	let walkStepCount: Int
 	/// By declaration: whether its place may be entered along an edge the configurations leave out, or beneath one, and
 	/// a construction there, its own or one beneath it, reads a field of its configuration. The walk leaves each such
 	/// construction to its initializer's own default, evaluated again each time, so a call of the declaration's function
@@ -232,12 +243,13 @@ struct MockEnteredSlots: Sendable {
 
 	/// Whether some function on no cycle enters the nearest place of its type alone, whether some function only hands
 	/// the places on, and whether some place may be entered left out: what `mock()` declares only where a call uses it
-	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:)`).
+	/// (`MockEnteredSlot.mockEnteredPlacesDeclaration(isSendable:entersNearest:passes:leavesOut:slotCount:)`).
 	var use: MockEnteredPlacesUse {
 		MockEnteredPlacesUse(
 			entersNearest: nearestEnteredByDeclaration.contains { $0 != nil },
 			passes: takesEnteredPlacesByDeclaration.indices.contains { takesEnteredPlacesByDeclaration[$0] && slotIndexByDeclaration[$0] < 0 && nearestEnteredByDeclaration[$0] == nil },
 			leavesOut: mayBeEnteredLeftOutByDeclaration.contains(true),
+			slotCount: slots.count,
 		)
 	}
 
@@ -246,6 +258,15 @@ struct MockEnteredSlots: Sendable {
 		let type: TypeDescription
 		let isBuiltWithHandWrittenMock: Bool
 	}
+}
+
+/// Whether a function of a mock's tree takes the places its cycles entered above it, in the one `__safeDI_entered`
+/// argument, and hands them on (`NodeRecords.mockEnteredPlacesForm(of:in:)`).
+enum MockEnteredPlacesForm: Hashable, Sendable {
+	/// The function takes no entered places: it reads its configuration where its parent holds it.
+	case takesNoPlaces
+	/// The function takes its configuration with the places entered above it, and hands them on.
+	case takesAndHandsOn
 }
 
 /// Which of the functions a mock root declares for the places its cycles enter its calls use, beside the one that looks
@@ -257,4 +278,6 @@ struct MockEnteredPlacesUse: Hashable, Sendable {
 	let passes: Bool
 	/// Whether some call enters a place left out, or from one entered so.
 	let leavesOut: Bool
+	/// How many slots the calls enter: a call names its slot by its position among them.
+	let slotCount: Int
 }

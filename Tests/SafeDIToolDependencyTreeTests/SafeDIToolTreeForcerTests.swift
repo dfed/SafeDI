@@ -309,7 +309,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 	mutating func generate_laysOutRoot_whenRenameKeepingItsLabelReadsRenameKeepingItsLabelAbove() async throws {
 		// `Detail`, beneath `Settings`, renames `analytics` under its own label too: its key names `Settings`' rename, the
 		// nearest declaration, never the wrapper above `Settings`, so its record matches the tree's code
-		// (`NodeRecordsChecks`), and the engine lays the erased rename that keeps its label out.
+		// (`NodeRecordsChecks`), and the engine lays the root out, the rename read before its binding as one from outside.
 		let (forcers, _) = try await treeForcers(of: Self.keepLabelRenames(nestedRename: true))
 		#expect(forcers == """
 		Root\tnone

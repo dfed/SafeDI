@@ -4734,11 +4734,11 @@ struct SafeDIToolGraphFuzzerTests {
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
 		// The outcome under reversed type names has no field for the builder of T8, so its function hands a new
 		// configuration in the field's place.
-		let handed = "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
+		let handed = "__safeDI_entered.entering(0, \(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
 
 		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { $0 }, renamedOutcomeBy: { code in
 			#expect(code.contains(handed))
-			return code.replacingOccurrences(of: handed, with: "__safeDI_entered.entering(\"t8Builder\", \(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration())")
+			return code.replacingOccurrences(of: handed, with: "__safeDI_entered.entering(0, \(Self.mockDifferencePrefix)T7.SafeDIMockConfiguration())")
 		})
 
 		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
@@ -4749,8 +4749,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func differences_nameNeitherReason_whenALaidOutMockHandsADroppedFieldToAnotherFunctionThanTheOneThatEntersAPlace() async throws {
 		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: Self.lazyCycleFixture)
 		let fileName = "\(Self.mockDifferencePrefix)T7+SafeDIMock.swift"
-		let entering = "__safeDI_entered.entering(\"t8Builder\", "
-		let passing = "__safeDI_entered.passing(\"t8Builder\", "
+		let entering = "__safeDI_entered.entering(0, "
+		let passing = "__safeDI_entered.passing(0, "
 		let read = "__safeDI_entered.configuration.t8Builder)"
 		let newConfiguration = "\(Self.mockDifferencePrefix)T8.SafeDIMockConfiguration())"
 

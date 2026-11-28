@@ -1061,11 +1061,13 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		// and its dispatchers made by `FillDispatcher`'s statics, as step 3's interface allows. A world with a cycle names a
 		// body's functions apart as the tree does (`identifierSafeNames`), from the labels and types of the places the body holds. A
 		// mock world with a cycle asks which edges its module's configurations leave out (`CycleEdge`), a fact of the module's
-		// types together that the world is made with until an edge fact holds it.
+		// types together that the world is made with until an edge fact holds it. A mock world's configuration records
+		// (`NodeRecords+MockConfigurations.swift`) read how a mock builds one type (`MockConstruction`), a fact of that type
+		// alone, as the walk's records read it.
 		let directory = URL(fileURLWithPath: #filePath)
 			.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 			.appendingPathComponent("Sources/SafeDICore/Generators/NodeRecords")
-		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames", "CycleEdge"]
+		let staticHelpers: Set = ["functionName", "standardIndent", "provides", "referencingDeclaration", "aliasDeclaration", "isBuilder", "DefaultParameter", "mockConfigurationStructName", "fillKey", "fillCaseKey", "FillDispatcher", "FillFieldSelection", "identifierSafeNames", "CycleEdge", "MockConstruction"]
 		let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { $0.hasSuffix(".swift") && $0 != "DependencyTreeGenerator+NodeRecords.swift" }.sorted()
 		#expect(files.count >= 4)
 		for file in files {
