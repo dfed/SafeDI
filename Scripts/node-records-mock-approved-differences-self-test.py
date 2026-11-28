@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 13, 16,
-20 in its three forms, 21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
+"""Self-test of node-records-mock-approved-differences.py: for each rewrite that restructures text (entries 13, 16 with a
+loop at two levels, 19, 20 in its four forms, 21 and 23), one real pair the rewrite makes equal, and hand edits of the records' text after each of which the pair
 must differ. Prints one line per case and exits 1 when a pair is not equal before an edit or still equal after one.
 
   node-records-mock-approved-differences-self-test.py
@@ -28,6 +28,17 @@ def swapped(first, second):
         if text.count(first) != 1 or text.count(second) != 1:
             raise SystemExit('the fixture no longer holds one of each: ' + first)
         return text.replace(first, '\0').replace(second, first).replace('\0', second)
+    return edit
+
+
+def last_two_swapped(first, second):
+    """swaps the last occurrence of first with the last occurrence of second, which follows it"""
+    def edit(text):
+        a = text.rfind(first)
+        b = text.rfind(second)
+        if a < 0 or b != a + len(first):
+            raise SystemExit('the fixture no longer holds the two in a row: ' + first)
+        return text[:a] + second + first + text[b + len(second):]
     return edit
 
 
@@ -90,6 +101,12 @@ CASES = [
     ('21', 'the closing call names the other type’s function of the same label',
      once('__safeDI_childBuilder(safeDIOverrides: Child.SafeDIMockConfiguration(),',
           '__safeDI_childBuilder_(safeDIOverrides: Child.SafeDIMockConfiguration(),')),
+    ('21-scopes', 'a call in the second parent names the first parent’s function',
+     once('__safeDI_aBuilder_(safeDIOverrides: safeDIOverrides.aBuilder)',
+          '__safeDI_aBuilder(safeDIOverrides: safeDIOverrides.aBuilder)')),
+    ('21-scopes', 'a parent hands the shared function another override',
+     once('__safeDI_aBuilder_(safeDIOverrides: __safeDI_entered.configuration.aBuilder)',
+          '__safeDI_aBuilder_(safeDIOverrides: __safeDI_entered.configuration.bBuilder)')),
     ('23-ancestor', 'the function built again reads another configuration’s override',
      once('return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }',
           'return if let safeDIBuilder = __safeDI_entered.configuration.worker.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }')),
@@ -110,6 +127,25 @@ CASES = [
           '            let token: Token? = nil\n            let api: any Api = if let safeDIBuilder = safeDIOverrides.api { safeDIBuilder(token) }')),
     ('13', 'the function writes nil where it read its parameter',
      once('LiveApi(token: token)', 'LiveApi(token: nil)')),
+    ('16-two-levels', 'a level’s configuration of the loop leaves out a label a member reads',
+     once('.init(aBuilder: safeDIOverrides.aBuilder, bBuilder: safeDIOverrides.bBuilder)', '.init(aBuilder: safeDIOverrides.aBuilder)')),
+    ('16-two-levels', 'a level’s configuration of the loop hands one label another’s value',
+     once('.init(aBuilder: safeDIOverrides.aBuilder, bBuilder: safeDIOverrides.bBuilder)', '.init(aBuilder: safeDIOverrides.bBuilder, bBuilder: safeDIOverrides.aBuilder)')),
+    ('16-two-levels', 'the second level binds its members in the first level’s order',
+     last_two_swapped('            let bBuilder = Instantiator<B> {\n                __safeDI_bBuilder(safeDIOverrides: safeDIOverrides.bBuilder, __safeDI_First_loopConfiguration: .init(aBuilder: safeDIOverrides.aBuilder, bBuilder: safeDIOverrides.bBuilder))\n            }\n',
+                      '            let aBuilder = Instantiator<A> {\n                __safeDI_aBuilder(safeDIOverrides: safeDIOverrides.aBuilder, __safeDI_First_loopConfiguration: .init(aBuilder: safeDIOverrides.aBuilder, bBuilder: safeDIOverrides.bBuilder))\n            }\n')),
+    ('19', 'the loop’s struct is built with one label’s local under another label',
+     once('bBuilder: __safeDI_bBuilder__safeDIBuilder, cBuilder: __safeDI_cBuilder__safeDIBuilder)', 'bBuilder: __safeDI_cBuilder__safeDIBuilder, cBuilder: __safeDI_bBuilder__safeDIBuilder)')),
+    ('19', 'a member hands another member its configuration under the wrong label',
+     once('__safeDI_cBuilder(safeDIOverrides: __safeDI_Holder_loopConfiguration.cBuilder,', '__safeDI_cBuilder(safeDIOverrides: __safeDI_Holder_loopConfiguration.bBuilder,')),
+    ('19', 'the loop’s struct leaves out a field it is built with',
+     once('            let cBuilder: (@Sendable (SendableInstantiator<A>) -> C)?\n', '')),
+    ('19', 'the level binds a member’s local from another label',
+     once('let __safeDI_cBuilder__safeDIBuilder = safeDIOverrides.cBuilder', 'let __safeDI_cBuilder__safeDIBuilder = safeDIOverrides.bBuilder')),
+    ('20-self', 'the call that hands a function’s places on unchanged names another function',
+     once('{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered) }', '{ __safeDI_stepBuilder(__safeDI_entered: __safeDI_entered) }')),
+    ('20-self', 'the call enters another place instead of handing its own on',
+     once('{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered) }', '{ __safeDI_screenBuilder(__safeDI_entered: __safeDI_entered.entering("detail", __safeDI_entered.configuration)) }')),
 ]
 
 

@@ -139,6 +139,11 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             number,expr=expr[1:].split(HANDED,1)
             how=HANDS[int(number)]
         closes=('slot',how[1]) if how and how[0]=='entering' else name if not how else None
+        if how and how[0]=='same':
+            # entry 20: the function nested here calls itself at its own place; any other callee fails closed
+            current=entered.get(('current',))
+            if not current or current[0]!=name: raise SystemExit('a call hands its own places to another function')
+            closes=current[1]
         if closes in entered:
             # entry 20: a call of a function this one is nested in closes the cycle on that function. The records
             # declare one function per place of the list, so the function's name stands for its place.
@@ -248,6 +253,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         if handed: sub=[handed.sub(lambda _:loop,x) for x in sub]
         if base_indent>8000: raise RecursionError('functions nest without end')
         inside=dict(entered)
+        inside[('current',)]=(name,('slot',how[1]) if how and how[0]=='entering' else name if not how else None)
         if not how: inside[name]=newname
         elif how[0]=='entering':
             inside[('slot',how[1])]=newname
@@ -262,8 +268,9 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
             while len(out[k])-len(out[k].lstrip())>base_indent: k-=1
         if key not in declared:
             if key in level:
-                # entry 16: the walk declares a loop's members one after another, in the order the records
-                # declare their functions, before the first is bound
+                # entry 16: the walk declares a loop's members one after another, in the order this level
+                # binds them (its own declaration order, which a second level of the loop may not share with
+                # the first), before the first is bound
                 if not members: out.insert(k,MEMBERS)
                 members.append((list(hoisted).index(name),inst))
             else:
@@ -285,7 +292,7 @@ def expand(lines,hoisted,base_indent,entered={},nearest={},visible=frozenset(),r
         continue
     if members:
         at=out.index(MEMBERS)
-        out[at:at+1]=[line for _,inst in sorted(members,key=lambda member:member[0]) for line in inst]
+        out[at:at+1]=[line for _,inst in members for line in inst]
     return out
 # entry 20, the places enum: the records write a wrapper's closure on one line where the function is handed the
 # places; once the call hands nothing, the walk hands the wrapper the function itself
@@ -481,9 +488,17 @@ def e20_places(text):
                 how=(kind,None,False);handed=parts[0]
             HANDS.append(how)
             line=line[:call.start()]+'safeDIOverrides: '+HANDED+str(len(HANDS)-1)+HANDED+handed+line[k+1:]
+        # a call inside a function that hands that function's places on unchanged calls the function at its own
+        # place: the cycle closes on the place the function is (kept beside the argument as 'same')
+        if inside:
+            same=SAME_PLACE.search(line)
+            if same:
+                HANDS.append(('same',None,False))
+                line=line[:same.start(1)]+'safeDIOverrides: '+HANDED+str(len(HANDS)-1)+HANDED+'__safeDI_entered.configuration'+line[same.end(1):]
         if inside: line=line.replace('__safeDI_entered.configuration','safeDIOverrides')
         out.append(line);i+=1
     return '\n'.join(out)
+SAME_PLACE=re.compile(r'\b__safeDI_\w+\((?:[^()]*, )?(__safeDI_entered: __safeDI_entered)\)')
 NEAREST_LINE=re.compile(r'^( +)let __safeDI_entered = __safeDI_entered\.entering\((__safeDI_nearest\w+): \.init\((.+), above: __safeDI_entered\)\)$')
 NEAREST_PLACE_LINE=re.compile(r'^( +)let __safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(__safeDI_entered\.(__safeDI_nearest\w+)\?\.configuration \?\? (.+), above: __safeDI_entered\)$')
 PLACE_LINE=re.compile(r'^ +let (?:__safeDI_place = __safeDI_entered\.\w+ \?\? \.init\(safeDIOverrides, above: __safeDI_entered\)|safeDIOverrides = __safeDI_place\.configuration|__safeDI_entered = __safeDI_place\.enteredAbove\.entering\(\w+: __safeDI_place\))$')
@@ -637,28 +652,157 @@ def e5(text,walk):
     return '\n'.join(lines)
 UNAVAILABLE=re.compile(r'^ +let (\w+): (.+\?) = safeDIOverrides\.(\w+)$')
 def e21(text,walk):
-    # entry 21: the walk names a nested cycle function apart by its type (__safeDI_x_Type) where the records'
-    # function is __safeDI_x or __safeDI_x_. Line by line, a name of the records is given the walk's name only
-    # where the walk declares a function of that longer name, the mock's texts must otherwise have the same
-    # lines, and one name of the records becomes one name of the walk everywhere in the mock: a call that
-    # names another function than the walk's call does leaves the texts different.
+    # entry 21: the walk names a nested function apart by its type (__safeDI_x_Type) where the records'
+    # function is __safeDI_x or __safeDI_x_, and, where the walk's function is nested out of sight of the one
+    # it would hide, keeps the plain name (__safeDI_x) where the records' is __safeDI_x_. Line by line, a name
+    # of the records is given the walk's name only where the walk declares a function of that name, and the
+    # mock's texts must otherwise have the same lines. As ruled 2026-11-28 04:02Z the name is mapped per
+    # enclosing function: every use of one declaration of the records becomes one name of the walk, so a call
+    # that names another function than the walk's call does leaves the texts different. Two declarations
+    # given one name must not be confused: where one is declared inside the other's block, no use of the
+    # outer one may stand inside the inner one's block, and two in one block are refused.
     lines=text.split('\n');walk_lines=walk.split('\n')
     if len(lines)!=len(walk_lines): return text
     declared=set(FUNC.match(l).group(3) for l in walk_lines if FUNC.match(l))
     name=re.compile(r'(?<![\w.])__safeDI_\w+')
-    renamed={}
-    for ours,theirs in zip(lines,walk_lines):
+    def indent(i): return len(lines[i])-len(lines[i].lstrip()) if lines[i].strip() else 10**6
+    def block(d):
+        """the first and last line of the block a declaration at line d stands in"""
+        n=indent(d);first=d;last=d
+        while first>0 and indent(first-1)>=n: first-=1
+        while last+1<len(lines) and indent(last+1)>=n: last+=1
+        return first,last
+    declarations={}
+    for i,line in enumerate(lines):
+        f=FUNC.match(line)
+        if f: declarations.setdefault(f.group(3),[]).append((i,)+block(i))
+    def declaration(x,i):
+        """the declaration of x a use at line i names: the innermost block that holds both"""
+        holding=[d for d in declarations.get(x,()) if d[1]<=i<=d[2]]
+        return max(holding,key=lambda d:d[1]) if holding else None
+    renamed={};uses={}
+    for i,(ours,theirs) in enumerate(zip(lines,walk_lines)):
         a=name.findall(ours);b=name.findall(theirs)
         if len(a)!=len(b): return text
         for x,y in zip(a,b):
-            if not (x==y or (y.startswith(x.rstrip('_')+'_') and len(y)>len(x) and y in declared)): return text
-            if renamed.setdefault(x,y)!=y: return text
-    return '\n'.join(name.sub(lambda found:renamed[found.group(0)],line) for line in lines)
+            apart=y.startswith(x.rstrip('_')+'_') and len(y)>len(x)
+            plain=x.endswith('_') and not x.endswith('__safeDI_') and y==x[:-1]
+            if not (x==y or ((apart or plain) and y in declared)): return text
+            key=(x,declaration(x,i))
+            if renamed.setdefault(key,y)!=y: return text
+            uses.setdefault(y,{}).setdefault(key,[]).append(i)
+    for y,by_declaration in uses.items():
+        keys=list(by_declaration)
+        for inner in keys:
+            for outer in keys:
+                if inner==outer: continue
+                if inner[1] is None or outer[1] is None:
+                    if inner[1] is None and outer[1] is None: return text
+                    continue
+                if inner[1][1:]==outer[1][1:]: return text
+                if outer[1][1]<=inner[1][1] and inner[1][2]<=outer[1][2]:
+                    if any(inner[1][1]<=i<=inner[1][2] for i in by_declaration[outer]): return text
+    out=[]
+    for i,line in enumerate(lines):
+        out.append(name.sub(lambda found:renamed[(found.group(0),declaration(found.group(0),i))],line))
+    return '\n'.join(out)
 e21=per_mock(e21)
 e3=per_mock(e3)
 e5=per_mock(e5)
 e11=per_mock(e11)
-REWRITES=[('20',e20),('1+2',unhoist),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21)]
+LOOP_INIT=re.compile(r'(__safeDI_\w+_loopConfiguration): \.init\(')
+def e16_init(text,walk=None):
+    """entry 16, a loop built at two levels (11-28 03:45Z): a level hands a member the first level's configuration
+    as `.init(<label>: P.<label>, …)` of its own configuration P. Each member reads only those labels of it
+    (checked: a read of another label leaves the text as it is, so the pair fails), so it is written as P."""
+    out=[];i=0
+    while True:
+        m=LOOP_INIT.search(text,i)
+        if not m: out.append(text[i:]); break
+        depth=0;k=m.end()-1
+        for k in range(m.end()-1,len(text)):
+            c=text[k]
+            if c in '([': depth+=1
+            elif c in ')]':
+                depth-=1
+                if depth==0: break
+        parts=split_top(text[m.end():k])
+        prefixes=set();labels=set();ok=bool(parts)
+        for part in parts:
+            pm=re.fullmatch(r'(\w+): (.+)\.(\w+)',part)
+            if not pm or pm.group(1)!=pm.group(3): ok=False; break
+            labels.add(pm.group(1)); prefixes.add(pm.group(2))
+        name=m.group(1)
+        read=set(re.findall(r'(?<![\w.])'+re.escape(name)+r'\.(\w+)',text))
+        if ok and len(prefixes)==1 and read<=labels:
+            out.append(text[i:m.start()]+name+': '+prefixes.pop()); i=k+1
+        else:
+            out.append(text[i:m.end()]); i=m.end()
+    return ''.join(out)
+LOOP_STRUCT=re.compile(r'^( *)nonisolated struct (__safeDI_(\w+)_LoopOverrides): Sendable \{$')
+LOOP_FIELD=re.compile(r'^ *let (\w+): (.+)$')
+SENDABLE_LOOPS={}
+def e19(text,walk=None):
+    """entry 19, a loop of @Sendable members (11-28): the level gathers the loop's configuration into a Sendable
+    struct of the labels the members read, built from the locals the level binds of its own configuration
+    (`let x = safeDIOverrides.<label>`). Written in entry 16's form: the struct is removed, the level hands its
+    members a stand-in P whose `P.<label>` is the local the struct was built from, and the level's calls hand
+    `P.<label>` for that local. After entries 1+2 and 16 nest the members, `P.<label>` is written back as the
+    local (e19_reads). Fails closed: a struct whose fields are not the built labels in order, a built value
+    that is not such a local, or another use of the struct's name leaves the text as it is."""
+    lines=text.split('\n');i=0
+    SENDABLE_LOOPS.clear()
+    while i<len(lines):
+        found=LOOP_STRUCT.match(lines[i])
+        if not found: i+=1; continue
+        end=block_end(lines,i)
+        fields=[LOOP_FIELD.match(line) for line in lines[i+1:end]]
+        if not all(fields): return text
+        fields=[field.group(1) for field in fields]
+        struct=found.group(2);level=found.group(3)
+        configuration='__safeDI_'+level+'_loopConfiguration'
+        built=[k for k,line in enumerate(lines) if line.strip().startswith('let '+configuration+' = '+struct+'(')]
+        if len(built)!=1: return text
+        b=built[0]
+        call=re.match(r'^( *)let '+configuration+' = '+struct+r'\((.*)\)$',lines[b])
+        if not call: return text
+        parts=split_top(call.group(2))
+        if [part.split(': ',1)[0] for part in parts]!=fields: return text
+        locals_={part.split(': ',1)[0]:part.split(': ',1)[1] for part in parts}
+        indent=call.group(1)
+        # the level function the struct is built in, and the locals it binds of its own configuration
+        f=b
+        while f>=0 and not (FUNC.match(lines[f]) and len(FUNC.match(lines[f]).group(1))==len(indent)-4): f-=1
+        if f<0: return text
+        fend=block_end(lines,f)
+        for label,local in locals_.items():
+            if not any(line==indent+'let '+local+' = safeDIOverrides.'+label for line in lines[f+1:b]): return text
+        if len(set(locals_.values()))!=len(locals_): return text
+        stand_in='__safeDI_entry19_'+level
+        SENDABLE_LOOPS[stand_in]=locals_
+        by_local={local:label for label,local in locals_.items()}
+        for k in range(b+1,fend):
+            line=lines[k]
+            if configuration+': '+configuration not in line: continue
+            line=line.replace(configuration+': '+configuration,configuration+': '+stand_in)
+            line=re.sub(r'safeDIOverrides: (\w+)(?=, '+configuration+': )',lambda m:'safeDIOverrides: '+stand_in+'.'+by_local[m.group(1)] if m.group(1) in by_local else m.group(0),line)
+            lines[k]=line
+        del lines[b]
+        del lines[i:end+1]
+        rest='\n'.join(lines)
+        if struct in rest.replace(configuration+': '+struct,''): return text
+        i=0
+    return '\n'.join(lines)
+def e19_reads(text,walk=None):
+    """entry 19: the stand-in's reads written back as the locals the level bound (any other read fails closed)"""
+    for stand_in,locals_ in SENDABLE_LOOPS.items():
+        def read(m):
+            if m.group(1) not in locals_: raise SystemExit('a member reads a label the loop struct does not hold')
+            return locals_[m.group(1)]
+        text=re.sub(r'(?<![\w.])'+re.escape(stand_in)+r'\.(\w+)',read,text)
+        if re.search(r'(?<![\w.])'+re.escape(stand_in)+r'(?!\w)',text): raise SystemExit('the loop stand-in is left in the text')
+    return text
+REWRITES=[('20',e20),('19',e19),('16',e16_init),('1+2',unhoist),('19 reads',e19_reads),('11',e11),('5',e5),('3',e3),('8',e8),('9',e9),('6',e6),('4',e4),('21',e21)]
 
 
 def rewritten(text, walk):
@@ -714,7 +858,7 @@ def main():
             else:
                 failures += 1
                 print('%s: %s' % (records_path, failure))
-        for name in [name for name, _ in REWRITES] + ['10', '13', '16', '17', '23']:
+        for name in [name for name, _ in REWRITES] + ['10', '13', '17', '23']:
             print('entry %s: used on %d pairs' % (name, counts[name]))
         print('%d of %d pairs equal after rewrite' % (total - failures, total))
         sys.exit(1 if failures else 0)
