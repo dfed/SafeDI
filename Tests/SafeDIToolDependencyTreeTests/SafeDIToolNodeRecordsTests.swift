@@ -1593,6 +1593,39 @@ struct SafeDIToolNodeRecordsTests: ~Copyable {
 		#expect(rootReports.map { NodeRecordsChecks.outcome(of: $0).differences } == [[]])
 	}
 
+	@Test(arguments: ["", "@MainActor\n"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func outcome_approvesAFunctionMovedOutOfASendableFunction_whenTheTypeKeyMarksItSendable(rootAttribute: String) async throws {
+		// `Root` builds `Outer` through a `SendableInstantiator`: the tree nests `Inner`'s function, plain, inside `Outer`'s
+		// `@Sendable` one, where the type key declares it at the root, marked `@Sendable` as the function that calls it
+		// requires. Entry 24 approves the move with the mark, whose code compiles under a root of either isolation.
+		let modules = [Self.modulesCallingAFilledSeamTwoPlacesBelowTheRoot[0], ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+			"import Feature\n\n" + rootAttribute + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let outerBuilder: SendableInstantiator<Outer>"]),
+			"import Feature\n\n" + seamFixtureType(named: "Outer", isFinalClass: true, declarations: ["@Instantiated let inner: Inner"]),
+			"import Feature\n\n" + seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
+			"""
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Api.self])
+			public final class LiveApi: Api, Instantiable {
+			    public init() {}
+			}
+			""",
+		], dependencies: ["Feature"])]
+		let (_, reports) = try await NodeRecordsObservation.$recordsFilledCalls.withValue(true) {
+			try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+			}
+		}
+		let rootReports = reports.filter { $0.root == "Root" }
+		let texts = try #require(rootReports.first?.comparedTexts)
+		#expect(texts.nodeRecords.components(separatedBy: "@Sendable nonisolated func __safeDI_inner()").count == 2)
+		#expect(texts.tree.components(separatedBy: "@Sendable nonisolated func __safeDI_inner()").count == 1)
+		let outcomes = rootReports.map { NodeRecordsChecks.outcome(of: $0) }
+		#expect(outcomes.map(\.differences) == [[]])
+		#expect(outcomes.map(\.approvedEntries) == [[24]])
+	}
+
 	// MARK: Private
 
 	/// `App`'s `Root` builds `Outer`, which builds `Inner`, which calls `Feature`'s seam `Screen` and fills its hole `api`.

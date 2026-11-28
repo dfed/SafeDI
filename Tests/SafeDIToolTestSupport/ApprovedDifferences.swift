@@ -395,7 +395,13 @@ struct FlattenedFunctionText: Equatable {
 		var names = Set<String>()
 		while let function = Self.innermostFunction(in: lines) {
 			names.insert(function.name)
-			functions.append(lines[function.range].map { $0.hasPrefix(function.indentation) ? String($0.dropFirst(function.indentation.count)) : $0 })
+			var declaration = lines[function.range].map { $0.hasPrefix(function.indentation) ? String($0.dropFirst(function.indentation.count)) : $0 }
+			// A function declared inside a `@Sendable` function is spelled as the `@Sendable` one the type key declares outside
+			// it, which that function calls (entry 24, lead 11-28 05:07Z).
+			if !declaration[0].hasPrefix(Self.sendablePrefix), Self.isInsideSendableFunction(function.range, in: lines) {
+				declaration[0] = Self.sendablePrefix + declaration[0]
+			}
+			functions.append(declaration)
 			lines.removeSubrange(function.range)
 		}
 		remainder = Self.erasingArguments(ofCallsTo: names, in: lines)
@@ -416,6 +422,20 @@ struct FlattenedFunctionText: Equatable {
 		}
 		guard declaration.hasPrefix("func "), declaration.hasSuffix(" {"), let open = declaration.firstIndex(of: "(") else { return nil }
 		return String(declaration[declaration.index(declaration.startIndex, offsetBy: "func ".count)..<open])
+	}
+
+	private static let sendablePrefix = "@Sendable nonisolated "
+
+	/// Whether a `@Sendable` function `lines` declare holds `range`.
+	private static func isInsideSendableFunction(_ range: Range<Int>, in lines: [String]) -> Bool {
+		lines[..<range.lowerBound].indices.contains { index in
+			let line = lines[index]
+			let indentation = String(line.prefix { $0 == " " })
+			guard line.dropFirst(indentation.count).hasPrefix(sendablePrefix), declaredName(in: line) != nil,
+			      let end = lines[(index + 1)...].firstIndex(of: indentation + "}")
+			else { return false }
+			return end >= range.upperBound
+		}
 	}
 
 	/// The first function `lines` declare whose body declares none.
