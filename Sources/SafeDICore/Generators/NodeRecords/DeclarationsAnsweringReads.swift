@@ -141,13 +141,30 @@ struct DeclarationsAnsweringReads: Sendable {
 				// A variant's record is written from the call that resolved it. Every other call into it answers its reads in
 				// the forms that call does: the variant's key holds each form a declaration provides and, for a rename, the form
 				// its fulfilling label is read in, and every call into a declaration crosses the one edge from its type to it,
-				// which opens a `@Sendable` function at every call or at none.
-				guard answeringDeclarations[Int(callee)] == nil else { continue }
-				answeringDeclarations[Int(callee)] = calleeAnsweringDeclarations
-				callerByVariant[Int(callee)] = caller
+				// which opens a `@Sendable` function at every call or at none. A read only if available is the exception: rule 1
+				// keys it alike whether a call answers it or not, so the variant takes it as one optional parameter
+				// (`OnlyIfAvailableAnswers`), resolved as a call that answers it does, and read again, with everything it calls,
+				// whichever call comes first.
+				var calleeAnswers = calleeAnsweringDeclarations
+				if let resolved = answeringDeclarations[Int(callee)] {
+					var merged = resolved
+					for (index, readID) in calleeReads.enumerated() where merged[index] < 0 && calleeAnsweringDeclarations[index] >= 0 {
+						switch world.read(readID).channel {
+						case .optional, .optionalValue:
+							merged[index] = calleeAnsweringDeclarations[index]
+						case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+							break
+						}
+					}
+					guard merged != resolved else { continue }
+					calleeAnswers = merged
+				} else {
+					callerByVariant[Int(callee)] = caller
+				}
+				answeringDeclarations[Int(callee)] = calleeAnswers
 				stack.append(callee)
 				guard readsInstancesOrCaptures else { continue }
-				for (answeringDeclaration, readID) in zip(calleeAnsweringDeclarations, calleeReads) {
+				for (answeringDeclaration, readID) in zip(calleeAnswers, calleeReads) {
 					let read = world.read(readID)
 					guard read.channel.asksAboutLabel else { continue }
 					// The scope of the node that answers the read; `nil` where what the root is handed answers it.

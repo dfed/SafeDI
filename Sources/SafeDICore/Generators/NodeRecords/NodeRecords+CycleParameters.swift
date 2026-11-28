@@ -19,10 +19,12 @@
 // SOFTWARE.
 
 extension NodeRecords {
-	/// What every call of `variant`'s function passes its parameters, a call that closes a cycle on it included: by
-	/// parameter, `nil` where the label is unavailable to the variant, a lazily instantiated wrapper's instance where the
-	/// parameter takes the value by its wrapper, else the label's binding. Every call of a variant shares its keys, so each
-	/// passes the same.
+	/// What one call of `variant`'s function passes its parameters, a call that closes a cycle on it included, where the
+	/// call holds the by-value properties of `lazilyInstantiatedInstanceProperties` only as a wrapper's instance: by
+	/// parameter, `nil` where the label is unavailable to the variant; for a parameter that is a lazily instantiated
+	/// wrapper, the call's wrapper where it holds one, else a wrapper made of the value it holds; for a parameter by value,
+	/// the instance of the call's wrapper where it holds one; else the label's binding. Calls of one variant share its keys
+	/// but not what declares each label at them, so each call passes its own.
 	static func cycleArguments(
 		of parameters: [TypeFactsParameter],
 		unavailableProperties: Set<Property>,
@@ -30,8 +32,15 @@ extension NodeRecords {
 	) -> [PlaceRead] {
 		parameters.map { parameter in
 			let property = parameter.property
+			let wrapper = property.asUnwrappedProperty
 			let source: ArgumentSource = if unavailableProperties.contains(property) {
 				.nil
+			} else if wrapper.propertyType.isLazilyInstantiated, let instance = wrapper.asLazilyInstantiatedInstanceProperty {
+				if lazilyInstantiatedInstanceProperties.contains(instance) || lazilyInstantiatedInstanceProperties.contains(instance.asOptionalProperty) {
+					.binding(label: property.label)
+				} else {
+					.wrapper(of: .binding(label: property.label), wrapperType: wrapper.typeDescription)
+				}
 			} else if let instanceSource = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: property, boundAs: property.label) {
 				instanceSource
 			} else {
