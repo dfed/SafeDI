@@ -95,6 +95,19 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place records beyond a call of its target, held in one box that most places leave `nil`, so a record stays
 	/// as small to copy as one that holds none of it.
 	var sharingFields: PlaceSharingFields?
+	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
+	/// that every other place leaves `nil`.
+	var callFields: CallFields?
+
+	/// The statement the place's builder function begins with, before its children.
+	var leadingStatement: CallGuard? {
+		callFields?.leadingStatement
+	}
+
+	/// What the construction hands each closure parameter after `arguments`.
+	var closureArguments: [ClosureArgumentEntry] {
+		callFields?.closureArguments ?? []
+	}
 
 	/// The values the place's function is handed on every call (`PassedArgument`), after `cycleParameters`.
 	var passedArguments: [PassedArgument] {

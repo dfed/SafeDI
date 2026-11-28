@@ -473,7 +473,7 @@ extension ScopeRecord {
 					typeFactsPlaces: &places,
 				)
 			} }
-			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration))
+			observer(treeBuiltWithMemo, treeBuiltWithoutMemo, TypeFactsReport(root: ConstructionScope(table: table, record: self), places: places ?? TypeFactsPlaces(), forMockGeneration: forMockGeneration, tree: treeBuiltWithoutMemo))
 		}
 		return scopeGenerator
 	}
@@ -2925,29 +2925,29 @@ struct SeamHoles: Sendable {
 			// route's last member returns. The struct of a fill's own level, which the fill is handed, is typed by no binding.
 			let parentStep = callRoute.route.last
 			let parentMember = callRoute.routeMembers.last ?? nil
-			let memberParent: ScopeGenerator.BuilderCallArgument.PassedUpStruct? = if parentStep?.innerScope != nil {
+			let memberParent: (name: String, type: TypeDescription)? = if parentStep?.innerScope != nil {
 				nil
 			} else if let member = parentMember {
-				.init(name: member.bindingName, type: member.levelType)
+				(member.bindingName, member.levelType)
 			} else {
-				.init(name: builderName, type: builder.parameterType)
+				(builderName, builder.parameterType)
+			}
+			// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
+			let member: PassedOnMember? = callRoute.handsFillLevelStruct ? nil : callRoute.memberValuesType.map { memberValuesType in
+				if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+					isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? .carrierChild : .carrierMember
+				} else {
+					.member(valuesType: memberValuesType)
+				}
 			}
 			let memberCall = if callRoute.handsFillLevelStruct {
 				parentStep?.innerScope?.name ?? parentMember?.bindingName
 			} else {
-				callRoute.memberValuesType.map { memberValuesType in
-					let parentName = parentStep?.innerScope?.name ?? parentMember?.bindingName ?? builderName
-					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
-						return isLetChild(ofCaseNamed: callRoute.caseName, handed: memberValuesType) ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
-					} else {
-						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
-					}
-				}
+				member.map { $0.spelled(on: parentStep?.innerScope?.name ?? parentMember?.bindingName ?? builderName, caseName: callRoute.caseName) }
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(
 				memberCall: memberCall,
-				passedUpStruct: callRoute.handsFillLevelStruct || memberCall == nil ? nil : memberParent,
+				passedUpStruct: member.flatMap { member in memberParent.map { .init(name: $0.name, type: $0.type, caseName: callRoute.caseName, member: member) } },
 			)
 		}
 		self.routeCasesByCall = routeCasesByCall

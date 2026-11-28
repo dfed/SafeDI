@@ -243,6 +243,37 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenReceiveOnlyIfAvailableIsUnansweredUnderOneParentAndBeingBuiltUnderTheOther() async throws {
+		// `A` receives `theme` only if available: `Root` declares none, and the cycle `Theme` closes on `aBuilder` reads the
+		// `theme` `Mid` is still building. Both pass `nil`, and 2.4.0 builds one function of `A`, so one body.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let theme: Theme"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "A as aBuilder: Instantiator<A>" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "A as aBuilder: Instantiator<A>", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOneVariant_whenReceiveOnlyIfAvailableIsUnansweredUnderOneParentAndALazyWrapperBeingBuiltUnderTheOther() async throws {
+		// As above, with `Mid` building `theme` lazily and `A` receiving the wrapper: both calls still pass `nil`.
+		let report = try await rootReport(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let theme: LazilyInstantiated<Theme>?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let theme: LazilyInstantiated<Theme>"]),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+		])
+
+		#expect(report.places.count(where: { $0.declaration == "A as aBuilder: Instantiator<A>" }) == 2, "\(report.world)")
+		#expect(variantCount(ofNodeDeclaring: "A as aBuilder: Instantiator<A>", in: report) == 1, "\(report.world)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keysVariantPerOtherRead_whenTwinsBeingBuiltReadAnotherLabelInOtherForms() async throws {
 		// Rule 3, case 2 drops only the being-built answer's form: `Leaf` also requires `theme`, which `First` declares by
 		// value and `Second` lazily, so the two bodies stay apart by `theme` alone.
