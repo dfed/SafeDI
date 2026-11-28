@@ -83,6 +83,25 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 - The generator's own hazards (the fulfilling-instantiable map, a loop over a `Set<Scope>`, choosing a diagnostic by source location) are under "Determinism in the generator" in `.claude/rules/generator-design.md`.
 - **What may follow names.** Generated code and signatures, which graphs are accepted, and which diagnostic is reported never depend on names or order. The order of suggestions inside one message, and a label sort of equivalent parameters (flat `mock()` parameters, overrides, a seam's pass-throughs), may. Fix an order-dependent choice in the change that notices it.
 
+## Growth
+
+`generate`'s work never grows with the number of paths through a graph, and nothing is exponential. Per world (a root, a seam, a mock root), `generate`'s time and peak memory are at most linear in the declarations and edges the world reads, times the number of labels a type reads from above, plus the size of what it writes, with sorting allowed. A type is generated once per world, except as listed under debt. Adopters' graphs are large and every build pays for `generate`, so work that grows with a product of two dimensions of a project, with a power of one, or by a factor with each layer is a defect, a quadratic step as much as an exponential one.
+
+- **A difference a parameter can carry is never a variant.** Where two places build a type alike but for a value, the type is generated once and takes the value; a second copy of its code or its facts is growth with places. The `@Sendable` form of a type is a second copy at most, a constant factor and not growth.
+- **A change that adds iteration proves its growth.** A new loop, walk, memo key or collection in the generator names what it grows with, and its pull request adds the proof: a growth row in `Scripts/generate-time-check.py` whose larger graph multiplies that dimension, or a counted step (`GenerationWork`) with a test that fails when its work grows faster than the dimension does.
+- **Anything else is listed debt or needs the maintainer's approval.** Debt is listed here or as a growth row whose limit is above its larger graph's own multiple, with what removes it. No change raises such a limit or adds a row with one; the change that removes the growth lowers or deletes it.
+- **Listed debt:**
+  - A tree emits a node for each path to a type, so an inline tree's code, and the time and memory to write it, grow with the paths; building each type once from node records and per-type facts removes it.
+  - A type read in more than one form (as a value and through `LazilyInstantiated` or `SendableLazilyInstantiated`, under a rename or an only-if-available read) is written once per combination of the forms its labels are bound in, which can double with each such label. Production code and mocks both write it so, as released versions’ production code already does; the graph fuzzer draws such graphs, and the lifelike benchmark graphs have none.
+  - Each mock root writes its own tree, so a module's mock code grows with its mock roots times their types.
+  - A mock root's tree build grows faster than its types.
+  - The layout engine computes a partition twice.
+  - A seam's signature is still computed from its tree, and the holes a seam passes up and its re-entries are not yet shown linear.
+  - The walk that reports a rejected graph visits paths.
+  - Debug builds compare the tree with the records at every place while the tree exists.
+- **One exception:** the DOT graph draws every path, by design.
+- "`generate` time grows with the code it generates" in `.claude/rules/generator-design.md` says how a step counts its work.
+
 ## Code Style
 
 - **Compare for meaning through a projection.** A comparison for meaning (settling, the callers' view, a guard hash) uses an explicit projection, never the synthesized `==` or hash of a type that carries diagnostic payload.
