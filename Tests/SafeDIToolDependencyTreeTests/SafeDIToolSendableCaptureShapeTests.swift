@@ -357,6 +357,72 @@ struct SafeDIToolSendableCaptureShapeTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_reportsCaptureOfLaterParentsDeclaration_whenEarlierParentOfOneSendableBuilderDeclaresNoneOfWrapperReceivedOnlyIfAvailable() async {
+		// `ScreenA`, built first, declares no `childBuilder`, so its `Settings` is passed `nil` and captures nothing;
+		// `ScreenB` declares one, which its `Settings`'s `@Sendable` function captures. Both build one declaration, so the
+		// world's check must judge every call into it, not only the first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>?` cannot be received inside a `@Sendable` function in chain: Root -> ScreenB -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `ScreenB` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>` on `ScreenB`, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` on `ScreenB`, and this property, as `SendableInstantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				\(fixtures["ScreenB.swift"]):7:5: note: `childBuilder: Instantiator<Child>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(screenA: ScreenA, screenB: ScreenB) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let screenA: ScreenA
+					    @Instantiated let screenB: ScreenB
+					}
+					""",
+					"""
+					@Instantiable
+					public final class ScreenA: Instantiable {
+					    public init(settingsBuilder: SendableInstantiator<Settings>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class ScreenB: Instantiable {
+					    public init(childBuilder: Instantiator<Child>, settingsBuilder: SendableInstantiator<Settings>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let childBuilder: Instantiator<Child>
+					    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+					}
+					""",
+					Self.child,
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(childBuilder: Instantiator<Child>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let childBuilder: Instantiator<Child>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
