@@ -671,9 +671,7 @@ struct SafeDIToolMockPassedNilByPlaceTests: ~Copyable {
 		        }
 		        let reader: Reader = __safeDI_reader()
 		        func __safeDI_leaf() -> Leaf {
-		            #sourceLocation(file: "\(output.fixtures["Leaf.swift"])", line: 7)
-		            let renamedToken: Token? = token_Token
-		            #sourceLocation()
+		            let renamedToken: Token? = token_Token // Declared as Leaf.renamedToken
 		            return if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(renamedToken) } else { Leaf(renamedToken: renamedToken) }
 		        }
 		        let leaf: Leaf = __safeDI_leaf()
@@ -684,9 +682,7 @@ struct SafeDIToolMockPassedNilByPlaceTests: ~Copyable {
 		        func __safeDI_source() -> Source {
 		            let token: Instantiator<Token> = token_Instantiator__Token
 		            func __safeDI_leaf() -> Leaf {
-		                #sourceLocation(file: "\(output.fixtures["Leaf.swift"])", line: 7)
-		                let renamedToken: Token? = nil
-		                #sourceLocation()
+		                let renamedToken: Token? = nil // Declared as Leaf.renamedToken
 		                return if let safeDIBuilder = safeDIOverrides.source.leaf { safeDIBuilder(renamedToken) } else { Leaf(renamedToken: renamedToken) }
 		            }
 		            let leaf: Leaf = __safeDI_leaf()

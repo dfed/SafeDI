@@ -6170,7 +6170,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let renamedAnalytics: Analytics"#])]
 		let modules = Self.modules(feature: Self.canonicalFeature, app: fulfillers + [Self.canonicalRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let fulfillerPath = try #require(output.modules["App"]).fixtures["DefaultUserService.swift"]
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -6183,9 +6182,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			            _ = Service.__safeDI_Service_88819F20AD4FA546.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_userServiceBuilder_Service_Profile_Scope_userService(analytics: Analytics) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
-			                    #sourceLocation(file: "\(fulfillerPath)", line: 9)
-			                    let renamedAnalytics: Analytics = analytics
-			                    #sourceLocation()
+			                    let renamedAnalytics: Analytics = analytics // Declared as DefaultUserService.renamedAnalytics
 			                    return DefaultUserService(renamedAnalytics: renamedAnalytics)
 			                }
 			                let userService: any UserService = __safeDI_userService()

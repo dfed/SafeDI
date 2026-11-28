@@ -1460,9 +1460,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    ) -> Parent {
 		        func __safeDI_service() -> MyService {
 		            let store = if let safeDIBuilder = safeDIOverrides.service.store { safeDIBuilder() } else { Store() }
-		            #sourceLocation(file: "\(output.fixtures["MyService.swift"])", line: 8)
-		            let reader: Reader = store
-		            #sourceLocation()
+		            let reader: Reader = store // Declared as MyService.reader
 		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(reader) } else { MyService.mock(reader: reader) }
 		        }
 		        let service: MyService = __safeDI_service()

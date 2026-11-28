@@ -508,7 +508,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		let badgeScan = try #require(cache.conditionSensitiveFileScans.first { $0.fileScan.path == "Badge.swift" })
 		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Token")])
 		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.access.level) == [.public])
-		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.access.declarationStartLocation?.lineAndColumn?.line) == [4])
+		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.access.declarationStartLocation?.position?.line) == [4])
 		#expect(badgeScan.fileScan.consultedCompilationConditions == ["FLAG"])
 	}
 

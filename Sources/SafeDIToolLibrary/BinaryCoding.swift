@@ -165,6 +165,30 @@ struct BinaryLayoutPayloadElement: CustomStringConvertible {
 	}
 }
 
+/// The rank of each location of a module's own declarations, from 1, among the distinct locations the module records in
+/// its file, in source order: what a module info file writes in place of a location's line and column
+/// (``BinaryWriter/locationRanks``).
+struct LocationRanks {
+	/// Ranks `locations` by file, then by line and column.
+	init(ranking locations: Set<Dependency.DeclarationLocation>) {
+		var rankByLocation = [Dependency.DeclarationLocation: Int]()
+		// Each file's locations are ranked apart, so the order the files are met in decides nothing.
+		for locationsOfFile in Dictionary(grouping: locations, by: \.filePath).values {
+			for (index, location) in locationsOfFile.sorted().enumerated() {
+				rankByLocation[location] = index + 1
+			}
+		}
+		self.rankByLocation = rankByLocation
+	}
+
+	/// The rank of `location`, or `nil` where it was not ranked.
+	func rank(of location: Dependency.DeclarationLocation) -> Int? {
+		rankByLocation[location]
+	}
+
+	private let rankByLocation: [Dependency.DeclarationLocation: Int]
+}
+
 /// Accumulates values in SafeDITool's binary format.
 struct BinaryWriter {
 	// MARK: Initialization
@@ -223,71 +247,50 @@ struct BinaryWriter {
 		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
 	}
 
-	/// The positions of the module's own declarations, collected inside ``collectingPositions(_:)`` to rank them before
-	/// they are written to a file that stores them elsewhere.
-	private(set) var collectedPositions: CollectedPositions?
+	/// The locations of the module's own declarations, collected inside ``collectingLocations(_:)`` to rank them before
+	/// they are written to a module info file.
+	private(set) var collectedLocations: Set<Dependency.DeclarationLocation>?
 
-	/// Where ``positionsStoredElsewhere`` is set, how positions are written: each location with its file and its rank,
-	/// and its line and column in the stream of the positions file, but an aliased dependency's location with its line
-	/// and column too, since the code generated above reads it; each range in that stream alone.
-	var positionsStoredElsewhere: PositionsStoredElsewhere?
+	/// Where set, how a module info file writes its own declarations' positions: each location as its file and its rank
+	/// there, never its line or column, and each range without its lines and columns, so a line moved in the module
+	/// changes no byte of the file. Unset, as in scan's cache, every position is written as it is.
+	var locationRanks: LocationRanks?
 
-	/// Runs `write`, which writes nothing anyone reads, and returns the positions it wrote.
-	static func collectingPositions(_ write: (inout BinaryWriter) -> Void) -> CollectedPositions {
+	/// Runs `write`, which writes nothing anyone reads, and returns the locations it wrote.
+	static func collectingLocations(_ write: (inout BinaryWriter) -> Void) -> Set<Dependency.DeclarationLocation> {
 		var writer = BinaryWriter()
-		writer.collectedPositions = CollectedPositions()
+		writer.collectedLocations = []
 		write(&writer)
-		return writer.collectedPositions ?? CollectedPositions()
+		return writer.collectedLocations ?? []
 	}
 
-	/// Notes that `location` is where an aliased dependency is declared, which a file that stores positions elsewhere
-	/// keeps with its line and column, since the code generated above reads its line.
-	mutating func noteAliasDeclaration(at location: Dependency.DeclarationLocation?) {
-		guard let location, collectedPositions != nil else { return }
-		collectedPositions?.aliasDeclarationLocations.insert(location)
-	}
-
-	/// Writes `location` as it is, or, where positions are stored elsewhere, ranked.
+	/// Writes `location` as its file, then its line and column where it holds them and ``locationRanks`` is unset, and
+	/// otherwise its rank negated, alone: a line is never below 0, and a rank, as an order a location was read with,
+	/// begins at 1.
 	mutating func writeLocation(_ location: Dependency.DeclarationLocation) {
-		collectedPositions?.locations.insert(location)
-		guard let ranked = positionsStoredElsewhere?.ranked(location) else {
-			return writeLocationFields(of: location)
-		}
-		if ranked.placement == .storedElsewhere, case let .here(line, column) = location.placement {
-			positionsStoredElsewhere?.append(line: line, column: column)
-		}
-		writeLocationFields(of: ranked)
-	}
-
-	/// Writes `range` as it is, or, where positions are stored elsewhere, as stored there.
-	mutating func writeRange(_ range: Dependency.SourceRange) {
-		guard positionsStoredElsewhere != nil, case let .here(startLine, startColumn, endLine, endColumn) = range.placement else {
-			return writeRangeFields(of: range)
-		}
-		positionsStoredElsewhere?.append(startLine: startLine, startColumn: startColumn, endLine: endLine, endColumn: endColumn)
-		writeRangeFields(of: Dependency.SourceRange(placement: .storedElsewhere))
-	}
-
-	/// The file, then the line or the order (`Dependency.DeclarationLocation.binaryLineOrOrder`), then, where the location
-	/// holds them, the column, after the line where the location is ranked: so a location that is not ranked is written
-	/// as its file, line and column, as it was before locations were ranked.
-	private mutating func writeLocationFields(of location: Dependency.DeclarationLocation) {
+		collectedLocations?.insert(location)
 		write(location.filePath)
-		write(location.binaryLineOrOrder)
-		guard case let .here(line, column) = location.placement else { return }
-		if location.order != 0 {
-			write(line)
+		if let position = location.position, locationRanks == nil {
+			write(position.line)
+			write(position.column)
+		} else {
+			write(0 &- (locationRanks?.rank(of: location) ?? location.order))
 		}
-		write(column)
 	}
 
-	/// The start line, or `-1` where the range is stored elsewhere, and then the start column, end line and end column.
-	private mutating func writeRangeFields(of range: Dependency.SourceRange) {
-		write(range.binaryStartLine)
-		guard case .here = range.placement else { return }
-		write(range.binaryStartColumn)
-		write(range.binaryEndLine)
-		write(range.binaryEndColumn)
+	/// Writes `range` as its start line, start column, end line and end column where it holds them and ``locationRanks``
+	/// is unset, and otherwise as a start line of -1 alone: the reader of the declaration it belongs to rebuilds it from
+	/// the declaration's location (``BinaryReader/readRange(unlocatedAs:)``).
+	mutating func writeRange(_ range: Dependency.SourceRange) {
+		switch range.span {
+		case let .located(startLine, startColumn, endLine, endColumn) where locationRanks == nil:
+			write(startLine)
+			write(startColumn)
+			write(endLine)
+			write(endColumn)
+		case .located, .unlocated:
+			write(-1)
+		}
 	}
 
 	mutating func writeTag(_ tag: some BinaryTag) {
@@ -1020,49 +1023,56 @@ struct BinaryReader {
 		return Int(count)
 	}
 
-	/// The lines and columns of the positions file of the file being read, with which a location or range the file
-	/// stores elsewhere is read; `nil` reads one as stored elsewhere.
-	var reattachedPositions: ReattachedPositions?
-	/// Whether the reader read a location or range as stored elsewhere, which it does only without ``reattachedPositions``.
-	private(set) var readsPositionStoredElsewhere = false
-	/// The files of the locations the reader read as stored elsewhere, collected only where it is not `nil`.
-	var storedElsewhereFilePaths: Set<String>?
+	/// For each file of the locations read without a position, the highest rank read there: of a module info file's own
+	/// entry, the number of distinct locations its module recorded in that file, which is every location the file holds
+	/// without a position, since its view and its seam signatures and public mock plans hold none.
+	private(set) var highestOrderByFilePath = [String: Int]()
 
 	/// A location as `BinaryWriter.writeLocation(_:)` writes it.
 	mutating func readLocation() throws(BinaryDecodingError) -> Dependency.DeclarationLocation {
 		let filePath: String = try read()
-		let lineOrOrder: Int = try read()
-		guard lineOrOrder < 0 else {
-			return try Dependency.DeclarationLocation(filePath: filePath, line: lineOrOrder, column: read())
+		let lineOrNegatedOrder: Int = try read()
+		guard lineOrNegatedOrder < 0 else {
+			return try Dependency.DeclarationLocation(filePath: filePath, line: lineOrNegatedOrder, column: read())
 		}
 		// Wrapping: a crafted body may hold any value here, and an order nothing pairs with only fails to compare.
-		let order = (1 &- lineOrOrder) / 2
-		guard lineOrOrder % 2 != 0 else {
-			return try Dependency.DeclarationLocation(filePath: filePath, order: order, placement: .here(line: read(), column: read()))
-		}
-		guard var positions = reattachedPositions else {
-			readsPositionStoredElsewhere = true
-			storedElsewhereFilePaths?.insert(filePath)
-			return Dependency.DeclarationLocation(filePath: filePath, order: order, placement: .storedElsewhere)
-		}
-		let placement = positions.nextLocation()
-		reattachedPositions = positions
-		return Dependency.DeclarationLocation(filePath: filePath, order: order, placement: placement)
+		let order = 0 &- lineOrNegatedOrder
+		highestOrderByFilePath[filePath] = max(highestOrderByFilePath[filePath] ?? order, order)
+		return Dependency.DeclarationLocation(filePath: filePath, order: order)
 	}
 
-	/// A range as `BinaryWriter.writeRange(_:)` writes it.
-	mutating func readRange() throws(BinaryDecodingError) -> Dependency.SourceRange {
+	/// A range as `BinaryWriter.writeRange(_:)` writes it, or `unlocated`, the range the declaration it belongs to would
+	/// rebuild, where it was written without its lines and columns.
+	/// - Throws: `rangeWithoutOwner` where the range was written without its lines and columns and `unlocated` is `nil`:
+	///   no declaration location says where it belongs.
+	mutating func readRange(unlocatedAs unlocated: Dependency.SourceRange?) throws(BinaryDecodingError) -> Dependency.SourceRange {
+		let range = try readRangeAsWritten(unlocatedAs: unlocated)
+		rangesRead?.append(range)
+		return range
+	}
+
+	/// Where set, every range read, in the order read (``readRange(unlocatedAs:)``): two reads of one value's bytes,
+	/// written once with ranked locations and once with lines and columns, pair each declaration's part with its lines
+	/// and columns (`DiagnosticLocator`).
+	var rangesRead: [Dependency.SourceRange]?
+
+	private mutating func readRangeAsWritten(unlocatedAs unlocated: Dependency.SourceRange?) throws(BinaryDecodingError) -> Dependency.SourceRange {
+		let startLineOffset = offset
 		let startLine: Int = try read()
 		guard startLine < 0 else {
 			return try Dependency.SourceRange(startLine: startLine, startColumn: read(), endLine: read(), endColumn: read())
 		}
-		guard var positions = reattachedPositions else {
-			readsPositionStoredElsewhere = true
-			return Dependency.SourceRange(placement: .storedElsewhere)
+		guard let unlocated else {
+			throw .rangeWithoutOwner(offset: startLineOffset)
 		}
-		let range = positions.nextRange()
-		reattachedPositions = positions
-		return range
+		return unlocated
+	}
+
+	/// An optional range of a struct that writes its fields' flags, as `readOptional(flaggedIn:)` reads it, rebuilt as
+	/// `unlocated` where it was written without its lines and columns.
+	mutating func readOptionalRange(flaggedIn flags: inout BinaryFieldFlagsReader, unlocatedAs unlocated: Dependency.SourceRange?) throws(BinaryDecodingError) -> Dependency.SourceRange? {
+		guard flags.next() else { return nil }
+		return try readRange(unlocatedAs: unlocated)
 	}
 
 	mutating func readString() throws(BinaryDecodingError) -> String {
@@ -1458,6 +1468,9 @@ enum BinaryDecodingError: Error, Equatable {
 	case nestedTooDeeply(offset: Int)
 	case trailingBytes(offset: Int)
 	case unreadFieldFlags(offset: Int)
+	/// A range written without its lines and columns where nothing says which declaration it belongs to
+	/// (``BinaryReader/readRange(unlocatedAs:)``).
+	case rangeWithoutOwner(offset: Int)
 }
 
 // MARK: - Standard library conformances

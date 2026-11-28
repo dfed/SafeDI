@@ -277,7 +277,6 @@ extension DependencyTreeGenerator {
 				importStatements: [],
 				mockImportStatements: [],
 				typeDescriptionToFulfillingInstantiableMap: visible.instantiables,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				compilesGeneratedMocks: compilesGeneratedMocks,
 				// The declaring module's files are not this run's own: its declarations record its name.
 				emittingModule: EmittingModule(
@@ -340,7 +339,6 @@ extension DependencyTreeGenerator {
 			importStatements: [],
 			mockImportStatements: [],
 			typeDescriptionToFulfillingInstantiableMap: callersVisibleInstantiables,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			compilesGeneratedMocks: compilesGeneratedMocks,
 			emittingModule: emittingModule,
 			seams: seams,

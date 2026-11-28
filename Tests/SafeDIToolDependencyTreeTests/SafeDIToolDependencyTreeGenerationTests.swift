@@ -315,7 +315,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let cachePath = output.fixtures["Cache.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -324,9 +323,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        let storage = LazilyInstantiated<Database>(__safeDI_storage)
 		        @inline(never) func __safeDI_cache() -> Cache {
-		            #sourceLocation(file: "\(cachePath)", line: 7)
-		            let store: Database = database.instance
-		            #sourceLocation()
+		            let store: Database = database.instance // Declared as Cache.store
 		            return Cache(store: store)
 		        }
 		        let cache: Cache = __safeDI_cache()
@@ -339,14 +336,11 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public enum __safeDI_Screen_7760020BF44A227B {}
 		}
 		""")
-		let rootPath = output.fixtures["Root.swift"]
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
 		    public init() {
 		        let database = Database()
-		        #sourceLocation(file: "\(rootPath)", line: 10)
-		        let storage: Database = database
-		        #sourceLocation()
+		        let storage: Database = database // Declared as Root.storage
 		        func __safeDI_screen() -> Screen {
 		            _ = Screen.__safeDI_Screen_7760020BF44A227B.self
 		            return Screen(__safeDI_database: database, __safeDI_storage: storage)
@@ -1249,16 +1243,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_session session: Session?) {
 		        @inline(never) func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(detailPath)", line: 7)
-		            let current: Session? = session
-		            #sourceLocation()
+		            let current: Session? = session // Declared as Detail.current
 		            return Detail(current: current)
 		        }
 		        let detail: Detail = __safeDI_detail()
@@ -1363,7 +1354,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let summaryPath = output.fixtures["Summary.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -1372,9 +1362,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        let detail = Detail(session: session.instance)
 		        @inline(never) func __safeDI_summary() -> Summary {
-		            #sourceLocation(file: "\(summaryPath)", line: 7)
-		            let anySession: AnySession? = (session.instance as Session?).map { AnySession($0) }
-		            #sourceLocation()
+		            let anySession: AnySession? = (session.instance as Session?).map { AnySession($0) } // Declared as Summary.anySession
 		            return Summary(anySession: anySession)
 		        }
 		        let summary: Summary = __safeDI_summary()
@@ -1898,9 +1886,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			        let `default` = LazilyInstantiated<Token?>(__safeDI_default)
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_session() -> Session {
-			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
-			            let current: Token? = `default`.instance
-			            #sourceLocation()
+			            let current: Token? = `default`.instance // Declared as Session.current
 			            let client = Client(current: current)
 			            return Session(current: current, client: client)
 			        }
@@ -4490,16 +4476,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// The alias's fulfilling property `user: User` is a by-value form of `user`, which the required wrapper
 		// parameter provides: the alias is created from its instance.
 		let output = try await labelFormsOutput(Self.aliasOfLabelFixture(onlyIfAvailable: false, summary: .required))
-		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        @inline(never) func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(detailPath)", line: 7)
-		            let currentUser: User = user.instance
-		            #sourceLocation()
+		            let currentUser: User = user.instance // Declared as Detail.currentUser
 		            return Detail(currentUser: currentUser)
 		        }
 		        let detail: Detail = __safeDI_detail()
@@ -4535,16 +4518,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	mutating func generate_createsOnlyIfAvailableAliasFromWrappersInstance_whenLabelIsReceivedAsRequiredWrapper() async throws {
 		// An only-if-available alias of the instance is created too: a required wrapper's instance is always available.
 		let output = try await labelFormsOutput(Self.aliasOfLabelFixture(onlyIfAvailable: true, summary: .required))
-		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: LazilyInstantiated<User>) {
 		        @inline(never) func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(detailPath)", line: 7)
-		            let currentUser: User? = user.instance
-		            #sourceLocation()
+		            let currentUser: User? = user.instance // Declared as Detail.currentUser
 		            return Detail(currentUser: currentUser)
 		        }
 		        let detail: Detail = __safeDI_detail()
@@ -4616,8 +4596,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	/// A mix of `user`'s forms the seam supports, as the single-module cell of the same name pins it, built with the
 	/// seam and its tree in `Core` and the caller in `App`: `seamCode` is what `Core` generates and `rootCode` what
-	/// `App` generates, with `<COMMENT>` where the plugin's call carries its comment and `<DETAIL-PATH>` for
-	/// `Detail.swift`'s path as the compiler is handed it; `rootWarning`, with `<ROOT-PATH>` for `Root.swift`'s path,
+	/// `App` generates, with `<COMMENT>` where the plugin's call carries its comment; `rootWarning`, with `<ROOT-PATH>` for `Root.swift`'s path,
 	/// is the warning `App` reports where the seam's tree reads the instance of the wrapper `Root` instantiates
 	/// whenever `Root` is created, as it would were the tree built inline.
 	struct LabelFormsCell: Sendable, CustomTestStringConvertible {
@@ -4702,19 +4681,16 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let callComment = integration.seamCallComment(type: "Screen", declaringModule: "Core")
 		let core = try #require(output.modules["Core"])
 		let app = try #require(output.modules["App"])
-		let seamCode = cell.seamCode.contains("<DETAIL-PATH>")
-			? cell.seamCode.replacingOccurrences(of: "<DETAIL-PATH>", with: core.fixtures.compilerPath(of: "Detail.swift"))
-			: cell.seamCode
 		let rootCode = cell.rootCode.replacingOccurrences(of: "<COMMENT>", with: callComment)
 		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
 		case .moduleInfo:
 			[
-				"Core": ["Core.swift": generatedFileHeader + seamCode],
+				"Core": ["Core.swift": generatedFileHeader + cell.seamCode],
 				"App": ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode],
 			]
 		case .swiftPackagePlugin:
 			[
-				"Core": ["Screen+SafeDI.swift": generatedFileHeader + seamCode],
+				"Core": ["Screen+SafeDI.swift": generatedFileHeader + cell.seamCode],
 				"App": ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode],
 			]
 		}
@@ -4993,17 +4969,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_first() -> First {
-			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as First.authToken
 			            let reader = Reader(authToken: authToken)
 			            return First(authToken: authToken, reader: reader)
 			        }
 			        let first: First = __safeDI_first()
 			        @inline(never) func __safeDI_second() -> Second {
-			            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Second.authToken
 			            return Second(authToken: authToken)
 			        }
 			        let second: Second = __safeDI_second()
@@ -5111,9 +5083,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_session() -> Session {
-			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
-			            let anyToken: AnyToken? = (token.instance as Token?).map { AnyToken($0) }
-			            #sourceLocation()
+			            let anyToken: AnyToken? = (token.instance as Token?).map { AnyToken($0) } // Declared as Session.anyToken
 			            let reader = Reader(anyToken: anyToken)
 			            return Session(anyToken: anyToken, reader: reader)
 			        }
@@ -7110,15 +7080,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		return files
 	}
 
-	/// The alias binding `Detail` builds for `alias`, indented by `indent`, with `<DETAIL-PATH>` for its file.
+	/// The alias binding `Detail` builds for `alias`, indented by `indent`.
 	private static func aliasOfProvidedPropertyBindings(alias: AliasOfProvidedProperty, indent: String) -> String {
 		switch alias {
 		case .onChild:
 			"""
 			\(indent)let user = User()
-			\(indent)#sourceLocation(file: "<DETAIL-PATH>", line: 9)
-			\(indent)let currentUser: User = user
-			\(indent)#sourceLocation()
+			\(indent)let currentUser: User = user // Declared as Detail.currentUser
 			\(indent)return Detail(user: user, currentUser: currentUser)
 			"""
 		case .onSeamRoot:
@@ -7128,13 +7096,11 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	struct AliasOfProvidedPropertyCell: Sendable, CustomTestStringConvertible {
 		enum Expectation: Sendable {
-			/// The seam's generated file, the root's, and the root's with the tree built inline, with `<HASH>`,
-			/// `<DETAIL-PATH>` and `<SCREEN-PATH>` to fill in.
+			/// The seam's generated file, the root's, and the root's with the tree built inline.
 			case generates(seam: String, root: String, inlineRoot: String)
 			/// The diagnostics with the seam and without it.
 			case throwsError(seam: @Sendable (FixturePaths) -> String, inline: @Sendable (FixturePaths) -> String)
-			/// The diagnostics with the seam, and the root's generated file with the tree built inline, with
-			/// `<SCREEN-PATH>` to fill in.
+			/// The diagnostics with the seam, and the root's generated file with the tree built inline.
 			case throwsErrorAtSeam(seam: @Sendable (FixturePaths) -> String, inlineRoot: String)
 		}
 
@@ -7248,9 +7214,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    /// Code you write and code SafeDI generates can both call this initializer.
 			    public init() {
 			        let user = User()
-			        #sourceLocation(file: "<SCREEN-PATH>", line: 10)
-			        let currentUser: User = user
-			        #sourceLocation()
+			        let currentUser: User = user // Declared as Screen.currentUser
 			        let detail = Detail(currentUser: currentUser)
 			        self.init(user: user, currentUser: currentUser, detail: detail)
 			    }
@@ -7277,9 +7241,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            let user = User()
-			            #sourceLocation(file: "<SCREEN-PATH>", line: 10)
-			            let currentUser: User = user
-			            #sourceLocation()
+			            let currentUser: User = user // Declared as Screen.currentUser
 			            let detail = Detail(currentUser: currentUser)
 			            return Screen(user: user, currentUser: currentUser, detail: detail)
 			        }
@@ -7318,9 +7280,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				    public init() {
 				        func __safeDI_screen() -> Screen {
 				            let user = User()
-				            #sourceLocation(file: "<SCREEN-PATH>", line: 11)
-				            let currentUser: User = user
-				            #sourceLocation()
+				            let currentUser: User = user // Declared as Screen.currentUser
 				            let detail = Detail(currentUser: currentUser)
 				            let summary = Summary(user: nil)
 				            return Screen(user: user, currentUser: currentUser, detail: detail, summary: summary)
@@ -7362,18 +7322,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-			func filled(_ code: String, fixtures: FixturePaths) -> String {
-				code.replacingOccurrences(of: "<DETAIL-PATH>", with: fixtures["Detail.swift"])
-					.replacingOccurrences(of: "<SCREEN-PATH>", with: fixtures["Screen.swift"])
-			}
-			#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + filled(seam, fixtures: output.fixtures))
-			#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + filled(root, fixtures: output.fixtures))
+			#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + seam)
+			#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + root)
 			let inlineOutput = try await executeSafeDIToolTest(
 				swiftFileContent: Self.aliasOfProvidedPropertyFixture(alias: cell.alias, neighbor: cell.neighbor, seam: false),
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(inlineOutput.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + filled(inlineRoot, fixtures: inlineOutput.fixtures))
+			#expect(inlineOutput.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + inlineRoot)
 		case let .throwsError(seamDiagnostics, inlineDiagnostics):
 			for (seam, diagnostics) in [(true, seamDiagnostics), (false, inlineDiagnostics)] {
 				await assertThrowsError(diagnostics: diagnostics) {
@@ -7397,7 +7353,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-			#expect(inlineOutput.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + inlineRoot.replacingOccurrences(of: "<SCREEN-PATH>", with: inlineOutput.fixtures["Screen.swift"]))
+			#expect(inlineOutput.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + inlineRoot)
 		}
 	}
 
@@ -8156,7 +8112,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 		)
-		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -8164,9 +8119,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token) {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        @inline(never) func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(detailPath)", line: 8)
-		            let authToken: Token? = token.instance
-		            #sourceLocation()
+		            let authToken: Token? = token.instance // Declared as Detail.authToken
 		            let reader = Reader(authToken: authToken)
 		            return Detail(authToken: authToken, reader: reader)
 		        }
@@ -8256,9 +8209,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Token? = token.instance
-			            #sourceLocation()
+			            let authToken: Token? = token.instance // Declared as Detail.authToken
 			            let reader = Reader(authToken: authToken)
 			            return Detail(authToken: authToken, reader: reader)
 			        }
@@ -9108,7 +9059,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 		)
-		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
@@ -9116,9 +9066,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init(__safeDI_token: @autoclosure @escaping () -> Token?) {
 		        let token = LazilyInstantiated<Token?>(__safeDI_token)
 		        @inline(never) func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(detailPath)", line: 7)
-		            let authToken: Token? = token.instance
-		            #sourceLocation()
+		            let authToken: Token? = token.instance // Declared as Detail.authToken
 		            return Detail(authToken: authToken)
 		        }
 		        let detail: Detail = __safeDI_detail()
@@ -9161,9 +9109,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		            return Screen(detail: detail)
 		        }
 		        func __safeDI_detail(token: Token?) -> Detail {
-		            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-		            let authToken: Token? = token
-		            #sourceLocation()
+		            let authToken: Token? = token // Declared as Detail.authToken
 		            return Detail(authToken: authToken)
 		        }
 		        func __safeDI_featureBuilder(token: Token?) -> Feature {

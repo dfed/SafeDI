@@ -3617,7 +3617,8 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == expectedFiles)
 		if integration == .moduleInfo {
 			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.package])
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.lineAndColumn?.line) == [2])
+			// A `.safedi` file stores the declaration's rank in its file, never its line.
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.declarationStartLocation?.order) == [1])
 		}
 	}
 

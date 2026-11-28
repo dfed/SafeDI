@@ -135,16 +135,12 @@ struct SafeDIToolSeamExistentialSpellingTests: ~Copyable {
 		    public init(__safeDI_service: @autoclosure @escaping () -> any Service) {
 		        let service = LazilyInstantiated<any Service>(__safeDI_service)
 		        @inline(never) func __safeDI_first() -> First {
-		            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 7)
-		            let other: any Service = service.instance
-		            #sourceLocation()
+		            let other: any Service = service.instance // Declared as First.other
 		            return First(other: other)
 		        }
 		        let first: First = __safeDI_first()
 		        @inline(never) func __safeDI_second() -> Second {
-		            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
-		            let other: any Service = service.instance
-		            #sourceLocation()
+		            let other: any Service = service.instance // Declared as Second.other
 		            return Second(other: other)
 		        }
 		        let second: Second = __safeDI_second()

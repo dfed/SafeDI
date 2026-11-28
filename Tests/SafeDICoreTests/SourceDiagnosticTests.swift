@@ -75,6 +75,41 @@ struct SourceDiagnosticTests {
 	}
 
 	@Test
+	func formatted_printsFileWithoutLineOrFixIt_whenLocationWasReadWithoutItsPosition() {
+		// A `.safedi` file records each declaration's file and its order there, never its line or column, so a
+		// diagnostic at another module's declaration names the file alone, and a fix-it, which edits a range of
+		// lines and columns, prints nothing.
+		let location = Dependency.DeclarationLocation(filePath: "Sources/Core/Child.swift", order: 3)
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: location,
+			message: "@Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?",
+			fixIts: [
+				SourceDiagnostic.FixIt(
+					range: Dependency.SourceRange(owner: location, part: .identifier),
+					replacement: "shared",
+				),
+			],
+		)
+		#expect(diagnostic.formatted == "Sources/Core/Child.swift: error: @Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?")
+	}
+
+	@Test
+	func printsUnlocatedPosition_isTrueOnlyForLocationOrFixItReadWithoutItsPosition() {
+		let located = Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 5)
+		let unlocated = Dependency.DeclarationLocation(filePath: "Sources/Core/Child.swift", order: 3)
+		func diagnostic(_ location: Dependency.DeclarationLocation?, fixItRange: Dependency.SourceRange? = nil) -> SourceDiagnostic {
+			SourceDiagnostic(severity: .error, location: location, message: "message", fixIts: fixItRange.map { [SourceDiagnostic.FixIt(range: $0, replacement: "shared")] } ?? [])
+		}
+
+		#expect(!diagnostic(nil).printsUnlocatedPosition)
+		#expect(!diagnostic(located).printsUnlocatedPosition)
+		#expect(!diagnostic(located, fixItRange: Dependency.SourceRange(startLine: 7, startColumn: 19, endLine: 7, endColumn: 26)).printsUnlocatedPosition)
+		#expect(diagnostic(located, fixItRange: Dependency.SourceRange(owner: unlocated, part: .typeAnnotation)).printsUnlocatedPosition)
+		#expect(diagnostic(unlocated).printsUnlocatedPosition)
+	}
+
+	@Test
 	func respellingFilePath_respellsLocation() {
 		let diagnostic = SourceDiagnostic(
 			severity: .note,
