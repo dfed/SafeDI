@@ -1146,14 +1146,14 @@ struct GraphFuzzerCallingMockDraw {
 		case .calledTypeHoldsSecondHoleType:
 			// Where no type of the caller's module fills the second place, `mock()` and the twin take its builder, handed a stub.
 			secondHole?.fill == .invisible
-				? ("\(caller).mock(\(secondHoleBuilderLabel): \(secondHoleStubBuilder))", "\(caller)(__safeDI_\(secondHoleBuilderLabel): .init(__safeDI_noScope: \(secondHoleStubBuilder)))")
+				? ("\(caller).mock(\(secondHoleBuilderLabel): \(secondHoleStubBuilder))", "\(caller)(\(secondHoleBuilderLabel): \(secondHoleStubBuilder))")
 				: ("\(caller).mock()", "\(caller)()")
 		case .placeInstantiatedOnlyIfAvailable:
 			// Where no type of the caller's module fills the place, the mock's builder defaults to `{ nil }`, which the twin's
 			// is handed, so both hold `nil`.
 			implementationIsVisible
 				? ("\(caller).mock()", "\(caller)()")
-				: ("\(caller).mock()", "\(caller)(__safeDI_\(holeBuilderLabel): .init(__safeDI_noScope: { nil }))")
+				: ("\(caller).mock()", "\(caller)(\(holeBuilderLabel): { nil })")
 		case .callerForwardsValueFillReads:
 			("\(caller).mock(\(names.value.lowercasedFirst): \(names.outerModuleName).\(names.value)())", "\(caller)(__safeDI_\(names.value.lowercasedFirst): \(names.outerModuleName).\(names.value)())")
 		case .calledTypeReceivesValueOnlyIfAvailableNothingProvides:
@@ -1169,7 +1169,7 @@ struct GraphFuzzerCallingMockDraw {
 			fillHoles.map { _ in
 				let builders = expectedBuilders
 				let mockArguments = builders.map { "\($0.label): \($0.value(names.callerModuleName))" }
-				let twinArguments = builders.map { "__safeDI_\($0.label): .init(__safeDI_noScope: \($0.value(names.callerModuleName)))" }
+				let twinArguments = builders.map { "\($0.label): \($0.value(names.callerModuleName))" }
 				return ("\(caller).mock(\(mockArguments.joined(separator: ", ")))", "\(caller)(\(twinArguments.joined(separator: ", ")))")
 			}
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive, .fillConstructsTypeCallerModuleCannotReach:
@@ -1469,7 +1469,7 @@ struct GraphFuzzerCallingMockDraw {
 		// Where the fill instantiates what nothing fulfills, both calls hand its builder the stub.
 		let stub = "{ \(names.callerModuleName).\(Self.beaconStub)() }"
 		let calls = if reenteringFillInstantiatesWhatNothingFulfills {
-			(mock: "\(caller).mock(\(beaconBuilderLabel): \(stub))", twin: "\(caller)(__safeDI_\(beaconBuilderLabel): .init(__safeDI_noScope: \(stub)))")
+			(mock: "\(caller).mock(\(beaconBuilderLabel): \(stub))", twin: "\(caller)(\(beaconBuilderLabel): \(stub))")
 		} else {
 			(mock: "\(caller).mock()", twin: "\(caller)()")
 		}
@@ -2824,8 +2824,8 @@ struct GraphFuzzerCallingMockGraph {
 	let twinFiles: [File]
 	let callerTypeName: String
 	let callerIsPublic: Bool
-	/// The `SafeDIConfiguration.swift` the calling mock's module holds beside its file, which the twin's does not: one that
-	/// lists the caller in `additionalMocksToGenerate`, or `nil`.
+	/// The `SafeDIConfiguration.swift` the calling mock's module holds beside its file, in place of the twin's (which sets
+	/// `generatePlainDependencyTreeInitializers`): one that lists the caller in `additionalMocksToGenerate`, or `nil`.
 	let mockConfiguration: String?
 	/// The parameters of the calling mock's `mock()` that its own `@Forwarded` values and the received values its tree
 	/// cannot build account for: every other parameter but `safeDIOverrides` is a place it passes up.
@@ -2921,13 +2921,15 @@ struct GraphFuzzerCallingMockGraph {
 		}
 	}
 
-	/// The configuration the caller's module holds in `form`.
+	/// The configuration the caller's module holds in `form`. The twin's generates its seams' plain initializers, which
+	/// the known-right probes call with a stub builder: a seam's levels declare no initializer that builds one from a
+	/// builder alone, so only its plain initializer, which builds each level in a local function, takes the builder itself.
 	private func configuration(of form: Form) -> String? {
 		switch form {
 		case .mock:
 			mockConfiguration
 		case .twin:
-			nil
+			"import SafeDI\n\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n"
 		}
 	}
 
