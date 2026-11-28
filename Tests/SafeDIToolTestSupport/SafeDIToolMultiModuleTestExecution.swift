@@ -951,6 +951,7 @@ enum SplitPositionsRun {
 		// whole run's reports alone.
 		let laysOutRoots = NodeRecordsChecks.laysOutRoots
 		let laysOutMockRoots = NodeRecordsChecks.laysOutMockRoots
+		let recordsFilledCalls = NodeRecordsChecks.recordsFilledCalls
 		var nodeRecordsObserver: (@Sendable (NodeRecordsReport) -> Void)?
 		if laysOutMockRoots || NodeRecordsObservation.observer != nil {
 			nodeRecordsObserver = { _ in }
@@ -960,8 +961,10 @@ enum SplitPositionsRun {
 			do {
 				let output: Generate.Output = try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 					try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
-						try await NodeRecordsObservation.$observer.withValue(splitObserver) {
-							try await Generate.parse(splitArguments).generate()
+						try await NodeRecordsObservation.$recordsFilledCalls.withValue(recordsFilledCalls) {
+							try await NodeRecordsObservation.$observer.withValue(splitObserver) {
+								try await Generate.parse(splitArguments).generate()
+							}
 						}
 					}
 				}

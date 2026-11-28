@@ -45,6 +45,12 @@ enum NodeRecordsChecks {
 		NodeRecordsObservation.laysOutMockRoots || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_LAY_OUT_MOCKS"] == "1"
 	}
 
+	/// Whether node records make the records of filled calls (`NodeRecordsObservation.recordsFilledCalls`): a test said so,
+	/// or `SAFEDI_NODE_RECORDS_FILLED_CALLS` is `1`, as `laysOutRoots` says of laying out.
+	static var recordsFilledCalls: Bool {
+		NodeRecordsObservation.recordsFilledCalls || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_FILLED_CALLS"] == "1"
+	}
+
 	static func checking<Result>(_ body: () async throws -> Result) async rethrows -> Result {
 		let reportPath = ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_REPORT"]
 		let testName = Test.current?.name ?? "unknown test"
@@ -190,8 +196,7 @@ enum NodeRecordsChecks {
 	}
 
 	private static func checkingNodeRecords<Result>(laysOutRoots: Bool, laysOutMockRoots: Bool, reportPath: String?, testName: String, enclosingObserver: (@Sendable (NodeRecordsReport) -> Void)?, _ body: () async throws -> Result) async rethrows -> Result {
-		// Where `SAFEDI_NODE_RECORDS_FILLED_CALLS` is `1`, node records make the records of a root's filled seam calls.
-		let recordsFilledCalls = NodeRecordsObservation.recordsFilledCalls || ProcessInfo.processInfo.environment["SAFEDI_NODE_RECORDS_FILLED_CALLS"] == "1"
+		let recordsFilledCalls = Self.recordsFilledCalls
 		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
 				try await NodeRecordsObservation.$recordsFilledCalls.withValue(recordsFilledCalls) {

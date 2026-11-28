@@ -42,6 +42,9 @@ extension NodeRecords {
 	) throws -> AliasPlaceRecord {
 		let scope = world.scope(of: declaration)
 		guard let call = scope.publicMockCall, case let .success(records) = world.publicMockFilledCallRecords(of: declaration) else { throw NodeRecordRefusal.publicMockCallFills }
+		// A receive the call binds again under its label is declared in the call's function, which a call spelled in place
+		// does not hold yet: such a root keeps the walk.
+		guard receivesBoundAgain.isEmpty else { throw NodeRecordRefusal.publicMockCallFills }
 		// What the call hands each builder it fills: the struct its root level function returns, unless `mock()` takes a
 		// builder for the places of the builder's family, which a test passes in place of the fills.
 		var filledBuilderValues = [String: String]()
@@ -80,7 +83,7 @@ extension NodeRecords {
 		}
 		var alias = AliasPlaceRecord(property: record.property, fulfillingProperty: nil, text: "", reads: reads)
 		alias.declaredFunctionNames = [record.functionName]
-		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: statements, statementsAfterLeadingStatement: receivesBoundAgain.map { .indented($0.place, by: indent) })
+		alias.call = InPlaceCall(record: record, statementsBeforeLeadingStatement: statements, statementsAfterLeadingStatement: [])
 		return alias
 	}
 }

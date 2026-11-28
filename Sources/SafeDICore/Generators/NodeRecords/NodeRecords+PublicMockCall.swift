@@ -75,8 +75,9 @@ extension NodeRecords {
 	/// The refusal of `declaration`, a call of another module's public mock that fills a builder, where its records do not
 	/// make it yet, once a test turns on records of filled calls (`NodeRecordsObservation.recordsFilledCalls`), and `nil`
 	/// where they do: a constant call the root alone builds, not erased, of a mock that takes overrides, which the call's
-	/// function reads of `mock()`'s own, whose fills each build a type of no hand-written mock that instantiates nothing,
-	/// read nothing of the caller's scope, and return the value they bind. Every other call is left to the walk.
+	/// function reads of `mock()`'s own, whose fills each build, at a place that is not erased, a type of no hand-written
+	/// mock that instantiates nothing, read nothing of the caller's scope, and return the value they bind. Every other call
+	/// is left to the walk, as is a call that binds a receive again (`publicMockFilledCallRecord`).
 	private static func filledCallRefusal(of declaration: DeclarationID, call: PublicMockCall, in world: some NodeRecordSources) -> NodeRecordRefusal? {
 		guard NodeRecordsObservation.recordsFilledCalls,
 		      call.takesOverrides,
@@ -86,6 +87,7 @@ extension NodeRecords {
 		      case let .success(records) = world.publicMockFilledCallRecords(of: declaration),
 		      records.fills.allSatisfy({ fill in
 		      	fill.signature.returnsBoundValue
+		      		&& !fill.facts.hole.erasedToConcreteExistential
 		      		&& fill.facts.callerReads.isEmpty
 		      		&& world.edges(from: fill.facts.declaration).isEmpty
 		      		&& world.scope(of: fill.facts.declaration).instantiable.mockInitializer == nil
