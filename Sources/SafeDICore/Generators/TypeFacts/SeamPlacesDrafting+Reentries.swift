@@ -140,6 +140,7 @@ extension SeamPlacesDrafts {
 				"taken by \(field.parameterTakingType?.asSource ?? "none")",
 				"deferral \(field.deferral)",
 				field.isSeamParameter ? "seam parameter" : "",
+				"origin \(field.seamParameterOrigin.map { "\($0)" } ?? "none")",
 				field.isBoundByPublicMockRoot ? "bound by public mock root" : "",
 				declaration.isBoundBeforeNextProperty ? "bound before" : "bound later",
 				"built after \(declaration.builtAfter?.label ?? "none")",
@@ -253,12 +254,49 @@ extension SeamPlacesDrafts {
 				alias: aliasNode?.aliasFulfillingProperty.map { .init(fulfillingProperty: $0, isSeams: variant == rootVariant) },
 				isBoundFromCallersArgument: false,
 				isCycleParameter: binding.isCycleParameter,
-				isReboundByBuilderFunction: binding.isReboundByBuilderFunction,
+				isReboundByBuilderFunction: binding.isReboundByBuilderFunction && variant != rootVariant,
 				isFieldOfSeamParameter: false,
 				fillFieldHiding: nil,
 				buildability: labelsHeldAboveSeam.map { .init(labelsHeldAboveSeam: $0, placesInTree: []) },
 			)
 			return child.map(declaration.asChild) ?? declaration
+		}
+		// A signature parameter as the root's list holds it: bound before any child, declared where its first receiver
+		// declares it.
+		let seam = world.graph.nodes[Int(world.declaration(of: rootVariant))].scope.instantiable
+		var seamDependencyByProperty = [Property: Dependency]()
+		for dependency in seam.dependencies where seamDependencyByProperty[dependency.property] == nil {
+			seamDependencyByProperty[dependency.property] = dependency
+		}
+		func parameterDeclaration(of parameter: SeamSignature.Parameter) -> SeamSignature.Places.Declaration {
+			let firstReceiver = parameter.receivers.first
+			let declaringType = firstReceiver?.declaringType ?? seam.concreteInstantiable
+			let location = firstReceiver?.declarationLocation ?? seamDependencyByProperty[parameter.property]?.declarationLocation ?? seam.declarationLocation
+			return SeamSignature.Places.Declaration(
+				field: SeamSignature.Hole.Field(
+					property: parameter.property,
+					access: parameter.tierAccess,
+					accessCause: parameter.accessCause,
+					declaringType: declaringType,
+					declarationLocation: location,
+					isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
+					deferral: parameter.deferral,
+					isSeamParameter: true,
+					seamParameterOrigin: .init(of: parameter, of: seam, declaringType: declaringType, declarationLocation: location),
+				),
+				isBoundBeforeNextProperty: true,
+				builtAfter: nil,
+				reason: .other,
+				isForwarded: false,
+				cycleParameterOrigin: nil,
+				alias: nil,
+				isBoundFromCallersArgument: false,
+				isCycleParameter: false,
+				isReboundByBuilderFunction: false,
+				isFieldOfSeamParameter: false,
+				fillFieldHiding: nil,
+				buildability: nil,
+			)
 		}
 		func spelledPlaces(inTree cases: [Int]) -> [String] {
 			cases.map { index in
@@ -267,12 +305,13 @@ extension SeamPlacesDrafts {
 			}.uniqued()
 		}
 		var factsFieldsByList = [String: Set<[String]>]()
-		for level in levels + closingLevels where level.id.variant != rootVariant {
+		for level in levels + closingLevels {
 			let declaration = world.declaration(of: level.id.variant)
 			let targets = world.edges(from: declaration)
 			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
 			let key = "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))"
-			let fields = world.worldBindings(of: Int(declaration)).map { binding in
+			let parameterFields = level.id.variant == rootVariant ? parameters.map { projected(parameterDeclaration(of: $0), placesInTree: []) } : []
+			let fields = parameterFields + world.worldBindings(of: Int(declaration)).filter { level.id.variant != rootVariant || !$0.isForwarded }.map { binding in
 				let property = world.propertyTable[Int(binding.property)]
 				let held = labelsHeldAboveSeam(ofBinding: property, atVariant: level.id.variant)
 				let split = held.flatMap { $0.firstIndex(of: "in tree:") }
@@ -285,7 +324,7 @@ extension SeamPlacesDrafts {
 		}
 		var fieldDifferences = Set<String>()
 		var comparedFieldCount = 0
-		for level in places.levels where !level.key.isSeamRoot {
+		for level in places.levels {
 			let list = places.declarationLists[level.declarationList]
 			let key = "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(list.map { spelled(label: $0.field.property.label, isCycleParameter: $0.isCycleParameter, isRebound: $0.isReboundByBuilderFunction, isForwarded: $0.isForwarded) }.joined(separator: ", "))"
 			guard let factsFields = factsFieldsByList[key] else { continue }
