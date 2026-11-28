@@ -217,6 +217,28 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillHandedPlainMemoCallsSeamThatDefersLabelSendable() async throws {
+		// `Desk`'s fill of `Parcel` is handed `Inbox`'s plain memo of `credential`, and calls `Vault`, whose tree reads
+		// `credential` inside a `SendableInstantiator`'s builder, so `Vault` takes it `@Sendable`: the fill binds the memo's
+		// value, which serves no read of the wrapper, so `LazyReader`'s receive of it leaves `Desk`.
+		let comparisons = try await comparisonsAllowingRejection(ofSeam: "Desk", in: Self.modules(besideParcelReader: Self.vaultDeclarations, parcelBuilds: "vault: Vault"))
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoDifference_whenFillHandedPlainMemoFillsPlaceSeamBuildsInSendableFunction() async throws {
+		// `Desk`'s fill of `Parcel` is handed `Inbox`'s plain memo of `credential`, and calls `Safe`, whose `seal` place is
+		// built in a `SendableInstantiator`'s builder, so `Safe` takes its builder `@Sendable` and its fill is `@Sendable`; the
+		// fill reads `credential` there, so the outer fill binds the memo's value, which serves no read of the wrapper.
+		let comparisons = try await comparisonsAllowingRejection(ofSeam: "Desk", in: Self.modules(besideParcelReader: Self.safeDeclarations, Self.sealImplDeclaration, parcelBuilds: "safe: Safe"))
+		#expect(!comparisons.isEmpty)
+		#expect(comparisons.flatMap(\.differences).isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsNoDifference_whenFillOfSeamCallRequiresValueOfSeamsCaller() async throws {
 		// `Desk`'s fill of `Drawer`'s place builds `PenImpl`, which requires `clock` of `Desk`'s caller: the tree's
 		// required receives count it, as the facts' must.
@@ -312,6 +334,28 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Every comparison the oracle makes of `seam` while `modules` generate under module info, whether or not the graph is
+	/// accepted: the signature passes before an error compare their seams too.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func comparisonsAllowingRejection(ofSeam seam: String, in modules: [ModuleFixture]) async throws -> [SeamTreeReadsComparison] {
+		let (stream, continuation) = AsyncStream.makeStream(of: SeamTreeReadsComparison.self)
+		do {
+			try await SeamTreeReadsObservation.$comparesFacts.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolMultiModuleTest(
+					modules: modules,
+					integration: .moduleInfo,
+					filesToDelete: &filesToDelete,
+				)
+			}
+		} catch {}
+		continuation.finish()
+		var comparisons = [SeamTreeReadsComparison]()
+		for await comparison in stream where comparison.seam == seam {
+			comparisons.append(comparison)
+		}
+		return comparisons
+	}
 
 	/// `Feature`'s stored seam signatures, as JSON, and every module's generated code, each with the fixture root spelled
 	/// `$FIXTURE_ROOT`, when every signature pass proceeds with `producer`'s reads.
@@ -715,6 +759,134 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 		}
 		"""], dependencies: ["Core", "Session", "Feature"]),
 	]
+
+	/// `Vault`, a seam of `Core` that reads `credential` inside a `SendableInstantiator`'s builder.
+	private static let vaultDeclarations = """
+	@Instantiable(generateDependencyTree: true)
+	public final class Vault: Instantiable, Sendable {
+	    public init(noteBuilder: SendableInstantiator<Note>) { self.noteBuilder = noteBuilder }
+	    @Instantiated public let noteBuilder: SendableInstantiator<Note>
+	}
+	"""
+
+	/// `Safe`, a seam of `Core` whose `seal` place `Locker` builds inside a `SendableInstantiator`'s builder.
+	private static let safeDeclarations = """
+	public protocol Seal: Sendable {}
+
+	@Instantiable
+	public final class Locker: Instantiable, Sendable {
+	    public init(seal: any Seal) { self.seal = seal }
+	    @Instantiated public let seal: any Seal
+	}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class Safe: Instantiable, Sendable {
+	    public init(lockerBuilder: SendableInstantiator<Locker>) { self.lockerBuilder = lockerBuilder }
+	    @Instantiated public let lockerBuilder: SendableInstantiator<Locker>
+	}
+	"""
+
+	/// `SealImpl`, of `Feature`, which fills `Safe`'s `seal` place and receives `credential`.
+	private static let sealImplDeclaration = """
+	@Instantiable(fulfillingAdditionalTypes: [Seal.self])
+	public final class SealImpl: Instantiable, Seal, Sendable {
+	    public init(credential: Credential) { self.credential = credential }
+	    @Received public let credential: Credential
+	}
+	"""
+
+	/// `Desk`, a seam of `Feature`, calls `Office`, which receives `credential` as a `SendableLazilyInstantiated` and calls
+	/// `Inbox`, whose `Note` defers `credential` by value; `Office` fills `Inbox`'s `courier` with `CourierImpl`, whose
+	/// `parcel` it passes up to `Desk`, which fills it with `ParcelImpl`. `ParcelImpl` builds `LazyReader`, which reads
+	/// `credential` as an optional `LazilyInstantiated`, and `parcelBuilds`, of `coreDeclarations`, which `Core` declares
+	/// too, beside `featureDeclarations` of `Feature`.
+	private static func modules(besideParcelReader coreDeclarations: String, _ featureDeclarations: String = "", parcelBuilds: String) -> [ModuleFixture] {
+		let parcelLabel = parcelBuilds.prefix { $0 != ":" }
+		return [
+			ModuleFixture(name: "Core", packageName: "Post", swiftFileContent: ["""
+			import SafeDI
+
+			public protocol Courier: Sendable {}
+
+			@Instantiable
+			public final class Credential: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable
+			public final class Note: Instantiable, Sendable {
+			    public init(credential: Credential) { self.credential = credential }
+			    @Received public let credential: Credential
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Inbox: Instantiable, Sendable {
+			    public init(noteBuilder: Instantiator<Note>, courier: any Courier) { self.noteBuilder = noteBuilder; self.courier = courier }
+			    @Instantiated public let noteBuilder: Instantiator<Note>
+			    @Instantiated public let courier: any Courier
+			}
+
+			\(coreDeclarations)
+			"""]),
+			ModuleFixture(name: "Session", packageName: "Post", swiftFileContent: ["""
+			import Core
+			import SafeDI
+
+			public protocol Parcel: Sendable {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Courier.self])
+			public final class CourierImpl: Instantiable, Courier, Sendable {
+			    public init(parcel: any Parcel) { self.parcel = parcel }
+			    @Instantiated public let parcel: any Parcel
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Office: Instantiable, Sendable {
+			    public init(credential: SendableLazilyInstantiated<Credential>, inbox: Inbox) { self.credential = credential; self.inbox = inbox }
+			    @Received public let credential: SendableLazilyInstantiated<Credential>
+			    @Instantiated public let inbox: Inbox
+			}
+			"""], dependencies: ["Core"]),
+			ModuleFixture(name: "Feature", packageName: "Post", swiftFileContent: ["""
+			import Core
+			import Session
+			import SafeDI
+
+			@Instantiable
+			public final class LazyReader: Instantiable, Sendable {
+			    public init(credential: LazilyInstantiated<Credential>?) { self.credential = credential }
+			    @Received(onlyIfAvailable: true) public let credential: LazilyInstantiated<Credential>?
+			}
+
+			\(featureDeclarations)
+
+			@Instantiable(fulfillingAdditionalTypes: [Parcel.self])
+			public final class ParcelImpl: Instantiable, Parcel, Sendable {
+			    public init(lazyReader: LazyReader, \(parcelBuilds)) { self.lazyReader = lazyReader; self.\(parcelLabel) = \(parcelLabel) }
+			    @Instantiated public let lazyReader: LazyReader
+			    @Instantiated public let \(parcelBuilds)
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Desk: Instantiable, Sendable {
+			    public init(office: Office) { self.office = office }
+			    @Instantiated public let office: Office
+			}
+			"""], dependencies: ["Core", "Session"]),
+			ModuleFixture(name: "App", packageName: "Post", swiftFileContent: ["""
+			import Core
+			import Feature
+			import SafeDI
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable, Sendable {
+			    public init(credential: SendableLazilyInstantiated<Credential>, desk: Desk) { self.credential = credential; self.desk = desk }
+			    @Instantiated let credential: SendableLazilyInstantiated<Credential>
+			    @Instantiated let desk: Desk
+			}
+			"""], dependencies: ["Core", "Session", "Feature"]),
+		]
+	}
 
 	/// `Console`, a seam of `Panel`, builds `Gauge`, which receives `unit`, beneath `Dial`, which declares `unit`, and
 	/// beneath `Knob`, which does not and receives `label`.
