@@ -100,14 +100,25 @@ struct SafeDIToolSeamTreeReadsTests: ~Copyable {
 				"property=session: Session; declaringType=Poller; location=Poller.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
 				"property=clock: Clock; declaringType=Ticker; location=Ticker.swift 0 here(line: 4, column: 5); access=public; module=Feature; instantiateMethodParameter=false; noTier=false; noTierCallTier=none; nestedSeamCall=none; alias=none; fromReportedSeamCall=false",
 			]
+		case .parameterReads:
+			[
+				"clock: read true, inside a @Sendable function true",
+				"config: read true, inside a @Sendable function false",
+				"onTap: read true, inside a @Sendable function false",
+				"session: read true, inside a @Sendable function true",
+				"theme: read true, inside a @Sendable function false",
+				"token: read true, inside a @Sendable function false",
+			]
 		}
-		// `Panel`'s tree holds no alias and no escaping type; its builder function names are checked by the cells below.
+		// `Panel`'s tree holds no alias and no escaping type, and its `clock` is read where `Screen`'s is; its builder function
+		// names are checked by the cells below.
 		let screenComparisons = comparisons.filter { $0.seam == "Screen" }
 		#expect(!screenComparisons.isEmpty)
 		for comparison in screenComparisons {
 			#expect(comparison.differences.map(\.field) == [field.rawValue])
 			#expect(comparison.differences.map(\.tree).map(Self.withFileNames) == [tree])
-			#expect(comparison.differences.map(\.facts) == [[]])
+			// An emptied `ParameterReads` reads no label.
+			#expect(comparison.differences.map(\.facts) == [field == .parameterReads ? tree.map { $0.replacingOccurrences(of: "true", with: "false") } : []])
 		}
 	}
 
