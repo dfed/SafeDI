@@ -354,7 +354,8 @@ extension SeamPlacesDrafts {
 				listIndexByKey[listKey] = listIndex
 				lists.append([])
 			}
-			let key = SeamSignature.Places.LevelKey(builtType: calledType, nextProperty: nil, isSeamRoot: false, isInFill: isInFill.contains(draft.id.variant), filledType: nil)
+			// A fill whose fulfiller is a seam call is that call: its level is in the fill.
+			let key = SeamSignature.Places.LevelKey(builtType: calledType, nextProperty: nil, isSeamRoot: false, isInFill: call.key.isFill || isInFill.contains(draft.id.variant), filledType: nil)
 			let levelKey = LevelKey(declarationList: listIndex, key: key, nextPosition: -1, nextLoop: -1, closesOn: nil)
 			let index: Int
 			if let known = levelIndexByKey[levelKey] {
@@ -404,13 +405,22 @@ extension SeamPlacesDrafts {
 			}
 		}
 		for (call, index) in passingUpLevelByCall.sorted(by: { $0.value < $1.value }) {
-			guard let parentIndex = inLineLevelByDraft[call], !assembled[index].parents.contains(parentIndex) else { continue }
-			let callProperty = world.graph.nodes[Int(target(of: call))].property
-			let parentInstantiable = node(of: call.variant).scope.instantiable
-			assembled[index].parents.append(parentIndex)
-			assembled[index].declaredSegmentByParent.append(callProperty.map { property in
-				[SeamSignature.Hole.DeclaredProperty(property: property, declaringType: parentInstantiable.concreteInstantiable, declarationLocation: parentInstantiable.dependencies.first { $0.property == property }?.declarationLocation)]
-			} ?? [])
+			// A fill's call is enclosed by the fill's entry level, which declares the hole's property on the way, as the
+			// fulfiller's levels are.
+			let calls = world.calls(of: call.variant)
+			if let entryLevel = entryLevelByCall[call], let entry = fillEntriesByVariant[calls[calls.startIndex + Int(call.edge)]]?.first(where: { $0.call == call }) {
+				guard !assembled[index].parents.contains(entryLevel) else { continue }
+				assembled[index].parents.append(entryLevel)
+				assembled[index].declaredSegmentByParent.append([SeamSignature.Hole.DeclaredProperty(property: entry.hole.property, declaringType: entry.hole.ownerType, declarationLocation: entry.hole.declarationLocation)])
+			} else {
+				guard let parentIndex = inLineLevelByDraft[call], !assembled[index].parents.contains(parentIndex) else { continue }
+				let callProperty = world.graph.nodes[Int(target(of: call))].property
+				let parentInstantiable = node(of: call.variant).scope.instantiable
+				assembled[index].parents.append(parentIndex)
+				assembled[index].declaredSegmentByParent.append(callProperty.map { property in
+					[SeamSignature.Hole.DeclaredProperty(property: property, declaringType: parentInstantiable.concreteInstantiable, declarationLocation: parentInstantiable.dependencies.first { $0.property == property }?.declarationLocation)]
+				} ?? [])
+			}
 		}
 		return SeamPlacesLevelAssembly(
 			levels: assembled.map { level in
