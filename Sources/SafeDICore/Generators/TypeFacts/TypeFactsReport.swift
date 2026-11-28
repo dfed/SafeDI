@@ -219,6 +219,7 @@ public struct TypeFactsReport: Sendable {
 				cycleKeyID: Int(graph.cycleIDs[index]),
 				twin: Int(graph.twins[index]),
 				buildsInSendableFunction: graph.buildsInSendableFunction[index],
+				sendabilityRefusal: graph.sendabilityRefusals[index].names,
 				edges: graph.graph.edges(from: index).map(Int.init),
 				edgeFacts: zip(graph.graph.edgeIndices(from: index), edgeFacts).map { edgeIndex, edge in
 					Edge(
@@ -232,6 +233,7 @@ public struct TypeFactsReport: Sendable {
 						hiddenFromCaller: graph.receives.hiddenFromCaller(atEdge: edgeIndex).map(propertyWithoutAny).sorted(),
 						fillHoleIsSendable: fillByEdge[Int32(edgeIndex)]?.holeIsSendable ?? false,
 						fillBuildsInSendableFunction: fillByEdge[Int32(edgeIndex)]?.buildsInSendableFunction ?? false,
+						fillSendabilityRefusal: fillByEdge[Int32(edgeIndex)]?.sendabilityRefusal.names ?? [],
 						fillKey: fillByEdge[Int32(edgeIndex)].map { graph.fillKeyTexts[Int($0.key)] },
 						fillHandedMemos: fillByEdge[Int32(edgeIndex)].map { fill in
 							graph.fillHandedMemos[Int(fill.handedMemoStart)..<Int(fill.handedMemoStart + fill.handedMemoCount)].map { memo in
@@ -317,6 +319,9 @@ public struct TypeFactsReport: Sendable {
 		public let fillHoleIsSendable: Bool
 		/// For a fill edge, whether the fill builds in a `@Sendable` function (`TypeFactsFill.buildsInSendableFunction`).
 		public let fillBuildsInSendableFunction: Bool
+		/// For a fill edge, why `fillBuildsInSendableFunction` can differ from the tree's mark, by name
+		/// (`TypeFactsFill.sendabilityRefusal`): empty where it is exact, and for any other edge.
+		public let fillSendabilityRefusal: [String]
 		/// For a fill edge, the fill's key (`ScopeGenerator.fillKey(of:)`); `nil` for any other edge.
 		public let fillKey: String?
 		/// For a fill edge, the memo the fill takes of each label some route hands it a memo of (`TypeFactsFill.handedMemoStart`),
@@ -384,6 +389,9 @@ public struct TypeFactsReport: Sendable {
 		public let twin: Int
 		/// Whether the node's builder function is `@Sendable` (`TypeFactsGraph.buildsInSendableFunction`).
 		public let buildsInSendableFunction: Bool
+		/// Why `buildsInSendableFunction` can differ from the tree's at some place of the node, by name
+		/// (`TypeFactsGraph.sendabilityRefusals`): empty where it is exact at every place.
+		public let sendabilityRefusal: [String]
 		/// The positions of the nodes its edges lead to, in edge order.
 		public let edges: [Int]
 		/// Each edge's facts, parallel to `edges`.

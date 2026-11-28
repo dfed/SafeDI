@@ -100,6 +100,9 @@ enum TypeFactsChecks {
 		/// were each a parameter: its declaration in the signature and its argument at each call of the variant.
 		var check35CapturedParameters = 0
 		var check35CapturedParameterBytes = 0
+		/// The places checks 37 and 40 leave out because the fold refuses their column (`TypeFactsSendabilityRefusal`), by
+		/// check and refusal name: a place carrying two refusals counts under each.
+		var refusedByCheck = [Int: [String: Int]]()
 		var line = ""
 	}
 
@@ -515,8 +518,10 @@ enum TypeFactsChecks {
 			}
 		}
 		var compared = [Int: Int]()
-		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
+		var refused = [Int: [String: Int]]()
+		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared, refused: &refused)
 		result.comparedByCheck.merge(compared) { $0 + $1 }
+		result.refusedByCheck.merge(refused) { $0.merging($1, uniquingKeysWith: +) }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
 		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) factsVariants=\(result.factsVariantCount) worst=\(result.worstNodeVariantCount) twins=\(twinNodes)"
@@ -527,6 +532,9 @@ enum TypeFactsChecks {
 		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
+		}
+		for check in [37, 40] {
+			line.append(" refused\(check)=\((result.refusedByCheck[check] ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ","))")
 		}
 		for check in 1...lastCheck {
 			if let first = result.findingsByCheck[check]?.first {
@@ -703,7 +711,9 @@ enum TypeFactsChecks {
 	///     difference (34 and 35 are other lanes' checks).
 	/// 37. Each fill a place passes builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction(ofFill:)`)
 	///     exactly where the facts' fold says so (`TypeFactsFill.buildsInSendableFunction`, `TypeFactsFillSendability`),
-	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property.
+	///     the fill's edge found by the fill's key, since two fills of one call can fill places of one property. A fill
+	///     whose column the fold refuses (`TypeFactsFill.sendabilityRefusal`) is left out and counted by refusal name
+	///     (`refusedByCheck`); any difference outside a refusal is a defect of the fold.
 	/// 39. Each fill a place passes takes the memos the place's generator hands it (`Scope.Fill.labelsHandedAsMemo`, the
 	///     fill's fields of those labels), exactly the facts' column (`TypeFactsFill.handedMemoStart`): which labels, each
 	///     memo's property, and its deferral, the `SendableLazilyInstantiated` its tree reads beside the value applied
@@ -712,9 +722,10 @@ enum TypeFactsChecks {
 	/// 40. Each place that closes no cycle builds in a `@Sendable` function (`ScopeGenerator.buildsInSendableFunction`)
 	///     exactly where its node's column says so (`TypeFactsGraph.buildsInSendableFunction`): a `Sendable` wrapper's
 	///     function, or one a cycle closed beneath it from inside a `@Sendable` function that does not enclose it makes
-	///     `@Sendable`, which 20 and 21 read from the edge alone. Its findings are places of a node whose cycle is entered at
-	///     another of its nodes, and places beneath an edge to a node the fold finished before, whose closed cycles the
-	///     fold does not hand on (`TypeFactsFillSendability.Columns.nodeBuildsInSendableFunction`).
+	///     `@Sendable`, which 20 and 21 read from the edge alone. A place of a node whose column the fold refuses
+	///     (`TypeFactsGraph.sendabilityRefusals`: a node of a cycle that can be entered at another of its nodes, or beneath
+	///     an edge to a node the fold finished before, whose closed cycles it does not hand on) is left out and counted by
+	///     refusal name (`refusedByCheck`); any difference outside a refusal is a defect of the fold.
 	///
 	/// 33, outside the columns: a production world keys by family only the bodies
 	/// of a seam's tree that hold a hole, which read their cases from the `@Sendable` carrier inside a `@Sendable` function.
@@ -727,6 +738,7 @@ enum TypeFactsChecks {
 		childrenByPlace: [[Int]],
 		add: (Int, String) -> Void,
 		compared: inout [Int: Int],
+		refused: inout [Int: [String: Int]],
 	) {
 		let places = report.places
 		let nodes = report.nodes
@@ -800,8 +812,13 @@ enum TypeFactsChecks {
 				// Check 37.
 				for fillChild in fillChildren {
 					guard let fillKey = places[fillChild].fillKey, let edge = facts.edgeFacts.first(where: { $0.isFill && $0.fillKey == fillKey }) else { continue }
-					count(37)
-					if places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
+					for name in edge.fillSendabilityRefusal {
+						refused[37, default: [:]][name, default: 0] += 1
+					}
+					if edge.fillSendabilityRefusal.isEmpty {
+						count(37)
+					}
+					if edge.fillSendabilityRefusal.isEmpty, places[fillChild].fillBuildsInSendableFunction != edge.fillBuildsInSendableFunction {
 						add(37, "place \(index) \(place.declaration) builds fill \(places[fillChild].declaration) in a `@Sendable` function \(places[fillChild].fillBuildsInSendableFunction.map { "\($0)" } ?? "unrecorded") where the facts say \(edge.fillBuildsInSendableFunction) (the seam takes it `@Sendable` \(edge.fillHoleIsSendable))")
 					}
 					// Check 39.
@@ -903,8 +920,13 @@ enum TypeFactsChecks {
 				add(explained ? 19 : 18, "place \(index) \(place.declaration) declares \(generator.typesDeclaredEscaping) escaping where its node's union is \(facts.typesDeclaredEscaping)")
 			}
 			// Check 40.
-			count(40)
-			if generator.buildsInSendableFunction != facts.buildsInSendableFunction {
+			for name in facts.sendabilityRefusal {
+				refused[40, default: [:]][name, default: 0] += 1
+			}
+			if facts.sendabilityRefusal.isEmpty {
+				count(40)
+			}
+			if facts.sendabilityRefusal.isEmpty, generator.buildsInSendableFunction != facts.buildsInSendableFunction {
 				add(40, "place \(index) \(place.declaration) builds in a `@Sendable` function \(generator.buildsInSendableFunction) where its node's column says \(facts.buildsInSendableFunction)")
 			}
 			// Check 20 and 21.

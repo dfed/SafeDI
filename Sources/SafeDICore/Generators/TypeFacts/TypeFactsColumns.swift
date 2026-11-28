@@ -65,8 +65,10 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// Whether the fill builds its tree in a `@Sendable` function of its own, the tree's mark
 	/// (`ScopeGenerator.buildsInSendableFunction(ofFill:)`): where the seam takes it `@Sendable`, a `@Sendable`-family
 	/// dispatcher of its call reaches it, or a `@Sendable` function inside the call's fills refers to it, found by one fold
-	/// up the call nesting (`TypeFactsFillSendability`).
+	/// up the call nesting (`TypeFactsFillSendability`). Exact where `sendabilityRefusal` is empty.
 	let buildsInSendableFunction: Bool
+	/// Why `buildsInSendableFunction` can differ from the tree's mark (`TypeFactsFillSendability.Columns.fillRefusal`).
+	let sendabilityRefusal: TypeFactsSendabilityRefusal
 	/// The fill's key (`ScopeGenerator.fillKey(of:)`), which names its place, by its position in
 	/// `TypeFactsGraph.fillKeyTexts`.
 	let key: Int32

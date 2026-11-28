@@ -732,6 +732,7 @@ struct TypeFactsGraph: Sendable {
 				stackCount: Int32(fillPathEntries.count) - stackStart,
 				holeIsSendable: hole.isSendable,
 				buildsInSendableFunction: sendability.fillBuildsInSendableFunction[Int(edge)],
+				sendabilityRefusal: sendability.fillRefusal[Int(edge)],
 				key: fillKeys.id(of: ScopeGenerator.fillKey(of: hole)),
 				handedMemoStart: handedMemoStart,
 				handedMemoCount: Int32(fillHandedMemos.count) - handedMemoStart,
@@ -829,6 +830,7 @@ struct TypeFactsGraph: Sendable {
 		self.bindingOffsets = bindingOffsets
 		self.twins = twins
 		buildsInSendableFunction = sendability.nodeBuildsInSendableFunction
+		sendabilityRefusals = sendability.nodeRefusal
 		self.receives = receives
 		self.typesBeneath = typesBeneath
 		self.typesDeclaredEscaping = typesDeclaredEscaping
@@ -1425,8 +1427,12 @@ struct TypeFactsGraph: Sendable {
 	let twins: [Int32]
 	/// Whether each node's builder function is `@Sendable` (`ScopeGenerator.buildsInSendableFunction`): its property is a
 	/// `Sendable` wrapper's, or a cycle-closing scope beneath it refers to it from inside a `@Sendable` builder function
-	/// that does not enclose it (`TypeFactsFillSendability.Columns.nodeBuildsInSendableFunction`).
+	/// that does not enclose it (`TypeFactsFillSendability.Columns.nodeBuildsInSendableFunction`). Exact at every place of a
+	/// node whose `sendabilityRefusals` entry is empty.
 	let buildsInSendableFunction: [Bool]
+	/// Why each node's `buildsInSendableFunction` can differ from the tree's at some place
+	/// (`TypeFactsFillSendability.Columns.nodeRefusal`).
+	let sendabilityRefusals: [TypeFactsSendabilityRefusal]
 	/// What each node's subtree receives from above it.
 	let receives: TypeFactsReceives
 	/// The types each node's subtree builds, the node's own included, by the world's type ID.
@@ -1525,8 +1531,8 @@ struct TypeFactsGraph: Sendable {
 	var columnElementCount: Int {
 		var count = graph.columnElementCount + kinds.count + constructions.count + nodeProperties.count + builtTypes.count
 		count += 8 * edgeFacts.count + 11 * bindings.count + bindingOffsets.count
-		count += cycleIDs.count + twins.count + buildsInSendableFunction.count + parentOffsets.count + 3 * parents.count
-		count += 12 * fills.count + 2 * fillPathEntries.count + 3 * fillHandedMemos.count + propertyFacts.columnElementCount + readTable.count
+		count += cycleIDs.count + twins.count + buildsInSendableFunction.count + sendabilityRefusals.count + parentOffsets.count + 3 * parents.count
+		count += 13 * fills.count + 2 * fillPathEntries.count + 3 * fillHandedMemos.count + propertyFacts.columnElementCount + readTable.count
 		count += readColumn.count + readOffsets.count + labelColumn.count + labelOffsets.count + answerKeys.count + variants.columnElementCount
 		count += 2 * (reads.rows.wordCount + receives.wordCount + typesBeneath.wordCount + typesDeclaredEscaping.wordCount + holesBeneath.wordCount)
 		count += madeAgain?.columnElementCount ?? 0
