@@ -62,11 +62,11 @@ public struct SeamCallRecordObservation: Sendable {
 	/// The names the record says the text reads: its arguments' reads, what its fills and dispatchers read of the caller's
 	/// scope, and each struct it passes a builder up from, by the name the tree binds it under.
 	public let readNames: [String]
-	/// The names the record says the text binds, and the functions it declares: its builder function, and the fills and
-	/// dispatchers it keeps in place.
+	/// The names the record says the text binds, and the functions it declares: its builder function, and the fills,
+	/// dispatchers and level functions it keeps in place.
 	public let boundNames: [String]
-	/// The fills and dispatchers the text keeps in place (`AliasPlaceRecord.keptFunctionNames`), each of which binds its
-	/// own parameters and values: what one reads of the caller's scope is among `readNames`.
+	/// The fills, dispatchers and level functions the text keeps in place (`AliasPlaceRecord.keptFunctionNames`), each of
+	/// which binds its own parameters and values: what one reads of the caller's scope is among `readNames`.
 	public let keptFunctionNames: [String]
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]

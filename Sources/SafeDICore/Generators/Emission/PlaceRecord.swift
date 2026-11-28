@@ -216,8 +216,9 @@ struct AliasPlaceRecord: Sendable {
 	/// declares them, from the place's plan, and nothing renames them, so none is among `calledFunctionNames`.
 	var calledRootFunctionNames = [String]()
 	/// The names of the functions a seam call's text declares inside its builder function: the fills and dispatchers it
-	/// keeps in place rather than leaving to the root. The text calls them where it declares them, so nothing outside the
-	/// text reads them, and none is among `declaredFunctionNames` or `calledFunctionNames`.
+	/// keeps in place rather than leaving to the root, and the level functions a builder argument's closure declares
+	/// (`BuilderCallArgument.levelFunctionNames`). The text calls them where it declares them, so nothing outside the text
+	/// reads them, and none is among `declaredFunctionNames` or `calledFunctionNames`.
 	var keptFunctionNames = [String]()
 }
 

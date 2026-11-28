@@ -2464,14 +2464,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 						let closureIndent = ScopeGenerator.standardIndent
 						let bodyIndent = closureIndent + ScopeGenerator.standardIndent
 						var levelsWithoutScope = ScopeGenerator.LevelsWithoutScope(scopeEnums: calledBuilders.scopeEnums)
-						let functions = levelsWithoutScope.functionDeclarations(reachedFrom: [enumKey], indent: bodyIndent)
+						let functions = levelsWithoutScope.functions(reachedFrom: [enumKey], indent: bodyIndent)
 						let value = """
 						{
-						\(functions.joined(separator: "\n"))
+						\(functions.map(\.declaration).joined(separator: "\n"))
 						\(bodyIndent)return \(levelsWithoutScope.call(ofLevel: enumKey, handing: ReservedName.nilBuilderSource))
 						\(closureIndent)}()
 						"""
-						return .init(label: label, value: value)
+						return .init(label: label, value: value, levelFunctionNames: functions.map(\.name))
 					}
 					return .init(label: label, value: "")
 				}
