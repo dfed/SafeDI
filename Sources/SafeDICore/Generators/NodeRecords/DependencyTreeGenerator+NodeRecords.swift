@@ -127,6 +127,17 @@ extension DependencyTreeGenerator {
 			} else {
 				laidOutCode
 			}
+			// A root the engine cannot lay out even for the comparison shows no text to approve that difference against, so
+			// where its records differ from the tree's in no other way its world is reported as one function cannot serve
+			// (`onlyIfAvailableAnsweredApart`), and it keeps its tree's code.
+			if comparedCode == nil, holdsDifferenceOfOptionalParameter, rootInfo.ownSeamRoot == nil,
+			   // safedi-source-rule: allow stringScan — only where a test observes node records, once for each difference of a root that keeps its tree.
+			   comparisons.allSatisfy({ $0.differences.allSatisfy { $0.contains(": \(NodeRecordsReport.argumentsOfOptionalParameterDifferenceName) is ") } })
+			{
+				let refusal = NodeRecordRefusal.onlyIfAvailableAnsweredApart.rawValue
+				observer(NodeRecordsReport(root: root, refusal: refusal, everyRefusal: [refusal], isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: rootInfo.treeForcers))
+				return treeCode
+			}
 			// A root whose tree's body holds nothing is compared nowhere.
 			for comparison in comparisons {
 				var report = NodeRecordsReport(
