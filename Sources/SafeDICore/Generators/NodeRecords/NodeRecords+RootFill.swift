@@ -388,7 +388,7 @@ public struct FillFactsObservation: Sendable {
 	public let refusals: [String]
 
 	/// Called with each production root's filled calls, when set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (FillFactsObservation) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillFactsObservation) -> Void>?
 
 	/// Hands the observer, where one is set, the facts of `world`'s filled calls beside `treeProjections`, the tree's
 	/// (`ScopeGenerator.fillFactsProjectionsOfCallsOutsideFills()`).

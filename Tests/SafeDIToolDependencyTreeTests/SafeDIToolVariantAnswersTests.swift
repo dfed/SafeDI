@@ -156,7 +156,7 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 		// constant, the twin its path is building, as the plan's call does.
 		var observations = [TwinObservation]()
 		let (stream, continuation) = AsyncStream.makeStream(of: TwinObservation.self)
-		try await TwinIdentityObservation.$observer.withValue({ root, shadowsTwinValues, plansTwinValues, callsOfOtherFunction in
+		try await TwinIdentityObservation.$observer.withValue(TaskLocalFunction { root, shadowsTwinValues, plansTwinValues, callsOfOtherFunction in
 			continuation.yield(TwinObservation(root: root, shadowsTwinValues: shadowsTwinValues, plansTwinValues: plansTwinValues, callsOfOtherFunction: callsOfOtherFunction))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -378,7 +378,7 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func plans(of swiftFileContent: String) async throws -> [Plan] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Plan.self)
-		try await PlanBodiesObservation.$observer.withValue({ root, bodiesOfPlan, todaysBodiesPlanLacks, _ in
+		try await PlanBodiesObservation.$observer.withValue(TaskLocalFunction { root, bodiesOfPlan, todaysBodiesPlanLacks, _ in
 			continuation.yield(Plan(root: root, bodiesOfPlan: bodiesOfPlan, todaysBodiesPlanLacks: todaysBodiesPlanLacks))
 		}) {
 			_ = try await executeSafeDIToolTest(
@@ -399,7 +399,7 @@ struct SafeDIToolVariantAnswersTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func calls(of swiftFileContent: String) async throws -> [[String]] {
 		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
-		try await PlanCallsObservation.$observer.withValue({ root, calls in
+		try await PlanCallsObservation.$observer.withValue(TaskLocalFunction { root, calls in
 			continuation.yield([root] + calls)
 		}) {
 			_ = try await executeSafeDIToolTest(

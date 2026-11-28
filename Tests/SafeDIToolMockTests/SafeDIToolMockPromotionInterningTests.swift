@@ -48,7 +48,7 @@ struct SafeDIToolMockPromotionInterningTests: ~Copyable {
 		// promotes the wrapper once, spelled after `Screen`'s own receive, `LazilyInstantiated<any Service>`, which no
 		// declaration spells.
 		let (stream, continuation) = AsyncStream.makeStream(of: (ConstructionInternerMiss, String).self)
-		let output = try await ConstructionInternerObservation.$missObserver.withValue({ bucket, value in
+		let output = try await ConstructionInternerObservation.$missObserver.withValue(TaskLocalFunction { bucket, value in
 			continuation.yield((bucket, value))
 		}) {
 			try await executeSafeDIToolTest(

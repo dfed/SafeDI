@@ -2957,7 +2957,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 	) async -> [String: RootTreeChoiceObservation.PerPathReason?] {
 		let (stream, continuation) = AsyncStream.makeStream(of: (String, RootTreeChoiceObservation.PerPathReason?).self)
 		await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
-			await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				await assertThrowsError(diagnostics: diagnostics, sourceLocation: sourceLocation) {
@@ -3050,7 +3050,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		// With no place allowed, every root's tree per path is abandoned at once, so each root is laid out from its plan
 		// wherever a root past the limit would be. `nil` leaves the limit the tool ships with.
 		let output = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(scopeGeneratorLimit) {
-			try await RootTreeChoiceObservation.$observer.withValue({ root, perPathReason in
+			try await RootTreeChoiceObservation.$observer.withValue(TaskLocalFunction { root, perPathReason in
 				continuation.yield((root, perPathReason))
 			}) {
 				try await executeSafeDIToolTest(

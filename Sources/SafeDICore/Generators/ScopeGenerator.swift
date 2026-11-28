@@ -7950,7 +7950,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let rootFunctionKeys = Self.rootFunctionDispatcherKeys(of: body.callDispatchers, inlinedFills: body.inlinedFills.filter { !body.inlinedFillKeysReadingCallersDeclarations.contains($0.key) }, capturingCallerDeclarations: capturingKeys)
 		if let observer = FillEmissionDecisionsObservation.observer {
-			observeFillEmissionDecisions(of: body, rootFunctionKeys: rootFunctionKeys, capturingKeys: capturingKeys, fillPlaceBindings: fillPlaceBindings, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls, observer: observer)
+			observeFillEmissionDecisions(of: body, rootFunctionKeys: rootFunctionKeys, capturingKeys: capturingKeys, fillPlaceBindings: fillPlaceBindings, labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls, observer: observer.function)
 		}
 		// Where a test observes them, each dispatcher's declaration is spelled again from the call's records alone, beside
 		// the text written here.

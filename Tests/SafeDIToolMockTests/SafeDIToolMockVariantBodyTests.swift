@@ -346,7 +346,7 @@ struct SafeDIToolMockVariantBodyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func bodies(of swiftFileContent: String) async throws -> [Bodies] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Bodies.self)
-		try await MockVariantBodyObservation.$observer.withValue({ _, place, todaysUnavailableProperties, bodysUnavailableProperties in
+		try await MockVariantBodyObservation.$observer.withValue(TaskLocalFunction { _, place, todaysUnavailableProperties, bodysUnavailableProperties in
 			continuation.yield(Bodies(place: place, todaysUnavailableProperties: todaysUnavailableProperties, bodysUnavailableProperties: bodysUnavailableProperties))
 		}) {
 			_ = try await executeSafeDIToolTest(

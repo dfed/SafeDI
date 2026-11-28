@@ -28,7 +28,7 @@ enum CallPlaceOrderChecks {
 	/// Runs `operation` while comparing the two orders of every scope observed, handing each to `enclosingObserver` too,
 	/// and records an issue for each scope whose orders differ.
 	static func comparing<Result>(
-		handingOn enclosingObserver: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
 		// A test that observes no comparison of a plan with today's tree compares only the roots whose shape the plan admits.
@@ -47,10 +47,10 @@ enum CallPlaceOrderChecks {
 	}
 
 	private static func comparingEveryScope<Result>(
-		handingOn enclosingObserver: (@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void)?,
+		handingOn enclosingObserver: TaskLocalFunction<@Sendable (_ scope: String, _ todaysOrder: [Int], _ callPlaceOrder: [Int]) -> Void>?,
 		_ operation: () async throws -> Result,
 	) async throws -> Result {
-		try await CallPlaceOrderObservation.$observer.withValue({ scope, todaysOrder, callPlaceOrder in
+		try await CallPlaceOrderObservation.$observer.withValue(TaskLocalFunction { scope, todaysOrder, callPlaceOrder in
 			if todaysOrder != callPlaceOrder {
 				Issue.record(Comment(rawValue: """
 				\(scope) builds its children in another order where its children on a cycle are call places:

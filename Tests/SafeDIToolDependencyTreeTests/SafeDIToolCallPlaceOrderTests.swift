@@ -198,7 +198,7 @@ struct SafeDIToolCallPlaceOrderTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func orders(of swiftFileContent: String) async throws -> [Orders] {
 		let (stream, continuation) = AsyncStream.makeStream(of: Orders.self)
-		try await CallPlaceOrderObservation.$observer.withValue({ scope, todaysOrder, callPlaceOrder in
+		try await CallPlaceOrderObservation.$observer.withValue(TaskLocalFunction { scope, todaysOrder, callPlaceOrder in
 			continuation.yield(Orders(scope: scope, todaysOrder: todaysOrder, callPlaceOrder: callPlaceOrder))
 		}) {
 			_ = try await executeSafeDIToolTest(
