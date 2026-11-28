@@ -1692,6 +1692,12 @@ struct TypeFactsGraph: Sendable {
 	/// `oneFunctionGroups` are the variants one function serves: a body and its twins of one key, the `Sendable`
 	/// wrapper's and the constant's (the lead's ruling for one `@Sendable` function), which share the mark, of any
 	/// family.
+	///
+	/// A member a loop makes again (`TypeFactsVariants.madeAgainCallees(of:)`) needs no fold of its own: its call names the
+	/// variant its maker's parent calls at an edge (oracle B, check 32), which that edge marks wherever the maker is marked,
+	/// since a loop's members are all plain or all `Sendable` (a mixed loop is rejected), and a twin group's `Sendable`
+	/// twin requires its type to be `Sendable`, which a plain loop member, holding a plain builder, is not. Check 34 holds
+	/// every made-again call to it.
 	static func sendableMarks(of variants: TypeFactsVariants, graph: OrderedGraph<TypeFactsDeclaration>, edgeOpens: [TypeFactsFunctionOpened], oneFunctionGroups: [[Int]]) -> [Bool] {
 		var marks = [Bool](repeating: false, count: variants.count)
 		var groupOfVariant = [Int](repeating: -1, count: variants.count)
