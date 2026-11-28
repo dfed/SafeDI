@@ -36,6 +36,11 @@ extension ValuePath {
 			case let .optionalMemberRead(name, base):
 				members.append((name, true))
 				current = base.value
+			// No record holds the term beneath a call or a splice: a record reads its configuration's field
+			// (`NodeRecords.mockConfigurationField(named:)`) as a value of its own only where it is built in place, and a node
+			// whose construction reads a field of its configuration, an `@autoclosure` one by a call, always declares a
+			// function (`NodeRecords.mockConstructionRecord`'s `alwaysDeclaresFunction`), which reads the field of its passed
+			// argument instead.
 			case .rootDeclaration,
 			     .read,
 			     .passedArgument,

@@ -326,7 +326,7 @@ extension TypeKeyLayout {
 		case .handedToChildrenByPlacingBody:
 			// The body that places a record resolves it before any of the record is spelled
 			// (`resolvingHandedToChildrenByPlacingBody(to:)`): a path that still holds it spells nothing, and its root keeps the
-			// path key's body.
+			// path key's body. Once no root keeps that body, this is a plain error instead.
 			return nil
 		case let .memberRead(name, base):
 			return spelledValuePath(base.value, inClass: owner, before: index).map { "\($0).\(name)" }
