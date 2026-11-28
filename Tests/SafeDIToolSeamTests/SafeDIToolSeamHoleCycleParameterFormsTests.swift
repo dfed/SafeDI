@@ -123,14 +123,28 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsInlineTreeOfSeam_whenSeamsTreeReceivesLabelItDeclaresInTwoForms() async throws {
+	mutating func generate_buildsNoInlineTreeOfSeam_whenFactsFindOneParameterPassesLabelSeamsTreeReceivesInTwoForms() async throws {
 		// `Reader` requires `tag: LazilyInstantiated<Tag>` and `LiveApi` receives `tag: Tag?`: two forms of a label `B`
-		// declares, which only the tree's generators can judge, so `App` builds `Hub`'s tree, once.
+		// declares, which the facts of `Hub`'s inline world find one parameter passes, so `App` builds no tree of it.
 		let inlineTrees = try await inlineTreesOfForeignSeams(
 			readerReceive: "@Received public let tag: LazilyInstantiated<Tag>",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
 		)
-		#expect(inlineTrees == ["App: Hub"])
+		#expect(inlineTrees == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineTreeOfSeam_whenFactsFindLabelNoOneParameterPassesInSeamsInlineWorld() async throws {
+		// `Reader` requires `tag: Tag` and `LiveApi` receives `tag: LazilyInstantiated<Tag>?`, which no one parameter passes
+		// together, so each run of `App` builds `Hub`'s tree to report the label from. A rejected build is run again (as
+		// a run that reads stored seam signatures and fails reruns computing them), so `App` runs more than once.
+		let inlineTrees = try await inlineTreesOfForeignSeams(
+			readerReceive: "@Received public let tag: Tag",
+			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
+			rejected: true,
+		)
+		#expect(Set(inlineTrees) == ["App: Hub"])
 	}
 
 	// MARK: Accepted
@@ -414,9 +428,10 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 	}
 
 	/// The inline trees of other modules' seams that the runs of the build with `LiveApi` in `App` build, each as the
-	/// run's module and the seam's type, in order.
+	/// run's module and the seam's type, in order. Expects the build to throw where `rejected` is set, and to succeed
+	/// otherwise.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func inlineTreesOfForeignSeams(readerReceive: String, liveApiReceive: String) async throws -> [String] {
+	private mutating func inlineTreesOfForeignSeams(readerReceive: String, liveApiReceive: String, rejected: Bool = false) async throws -> [String] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let modules = Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive)
 		var filesToDelete = filesToDelete
@@ -428,7 +443,14 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 				break
 			}
 		}) {
-			_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			let threw: Bool
+			do {
+				_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+				threw = false
+			} catch {
+				threw = true
+			}
+			#expect(threw == rejected)
 		}
 		self.filesToDelete = filesToDelete
 		continuation.finish()
