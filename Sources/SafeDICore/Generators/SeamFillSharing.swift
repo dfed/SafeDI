@@ -36,8 +36,38 @@ public enum SeamFillSharing {
 		public let builtFillCount: Int
 		/// The places another place's fill stands for.
 		public let placeStoodForCount: Int
+		/// The fills the call built a second time, only to be judged (`ScopeGenerator.fillJudgementTree`).
+		public let fillJudgementTreeCount: Int
+		/// Each fill's binding (`ScopeGenerator.fillBinding(of:)`) with the path of the place it fills, in the order the call
+		/// holds its fills.
+		public let bindings: [(sitePath: [Property], binding: SeamFillBinding)]
 	}
 
 	/// Called with what each call that fills a place built, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (FillsOfCall) -> Void>?
+}
+
+/// What a fill of a seam call or public mock call binds, as a reader outside the fill's own generation reads it: one
+/// value per fill, compared by its six facts alone. For a seam call's own cases, `boundFields`' order and each field's
+/// form come from the seam's signature, so every fill of one case binds the same at every call of the seam in the
+/// module. Two kinds of fill are per site until a passed-up case's answers follow its reference: a place the called
+/// seam passes up, and a public mock call's place whose caller binds one of the mock's arguments itself, which
+/// `fillUnderConstruction` drops from that call's fill.
+public struct SeamFillBinding: Hashable, Sendable {
+	/// The case nested by type the fill fills (`fillCaseKey(of:)`): every place of it shares one fill.
+	public let caseKey: String
+	/// The stack entries whose routes the fill's answers leave out. Empty for every fill generation emits: a fill that
+	/// closes a cycle on the seam's path is `closesCycleInSeamTree`, an error, so only the judge asks another set.
+	public let excludedStackEntries: Set<SeamSignature.Places.StackEntry>
+	/// What the fill binds from its case's struct, then what it takes as parameters, in the order the fill function
+	/// declares them (`fillBoundFields`, then `fillParameterFields`).
+	public let boundFields: [SeamSignature.Hole.Field]
+	/// The labels the case's places carry in forms that differ in more than optionality (`irreconcilableFields(of:)`):
+	/// non-empty only where `validateFills` rejects the graph, so generation never reads it.
+	public let irreconcilableLabels: Set<String>
+	/// Whether the fill's function is `@Sendable` (`buildsInSendableFunction(ofFill:)`): the case's family joined with the
+	/// caller's own `@Sendable` functions that refer to it, which is why it is no fact of the case.
+	public let isSendable: Bool
+	/// Whether the place is built inside a `@Sendable` function of the seam's tree: its family.
+	public let isBuiltInSendableFunction: Bool
 }

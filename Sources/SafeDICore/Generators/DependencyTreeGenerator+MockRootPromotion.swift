@@ -595,10 +595,10 @@ extension DependencyTreeGenerator {
 		let treeFunctionNames = Self.builderFunctionNamesOfProperties(in: generator, includingHoleSites: false)
 		let rootLevelLabels = Set(rootLevel.parameters.map(\.property.label))
 		func shapedBuilders(namedApartFrom otherParameters: [(label: String, access: AccessLevel)]) -> ShapedBuilders {
-			Self.shapedBuilders(
+			var builders = Self.shapedBuilders(
 				of: instantiable,
 				generator: generator,
-				holes: holes,
+				holesAndPlaces: holes,
 				parameters: rootLevel.parameters,
 				// The root level's fields are parameters of `mock()` already named apart by `parameters`.
 				otherParameters: otherParameters.filter { !rootLevelLabels.contains($0.label) },
@@ -610,8 +610,12 @@ extension DependencyTreeGenerator {
 				bindsReceivesAgain: true,
 				namesApartAtRoot: rootLevel.namesApart,
 			)
+			builders.places = holes.places
+			builders.caseIndexBySite = holes.caseIndexBySite
+			return builders
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
+		holes.handOnObservedPlaceLevels(with: builders)
 		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
@@ -628,7 +632,7 @@ extension DependencyTreeGenerator {
 		let enumsByKey = Dictionary(buildersNamedApart.scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		let errors = buildersNamedApart.builders.flatMap { builder in
 			let reachedSites = SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey)
-			return Self.placesForwardingOtherValuesErrors(of: instantiable, places: holes.filter { reachedSites.contains($0.site) }, holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable, instantiables: typeDescriptionToFulfillingInstantiableMap, declaredTypeNames: declaredTypeNames)
+			return Self.placesForwardingOtherValuesErrors(of: instantiable, places: holes.holes.filter { reachedSites.contains($0.site) }, holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable, instantiables: typeDescriptionToFulfillingInstantiableMap, declaredTypeNames: declaredTypeNames)
 		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error

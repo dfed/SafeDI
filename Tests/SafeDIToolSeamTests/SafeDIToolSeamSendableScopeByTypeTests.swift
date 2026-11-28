@@ -249,20 +249,23 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
+			            return __safeDI_fillBody_2766CFCBD48DBBAE()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_2766CFCBD48DBBAE() -> SendableErasedInstantiator<Int, any Widget>.Builder {
+			            @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
+			                DefaultWidget(id: id)
+			            }
+			            return { forwarded in __safeDI_widgetBuilder(id: forwarded) }
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope())
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell<any Widget> {
+			            .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_00A8B34CF50EF9A9.self // \(Self.moduleInfoComment)
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() -> SendableErasedInstantiator<Int, any Widget>.Builder {
-			                @Sendable nonisolated func __safeDI_widgetBuilder(id: Int) -> DefaultWidget {
-			                    DefaultWidget(id: id)
-			                }
-			                return { forwarded in __safeDI_widgetBuilder(id: forwarded) }
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope())
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell<any Widget> {
-			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_widgetBuilder() })
-			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()
@@ -1140,6 +1143,45 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesPassedUpPlacesOfOneCaseByOneBuilderLabel_whenPlacesInAndOutsideInstantiatorReadValueThePassingSeamInstantiates() async {
+		// `Hub` builds `Owner`, whose `service` a `@Sendable` builder builds, once in an `Instantiator` and once as a value:
+		// two places of one case, which `Outer` and then `Mid` pass up to `Root`. `Mid` instantiates the `logger` the fill
+		// reads, so the fill is an error, and the error names both places by the one label their builder has,
+		// `serviceSendableBuilder`, not a label per place.
+		let feature = [
+			"public protocol Service: Sendable {}",
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+			seamFixtureType(named: "Owner", isFinalClass: true, declarations: ["@Received public let logger: Logger", "@Instantiated public let service: SendableLazilyInstantiated<any Service>"], conformances: ", Sendable"),
+			seamFixtureType(named: "Hub", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let ownerBuilder: Instantiator<Owner>", "@Instantiated public let owner: Owner"]),
+		]
+		let middle = [
+			seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let hub: Hub"]),
+			seamFixtureType(named: "Mid", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let outer: Outer"]),
+		]
+		let app = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveService", fulfilling: "Service", declarations: ["@Received public let logger: Logger"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let logger: Logger", "@Instantiated public let mid: Mid"]),
+		]
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveService.swift"]):10:5: error: `LiveService` receives `logger: Logger`, which `Mid` builds where it calls `Hub`, but `Mid` passes the builder for `Owner`’s `service: SendableLazilyInstantiated<any Service>` (`service` of `serviceSendableBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Instantiate `logger` outside `Mid` and declare `@Received let logger: Logger` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Service` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
+			\(fixtures["Middle"]!["Mid.swift"]):10:5: note: `Mid` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+					ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test(arguments: ["declarationOrder", "reversedFileNames"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsEveryFindingOfReader_whenPlacesOneFillFillsLoseItsValueForDifferentReasons(fileNames: String) async {
@@ -1397,20 +1439,23 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
+			            return __safeDI_fillBody_4CFCCAACE99E98C4()
+			        }
+			        @Sendable nonisolated func __safeDI_fillBody_4CFCCAACE99E98C4() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
+			            @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
+			                DefaultWidget(scope: scope)
+			            }
+			            return { forwarded in __safeDI_widgetBuilder(scope: forwarded) }
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
+			            .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_())
+			        }
+			        @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<any Widget> {
+			            .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
+			        }
 			        func __safeDI_host() -> Host {
 			            _ = Host.__safeDI_Host_F60E1113BFAC8782.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() -> SendableErasedInstantiator<Shell_Scope, any Widget>.Builder {
-			                @Sendable nonisolated func __safeDI_widgetBuilder(scope: Shell_Scope) -> DefaultWidget {
-			                    DefaultWidget(scope: scope)
-			                }
-			                return { forwarded in __safeDI_widgetBuilder(scope: forwarded) }
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier<any Widget> {
-			                .init(shell_Sendable: __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_())
-			            }
-			            @Sendable nonisolated func __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope_() -> Host.__safeDI_DefaultWidget_WidgetSendableCarrier_Shell_Scope_<any Widget> {
-			                .init(widgetBuilder: { __safeDI_defaultWidget_WidgetSendableBuilder_Host_Shell_Scope__widgetBuilder() })
-			            }
 			            return Host(__safeDI_defaultWidget_WidgetSendableBuilder: __safeDI_defaultWidget_WidgetSendableBuilder_Host())
 			        }
 			        let host: Host = __safeDI_host()

@@ -54,9 +54,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
-		            .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
-		        }
 		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
 		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
 		        }
@@ -78,6 +75,9 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
+		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
+		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 		            }
@@ -111,9 +111,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		                return api
 		            })
 		        }
-		        func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
-		            .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token) })
-		        }
 		        func __safeDI_userServiceBuilder_Office_Desk_Scope() -> Office.__safeDI_UserServiceCarrier_Desk<any UserService> {
 		            .init(model: { values_token in __safeDI_userServiceBuilder_Office_Model_Scope(token: values_token) })
 		        }
@@ -131,6 +128,9 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
 		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token.instance) })
+		            }
+		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
+		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: token) })
 		            }
 		            return Office(__safeDI_apiBuilder: __safeDI_apiBuilder_Office(), __safeDI_userServiceBuilder: __safeDI_userServiceBuilder_Office())
 		        }
@@ -151,9 +151,6 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
-		            .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
-		        }
 		        func __safeDI_apiBuilder_Office_Shelf_Scope() -> Office.__safeDI_ApiCarrier_Shelf<any Api> {
 		            .init(panel: { values_token in __safeDI_apiBuilder_Office_Panel_Scope(token: values_token) })
 		        }
@@ -175,6 +172,9 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		        let token = Token()
 		        func __safeDI_office() -> Office {
 		            _ = Office.__safeDI_Office_4AC6D9478D1F32DF.self // If this line does not compile, add the SafeDI plugin to the target that declares Office.
+		            func __safeDI_apiBuilder_Office() -> Office.__safeDI_ApiCarrier<any Api> {
+		                .init(shelf: { values_desk, values_model in __safeDI_apiBuilder_Office_Shelf_Scope() }, panel: { values_desk, values_model, values_shelf in __safeDI_apiBuilder_Office_Panel_Scope(token: token) })
+		            }
 		            func __safeDI_userServiceBuilder_Office() -> Office.__safeDI_UserServiceCarrier<any UserService> {
 		                .init(desk: __safeDI_userServiceBuilder_Office_Desk_Scope(), model: { values_desk in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 		            }
@@ -430,6 +430,79 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		        }
 		        let office: Office = __safeDI_office()
 		        self.init(token: token, office: office)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsEachFillItsCallersNearestValue_whenTwoScreensAndTheRootDeclareTheValueTheFillReads() async throws {
+		// `Pane`'s place of `User` under `home.avatar` reads `session` of `Home`, and the one under `settings.avatar`, which no
+		// level of the seam binds it on, the caller's. Each screen declares `session` and calls `Pane`, and so does `Root`: each
+		// screen's fill reads its own screen's `session`, the nearest declaration, as the inline build does. 2.4.1 declared the
+		// root dispatcher once at the root's top, so both screens' fills read `Root`'s.
+		let feature = [
+			"public protocol User {}",
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Avatar", declarations: ["@Instantiated let user: any User"]),
+			seamFixtureType(named: "Settings", declarations: ["@Instantiated let avatar: Avatar"]),
+			seamFixtureType(named: "Home", declarations: ["@Instantiated let session: Session", "@Instantiated let avatar: Avatar"]),
+			seamFixtureType(named: "Pane", isSeam: true, declarations: ["@Instantiated let settings: Settings", "@Instantiated let home: Home"]),
+		]
+		let app = [
+			SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultUser", fulfilling: "User", declarations: ["@Received let session: Session"]),
+			seamFixtureType(named: "ScreenA", declarations: ["@Instantiated let session: Session", "@Instantiated let pane: Pane"]),
+			seamFixtureType(named: "ScreenB", declarations: ["@Instantiated let session: Session", "@Instantiated let pane: Pane"]),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenA: ScreenA", "@Instantiated let screenB: ScreenB"]),
+		]
+		try await expectApp(feature: feature, app: app, comparedWith: .inline, expected: """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_userBuilder_Pane_Settings_Scope(session: Session) -> Pane.__safeDI_UserCarrier_Settings<any User> {
+		            .init(avatar: __safeDI_userBuilder_Pane_Avatar_Scope(session: session))
+		        }
+		        func __safeDI_userBuilder_Pane_Avatar_Scope(session: Session) -> Pane.__safeDI_UserCarrier_Avatar<any User> {
+		            .init(user: {
+		                let user: any User = DefaultUser(session: session)
+		                return user
+		            })
+		        }
+		        func __safeDI_userBuilder_Pane_Home_Scope() -> Pane.__safeDI_UserCarrier_Home<any User> {
+		            .init(avatar: { values_session in __safeDI_userBuilder_Pane_Avatar_Scope(session: values_session) })
+		        }
+		        let session = Session()
+		        func __safeDI_screenA() -> ScreenA {
+		            let session = Session()
+		            func __safeDI_pane() -> Pane {
+		                _ = Pane.__safeDI_Pane_63BA986B85D2886C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_userBuilder_Pane() -> Pane.__safeDI_UserCarrier<any User> {
+		                    .init(settings: __safeDI_userBuilder_Pane_Settings_Scope(session: session), home: { values_settings in __safeDI_userBuilder_Pane_Home_Scope() })
+		                }
+		                return Pane(__safeDI_userBuilder: __safeDI_userBuilder_Pane())
+		            }
+		            let pane: Pane = __safeDI_pane()
+		            return ScreenA(session: session, pane: pane)
+		        }
+		        let screenA: ScreenA = __safeDI_screenA()
+		        func __safeDI_screenB() -> ScreenB {
+		            let session = Session()
+		            func __safeDI_pane() -> Pane {
+		                _ = Pane.__safeDI_Pane_63BA986B85D2886C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                func __safeDI_userBuilder_Pane() -> Pane.__safeDI_UserCarrier<any User> {
+		                    .init(settings: __safeDI_userBuilder_Pane_Settings_Scope(session: session), home: { values_settings in __safeDI_userBuilder_Pane_Home_Scope() })
+		                }
+		                return Pane(__safeDI_userBuilder: __safeDI_userBuilder_Pane())
+		            }
+		            let pane: Pane = __safeDI_pane()
+		            return ScreenB(session: session, pane: pane)
+		        }
+		        let screenB: ScreenB = __safeDI_screenB()
+		        self.init(session: session, screenA: screenA, screenB: screenB)
 		    }
 		}
 		""")

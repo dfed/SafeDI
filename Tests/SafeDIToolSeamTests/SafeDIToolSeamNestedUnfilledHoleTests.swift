@@ -464,28 +464,34 @@ struct SafeDIToolSeamNestedUnfilledHoleTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_aBuilder_S0_aBuilder() -> Instantiator<A>.Builder {
+		            return __safeDI_fillBody_536D4C5B5FAD9386()
+		        }
+		        func __safeDI_fillBody_536D4C5B5FAD9386() -> Instantiator<A>.Builder {
+		            func __safeDI_aBuilder() -> S1 {
+		                _ = S1.__safeDI_S1_97B8FCB68910DF92.self // If this line does not compile, compile the code SafeDI generates for module M1 into M1: under Bazel, add M1’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return S1(__safeDI_bBuilder: __safeDI_bBuilder_S1())
+		            }
+		            return { _ in __safeDI_aBuilder() }
+		        }
+		        func __safeDI_bBuilder_S1_bBuilder() -> Instantiator<B>.Builder {
+		            return __safeDI_fillBody_8D03AD7BE10383FB()
+		        }
+		        func __safeDI_fillBody_8D03AD7BE10383FB() -> Instantiator<B>.Builder {
+		            func __safeDI_bBuilder() -> S0 {
+		                _ = S0.__safeDI_S0_FDC3835787986604.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                return S0(__safeDI_aBuilder: __safeDI_aBuilder_S0())
+		            }
+		            return { _ in __safeDI_bBuilder() }
+		        }
+		        func __safeDI_bBuilder_S1() -> S1.__safeDI_BCarrier<B> {
+		            .init(bBuilder: { __safeDI_bBuilder_S1_bBuilder() })
+		        }
+		        func __safeDI_aBuilder_S0() -> S0.__safeDI_ACarrier<A> {
+		            .init(aBuilder: { __safeDI_aBuilder_S0_aBuilder() })
+		        }
 		        func __safeDI_s() -> S0 {
 		            _ = S0.__safeDI_S0_FDC3835787986604.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_aBuilder_S0_aBuilder() -> Instantiator<A>.Builder {
-		                func __safeDI_aBuilder() -> S1 {
-		                    _ = S1.__safeDI_S1_97B8FCB68910DF92.self // If this line does not compile, compile the code SafeDI generates for module M1 into M1: under Bazel, add M1’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                    func __safeDI_bBuilder_S1_bBuilder() -> Instantiator<B>.Builder {
-		                        func __safeDI_bBuilder() -> S0 {
-		                            _ = S0.__safeDI_S0_FDC3835787986604.self // If this line does not compile, compile the code SafeDI generates for module M0 into M0: under Bazel, add M0’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		                            return S0(__safeDI_aBuilder: __safeDI_aBuilder_S0())
-		                        }
-		                        return { _ in __safeDI_bBuilder() }
-		                    }
-		                    func __safeDI_bBuilder_S1() -> S1.__safeDI_BCarrier<B> {
-		                        .init(bBuilder: { __safeDI_bBuilder_S1_bBuilder() })
-		                    }
-		                    return S1(__safeDI_bBuilder: __safeDI_bBuilder_S1())
-		                }
-		                return { _ in __safeDI_aBuilder() }
-		            }
-		            func __safeDI_aBuilder_S0() -> S0.__safeDI_ACarrier<A> {
-		                .init(aBuilder: { __safeDI_aBuilder_S0_aBuilder() })
-		            }
 		            return S0(__safeDI_aBuilder: __safeDI_aBuilder_S0())
 		        }
 		        let s: S0 = __safeDI_s()

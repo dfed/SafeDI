@@ -34,20 +34,27 @@ extension ScopeGenerator.FillDispatcher {
 	}
 
 	/// The function of the dispatcher's level, indented by `indent`, `@Sendable` as `isSendable` says, which returns the
-	/// level's builder struct (`structDeclaration`). A case whose fill is in `inlinedFills`, by key, holds the fill's body.
+	/// level's builder struct (`structDeclaration`), and whether it hands a target a declaration of the code around the
+	/// call. A case whose fill is in `inlinedFills`, by key, holds the fill's body. The root dispatcher, which takes no
+	/// parameter, hands the caller's declaration of each value a target reads that no case carries, and any dispatcher
+	/// hands a memo the caller binds (`callerMemoArgumentByMemo`). Which values no case carries is decided only where the
+	/// struct is written, by the case's payload, the carried levels, the labels a reentering call hides and the deferred
+	/// fields a case hands on, so the walk that writes it records them. A function that hands none is written as it would
+	/// be without the caller's declarations.
 	/// - Parameter parametersByKey: What each dispatcher of the call takes beside its enum
 	///   (`dispatcherParameters(of:fillReads:)`), and each fill nested by type beside its case's payload, by key.
-	func declaration(
+	func declarationAndCaptures(
 		isSendable: Bool,
 		indent: String,
 		inlinedFills: [String: InlinedFill],
-		parametersByKey: [String: [SeamSignature.Hole.Field]] = [:],
-		callerArgumentByParameter: [Property: String] = [:],
-		callerMemoArgumentByMemo: [Property: String] = [:],
-		typesDeclaredEscaping: Set<TypeDescription> = [],
-		fillsTakingPayloadFields: Set<String> = [],
-		labelsHiddenByReenteringCalls: Set<String> = [],
-	) -> String {
+		parametersByKey: [String: [SeamSignature.Hole.Field]],
+		callerArgumentByParameter: [Property: String],
+		callerMemoArgumentByMemo: [Property: String],
+		typesDeclaredEscaping: Set<TypeDescription>,
+		fillsTakingPayloadFields: Set<String>,
+		labelsHiddenByReenteringCalls: Set<String>,
+	) -> (text: String, handsCallerDeclarations: Bool) {
+		var handsCallerDeclarations = false
 		let parameters = parametersByKey[key] ?? []
 		let parameterNames = Self.parameterNames(of: parameters)
 		// What this function hands on of a value no case carries to a target that takes it as `parameter`: its own parameter
@@ -55,7 +62,16 @@ extension ScopeGenerator.FillDispatcher {
 		// in the form that target takes (`ScopeGenerator.FillCallerReads`), whatever form another target of the call takes it
 		// in.
 		func ownValue(for parameter: SeamSignature.Hole.Field) -> String {
-			takesValuesOfOuterTypes ? parameterNames[parameter.property] ?? parameter.property.label : callerArgumentByParameter[parameter.property] ?? parameter.property.label
+			guard !takesValuesOfOuterTypes else { return parameterNames[parameter.property] ?? parameter.property.label }
+			handsCallerDeclarations = true
+			return callerArgumentByParameter[parameter.property] ?? parameter.property.label
+		}
+		func callerMemoArgument(for parameter: SeamSignature.Hole.Field) -> String? {
+			let memoArgument = callerMemoArgumentByMemo[parameter.memoProperty]
+			if memoArgument != nil {
+				handsCallerDeclarations = true
+			}
+			return memoArgument
 		}
 		// The names this function binds, apart from the names of what it takes and passes on.
 		let labels = Set(parameterNames.values).union(cases.flatMap { dispatcherCase in
@@ -68,7 +84,7 @@ extension ScopeGenerator.FillDispatcher {
 			}
 			return name
 		}
-		return structDeclaration(
+		let text = structDeclaration(
 			isSendable: isSendable,
 			indent: indent,
 			inlinedFills: inlinedFills,
@@ -76,12 +92,13 @@ extension ScopeGenerator.FillDispatcher {
 			parameters: parameters,
 			parametersByKey: parametersByKey,
 			ownValue: ownValue(for:),
-			callerMemoArgument: { callerMemoArgumentByMemo[$0.memoProperty] },
+			callerMemoArgument: callerMemoArgument(for:),
 			valuesName: name("values"),
 			scopeName: name("scope"),
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			labelsHiddenByReenteringCalls: labelsHiddenByReenteringCalls,
 		)
+		return (text, handsCallerDeclarations)
 	}
 
 	/// The function of one level of a seam's tree that returns its enum's builder struct (`returnsBuilderStruct`): it takes

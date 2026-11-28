@@ -168,7 +168,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: meter.remedied), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: Self.twinCalledTypes, meter: meter.remedied), integration: .moduleInfo, filesToDelete: &filesToDelete)
 
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.expectedFileWhereFillIsFilled(caller: caller, meterConstruction: meter.remedied.construction)])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.expectedFileWhereFillIsFilled(caller: caller, meterConstruction: meter.remedied.construction, fillBodyName: meter.remedied.fillBodyName)])
 	}
 
 	// MARK: Tests – the mock condition off
@@ -206,9 +206,9 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 	private static let twinCalledTypes = CalledTypeDeclaration.seamAndPublicMock.attribute
 
 	/// What `App` generates where `Meter` is accessible: `Panel`’s place filled with `DefaultService`, which builds `Meter`
-	/// with `meterConstruction`, as the twin fills it, and `mock()` taking no builder for it. A listed type’s mock is an
-	/// internal mock’s.
-	private static func expectedFileWhereFillIsFilled(caller: CallingMockCallerKind, meterConstruction: String) -> String {
+	/// with `meterConstruction`, as the twin fills it, in the shared fill body `fillBodyName`, and `mock()` taking no builder
+	/// for it. A listed type’s mock is an internal mock’s.
+	private static func expectedFileWhereFillIsFilled(caller: CallingMockCallerKind, meterConstruction: String, fillBodyName: String) -> String {
 		switch caller {
 		case .internal, .listed:
 			generatedFileHeader + """
@@ -253,14 +253,17 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func \(fillBodyName)() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let clock: any Clock = \(meterConstruction)
+			                return DefaultService(clock: clock)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let clock: any Clock = \(meterConstruction)
-			                    return DefaultService(clock: clock)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return \(fillBodyName)()
 			            }
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
@@ -325,14 +328,17 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        func \(fillBodyName)() -> any Service {
+			            func __safeDI_service() -> DefaultService {
+			                let clock: any Clock = \(meterConstruction)
+			                return DefaultService(clock: clock)
+			            }
+			            let service: any Service = __safeDI_service()
+			            return service
+			        }
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service() -> any Service {
-			                func __safeDI_service() -> DefaultService {
-			                    let clock: any Clock = \(meterConstruction)
-			                    return DefaultService(clock: clock)
-			                }
-			                let service: any Service = __safeDI_service()
-			                return service
+			                return \(fillBodyName)()
 			            }
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
@@ -535,6 +541,16 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 				"Meter()"
 			case .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
 				"Meter.mock()"
+			}
+		}
+
+		/// The name of the fill body that builds `DefaultService` with `construction`, named after the hash of its text.
+		var fillBodyName: String {
+			switch self {
+			case .internalInSamePackage, .packageInAnotherPackage, .packageInSamePackage, .publicInAnotherPackage:
+				"__safeDI_fillBody_3205EDE999F5D6BE"
+			case .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
+				"__safeDI_fillBody_C36956088B691F9E"
 			}
 		}
 

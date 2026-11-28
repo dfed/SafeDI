@@ -51,17 +51,18 @@ extension TypeKeyLayout {
 			guard let record = Self.record(of: frame.children[frame.next]) else { return false }
 			// A statement of the root's body whose tree holds a place the type key cannot lay out keeps the path key's code,
 			// which reads only the root's declarations before it, as the type key's code declares them: functions are all
-			// declared in the root's body, so no function beneath it could keep reads it does not list.
-			if body == 0, !Self.laysOut(frame.children[frame.next]) {
-				guard case let .built(built) = record, let text = Self.unindentedText(of: frame.children[frame.next], omittingRootFunctionsNamed: rootFunctionNames) else { return false }
-				namesInScope.insert(built.functionName)
-				bodies[0].statements.append(.alias(AliasPlaceRecord(property: built.property, fulfillingProperty: nil, text: text, reads: [])))
-				continue
-			}
+			// declared in the root's body, so no function beneath it could keep reads it does not list. A closer is never one:
+			// it lays out, and its code holds no root function.
+			let keepsPathKeyCode = body == 0 && (!Self.laysOut(frame.children[frame.next]) || holdsKeptRootFunction(frame.children[frame.next]))
 			let position = bodies[body].statements.count
 			let statement: Statement
 			switch record {
 			case let .built(built):
+				if keepsPathKeyCode {
+					namesInScope.insert(built.functionName)
+					guard keepPathKeyCode(of: frame.children[frame.next], building: built.property) else { return false }
+					continue
+				}
 				if built.hasFunction {
 					guard let domain = domain(of: built) else { return false }
 					let isInSendableFamily = built.isSendable || bodies[body].isInSendableFamily
@@ -175,12 +176,22 @@ extension TypeKeyLayout {
 					}
 				}
 			case let .alias(alias):
+				// A seam call built by value, or in a wrapper that forwards nothing, is a statement written as text: it is kept as
+				// a built place is.
+				if keepsPathKeyCode {
+					namesInScope.formUnion(alias.declaredFunctionNames)
+					guard alias.otherBindings.isEmpty, alias.calledFunctionNames.isEmpty, keepPathKeyCode(of: frame.children[frame.next], building: alias.property) else { return false }
+					continue
+				}
 				// A place written as text whose reads are not listed is never laid out by the type key, nor one that calls or
 				// refers to a function it does not declare: two such places of one text can name different functions, which
 				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is
 				// (`declareChildren`).
 				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
 				namesInScope.formUnion(alias.declaredFunctionNames)
+				for name in alias.declaredFunctionNames {
+					bodies[body].positionsByDeclaredFunction[name, default: []].append(position)
+				}
 				statement = .alias(alias)
 			}
 			bodies[body].statements.append(statement)
@@ -192,6 +203,14 @@ extension TypeKeyLayout {
 			bodies[closer.body].statements[closer.position] = .closer(record, target: target)
 			recordCloser(record, at: (body: closer.body, index: closer.position), closing: target)
 		}
+		return true
+	}
+
+	/// Keeps `code`, a statement of the root's body that builds `property`, as the path key writes it, or returns `false`
+	/// where its code is not a statement of the root. `declareChildren(_:ofBody:)` declared its label's position.
+	private mutating func keepPathKeyCode(of code: GeneratedCode, building property: Property) -> Bool {
+		guard let text = Self.unindentedText(of: code, omittingRootFunctionsNamed: rootFunctionNames) else { return false }
+		bodies[0].statements.append(.alias(AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: [])))
 		return true
 	}
 
@@ -465,6 +484,12 @@ extension TypeKeyLayout {
 		case let .alias(alias):
 			alias.listsItsReads && alias.calledFunctionNames.isEmpty
 		}
+	}
+
+	/// Whether `code`, a statement of the root's body, holds a root function the path key keeps in place
+	/// (`keptRootFunctionNames`).
+	func holdsKeptRootFunction(_ code: GeneratedCode) -> Bool {
+		!keptRootFunctionNames.isEmpty && RootFunctionHoisting.records(in: [code]).contains { keptRootFunctionNames.contains($0.name) }
 	}
 
 	/// The text of a statement of the root's body without the indentation the root gives it, which the type key's spelling

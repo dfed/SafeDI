@@ -580,6 +580,23 @@ extension ModuleInfoFile {
 		public let ofDecodedValues: [UInt8]
 	}
 
+	/// The signatures this file holds of its module's seams, decoded as a run of a module above decodes them. The tests
+	/// ask this of every file a run writes, to compare each seam's place graph with the graph the run computed; the tool
+	/// never does.
+	public var seamSignaturesReadBack: [StoredSeamSignature] {
+		get throws {
+			try seamSignatures.decoded
+		}
+	}
+
+	/// The plans this file holds of its module's public mocks, decoded as a run of a module whose mocks call one decodes
+	/// them. The tests ask this of every file a run writes, as they ask `seamSignaturesReadBack`; the tool never does.
+	public var publicMockPlansReadBack: [StoredPublicMockPlan] {
+		get throws {
+			try publicMockPlans.decoded
+		}
+	}
+
 	/// Each stored block of this file's own module, decoded and encoded again: the two encodings of a block are the same
 	/// bytes for a file SafeDITool wrote, since one layout writes and reads a block. The tests ask this of every file a
 	/// run writes, with real signatures and plans; the tool never does.

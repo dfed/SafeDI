@@ -481,14 +481,17 @@ struct SafeDIToolCallingMockInstantiatedOnlyIfAvailableTests: ~Copyable {
 		        analyticsOptionalBuilder: (() -> (any Analytics)?)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Home {
+		        func __safeDI_fillBody_7B18D6D5DA40E2A1() -> (any Analytics)? {
+		            func __safeDI_analytics() -> AnalyticsImpl {
+		                let uploader = Uploader()
+		                return AnalyticsImpl(uploader: uploader)
+		            }
+		            let analytics: (any Analytics)? = __safeDI_analytics()
+		            return analytics
+		        }
 		        func __safeDI_screen() -> Screen {
 		            func __safeDI_analyticsOptionalBuilder_Screen_Child_Scope_analytics(_ scope: Screen.SafeDIMockScope_AnalyticsOptional.Child_Scope.analytics_Values) -> (any Analytics)? {
-		                func __safeDI_analytics() -> AnalyticsImpl {
-		                    let uploader = Uploader()
-		                    return AnalyticsImpl(uploader: uploader)
-		                }
-		                let analytics: (any Analytics)? = __safeDI_analytics()
-		                return analytics
+		                return __safeDI_fillBody_7B18D6D5DA40E2A1()
 		            }
 		            func __safeDI_analyticsOptionalBuilder_Screen() -> Screen.SafeDIMockScope_AnalyticsOptional.__safeDI_Builder<(any Analytics)?> {
 		                .init(middle: { _ in __safeDI_analyticsOptionalBuilder_Screen_Middle_Scope() })

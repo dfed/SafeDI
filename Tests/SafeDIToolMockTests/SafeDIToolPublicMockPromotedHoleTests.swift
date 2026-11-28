@@ -2692,10 +2692,13 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        apiBuilder: (() -> any Api)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				            let api: any Api = LiveApi()
+				            return api
+				        }
 				        func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })
@@ -2988,8 +2991,11 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
 				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				                    let api: any Api = LiveApi()
+				                    return api
+				                }
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })
@@ -3300,10 +3306,13 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        apiBuilder: (() -> any Api)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        func __safeDI_fillBody_CF02C2716DA66B07() -> any Api {
+				            let api: any Api = LiveApi()
+				            return api
+				        }
 				        func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
-				                let api: any Api = LiveApi()
-				                return api
+				                return __safeDI_fillBody_CF02C2716DA66B07()
 				            }
 				            func __safeDI_apiBuilder_Other() -> Other.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(api: { _ in __safeDI_apiBuilder_Other_api() })
