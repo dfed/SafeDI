@@ -90,10 +90,27 @@ extension SeamPlacesDrafts {
 			let targets = world.edges(from: declaration)
 			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
 			fromFacts.insert("\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))")
-			let node = world.graph.nodes[Int(declaration)]
-			if node.key.isFill, let property = node.property {
-				fromFacts.insert("fill before \(property.label): \(list(of: level.id.variant))")
+		}
+		// A fill's entry level, beneath the call level whose edge passes it: the declarations on the paths of the places it
+		// stands for that their structs do not carry, each label once, then the fields it binds from the struct, which are
+		// those no such declaration's label hides, and of a deferred parameter only where the place is passed up
+		// (`ScopeGenerator.fillUncarriedDeclarations`, `fillFields`).
+		for level in levels + closingLevels {
+			guard let fill = level.fill, let calledBuilders = world.graph.nodes[Int(world.declaration(of: level.id.variant))].scope.calledBuilders else { continue }
+			let holes = calledBuilders.holes
+			guard Int(fill.holeIndex) < holes.count else { continue }
+			let hole = holes[Int(fill.holeIndex)]
+			var labels = [String]()
+			for declaration in hole.uncarriedDeclarations where !labels.contains(declaration.property.label) {
+				labels.append(declaration.property.label)
 			}
+			let fieldLabels = Set(hole.fields.map(\.property.label))
+			let uncarriedOnSomeRoute = Set(hole.uncarriedDeclarations.map(\.property.label).filter { !fieldLabels.contains($0) })
+			let readsDeferredFieldsFromStruct = hole.innerSeamType != nil && world.constructions[Int(world.declaration(of: level.id.variant))] != .publicMockCall
+			for field in hole.fields where (!field.isDeferredParameter || readsDeferredFieldsFromStruct) && !uncarriedOnSomeRoute.contains(field.property.label) {
+				labels.append(field.property.label)
+			}
+			fromFacts.insert("fill before \(hole.property.label): \(labels.joined(separator: ", "))")
 		}
 		// A passed-up case's owner is a level of the called seam with no next property, which holds no declarations.
 		for level in levels {
