@@ -439,6 +439,60 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTheTreesLayout_whenFunctionBetweenCycleClosingCallAndClosedOnFunctionMakesLoopMemberAgain() async throws {
+		// `T1` makes its own `t1Builder` again and closes the cycle on `T3`'s function, which `T0` builds `T1` in: the tree
+		// nests each function in the body that builds it, where the engine would declare the three together in `Host`'s.
+		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hostBuilder: Instantiator<Host>"]),
+					seamFixtureType(named: "Host", isFinalClass: true, declarations: ["@Forwarded let t1Builder: Instantiator<T1>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+					seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let t0Builder: Instantiator<T0>", "@Received let t1Builder: Instantiator<T1>"]),
+					seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let t1Builder: Instantiator<T1>"]),
+					seamFixtureType(named: "T1", isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_hostBuilder(t1Builder: Instantiator<T1>) -> Host {
+			            func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
+			                func __safeDI_t0Builder() -> T0 {
+			                    func __safeDI_t1Builder() -> T1 {
+			                        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                        let t3Builder = Instantiator<T3> {
+			                            __safeDI_t3Builder(t1Builder: t1Builder)
+			                        }
+			                        return T1(t3Builder: t3Builder)
+			                    }
+			                    let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			                    return T0(t1Builder: t1Builder)
+			                }
+			                let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+			                return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			            }
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder)
+			            }
+			            return Host(t1Builder: t1Builder, t3Builder: t3Builder)
+			        }
+			        let hostBuilder = Instantiator<Host> {
+			            __safeDI_hostBuilder(t1Builder: $0)
+			        }
+			        self.init(hostBuilder: hostBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(reports.map(\.refusal) == ["cycleHoldsLoopRebinding"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keepsTheTreesLayout_whenTypeReceivesBuilderInWorldWithCycle() async throws {
 		// `Detail` receives `screenBuilder`, which the cycle of `Screen` and `Step` builds: `Screen` is a loop of one, which
 		// rebinds `screenBuilder` at its top, and the cycle closes on its function. The records refuse a loop member a cycle

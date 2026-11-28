@@ -100,6 +100,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// tree names that function apart from another function of its name, which these records do not, or where the
 	/// member's place is no construction these records build.
 	case builderLoopTakesCycleParameters
+	/// A cycle whose closed-on function, or a function between it and the call that closes it, makes a member of a loop of
+	/// builders again: the type key engine declares the cycle's functions together where the cycle is first entered,
+	/// where the tree nests each in the body that builds it.
+	case cycleHoldsLoopRebinding
 	/// Making the records, or laying the root out from them, threw something other than a refusal
 	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
 	case recordsThrew
@@ -563,6 +567,9 @@ struct NodeRecords: Sendable {
 			}
 			guard !isLoopMember, !closesFromLoopMember else {
 				throw NodeRecordRefusal.builderLoopTakesCycleParameters
+			}
+			guard !([variant] + variantsBetween[Int(variant)]).contains(where: { !world.madeAgain(from: world.declaration(of: $0)).isEmpty }) else {
+				throw NodeRecordRefusal.cycleHoldsLoopRebinding
 			}
 		}
 		// What the body of `variant` reads as a wrapper's instance, where a call in it closes a cycle: its function's, but for
