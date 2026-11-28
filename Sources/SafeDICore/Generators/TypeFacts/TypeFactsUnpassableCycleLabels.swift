@@ -63,6 +63,7 @@ extension TypeFactsGraph {
 						break
 					}
 				}
+				var aliasLabels = Set<String>()
 				for dependency in dependencies {
 					switch dependency.source {
 					case let .received(onlyIfAvailable):
@@ -70,12 +71,15 @@ extension TypeFactsGraph {
 					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 						// An alias of a property its own type declares reads that declaration: it receives nothing.
 						if !labels.contains(fulfillingProperty.label) {
-							receives.append((onlyIfAvailable ? fulfillingProperty.asOptionalProperty : fulfillingProperty, !onlyIfAvailable))
+							receives.append((fulfillingProperty, !onlyIfAvailable))
 						}
+						// The alias declares its own label to the scopes beneath it.
+						aliasLabels.insert(dependency.property.label)
 					case .instantiated, .forwarded:
 						break
 					}
 				}
+				labels.formUnion(aliasLabels)
 			}
 			ownReceives.append(receives)
 			declaredLabels.append(labels)
