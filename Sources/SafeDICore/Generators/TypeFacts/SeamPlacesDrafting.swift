@@ -611,19 +611,19 @@ struct SeamPlacesDrafts: Sendable {
 			let level = places.levels[placeCase.ownerLevel]
 			storedCasesByKey[caseKey(type: level.key.builtType?.asSource ?? "fill", hole: level.key.nextProperty?.label ?? "fill", isSendable: placeCase.isBuiltInSendableFunction), default: []].append(placeCase)
 		}
-		let draftKeys = cases.map { draftCase in
+		let caseKeys = cases.map { draftCase in
 			caseKey(type: builtType(of: draftCase.owner.variant), hole: world.graph.nodes[Int(draftCase.sites[0].hole)].property?.label ?? "fill", isSendable: draftCase.isBuiltInSendableFunction)
 		}
 		var draftCountByKey = [String: Int]()
-		for draftKey in draftKeys {
+		for draftKey in caseKeys {
 			draftCountByKey[draftKey, default: 0] += 1
 		}
 		for (draftKey, draftCount) in draftCountByKey.sorted(by: { $0.key < $1.key }) {
 			guard let storedCount = storedCasesByKey[draftKey]?.count, storedCount != draftCount else { continue }
 			differences.append("case \(draftKey): \(draftCount) drafted, \(storedCount) stored")
 		}
-		let draftCaseKeys = Set(draftKeys)
-		for (draftCase, draftKey) in zip(cases, draftKeys) {
+		let draftCaseKeys = Set(caseKeys)
+		for (draftCase, draftKey) in zip(cases, caseKeys) {
 			guard let storedCases = storedCasesByKey[draftKey] else {
 				differences.append("case \(draftKey): drafted, not stored")
 				continue

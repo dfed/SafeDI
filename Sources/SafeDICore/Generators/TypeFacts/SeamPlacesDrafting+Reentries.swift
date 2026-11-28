@@ -58,3 +58,67 @@ extension SeamPlacesDrafts {
 			+ fromStored.subtracting(fromFacts).sorted().map { "closes on: only stored: \($0)" }
 	}
 }
+
+extension SeamPlacesDrafts {
+	/// How the declarations each drafted level's scope binds differ from those of the stored levels of `places` with the
+	/// same type and next property: each as the key, then the labels in binding order, a cycle parameter marked `(cycle)`,
+	/// a loop's rebinding `(rebound)` and a forwarded one `(forwarded)`. The facts' list is the scope's bindings
+	/// (`TypeFactsGraph.worldBindings(of:)`), after the seam's `parameters` at its root; a passed-up case's owner a level of the
+	/// called seam with no next property, and a fill's entry a level `fill before` its hole's property. The first line is a count report.
+	/// Test only, until the assembler builds the declaration lists.
+	func declarationListDifferences(from places: SeamSignature.Places, parameters: [SeamSignature.Parameter]) -> [String] {
+		func spelled(label: String, isCycleParameter: Bool, isRebound: Bool, isForwarded: Bool) -> String {
+			label + (isCycleParameter ? " (cycle)" : "") + (isRebound ? " (rebound)" : "") + (isForwarded ? " (forwarded)" : "")
+		}
+		let rootVariant = world.rootVariant(0)
+		func list(of variant: VariantID) -> String {
+			let declaration = world.declaration(of: variant)
+			// The root's forwarded properties are among its parameters. A loop's rebindings are its members', not those of
+			// the scope that declares it (`ScopeGenerator.reboundProperties`), which the facts do not hold yet.
+			let bindings = world.worldBindings(of: Int(declaration)).filter { variant != rootVariant || !$0.isForwarded }.map { binding in
+				spelled(label: world.labelTexts[Int(binding.label)], isCycleParameter: binding.isCycleParameter, isRebound: false, isForwarded: binding.isForwarded)
+			}
+			let parameterLabels = variant == rootVariant ? parameters.map { spelled(label: $0.property.label, isCycleParameter: false, isRebound: false, isForwarded: false) } : []
+			return (parameterLabels + bindings).joined(separator: ", ")
+		}
+		func builtType(of variant: VariantID) -> String {
+			world.graph.nodes[Int(world.declaration(of: variant))].scope.instantiable.concreteInstantiable.asSource
+		}
+		var fromFacts = Set<String>()
+		for level in levels + closingLevels {
+			let declaration = world.declaration(of: level.id.variant)
+			let targets = world.edges(from: declaration)
+			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
+			fromFacts.insert("\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))")
+			let node = world.graph.nodes[Int(declaration)]
+			if node.key.isFill, let property = node.property {
+				fromFacts.insert("fill before \(property.label): \(list(of: level.id.variant))")
+			}
+		}
+		// A passed-up case's owner is a level of the called seam with no next property, which holds no declarations.
+		for level in levels {
+			let targets = world.edges(from: world.declaration(of: level.id.variant))
+			let call = Int(targets[targets.startIndex + Int(level.id.edge)])
+			if !world.passUps(of: call).isEmpty {
+				fromFacts.insert("\(world.typeTable[Int(world.builtTypes[call])].asSource) before fill: ")
+			}
+		}
+		let fromStored = Set(places.levels.map { level -> String in
+			let declarations = places.declarationLists[level.declarationList].map { declaration in
+				spelled(label: declaration.field.property.label, isCycleParameter: declaration.isCycleParameter, isRebound: declaration.isReboundByBuilderFunction, isForwarded: declaration.isForwarded)
+			}
+			return "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(declarations.joined(separator: ", "))"
+		})
+		// The rows the facts hold no column for yet, left out of the second count: rebindings and cycle parameters.
+		func withoutRowsToCome(_ entry: String) -> String {
+			let parts = entry.components(separatedBy: ": ")
+			let labels = parts[1...].joined(separator: ": ").components(separatedBy: ", ").filter { !$0.hasSuffix(" (cycle)") && !$0.hasSuffix(" (rebound)") }
+			return "\(parts[0]): \(labels.joined(separator: ", "))"
+		}
+		let storedWithoutRowsToCome = Set(fromStored.map(withoutRowsToCome))
+		let alikeWithoutRowsToCome = fromFacts.count(where: { storedWithoutRowsToCome.contains(withoutRowsToCome($0)) })
+		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters"]
+			+ fromFacts.subtracting(fromStored).sorted().map { "declarations: only from facts: \($0)" }
+			+ fromStored.subtracting(fromFacts).sorted().map { "declarations: only stored: \($0)" }
+	}
+}

@@ -67,7 +67,7 @@ extension DependencyTreeGenerator {
 		case let .tree(scopeGenerator):
 			// A run a test observes keeps every root's scope (`RootScopeInfo.kept(_:)`), so every seam's own root is reported.
 			if let observer = NodeRecordsObservation.observer, let ownSeamRoot = rootInfo.ownSeamRoot, let rootScope = rootInfo.rootScope {
-				observer(placesDraftReport(of: rootInfo.instantiable, rootScope: rootScope, places: ownSeamRoot.signature.places))
+				observer(placesDraftReport(of: rootInfo.instantiable, rootScope: rootScope, places: ownSeamRoot.signature.places, parameters: ownSeamRoot.signature.parameters))
 			}
 			guard let observer = NodeRecordsObservation.observer, let rootScope = rootInfo.rootScope else {
 				return try await scopeGenerator.generatePlan()
@@ -118,12 +118,12 @@ extension DependencyTreeGenerator {
 
 	/// The report, of its own, of how the drafts of `seam`'s place graph, read off the facts world of its own root,
 	/// `rootScope`, differ from `places`, its stored graph.
-	private static func placesDraftReport(of seam: Instantiable, rootScope: ConstructionScope, places: SeamSignature.Places) -> NodeRecordsReport {
+	private static func placesDraftReport(of seam: Instantiable, rootScope: ConstructionScope, places: SeamSignature.Places, parameters: [SeamSignature.Parameter]) -> NodeRecordsReport {
 		var report = NodeRecordsReport(root: seam.concreteInstantiable.asSource, refusal: nil, everyRefusal: [], isLaidOutFromNodeRecords: false, differences: [], recordCount: 0, treePlaceCount: 0, treeForcers: [])
 		// The work of reading the drafts is no run's, so the tests that count a run's work count none of it.
 		report.placesDraftDifferences = GenerationWork.$observer.withValue(nil) {
 			let drafts = SeamPlacesDrafts(world: TypeFactsGraph(root: rootScope, forMockGeneration: false))
-			return drafts.levelAndSiteDifferences(from: places) + drafts.passedUpCases().passedUpDifferences(from: places) + drafts.closedOnDifferences(from: places)
+			return drafts.levelAndSiteDifferences(from: places) + drafts.passedUpCases().passedUpDifferences(from: places) + drafts.closedOnDifferences(from: places) + drafts.declarationListDifferences(from: places, parameters: parameters)
 		}
 		return report
 	}
