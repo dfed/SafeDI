@@ -72,6 +72,50 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_holdsNoFinishedCodeTask_whenRootIsLaidOutFromItsPlan() async throws {
+		// Past the limit, a root that reaches a cycle is laid out from the bodies of its plan, with no tree built per
+		// path: each body's tree is counted as a root's tree is.
+		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+		_ = try await RootTreeChoiceObservation.$scopeGeneratorLimitOverride.withValue(0) {
+			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: [
+						"""
+						@Instantiable(isRoot: true) public final class Root: Instantiable {
+						    @Instantiated let screenBuilder: Instantiator<Screen>
+						    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+						}
+
+						@Instantiable public final class Screen: Instantiable {
+						    @Instantiated let detailBuilder: Instantiator<Detail>
+						    public init(detailBuilder: Instantiator<Detail>) { self.detailBuilder = detailBuilder }
+						}
+
+						@Instantiable public final class Detail: Instantiable {
+						    @Instantiated let screenBuilder: Instantiator<Screen>
+						    public init(screenBuilder: Instantiator<Screen>) { self.screenBuilder = screenBuilder }
+						}
+						""",
+					],
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The root's code is what the tests of its shape compare; this one counts how it is generated.
+					skipCompileVerification: true,
+				)
+			}
+		}
+		continuation.finish()
+		var heldTaskCounts = [Int]()
+		for await heldTaskCount in stream {
+			heldTaskCounts.append(heldTaskCount)
+		}
+		// One count for each body of the plan, at least the root's, and none holds a task.
+		#expect(!heldTaskCounts.isEmpty)
+		#expect(heldTaskCounts.allSatisfy { $0 == 0 })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesChildrenInTheirDeclarationOrder_whenTheirCodeIsPlannedAtOnce() async throws {
 		// The root's six children are planned at once, four in flight at a time, and the larger ones are declared first, so
 		// that their tasks tend to finish last. The body writes them in the order the root declares them, on every run,

@@ -7235,7 +7235,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		inPlaceStatements: (before: [GeneratedCode], after: [GeneratedCode])?,
 		lineEnd: String,
 	) throws(Initializer.GenerationError) -> PlaceRecord? {
-		if SeamCallRecordObservation.observer != nil {
+		if SeamCallRecordObservation.observer != nil, forwardedProperties.isEmpty {
 			try observeFilledCall(of: property, instantiable: instantiable, seamCall: seamCall, erasedToConcreteExistential: erasedToConcreteExistential, code: code, unavailableProperties: unavailableProperties, builderFunctionNames: builderFunctionNames, inlinePlaceBuilder: inlinePlaceBuilder)
 		}
 		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings, separatesValuesBindings: separatesValuesBindings),
@@ -7312,7 +7312,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call that reaches no root function, outside a loop of builders, is spelled by the engine from its record where
 		// its text is written: the guard line, and a construction that hands each builder the member of the struct it
 		// passes up.
-		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, let declaredFunctionName {
+		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, forwardedProperties.isEmpty, let declaredFunctionName {
 			var arguments = argumentReads
 			var argumentValues = [Int: ValuePath]()
 			var closureArguments = [ClosureArgumentEntry]()

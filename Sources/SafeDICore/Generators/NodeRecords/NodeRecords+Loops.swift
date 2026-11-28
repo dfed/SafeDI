@@ -70,8 +70,10 @@ extension NodeRecords {
 		guard level == 0 || !world.isOnCycle(level) else { return false }
 		// A member another level builds too has one function, whose level's argument is typed as this level's and which
 		// the other level's body would hand its own configuration, so the loop keeps the walk, which writes a function
-		// per level.
-		guard members.allSatisfy({ member in world.parents(of: member).allSatisfy { $0.parent == level } }) else { return false }
+		// per level. A member that makes only itself again takes no level (`mockLoopLevels(in:)`), so any level builds it.
+		guard members.allSatisfy({ member in
+			world.madeAgain(from: member) == [member] || world.parents(of: member).allSatisfy { $0.parent == level }
+		}) else { return false }
 		return members.allSatisfy { member in
 			world.property(of: member)?.propertyType.isSendable == false
 				&& world.scope(of: member).publicMockCall == nil
@@ -120,7 +122,9 @@ extension NodeRecords {
 		var changed = true
 		while changed {
 			changed = false
-			for member in members where !levels.takingLevel.contains(member) {
+			// A member that makes again only itself hands its rebinding its own overrides (`loopRebindings(of:in:mockLoopLevels:)`),
+			// so it takes no level, whichever levels build it.
+			for member in members where !levels.takingLevel.contains(member) && world.madeAgain(from: member) != [member] {
 				let makesAgainMemberTakingOverrides = world.madeAgain(from: member).contains { madeAgain in
 					!mockLoopMemberTakesNothing(madeAgain, in: world) || levels.takingLevel.contains(madeAgain)
 				}
@@ -163,12 +167,7 @@ extension NodeRecords {
 	/// where its function takes them, then the level's, where its function takes that.
 	private static func mockLoopRebindingArguments(of member: DeclarationID, level: PassedArgument, in world: some NodeRecordSources, levels: MockLoopLevels) -> [PassedArgument] {
 		var arguments = [PassedArgument]()
-		if !mockLoopMemberTakesNothing(member, in: world), let property = world.property(of: member) {
-			let instantiable = world.scope(of: member).instantiable
-			let usesHandWrittenMock = world.construction(of: member) == .handWrittenMock && instantiable.mockInitializer != nil
-			let type: TypeDescription = isConfigured(member, in: world)
-				? mockConfigurationType(of: instantiable)
-				: .unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
+		if let property = world.property(of: member), let type = mockLoopOverridesType(of: member, in: world) {
 			arguments.append(PassedArgument(
 				parameterName: ReservedName.mockOverridesParameterName,
 				type: type,
@@ -180,6 +179,18 @@ extension NodeRecords {
 			arguments.append(PassedArgument(parameterName: level.parameterName, type: level.type, value: .passedArgument(level.parameterName), staysOutsideSendableFunctions: true))
 		}
 		return arguments
+	}
+
+	/// The type of the overrides the function of `member`, a member of a loop of builders in a mock root's world, takes:
+	/// its configuration, or its override closure where it reads no configuration. `nil` where its function is handed
+	/// nothing (`mockLoopMemberTakesNothing(_:in:)`).
+	private static func mockLoopOverridesType(of member: DeclarationID, in world: some NodeRecordSources) -> TypeDescription? {
+		guard !mockLoopMemberTakesNothing(member, in: world), let property = world.property(of: member) else { return nil }
+		let instantiable = world.scope(of: member).instantiable
+		let usesHandWrittenMock = world.construction(of: member) == .handWrittenMock && instantiable.mockInitializer != nil
+		return isConfigured(member, in: world)
+			? mockConfigurationType(of: instantiable)
+			: .unknown(text: "((\(MockLowering.BuilderParameters(of: instantiable, usesMockInitializer: usesHandWrittenMock).spelled)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource))?")
 	}
 
 	/// Whether `declaration` is a member of a loop of builders in a mock root's world: its function makes another member
@@ -196,7 +207,9 @@ extension NodeRecords {
 	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function
 	/// (`ClosingPlaceRecord.rebindsLoopMember`). The rebinding names only the member's declaration, its label and type, so
 	/// every variant of `declaration` rebinds alike (oracle B, check 32 of the per-type facts' checks).
-	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels()) -> [GeneratedCode] {
+	/// - Parameter ownFunctionArguments: What a call of `declaration`'s own function hands it, which a member that makes only
+	///   itself again hands its rebinding of itself, under the names its function takes them by.
+	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources, mockLoopLevels: MockLoopLevels = MockLoopLevels(), ownFunctionArguments: [PassedArgument] = []) -> [GeneratedCode] {
 		// In a mock, each rebinding hands the member's function what the member's level hands it.
 		let level = mockLoopLevelArgument(of: declaration, in: world, levels: mockLoopLevels)
 		return world.madeAgain(from: declaration).compactMap { member in
@@ -213,6 +226,13 @@ extension NodeRecords {
 			)
 			if let level {
 				closer.passedArguments = mockLoopRebindingArguments(of: member, level: level, in: world, levels: mockLoopLevels)
+			} else if member == declaration {
+				// A member that makes only itself again hands the rebinding what its own function was handed, under the names
+				// the function takes it by, which the walk's copy of the function reads at whichever level built it. A
+				// function that captures its overrides takes nothing.
+				closer.passedArguments = ownFunctionArguments.map { argument in
+					PassedArgument(parameterName: argument.parameterName, type: argument.type, value: .passedArgument(argument.parameterName), staysOutsideSendableFunctions: argument.staysOutsideSendableFunctions)
+				}
 			}
 			return .indented(.place(PlacePlan(code: .empty, record: .closer(closer))), by: ScopeGenerator.standardIndent)
 		}
