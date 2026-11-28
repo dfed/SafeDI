@@ -1324,7 +1324,9 @@ used_none = []
 # every pair the entry is used on, which then prints "held" and not the words a gate reads as equal.
 AWAITING_CELLS = {
     # in a mock; the test is on claude/mock-cycle-twin-parameters a2858a1a4 (merge request 1128-0436)
-    # in a mock (lead, 11-28 08:00Z): counts once the kinds integrator names the value cell
+    # in a mock (lead, 11-28 08:00Z): held until the cell the kinds integrator named (08:21Z),
+    # SafeDIToolNodeRecordsMockCycleWalkTests/mock_buildsTheWalksValues_whenFunctionOnNoCycleEntersCycleAtSendableFunction
+    # at c2f611531, which passes on Swift 6.2, has also passed on 6.3 and 6.4
     '24': [],
     # one builder function for several properties of one type (lead, 11-28 08:00Z): the cell (20 properties
     # of one type with shuffled labels, compiled and value-compared, plus seed 1080) is not named yet
