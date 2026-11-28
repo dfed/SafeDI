@@ -102,8 +102,9 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// payloads, which node records do not write.
 	case builderLoopBoxed
 	/// A member of a loop of builders whose function takes cycle parameters, or that closes a cycle on a function that
-	/// does: the tree wraps it through a `__safeDI_<label>_received` function its loop's parent declares, which no record
-	/// lays out yet.
+	/// does, which the tree wraps through a `__safeDI_<label>_received` function its loop's parent declares, where the
+	/// tree names that function apart from another function of its name, which these records do not, or where the
+	/// member's place is no construction these records build.
 	case builderLoopTakesCycleParameters
 	/// Making the records, or laying the root out from them, threw something other than a refusal
 	/// (`NodeRecords.refusingWhatRecordsThrow(_:)`). The world keeps its tree, which reports whatever it reports.
@@ -244,6 +245,8 @@ struct NodeRecords: Sendable {
 			cycleParameters: [Property],
 			callCycleArguments: [PlaceRead],
 			instanceProperties: Set<Property>,
+			receivedFunction: (name: String, arguments: [PlaceRead], parent: DeclarationID)?,
+			receivedFunctionNames: [DeclarationID: String],
 		) throws -> (place: GeneratedCode, record: PlaceRecord?, escaping: Set<TypeDescription>) {
 			// A hole's place is its site's code, written as text, and the payloads bound before it: places, not one record.
 			guard kinds[Int(declaration)] != .seamHole else {
@@ -257,8 +260,15 @@ struct NodeRecords: Sendable {
 			escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
 			escaping.formUnion(childrensEscaping)
 			// A member of a loop of builders first makes again the members its tree receives, whatever its kind
-			// (`NodeRecords+Loops.swift`): a call of a seam, before its guard.
-			let loopRebindings = Self.loopRebindings(of: declaration, in: world)
+			// (`NodeRecords+Loops.swift`): a call of a seam, before its guard. A label its function takes is that parameter.
+			let loopRebindings = Self.loopRebindings(
+				of: declaration,
+				functionName: functionName,
+				cycleParameters: cycleParameters,
+				hiddenLabels: Set(instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label) + cycleParameters.map(\.label)),
+				receivedFunctionNames: receivedFunctionNames,
+				in: world,
+			)
 			let calleeChildren = children
 			let children = loopRebindings + children
 			let madeRecord: PlaceRecord = switch kinds[Int(declaration)] {
@@ -289,14 +299,36 @@ struct NodeRecords: Sendable {
 			case .mockConstruction:
 				try .built(Self.mockConstructionRecord(of: declaration, variant: variant, in: world, typesDeclaredEscaping: escaping, children: children))
 			}
-			let record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
-			let place: GeneratedCode = switch record {
+			var record = Self.record(madeRecord, functionName: functionName, isMadeSendable: isMadeSendable, cycleParameters: cycleParameters, callCycleArguments: callCycleArguments)
+			// A member wrapped through a `_received` function declares only its builder function: the statement after it, which
+			// declares that function, binds it.
+			var receivedFunctionPlace: GeneratedCode?
+			if let receivedFunction {
+				guard case var .built(built) = record else { throw NodeRecordRefusal.builderLoopTakesCycleParameters }
+				built.bindsProperty = false
+				record = .built(built)
+				receivedFunctionPlace = Self.receivedFunctionPlace(
+					of: declaration,
+					property: built.property,
+					named: receivedFunction.name,
+					callingFunctionNamed: built.functionName,
+					parameters: cycleParameters,
+					arguments: receivedFunction.arguments,
+					isSendable: built.isSendable || built.property.propertyType.isSendable,
+					typesDeclaredEscaping: escaping,
+					receivedFunctionNames: receivedFunctionNames,
+					inBodyOf: receivedFunction.parent,
+					in: world,
+				)
+			}
+			let recordPlace: GeneratedCode = switch record {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written.
 				.place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
 				.place(PlacePlan(code: .empty, record: record))
 			}
+			let place = receivedFunctionPlace.map { GeneratedCode.sequence([recordPlace, $0]) } ?? recordPlace
 			if bindsHolesPayloads, let seamHoles {
 				return (Self.placeOnRouteToHole(place, of: declaration, in: world, seamHoles: seamHoles, rootLazilyInstantiatedInstanceProperties: rootLazilyInstantiatedInstanceProperties), record, escaping)
 			} else {
@@ -476,22 +508,52 @@ struct NodeRecords: Sendable {
 			}
 		}
 		// A loop member whose function takes cycle parameters, or whose place closes a cycle on such a function, is wrapped
-		// through a `__safeDI_<label>_received` function (`ScopeGenerator`'s loop rebindings). The facts give a label a
-		// loop makes again no parameter, so any function a cycle closes on counts, whatever its parameters.
-		for variant in postOrder where !variantsBetween[Int(variant)].isEmpty {
-			let isLoopMember = { (declaration: DeclarationID) in
-				world.parents(of: declaration).contains { parent in
-					world.edgeFacts(from: parent.parent).contains { $0.child == declaration && $0.loop >= 0 }
-				}
+		// through a `__safeDI_<label>_received` function its parent's body declares after it (`ScopeGenerator`'s loop
+		// rebindings), named in that body by the member's declaration: a call's that closes a cycle, the one it closes on.
+		var receivedFunctionNames = [VariantID: [DeclarationID: String]]()
+		var parentByVariant = [VariantID: VariantID]()
+		// Every function a place of the world declares: a `_received` name the tree would name apart from one of them, which
+		// these records do not.
+		var functionNamesInWorld = Set<String>()
+		for variant in postOrder {
+			if let property = world.property(of: world.declaration(of: variant)) {
+				functionNamesInWorld.insert(functionNames?.functionName(of: variant) ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
-			let closesFromLoopMember = variantsBetween[Int(variant)].contains { between in
-				entries[Int(between)].contains { entry in
-					guard case let .closer(closingOn: callee) = entry, callee == variant else { return false }
-					return world.edgeFacts(from: world.declaration(of: between)).contains { $0.child == world.declaration(of: variant) && $0.loop >= 0 }
+		}
+		// The root's body is no place of the walk's order.
+		for parent in [0] + postOrder {
+			let loopEdges = world.edgeFacts(from: world.declaration(of: parent)).filter { $0.loop >= 0 }
+			let loopMembers = Set(loopEdges.map(\.child))
+			// A call that closes a cycle receives what the function it closes on receives, less what that function binds,
+			// its own wrapper made again among them: it is on a loop of the tree's only beside another member.
+			let membersWithMates = Set(loopEdges.filter { edge in loopEdges.contains { $0.loop == edge.loop && $0.child != edge.child } }.map(\.child))
+			for entry in entries[Int(parent)] where !loopMembers.isEmpty {
+				// A place's own function takes parameters only where a cycle closes on it.
+				let callee: VariantID
+				let functionName: String?
+				let takesParameters: Bool
+				switch entry {
+				case let .place(placed):
+					parentByVariant[placed] = parent
+					callee = placed
+					functionName = functionNames?.functionName(of: placed)
+					takesParameters = !variantsBetween[Int(placed)].isEmpty
+				case let .closer(closingOn: closedOn):
+					callee = closedOn
+					functionName = functionNames?.closedOnFunctionName(of: closedOn, inBodyOf: parent)
+					takesParameters = membersWithMates.contains(world.declaration(of: closedOn))
 				}
-			}
-			guard !isLoopMember(world.declaration(of: variant)), !closesFromLoopMember else {
-				throw NodeRecordRefusal.builderLoopTakesCycleParameters
+				let declaration = world.declaration(of: callee)
+				guard takesParameters,
+				      loopMembers.contains(declaration),
+				      !cycleParameters(of: callee).isEmpty,
+				      let property = world.property(of: declaration)
+				else { continue }
+				let name = ReservedName.receivedBuilderFunctionName(of: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
+				guard !functionNamesInWorld.contains(name), receivedFunctionNames[parent]?.values.contains(name) != true else {
+					throw NodeRecordRefusal.builderLoopTakesCycleParameters
+				}
+				receivedFunctionNames[parent, default: [:]][declaration] = name
 			}
 		}
 		// What the body of `variant` reads as a wrapper's instance, where a call in it closes a cycle: its function's, but for
@@ -520,14 +582,38 @@ struct NodeRecords: Sendable {
 				switch entry {
 				case let .closer(closingOn: callee):
 					let closedOnDeclaration = world.declaration(of: callee)
-					let closer = try Self.closingRecord(
-						closingOn: closedOnDeclaration,
-						from: variant,
-						functionName: functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant),
-						cycleArguments: cycleArguments(of: callee, holding: instancePropertiesInBody(of: variant)),
-						in: world,
-					)
-					children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
+					let functionName = functionNames?.closedOnFunctionName(of: callee, inBodyOf: variant)
+					let arguments = cycleArguments(of: callee, holding: instancePropertiesInBody(of: variant))
+					if let name = receivedFunctionNames[variant]?[closedOnDeclaration], let property = world.property(of: closedOnDeclaration) {
+						// A loop member's call wraps the function it closes on through its `_received` function, which spells what the
+						// type's own initializers and the seam it calls declare `@escaping`.
+						let scope = world.scope(of: closedOnDeclaration)
+						var escaping = Set(scope.instantiable.initializer?.typesDeclaredEscaping ?? [])
+						escaping.formUnion(scope.instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
+						escaping.formUnion(scope.seamCall?.typesDeclaredEscaping ?? [])
+						children.append(.indented(Self.receivedFunctionPlace(
+							of: closedOnDeclaration,
+							property: property,
+							named: name,
+							callingFunctionNamed: functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
+							parameters: cycleParameters(of: callee).map(\.property),
+							arguments: arguments,
+							isSendable: property.propertyType.isSendable || Self.buildsInSendableFunction(closedOnDeclaration, in: world),
+							typesDeclaredEscaping: escaping,
+							receivedFunctionNames: receivedFunctionNames[variant] ?? [:],
+							inBodyOf: world.declaration(of: variant),
+							in: world,
+						), by: indentation))
+					} else {
+						let closer = try Self.closingRecord(
+							closingOn: closedOnDeclaration,
+							from: variant,
+							functionName: functionName,
+							cycleArguments: arguments,
+							in: world,
+						)
+						children.append(.indented(.place(PlacePlan(code: .empty, record: closer)), by: indentation))
+					}
 					closedOn.insert(callee)
 					// A call that hands a `Sendable` wrapper its function refers to the function it closes on from a
 					// `@Sendable` function.
@@ -556,6 +642,12 @@ struct NodeRecords: Sendable {
 			}
 			fromSendableFunction.remove(variant)
 			closedOnFromSendableFunction[Int(variant)] = fromSendableFunction
+			// A loop member wrapped through a `_received` function is called by that function, which passes its parameters.
+			let receivedFunction = parentByVariant[variant].flatMap { parent in
+				receivedFunctionNames[parent]?[declaration].map { name in
+					(name: name, arguments: cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]), parent: world.declaration(of: parent))
+				}
+			}
 			let (place, record, escaping) = try makePlace(
 				of: variant,
 				declaration: declaration,
@@ -565,8 +657,10 @@ struct NodeRecords: Sendable {
 				isMadeSendable: isMadeSendable,
 				// Only a function a cycle closes on takes parameters; every other captures what it reads.
 				cycleParameters: body.closedOn.contains(variant) ? cycleParameters(of: variant).map(\.property) : [],
-				callCycleArguments: body.closedOn.contains(variant) ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
+				callCycleArguments: body.closedOn.contains(variant) && receivedFunction == nil ? cycleArguments(of: variant, holding: instancePropertiesAtCall[Int(variant)]) : [],
 				instanceProperties: instancePropertiesInFunction[Int(variant)],
+				receivedFunction: receivedFunction,
+				receivedFunctionNames: parentByVariant[variant].flatMap { receivedFunctionNames[$0] } ?? [:],
 			)
 			records[Int(variant)] = record
 			places[Int(variant)] = place

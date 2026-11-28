@@ -94,6 +94,9 @@ public enum NodeRecordsObservation {
 					pending.append((tree: treeBuilt.children, nodeRecords: nodeRecordsBuilt.children, path: placePath))
 				case let (.alias(treeAlias), .alias(nodeRecordsAlias)):
 					differences += fieldDifferences(between: treeAlias, and: nodeRecordsAlias).map { "\(placePath): \($0)" }
+					if let treeFunction = treeAlias.function, let nodeRecordsFunction = nodeRecordsAlias.function {
+						pending.append((tree: treeFunction.statements, nodeRecords: nodeRecordsFunction.statements, path: "\(placePath).\(treeFunction.name)"))
+					}
 				case let (.closer(treeCloser), .closer(nodeRecordsCloser)):
 					differences += fieldDifferences(between: treeCloser, and: nodeRecordsCloser).map { "\(placePath): \($0)" }
 				case (.built, _), (.alias, _), (.closer, _):
@@ -148,8 +151,9 @@ public enum NodeRecordsObservation {
 		}
 		compare("property", tree.property, nodeRecords.property)
 		compare("fulfillingProperty", tree.fulfillingProperty, nodeRecords.fulfillingProperty)
-		// Node records leave a call's text to the engine, which spells it from the call (`InPlaceCall`).
-		if nodeRecords.call == nil {
+		// Node records leave a call's text, and a declared function's, to the engine, which spells it from the call
+		// (`InPlaceCall`) or the function (`CallingFunction`).
+		if nodeRecords.call == nil, nodeRecords.function == nil {
 			compare("text", tree.text, nodeRecords.text)
 		}
 		compare("reads", tree.reads, nodeRecords.reads)
@@ -158,6 +162,15 @@ public enum NodeRecordsObservation {
 		compare("declaredFunctionNames", tree.declaredFunctionNames, nodeRecords.declaredFunctionNames)
 		compare("calledRootFunctionNames", tree.calledRootFunctionNames, nodeRecords.calledRootFunctionNames)
 		compare("holdsCall", tree.call != nil, nodeRecords.call != nil)
+		compare("holdsFunction", tree.function != nil, nodeRecords.function != nil)
+		if let treeFunction = tree.function, let nodeRecordsFunction = nodeRecords.function {
+			compare("function: name", treeFunction.name, nodeRecordsFunction.name)
+			compare("function: isSendable", treeFunction.isSendable, nodeRecordsFunction.isSendable)
+			compare("function: parameters", treeFunction.parameters, nodeRecordsFunction.parameters)
+			compare("function: typesDeclaredEscaping", treeFunction.typesDeclaredEscaping, nodeRecordsFunction.typesDeclaredEscaping)
+			compare("function: returnType", treeFunction.returnType, nodeRecordsFunction.returnType)
+			differences += fieldDifferences(between: treeFunction.returnedCall, and: nodeRecordsFunction.returnedCall).map { "function: returnedCall: \($0)" }
+		}
 		if let treeCall = tree.call, let nodeRecordsCall = nodeRecords.call {
 			differences += fieldDifferences(between: treeCall.record, and: nodeRecordsCall.record).map { "call: \($0)" }
 			compare("call: argumentValues", treeCall.record.argumentValues, nodeRecordsCall.record.argumentValues)
@@ -208,6 +221,7 @@ public enum NodeRecordsObservation {
 		compare("typesDeclaredEscaping", tree.typesDeclaredEscaping, nodeRecords.typesDeclaredEscaping)
 		compare("lineEnd", tree.lineEnd, nodeRecords.lineEnd)
 		compare("hasFunction", tree.hasFunction, nodeRecords.hasFunction)
+		compare("bindsProperty", tree.bindsProperty, nodeRecords.bindsProperty)
 		compare("holdsSharingFields", tree.sharingFields != nil, nodeRecords.sharingFields != nil)
 		compare("leadingStatement", tree.leadingStatement, nodeRecords.leadingStatement)
 		compare("closureArguments", tree.closureArguments, nodeRecords.closureArguments)

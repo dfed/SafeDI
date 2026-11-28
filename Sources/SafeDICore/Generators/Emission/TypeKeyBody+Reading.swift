@@ -62,6 +62,8 @@ extension TypeKeyLayout {
 			let statement: Statement
 			switch record {
 			case let .built(built):
+				// A place that declares only its function, which a function after it calls, is not laid out yet.
+				guard built.bindsProperty else { return false }
 				if built.hasFunction {
 					guard let domain = domain(of: built) else { return false }
 					let isInSendableFamily = built.isSendable || bodies[body].isInSendableFamily
@@ -175,7 +177,7 @@ extension TypeKeyLayout {
 				// refers to a function it does not declare: two such places of one text can name different functions, which
 				// no read tells apart. The labels it binds besides its own are declarations of its position, as its own is
 				// (`declareChildren`).
-				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty else { return false }
+				guard alias.listsItsReads, alias.calledFunctionNames.isEmpty, alias.function == nil else { return false }
 				namesInScope.formUnion(alias.declaredFunctionNames)
 				statement = .alias(alias)
 			}

@@ -98,6 +98,10 @@ struct BuiltPlaceRecord: Sendable {
 	/// What a place that calls another module's code records beyond a built place (`CallFields`), in a box of its own
 	/// that every other place leaves `nil`.
 	var callFields: CallFields?
+	/// Whether the place binds its property to its function: `false` where the statement after it binds the property
+	/// through a function of its own that calls this one (`AliasPlaceRecord.function`), so the place declares only its
+	/// function, and is no declaration of its label.
+	var bindsProperty = true
 
 	/// The statement the place's builder function begins with, before its children.
 	var leadingStatement: CallGuard? {
@@ -256,6 +260,37 @@ struct AliasPlaceRecord: Sendable {
 	/// The call the engine spells where the place is written, in place of `text`, which it equals; `nil` where the engine
 	/// writes `text`.
 	var call: InPlaceCall?
+	/// The function the text declares before its binding, which is among `declaredFunctionNames` and which the binding
+	/// hands its wrapper: a body of its own whose value is a call of another function; `nil` where the text declares none
+	/// the engine plans.
+	var function: CallingFunction?
+}
+
+/// A function whose body declares its statements and returns a call of another function (`AliasPlaceRecord.function`):
+/// `func <name>(<parameters>) -> <returnType> { <statements> return <call> }`. A reference, as `InPlaceCall` is, so
+/// that an alias place that holds none stays as small as it was.
+final class CallingFunction: Sendable {
+	let name: String
+	let isSendable: Bool
+	/// The values the function takes, which a wrapper forwards, sorted.
+	let parameters: [Property]
+	let typesDeclaredEscaping: Set<TypeDescription>
+	let returnType: TypeDescription
+	/// The places the body builds before its call, in order.
+	let statements: [GeneratedCode]
+	/// The call the body returns: a closing place on the function it calls, whose cycle arguments read the body's
+	/// statements by label or the declarations around the function.
+	let returnedCall: ClosingPlaceRecord
+
+	init(name: String, isSendable: Bool, parameters: [Property], typesDeclaredEscaping: Set<TypeDescription>, returnType: TypeDescription, statements: [GeneratedCode], returnedCall: ClosingPlaceRecord) {
+		self.name = name
+		self.isSendable = isSendable
+		self.parameters = parameters
+		self.typesDeclaredEscaping = typesDeclaredEscaping
+		self.returnType = returnType
+		self.statements = statements
+		self.returnedCall = returnedCall
+	}
 }
 
 /// A call written where its place is, in the body that holds it: its builder function, which declares the statements of

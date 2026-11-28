@@ -39,22 +39,119 @@ extension NodeRecords {
 	}
 
 	/// The places `declaration`'s builder function begins with, before every child: a wrapper made again of each member of
-	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function
-	/// (`ClosingPlaceRecord.rebindsLoopMember`). A production world has one variant per node (`nodeHasSeveralVariants`), which is the one
-	/// the parent's body calls (oracle B, check 32 of the per-type facts' checks).
-	static func loopRebindings(of declaration: DeclarationID, in world: some NodeRecordSources) -> [GeneratedCode] {
+	/// its loop it rebinds, in the order it rebinds them, each a call of that member's builder function, or of the
+	/// `__safeDI_<label>_received` function its parent's body declares for it (`receivedFunctionNames`, by the member's
+	/// declaration) (`ClosingPlaceRecord.rebindsLoopMember`), but for a member whose label a parameter of the function names
+	/// (`hiddenLabels`: its forwarded properties and the parameters a lazy cycle closing on it passes), which is the nearest
+	/// declaration there. Its own property, where the function takes `cycleParameters`, is wrapped again with them. A
+	/// production world has one variant per node (`nodeHasSeveralVariants`), which is the one the parent's body calls
+	/// (oracle B, check 32 of the per-type facts' checks).
+	static func loopRebindings(
+		of declaration: DeclarationID,
+		functionName: String?,
+		cycleParameters: [Property],
+		hiddenLabels: Set<String>,
+		receivedFunctionNames: [DeclarationID: String],
+		in world: some NodeRecordSources,
+	) -> [GeneratedCode] {
 		world.madeAgain(from: declaration).compactMap { member in
-			guard let property = world.property(of: member) else { return nil }
-			let instantiable = world.scope(of: member).instantiable
-			return .indented(.place(PlacePlan(code: .empty, record: .closer(ClosingPlaceRecord(
+			guard let property = world.property(of: member), !hiddenLabels.contains(property.label) else { return nil }
+			let rebindsOwnFunction = member == declaration && !cycleParameters.isEmpty
+			let closedOnFunctionName = if rebindsOwnFunction {
+				functionName ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+			} else {
+				receivedFunctionNames[member] ?? ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+			}
+			return .indented(rebinding(
+				of: member,
 				property: property,
-				isErased: world.isErased(member),
-				isExtension: instantiable.declarationType.isExtension,
-				closedOnFunctionName: ScopeGenerator.functionName(toBuildPropertyNamed: property.label),
-				forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
-				cycleArguments: [],
-				rebindsLoopMember: true,
-			)))), by: ScopeGenerator.standardIndent)
+				closedOnFunctionName: closedOnFunctionName,
+				cycleArguments: rebindsOwnFunction ? cycleParameters.map { PlaceRead(argumentLabel: $0.label, label: $0.label, property: $0, source: .binding(label: $0.label)) } : [],
+				in: world,
+			), by: ScopeGenerator.standardIndent)
 		}
+	}
+
+	/// The place that makes `member`'s wrapper, built as `property`, again around the function named
+	/// `closedOnFunctionName`, passing it `cycleArguments`.
+	static func rebinding(of member: DeclarationID, property: Property, closedOnFunctionName: String, cycleArguments: [PlaceRead], in world: some NodeRecordSources) -> GeneratedCode {
+		let instantiable = world.scope(of: member).instantiable
+		return .place(PlacePlan(code: .empty, record: .closer(ClosingPlaceRecord(
+			property: property,
+			isErased: world.isErased(member),
+			isExtension: instantiable.declarationType.isExtension,
+			closedOnFunctionName: closedOnFunctionName,
+			forwardedProperties: instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted(),
+			cycleArguments: cycleArguments,
+			rebindsLoopMember: true,
+		))))
+	}
+
+	/// The statement that binds `property`, the wrapper of a loop member built by the function named `functionName`, through
+	/// the member's `__safeDI_<label>_received` function, `name`, which the statement declares (`ScopeGenerator`'s loop
+	/// rebindings): after the member's place in its parent's body, or in place of a call that closes a cycle from a loop
+	/// member. The function makes again each member of the loop of `declaration` in the body of `parent` whose label one
+	/// of `parameters` names, and returns a call of `functionName` that passes those by their labels and every other
+	/// parameter `arguments`, what the body around it holds.
+	static func receivedFunctionPlace(
+		of declaration: DeclarationID,
+		property: Property,
+		named name: String,
+		callingFunctionNamed functionName: String,
+		parameters: [Property],
+		arguments: [PlaceRead],
+		isSendable: Bool,
+		typesDeclaredEscaping: Set<TypeDescription>,
+		receivedFunctionNames: [DeclarationID: String],
+		inBodyOf parent: DeclarationID,
+		in world: some NodeRecordSources,
+	) -> GeneratedCode {
+		let edges = world.edgeFacts(from: parent)
+		let loop = edges.first { $0.child == declaration && $0.loop >= 0 }?.loop
+		let mates = edges.filter { $0.loop == loop }.map(\.child)
+		var statements = [GeneratedCode]()
+		var callReads = [PlaceRead]()
+		var readsOutsideFunction = [PlaceRead]()
+		for (parameter, argument) in zip(parameters, arguments) {
+			// A body declares each label once, so at most one of the two forms is a member.
+			let unwrappedProperty = parameter.asUnwrappedProperty
+			let mate = mates.lazy.compactMap { mate in world.property(of: mate).map { (mate, $0) } }.first { _, mateProperty in
+				mateProperty == unwrappedProperty || mateProperty == unwrappedProperty.asOptionalProperty
+			}
+			if let (mate, mateProperty) = mate {
+				statements.append(.indented(rebinding(
+					of: mate,
+					property: mateProperty,
+					closedOnFunctionName: receivedFunctionNames[mate] ?? ScopeGenerator.functionName(toBuildPropertyNamed: mateProperty.label),
+					cycleArguments: [],
+					in: world,
+				), by: ScopeGenerator.standardIndent))
+				callReads.append(PlaceRead(argumentLabel: parameter.label, label: parameter.label, property: parameter, source: .binding(label: parameter.label)))
+			} else {
+				callReads.append(argument)
+				readsOutsideFunction.append(argument)
+			}
+		}
+		let instantiable = world.scope(of: declaration).instantiable
+		let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted()
+		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "", reads: readsOutsideFunction)
+		record.declaredFunctionNames = [name]
+		record.function = CallingFunction(
+			name: name,
+			isSendable: isSendable,
+			parameters: forwardedProperties,
+			typesDeclaredEscaping: typesDeclaredEscaping,
+			returnType: instantiable.concreteInstantiable,
+			statements: statements,
+			returnedCall: ClosingPlaceRecord(
+				property: property,
+				isErased: false,
+				isExtension: instantiable.declarationType.isExtension,
+				closedOnFunctionName: functionName,
+				forwardedProperties: forwardedProperties,
+				cycleArguments: callReads,
+			),
+		)
+		return .place(PlacePlan(code: .text(""), record: .alias(record)))
 	}
 }
