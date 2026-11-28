@@ -101,8 +101,9 @@ extension LevelFunctionRecordsObservation {
 		// in `Property` order, as `ScopeGenerator.publicMockLevelFunctions` chooses it.
 		var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
 		var callerArguments = [Property: ArgumentSource]()
+		let callerSources = FillCallerSources(world: world)
 		for facts in allFacts {
-			let sources = FillCallerSources.of(facts: facts, call: call, variant: variant, in: world)
+			let sources = callerSources.of(facts: facts, call: call, variant: variant)
 			for (read, (parameter, source)) in zip(facts.callerReads, zip(facts.parametersTakenOfCallerReads, sources)) {
 				callerArguments[parameter] = callerArguments[parameter] ?? source
 				if let field = facts.parametersTaken.first(where: { $0.property == parameter }) {

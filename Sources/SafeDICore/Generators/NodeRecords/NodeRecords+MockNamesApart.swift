@@ -57,8 +57,9 @@ extension NodeRecords {
 		/// (`MockRootNames.wrapperBindingName(of:)`), by the receive's property, as the walk passes it by name, never bound
 		/// again under its label, which would hide the instance from the receives by value beside it.
 		var wrapperArgumentNames: [[Property: String]]
-		/// The name of the wrapper each variant that is a rename of such a wrapper reads, as the walk reads it by name.
-		var wrapperNamesReadByRenames: [VariantID: String]
+		/// The name each variant that is a rename of such a wrapper, or of a value the root names apart, reads, as the walk
+		/// reads it by name.
+		var namesReadByRenames: [VariantID: String]
 	}
 
 	/// What each variant of a mock root's world reads under a name the mock root binds apart, read from the names the mock
@@ -78,7 +79,7 @@ extension NodeRecords {
 		var namesRead = MockNamesReadApart(
 			receivesBoundAgain: [[MockReceiveBoundAgain]](repeating: [], count: world.variantCount),
 			wrapperArgumentNames: [[Property: String]](repeating: [:], count: world.variantCount),
-			wrapperNamesReadByRenames: [:],
+			namesReadByRenames: [:],
 		)
 		let namesBoundAgain = world.mockRootNames.namesBoundAgain
 		let wrapperBindingNames = world.mockRootNames.wrapperBindingNames
@@ -98,9 +99,10 @@ extension NodeRecords {
 			} else if world.kind(of: declaration) == .alias {
 				// A rename is a leaf, which reads its fulfilling property where its scope binds it.
 				functionNames = ([:], [:])
-				let visible = visibleNames[Int(variant)]?.wrapperNames ?? [:]
-				if let fulfillingProperty = renamedProperty(of: declaration, in: world), let name = Self.name(of: fulfillingProperty, among: visible) {
-					namesRead.wrapperNamesReadByRenames[variant] = name
+				let visible = visibleNames[Int(variant)] ?? ([:], [:])
+				// It reads a wrapper `mock()` makes by the wrapper's name, and a value the root names apart by its name apart.
+				if let fulfillingProperty = renamedProperty(of: declaration, in: world), let name = Self.name(of: fulfillingProperty, among: visible.wrapperNames) ?? Self.name(of: fulfillingProperty, among: visible.namesApart) {
+					namesRead.namesReadByRenames[variant] = name
 				}
 			} else {
 				let instantiable = world.scope(of: declaration).instantiable

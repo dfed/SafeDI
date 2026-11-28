@@ -155,9 +155,9 @@ extension NodeRecords {
 	/// (`ScopeGenerator.disambiguatePropertyLabels(forProperties:besideParametersKeepingTheirLabels:reservedNames:)`), and
 	/// names apart a parameter of `mock()` or an override beside another form of its label, so the override of such a child
 	/// is the root's field under the name, and each type that receives the label where no declaration between hides it binds
-	/// the name again under the label at the top of its function (`mockNamesReadApart(in:)`). Refused, and left to the
-	/// walk: two children of one label under any other node, or under a root that was handed no name for one; a rename of such a label
-	/// or from one, whose binding the walk reads otherwise; and a receive of the label only if available, which reads the name or `nil`
+	/// the name again under the label at the top of its function, and a rename of the label reads the name
+	/// (`mockNamesReadApart(in:)`). Refused, and left to the walk: two children of one label under any other node, or under a
+	/// root that was handed no name for one; and a receive of the label only if available, which reads the name or `nil`
 	/// by its place, since a required receive of another form above a place pins the label there
 	/// (`MockLowering.receiveReadsLabelByName`), and one function serves every place.
 	static func refusalOfNamingApart(_ declaration: DeclarationID, in world: some NodeRecordSources) -> NodeRecordRefusal? {
@@ -173,11 +173,9 @@ extension NodeRecords {
 			switch dependency.source {
 			case let .received(onlyIfAvailable):
 				guard !onlyIfAvailable || !mockRootNames.namesApart(label: dependency.property.label) else { return .mockOverrideNotParentField }
-			case let .aliased(fulfillingProperty, _, _):
-				// A rename reads its fulfilling label by name, which the walk resolves past a receive bound again.
-				guard !mockRootNames.namesApart(label: dependency.property.label), !mockRootNames.namesApart(label: fulfillingProperty.label) else { return .mockOverrideNotParentField }
-			case .instantiated, .forwarded:
-				// A declaration of the label hides the name from what the node builds (`mockNamesReadApart(in:)`).
+			case .aliased, .instantiated, .forwarded:
+				// A declaration of the label hides the name from what the node builds, and a rename reads its fulfilling label by
+				// the name where its scope sees it (`mockNamesReadApart(in:)`).
 				break
 			}
 		}

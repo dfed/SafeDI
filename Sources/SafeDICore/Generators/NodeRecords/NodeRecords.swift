@@ -394,7 +394,7 @@ struct NodeRecords: Sendable {
 					answers: onlyIfAvailableAnswers,
 					// The root declares no rename through a variant of its own, so it is the scope of each rename among its edges.
 					autoclosureCall: world.edges(from: 0).contains(declaration) ? world.property(of: declaration).flatMap { autoclosureCallByLabel[$0.label] } : nil,
-					wrapperName: mockNamesReadApart.wrapperNamesReadByRenames[variant],
+					nameReadApart: mockNamesReadApart.namesReadByRenames[variant],
 				))
 			case .cycle:
 				try .built(Self.cycleRecord(of: declaration, variant: variant, in: world, lazilyInstantiatedInstanceProperties: instanceProperties, typesDeclaredEscaping: escaping, children: children))

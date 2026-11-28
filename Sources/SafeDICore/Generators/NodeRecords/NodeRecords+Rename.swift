@@ -76,12 +76,12 @@ extension NodeRecords {
 		in world: some NodeRecordVariantFacts,
 		answers: OnlyIfAvailableAnswers,
 		autoclosureCall: String? = nil,
-		wrapperName: String? = nil,
+		nameReadApart: String? = nil,
 	) throws(NodeRecordRefusal) -> AliasPlaceRecord {
 		guard let (property, renamedProperty, erasedToConcreteExistential, declarationReference) = rename(of: declaration, in: world) else { throw .renameOrHole }
-		// A rename of a wrapper a mock binds around an instance it takes reads the wrapper by name, as the walk reads it
-		// (`mockNamesReadApart(in:)`).
-		let fulfillingProperty = wrapperName.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
+		// A rename of a wrapper a mock binds around an instance it takes, or of a value a mock root names apart, reads it by
+		// that name, as the walk reads it (`mockNamesReadApart(in:)`).
+		let fulfillingProperty = nameReadApart.map { Property(label: $0, typeDescription: renamedProperty.typeDescription) } ?? renamedProperty
 		// A rename of the wrapper itself is bound from the wrapper; only one of its value reads the instance. A rename that
 		// keeps its label reads the label past its own declaration, so its key names what it renames, as any rename's does.
 		guard let fulfillingKeyIsLazyWrapper = fulfillingKeyIsLazyWrapper(declaration, variant: variant, in: world) else { throw .lazy }
