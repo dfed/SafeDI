@@ -27,8 +27,10 @@ extension NodeRecords {
 	struct MockReceiveBoundAgain: Equatable {
 		/// The receive, as the node's type declares it.
 		let property: Property
-		/// The declaration the mock root binds apart, which the binding reads.
-		let nameApart: Property
+		/// The declaration the mock root binds apart, which the binding reads; `nil` for a binding to `nil` of the name
+		/// itself, which a node whose required receive pins that declaration makes for everything it builds
+		/// (`MockNamesReadApart.bindNamesToNil(beneathPinsFoundBy:)`).
+		let nameApart: Property?
 
 		/// The place of the binding, the first statement of the node's builder function, as the mock's walk writes it
 		/// (`MockLowering.ConstantNode.receiverBindingLines(indent:)`), read as a rename of the name is, so the function is
@@ -36,12 +38,17 @@ extension NodeRecords {
 		var place: GeneratedCode {
 			// A builder a call passes up is received `@escaping`, which no binding spells.
 			let type = property.typeDescription.strippingEscaping
-			let text = "let \(property.label): \(type.asSource) = \(nameApart.label)"
-			let record = AliasPlaceRecord(
-				property: Property(label: property.label, typeDescription: type),
-				fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
-				text: text,
-			)
+			let record: AliasPlaceRecord
+			if let nameApart {
+				record = AliasPlaceRecord(
+					property: Property(label: property.label, typeDescription: type),
+					fulfillingProperty: Property(label: nameApart.label, typeDescription: type),
+					text: "let \(property.label): \(type.asSource) = \(nameApart.label)",
+				)
+			} else {
+				record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: "let \(property.label): \(type.asSource) = nil", reads: [])
+			}
+			let text = record.text
 			return .indented(
 				.place(PlacePlan(code: .text(text), record: .alias(record))),
 				by: ScopeGenerator.standardIndent,
@@ -72,6 +79,35 @@ extension NodeRecords {
 				let unavailableProperties = answers.unavailableProperties(of: VariantID(variant))
 				guard !unavailableProperties.isEmpty else { continue }
 				receivesBoundAgain[variant].removeAll { unavailableProperties.contains($0.property) }
+			}
+		}
+
+		/// Binds, first in the builder function of each variant whose required receive pins a name apart for only some
+		/// calls of a variant beneath it, as `answers` find them, that name to `nil`, and passes the variant beneath the
+		/// name itself in place of a binding of it under the receive's label: its one function, which serves every call,
+		/// then takes the name as a parameter, which a call beneath the pin passes `nil` and every other call the mock
+		/// root's binding, where the walk writes two functions, one of which passes `nil`. A parameter in place of a
+		/// rebinding, for mocks only, since production rejects the receive that makes the pin.
+		/// - Throws: `onlyIfAvailableAnsweredApart` where the receive reads no name of its own unwrapped form, such as a
+		///   lazy wrapper's, or its variant is a call of another module's public mock, whose record passes no name.
+		mutating func bindNamesToNil(beneathPinsFoundBy answers: OnlyIfAvailableAnswers, in world: some NodeRecordSources) throws(NodeRecordRefusal) {
+			var namesBoundToNil = [Int: Set<Property>]()
+			for variant in receivesBoundAgain.indices {
+				for (property, pinningVariants) in answers.variantsPinningReceives(of: VariantID(variant)) {
+					guard let index = receivesBoundAgain[variant].firstIndex(where: { $0.property == property }),
+					      let nameApart = receivesBoundAgain[variant][index].nameApart,
+					      nameApart.typeDescription == property.asUnwrappedProperty.typeDescription,
+					      world.scope(of: world.declaration(of: VariantID(variant))).publicMockCall == nil
+					else { throw .onlyIfAvailableAnsweredApart }
+					receivesBoundAgain[variant].remove(at: index)
+					wrapperArgumentNames[variant][property] = nameApart.label
+					for pinningVariant in pinningVariants {
+						namesBoundToNil[Int(pinningVariant), default: []].insert(Property(label: nameApart.label, typeDescription: .optional(nameApart.typeDescription)))
+					}
+				}
+			}
+			for (variant, names) in namesBoundToNil {
+				receivesBoundAgain[variant].insert(contentsOf: names.sorted().map { MockReceiveBoundAgain(property: $0, nameApart: nil) }, at: 0)
 			}
 		}
 	}
@@ -161,7 +197,7 @@ extension NodeRecords {
 					}
 					guard let names = namesApart[dependency.property.label] else { continue }
 					// The receive's own form, or the non-optional form the root binds for its optional one.
-					if let nameApart = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
+					if let nameApart: Property = [dependency.property.typeDescription, dependency.property.asUnwrappedProperty.typeDescription].lazy.compactMap({ type in names[type].map { Property(label: $0, typeDescription: type) } }).first {
 						namesRead.receivesBoundAgain[Int(variant)].append(MockReceiveBoundAgain(property: dependency.property, nameApart: nameApart))
 					} else if let wrapper = Self.lazyWrapperNamedApart(providingInstanceReadBy: dependency.property, among: names) {
 						// A receive by value of a lazy wrapper's instance binds the wrapper named apart again under its label,
