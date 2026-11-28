@@ -113,22 +113,52 @@ extension SeamPlacesLevelAssembly {
 				namingRoute: callRoute + [owner],
 			))
 		}
-		// The cases that present the same places, those whose references lead to one own case of one seam, name the first of
-		// them, and only that first one keeps its naming route.
-		var firstCaseByOrigin = [SeamSignature.Places.CalledCase: Int]()
-		for index in cases.indices {
-			let origin = Self.origin(ofCaseAt: index, in: cases, calledBuildersByCase: calledBuildersByCase, seamType: seamType)
-			guard let first = firstCaseByOrigin[origin] else {
-				firstCaseByOrigin[origin] = index
-				continue
+		// The cases that present the same places name the first of them, and only that first one keeps its naming route:
+		// cases that share a place, by the sites of the called case's holes, or by the own case of this seam a ring of seams
+		// leads back to (`origin(ofCaseAt:in:calledBuildersByCase:seamType:)`), are one set, named by its least case.
+		enum PlaceKey: Hashable {
+			case own(Int)
+			case site(SeamSignature.Hole.Site)
+		}
+		var leastCaseByKey = [PlaceKey: Int]()
+		var parent = Array(cases.indices)
+		func root(of index: Int) -> Int {
+			var root = index
+			while parent[root] != root {
+				root = parent[root]
 			}
+			parent[index] = root
+			return root
+		}
+		for index in cases.indices {
+			var keys = [PlaceKey]()
+			if let calledCase = cases[index].passedUp, let calledBuilders = calledBuildersByCase[index] {
+				for (hole, caseIndex) in zip(calledBuilders.holes, calledBuilders.caseIndexByHole) where caseIndex == calledCase.caseIndex {
+					keys.append(hole.scopeSeamType == seamType ? .own(Self.origin(ofCaseAt: index, in: cases, calledBuildersByCase: calledBuildersByCase, seamType: seamType).caseIndex) : .site(hole.site))
+				}
+				if keys.isEmpty {
+					keys.append(.own(Self.origin(ofCaseAt: index, in: cases, calledBuildersByCase: calledBuildersByCase, seamType: seamType).caseIndex))
+				}
+			} else {
+				keys.append(.own(index))
+			}
+			for key in keys {
+				guard let earlier = leastCaseByKey[key] else {
+					leastCaseByKey[key] = index
+					continue
+				}
+				let (first, other) = (root(of: earlier), root(of: index))
+				parent[max(first, other)] = min(first, other)
+			}
+		}
+		for index in cases.indices where root(of: index) != index {
 			let placeCase = cases[index]
 			cases[index] = SeamSignature.Places.Case(
 				ownerLevel: placeCase.ownerLevel,
 				isBuiltInSendableFunction: placeCase.isBuiltInSendableFunction,
 				siteOpensSendableFunction: placeCase.siteOpensSendableFunction,
 				passedUp: placeCase.passedUp,
-				firstCasePresentingSamePlaces: first,
+				firstCasePresentingSamePlaces: root(of: index),
 			)
 		}
 		return SeamPlacesCaseAssembly(cases: cases, unassembled: unassembled, ownCaseByKey: ownCaseByKey, passedUpCaseByKey: passedUpCaseByKey)
