@@ -44,6 +44,21 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesTodaysParameterOrder_whenPlanLaysOutFunctionWhoseTreeFirstReceivesLabelsAtCycleClosingCall() async throws {
+		// The base corpus's seed 2185. `PlanScreen1`'s function takes the values its tree receives in the order the tree
+		// first meets them, at the calls that close the cycle as well (`ScopeGenerator.inOrderTheBodyFirstReceives`); a walk
+		// that skips those calls meets `planService0` before `planModel1`. Today's tree is kept within any limit, and every
+		// root of the plan's run is abandoned at once, so each root the plan admits is laid out from its plan.
+		let choices = try await choicesGeneratingTodaysCode(
+			of: GraphFuzzerGenerator.fixture(forSeed: 2_185).swiftFileContent.joined(separator: "\n\n"),
+			comparingWithTreesWithin: .max,
+		)
+
+		#expect(choices["S2185_PlanRoot"] == .some(nil))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenScreensOnCycleReceiveValueTheirCycleDeclares() async throws {
 		// Screens open each other through instantiators, one forwarded a value and instantiating a leaf, the other receiving the leaf.
 		let choices = try await choicesGeneratingTodaysCode(of: """
