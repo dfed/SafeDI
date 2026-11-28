@@ -102,31 +102,15 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The checks of `world`'s seam calls that read the tree, where no fact answers them yet (`SeamCallCheck`), in
-	/// `SeamCallCheck` order: a call that passes a fill, whose fills `validateFills` judges, and a call that omits a
-	/// parameter or takes one on no tier, whose omission of a value the tree provides
-	/// `validateNoSeamTierOmitsProvidedValue` reports. A call's `@Sendable` deferrals are reads from inside a `@Sendable`
-	/// function that `DeclarationsAnsweringReads` follows. The walk visits every declaration's scope of the world: each
-	/// scope's fill fact (`fillsAHole`, the fact node records refuse a fill on), and, for a scope that holds a seam call, its
-	/// omitted and no-tier parameters. Each check is named where any scope of the world could make it fire, whether or not
-	/// it does.
+	/// `SeamCallCheck` order: a call that passes a fill, whose fills `validateFills` judges. A call's `@Sendable`
+	/// deferrals, and its omitted and no-tier parameters, are reads `DeclarationsAnsweringReads` follows, which refuses a
+	/// world where the tree would report either. The walk visits every declaration's scope of the world for its fill fact
+	/// (`fillsAHole`, the fact node records refuse a fill on). The check is named where any scope of the world could make
+	/// it fire, whether or not it does.
 	static func seamCallChecks(in world: some NodeRecordSources) -> [TreeForcer] {
-		var passesFill = false
-		var omitsParameter = false
-		for scope in (0..<Int32(world.declarationCount)).lazy.map({ world.scope(of: $0) }) {
-			// The same fact node records refuse a fill on (`refusalsOfBuiltByInitializer(_:in:)`, `seamCallClaim(of:in:)`).
-			passesFill = passesFill || scope.fillsAHole
-			if let seamCall = scope.seamCall {
-				omitsParameter = omitsParameter || !seamCall.omittedParameters.isEmpty || !seamCall.noTierParameters.isEmpty
-			}
-		}
-		var checks = [TreeForcer]()
-		if passesFill {
-			checks.append(.seamCallCheck(.passesFill))
-		}
-		if omitsParameter {
-			checks.append(.seamCallCheck(.tierOmitsParameter))
-		}
-		return checks
+		// The same fact node records refuse a fill on (`refusalsOfBuiltByInitializer(_:in:)`, `seamCallClaim(of:in:)`).
+		let passesFill = (0..<Int32(world.declarationCount)).contains { world.scope(of: $0).fillsAHole }
+		return passesFill ? [.seamCallCheck(.passesFill)] : []
 	}
 
 	/// The kind node records refuse the world of `rootInfo`, a root of a module with seams, with; empty where they make its

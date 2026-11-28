@@ -24,8 +24,8 @@
 ///
 /// - `validateFills` and `seamTierOmissions` judge seam calls and fills, which a module without seams has none of. In a
 ///   module with seams, node records refuse every fill (`.fill`), a world that holds one makes no records at
-///   all (`SeamCallCheck.passesFill`), and a production root's world whose seam call omits a
-///   parameter keeps its tree (`SeamCallCheck.tierOmitsParameter`).
+///   all (`SeamCallCheck.passesFill`), and they refuse a world whose seam call omits a value the world holds
+///   (`NodeRecordRefusal.seamCallOmitsProvidedValue`, from `DeclarationsAnsweringReads`).
 /// - `nonSendableWrapperCaptures` judges a `@Sendable` builder function, which only a `Sendable` wrapper or a cycle makes:
 ///   node records refuse a world in which one captures a wrapper (`NodeRecordRefusal.sendableFunctionCapturesWrapper`,
 ///   from `DeclarationsAnsweringReads`, which reads a seam call's `@Sendable` deferrals as one more such function), and
@@ -67,9 +67,6 @@ public enum SeamCallCheck: String, Hashable, Sendable {
 	/// A seam call passes a fill, whose fills and dispatchers only the tree's fill pass makes, and which `validateFills`
 	/// judges from the tree. Node records refuse such a world (`NodeRecordRefusal.fill`), so its root makes none.
 	case passesFill = "seam call passes a fill"
-	/// A call of a seam's tier omits a parameter, or one no tier takes: `seamTierOmissions` judges, from the tree, whether
-	/// the caller would hand it a value (`validateNoSeamTierOmitsProvidedValue`).
-	case tierOmitsParameter = "seam call omits a parameter"
 }
 
 /// What a run can read of every root's tree beside its code, which no root's node records stand in for yet.

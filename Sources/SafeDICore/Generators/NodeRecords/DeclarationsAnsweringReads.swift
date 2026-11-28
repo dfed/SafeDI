@@ -36,23 +36,37 @@
 /// where its key differs, which makes a variant of its own. The check goes when the facts fold captures per variant
 /// (`TypeFactsOutcome`), the per-type facts' form of `nonSendableWrapperCaptures`.
 ///
+/// The same walk finds whether a seam call drops a value its world holds (`seamCallOmitsProvidedValue`), which the tree
+/// reports as an error too (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:isOwnFile:)`): a read of a parameter the
+/// tier the call reaches omits, or no tier takes, which the call's leaf declares a receive only if available, that a
+/// declaration of the world or what the root is handed answers, but for a read passed `nil` (`isPassedNil`). A value a
+/// function a lazy cycle closes on takes as a parameter, which the tree judges per call of the function, is none here:
+/// node records refuse such a world (`NodeRecordRefusal.cycleTakesParameters`).
+///
 /// Memory: the declaration that answers each read, one ID per key of every variant, while the check runs; none in a world
-/// that opens no `@Sendable` function.
+/// that opens no `@Sendable` function and holds no seam call that omits a parameter.
 struct DeclarationsAnsweringReads: Sendable {
 	/// - Parameters:
 	///   - world: A production root's world.
 	///   - rootNonSendableWrapperLabels: The labels of what the root is handed in an `Instantiator`, an
 	///     `ErasedInstantiator` or a `LazilyInstantiated`. Empty unless the root is a seam's own.
-	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = []) {
-		guard (0..<Int32(world.declarationCount)).contains(where: { world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } || !Self.sendableDeferredLabels(of: $0, in: world).isEmpty }) else {
+	///   - rootParameterLabels: The labels of everything the root is handed: a seam's own root's parameters. Empty unless
+	///     the root is a seam's own.
+	init(world: some NodeRecordSources, rootNonSendableWrapperLabels: Set<String> = [], rootParameterLabels: Set<String> = []) {
+		guard (0..<Int32(world.declarationCount)).contains(where: {
+			world.edgeFacts(from: $0).contains { Self.opensSendableFunction($0) } || !Self.sendableDeferredLabels(of: $0, in: world).isEmpty || !Self.omittedLabels(of: $0, in: world).isEmpty
+		}) else {
 			sendableFunctionCapturesWrapper = false
+			seamCallOmitsProvidedValue = false
 			return
 		}
 		var sendableFunctionCapturesWrapper = false
-		// For each variant reached, the declaration that answers each of its reads, -1 where none does. No node is above
-		// the root, so what the root is handed answers what its tree reads.
+		var seamCallOmitsProvidedValue = false
+		// For each variant reached, the declaration that answers each of its reads, -1 where none does, and
+		// `rootParameter` where what the root is handed does: no node is above the root, so what the root is handed answers
+		// what its tree reads, and a read of any other label is answered by nothing.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
-		answeringDeclarations[0] = [DeclarationID](repeating: -1, count: world.reads(of: world.declaration(of: 0)).count)
+		answeringDeclarations[0] = world.reads(of: world.declaration(of: 0)).map { rootParameterLabels.contains(world.text(ofLabel: world.read($0).label)) ? Self.rootParameter : -1 }
 		// Each variant's caller, the first call a walk from the root meets, -1 for the root.
 		var callerByVariant = [VariantID](repeating: -1, count: world.variantCount)
 		// A stack, since a tree can be as deep as the module has types.
@@ -63,6 +77,7 @@ struct DeclarationsAnsweringReads: Sendable {
 			for (edgeIndex, callee) in world.calls(of: caller).enumerated() where answeringDeclarations[Int(callee)] == nil {
 				let opensSendableFunction = Self.opensSendableFunction(edgeFacts[edgeFacts.startIndex + edgeIndex])
 				let sendableDeferredLabels = Self.sendableDeferredLabels(of: world.declaration(of: callee), in: world)
+				let omittedLabels = Self.omittedLabels(of: world.declaration(of: callee), in: world)
 				var calleeAnsweringDeclarations = [DeclarationID]()
 				callerByVariant[Int(callee)] = caller
 				for (source, readID) in zip(world.sources(ofCall: edgeIndex, of: caller), world.reads(of: world.declaration(of: callee))) {
@@ -78,6 +93,14 @@ struct DeclarationsAnsweringReads: Sendable {
 					let read = world.read(readID)
 					guard read.channel.asksAboutLabel else { continue }
 					let label = world.text(ofLabel: read.label)
+					if omittedLabels.contains(label) {
+						let isAnswered = if answeringDeclaration >= 0 {
+							!Self.isPassedNil(read.channel, of: label, answeredBy: answeringDeclaration, aboveCallOf: callee, by: caller, callerByVariant: callerByVariant, in: world)
+						} else {
+							answeringDeclaration == Self.rootParameter
+						}
+						seamCallOmitsProvidedValue = seamCallOmitsProvidedValue || isAnswered
+					}
 					guard opensSendableFunction || sendableDeferredLabels.contains(label) else { continue }
 					let readsNonSendableWrapper = if answeringDeclaration >= 0 {
 						world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
@@ -95,10 +118,18 @@ struct DeclarationsAnsweringReads: Sendable {
 			}
 		}
 		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper
+		self.seamCallOmitsProvidedValue = seamCallOmitsProvidedValue
 	}
 
 	/// Whether a `@Sendable` function of the world reads, from outside it, a wrapper that is not `Sendable`.
 	let sendableFunctionCapturesWrapper: Bool
+
+	/// Whether a seam call of the world passes `nil` for a parameter its tier omits, or no tier takes, where the world
+	/// holds a value for it.
+	let seamCallOmitsProvidedValue: Bool
+
+	/// The answer of a read that what the root is handed answers: a seam's own root's parameter.
+	private static let rootParameter: DeclarationID = -2
 
 	/// Whether every read of `label` through `channel` that `callee`'s tree makes is passed `nil` where `answeringDeclaration`,
 	/// the scope that declares the label, answers it: a read only if available (`optional`, `optionalValue`) of the
@@ -126,6 +157,13 @@ struct DeclarationsAnsweringReads: Sendable {
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
 		}
+	}
+
+	/// The labels of the parameters the tier `declaration` calls of a seam omits, or no tier of it takes; empty where it
+	/// calls no seam.
+	private static func omittedLabels(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<String> {
+		guard let seamCall = world.scope(of: declaration).seamCall else { return [] }
+		return Set((seamCall.omittedParameters + seamCall.noTierParameters).map(\.property.label))
 	}
 
 	/// The labels of the parameters the seam `declaration` calls defers `@Sendable`; empty where it calls none.

@@ -211,9 +211,10 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsAppRootsTree_whenRootsSeamCallOmitsParameter() async throws {
+	mutating func generate_laysOutAppRoot_whenRootsSeamCallOmitsParameterNoDeclarationProvides() async throws {
 		// `Library`'s `Panel`, whose `public` tier omits the `token` its `Badge` receives only if available, since `Token`
-		// is internal: `App`'s call of that tier is one `validateNoSeamTierOmitsProvidedValue` judges from `Root`'s tree.
+		// is internal: `Root`'s world holds no `token`, so its call passes `nil` as the inline build would, and the facts'
+		// check (`DeclarationsAnsweringReads.seamCallOmitsProvidedValue`) refuses nothing.
 		let forcersByRoot = try await treeForcersReported(byModules: [
 			ModuleFixture(
 				name: "Library",
@@ -243,7 +244,7 @@ struct SafeDIToolTreeForcerTests: ~Copyable {
 				"import Library\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let panel: Panel"]),
 			], dependencies: ["Library"]),
 		])
-		#expect(forcersByRoot["Root"] == ["seam call omits a parameter"])
+		#expect(forcersByRoot["Root"] == [])
 	}
 
 	@Test

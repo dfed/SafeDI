@@ -50,6 +50,10 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	/// (`DeclarationsAnsweringReads.sendableFunctionCapturesWrapper`): an error the tree reports, which the records
 	/// cannot, so the world keeps its tree.
 	case sendableFunctionCapturesWrapper
+	/// A seam call passes `nil` for a parameter its tier omits, or no tier takes, where the world holds a value for it
+	/// (`DeclarationsAnsweringReads.seamCallOmitsProvidedValue`): an error the tree reports, which the records cannot, so
+	/// the world keeps its tree.
+	case seamCallOmitsProvidedValue
 	/// The node is built as an `ErasedInstantiator`, or as a constant or an `Instantiator` erased to its property's type,
 	/// which `erasedClaim(of:in:)` discharges: its record is `NodeRecordKind.erased`'s.
 	case erased
@@ -296,9 +300,11 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
+			rootParameterLabels: Set(seamTree?.parameters.map(\.label) ?? []),
 		)
-		// The tree reports the capture as an error, which the records cannot.
+		// The tree reports the capture, and a seam call's omission of a value, as errors, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
+		guard !answeringDeclarations.seamCallOmitsProvidedValue else { throw NodeRecordRefusal.seamCallOmitsProvidedValue }
 		// The call of each deferred parameter's autoclosure that the seam's own rename keeping its label is bound from.
 		let autoclosureCallByLabel = seamTree?.seamRoot.autoclosureCallByLabel(of: world.scope(of: 0).instantiable) ?? [:]
 		func edgeIndices(of declaration: DeclarationID) -> [Int] {
@@ -710,9 +716,13 @@ struct NodeRecords: Sendable {
 		let answeringDeclarations = DeclarationsAnsweringReads(
 			world: world,
 			rootNonSendableWrapperLabels: seamTree?.rootNonSendableWrapperLabels ?? [],
+			rootParameterLabels: Set(seamTree?.parameters.map(\.label) ?? []),
 		)
 		if answeringDeclarations.sendableFunctionCapturesWrapper {
 			refusals.insert(.sendableFunctionCapturesWrapper)
+		}
+		if answeringDeclarations.seamCallOmitsProvidedValue {
+			refusals.insert(.seamCallOmitsProvidedValue)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
