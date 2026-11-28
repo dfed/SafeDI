@@ -96,6 +96,14 @@ struct SeamPlacesCaseDraft: Equatable, Sendable {
 	let namingRoute: [SeamPlacesLevelID]
 }
 
+/// The routes a case of a family is named by: those that open no `@Sendable` function, those that open one, or, for a
+/// case already in one, every route.
+enum SeamPlacesRouteFamily: Hashable {
+	case plain
+	case opensSendableFunction
+	case either
+}
+
 /// The families a body is built in on the routes to it.
 struct SeamPlacesFamilies: OptionSet, Sendable {
 	let rawValue: UInt8
@@ -275,8 +283,10 @@ struct SeamPlacesDrafts: Sendable {
 		// A case per site and family: each hole edge of a variant is one owner level.
 		var cases = [SeamPlacesCaseDraft]()
 		for site in sites {
+			// A hole held in a `@Sendable` wrapper is built in the function the wrapper opens, on every route to it.
 			let isSendableHole = world.graph.nodes[Int(site.hole)].property?.propertyType.isSendable ?? false
-			for (family, isSendable) in [(SeamPlacesFamilies.plain, false), (.sendable, true)] where families[Int(site.owner.variant)].contains(family) {
+			let siteFamilies = isSendableHole ? SeamPlacesFamilies.sendable : families[Int(site.owner.variant)]
+			for (family, isSendable) in [(SeamPlacesFamilies.plain, false), (.sendable, true)] where siteFamilies.contains(family) {
 				cases.append(SeamPlacesCaseDraft(owner: site.owner, isBuiltInSendableFunction: isSendable, siteOpensSendableFunction: isSendableHole, sites: [site], passedUp: nil, firstCasePresentingSamePlaces: nil, namingRoute: []))
 			}
 		}
@@ -298,33 +308,6 @@ struct SeamPlacesDrafts: Sendable {
 			}
 			return lhsLabel < rhsLabel
 		}
-		/// The least route to `owner` in source order: from the root down, each step the least edge from whose callee the
-		/// owner's variant is still reached, so no route is listed.
-		func namingRoute(to owner: SeamPlacesLevelID) -> [SeamPlacesLevelID] {
-			var reachesOwner = Set([owner.variant])
-			var up = [owner.variant]
-			while let variant = up.popLast() {
-				for parent in parentsByVariant[Int(variant)] where reachesOwner.insert(parent.variant).inserted {
-					up.append(parent.variant)
-				}
-			}
-			var route = [SeamPlacesLevelID]()
-			var variant = rootVariant
-			while variant != owner.variant {
-				let declaration = world.declaration(of: variant)
-				let callees = world.calls(of: variant)
-				let steps = world.edgeFacts(from: declaration).indices.compactMap { index -> SeamPlacesLevelID? in
-					let offset = index - world.edgeFacts(from: declaration).startIndex
-					let callee = callees[callees.startIndex + offset]
-					guard buildsInLine[world.variants.callOffset(of: Int(variant)) + offset], reachesOwner.contains(callee) else { return nil }
-					return SeamPlacesLevelID(variant: variant, edge: Int32(offset))
-				}
-				guard let step = steps.min(by: precedes) else { return [] }
-				route.append(step)
-				variant = callees[callees.startIndex + Int(step.edge)]
-			}
-			return route + [owner]
-		}
 		// The cases in builder-label order: by the hole's label, and the cases of one label by their naming routes.
 		let namedCases = cases.map { draftCase in
 			SeamPlacesCaseDraft(
@@ -334,7 +317,7 @@ struct SeamPlacesDrafts: Sendable {
 				sites: draftCase.sites,
 				passedUp: nil,
 				firstCasePresentingSamePlaces: nil,
-				namingRoute: namingRoute(to: draftCase.owner),
+				namingRoute: Self.namingRoute(to: draftCase.owner, in: world, buildsInLine: buildsInLine, family: draftCase.siteOpensSendableFunction ? .either : draftCase.isBuiltInSendableFunction ? .opensSendableFunction : .plain),
 			)
 		}
 		func holeLabel(of draftCase: SeamPlacesCaseDraft) -> String {
@@ -346,9 +329,18 @@ struct SeamPlacesDrafts: Sendable {
 			}
 			return lhs.count < rhs.count
 		}
+		// A case's name is its hole's label, named apart from the others of that label by the first of its owner's type and
+		// its path's labels that tells them apart (`identifierSafeNames`), so the cases of one label go by those in turn.
+		func namingKey(of draftCase: SeamPlacesCaseDraft) -> (label: String, owner: String, path: String) {
+			(
+				holeLabel(of: draftCase),
+				world.graph.nodes[Int(world.declaration(of: draftCase.owner.variant))].scope.instantiable.concreteInstantiable.asIdentifier,
+				draftCase.namingRoute.dropLast().flatMap { Self.pathLabels(of: $0, in: world) }.joined(separator: "_"),
+			)
+		}
 		self.cases = namedCases.sorted { lhs, rhs in
-			let (lhsLabel, rhsLabel) = (holeLabel(of: lhs), holeLabel(of: rhs))
-			guard lhsLabel == rhsLabel else { return lhsLabel < rhsLabel }
+			let (lhsKey, rhsKey) = (namingKey(of: lhs), namingKey(of: rhs))
+			guard lhsKey == rhsKey else { return lhsKey < rhsKey }
 			guard lhs.namingRoute == rhs.namingRoute else { return routePrecedes(lhs.namingRoute, rhs.namingRoute) }
 			return !lhs.isBuiltInSendableFunction && rhs.isBuiltInSendableFunction
 		}
@@ -387,6 +379,115 @@ struct SeamPlacesDrafts: Sendable {
 
 	func closesCycle(_ level: SeamPlacesLevelID) -> Bool {
 		closesCycle[world.variants.callOffset(of: Int(level.variant)) + Int(level.edge)]
+	}
+
+	/// The labels a step of a route adds to a site's path: its property's, or, for a fill, the way from the seam it fills
+	/// to the hole's owner, then the hole's property.
+	static func pathLabels(of level: SeamPlacesLevelID, in world: TypeFactsGraph) -> [String] {
+		let declaration = world.declaration(of: level.variant)
+		let targets = world.edges(from: declaration)
+		let target = world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])]
+		let label = target.property?.label.spelledWithoutBackticks ?? ""
+		let edge = world.graph.edgeOffset(of: Int(declaration)) + Int(level.edge)
+		guard target.key.isFill else { return [label] }
+		// The fills are in edge order, so the edge's fill is found by halving.
+		var low = 0
+		var high = world.fills.count
+		while low < high {
+			let middle = (low + high) / 2
+			if Int(world.fills[middle].edge) < edge {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		let fill = world.fills[low]
+		// A fill's node is both the walk's fill, whose segment is the way from the seam it fills to the hole's owner
+		// (`SeamSignature.Hole.pathBeforePropertyInItsFill`), and what the fill builds for the hole's property.
+		return world.fillSitePathLabels[Int(fill.sitePathStart)..<Int(fill.sitePathStart + fill.sitePathCount)].map { world.labelTexts[Int($0)].spelledWithoutBackticks } + [label]
+	}
+
+	/// The route that names a case owned by `owner`, root first, `owner` last: of the routes of `family` from the seam's root
+	/// down the calls that build in line, the one whose labels, joined with `_`, sort first, as the builder of the site at the end of
+	/// it is named and the case is named by its first site in builder-label order (`Hole.pathLabels(of:)`); routes alike
+	/// in their labels go by source order. Found by the least suffix from each variant down to the owner, which a common
+	/// prefix leaves least, so no route is listed. Empty where no route reaches the owner.
+	static func namingRoute(to owner: SeamPlacesLevelID, in world: TypeFactsGraph, buildsInLine: [Bool], family: SeamPlacesRouteFamily) -> [SeamPlacesLevelID] {
+		/// Where a property is declared, which breaks a tie of labels in source order.
+		func declarationLocation(of level: SeamPlacesLevelID) -> Dependency.DeclarationLocation? {
+			let declaration = world.declaration(of: level.variant)
+			let targets = world.edges(from: declaration)
+			let target = world.graph.nodes[Int(targets[targets.startIndex + Int(level.edge)])]
+			guard !target.key.isFill, let property = target.property else { return nil }
+			return world.graph.nodes[Int(declaration)].scope.instantiable.dependencies.first { $0.property == property }?.declarationLocation
+		}
+		struct Best {
+			let suffix: String
+			let step: SeamPlacesLevelID?
+		}
+		struct Visit: Hashable {
+			let variant: VariantID
+			let family: SeamPlacesRouteFamily
+		}
+		var best = [Visit: Best?]()
+		var onRoute = Set<Visit>()
+		func least(from variant: VariantID, family: SeamPlacesRouteFamily) -> Best? {
+			if variant == owner.variant {
+				switch family {
+				case .plain, .either:
+					return Best(suffix: "", step: nil)
+				case .opensSendableFunction:
+					return nil
+				}
+			}
+			let visit = Visit(variant: variant, family: family)
+			if let known = best[visit] {
+				return known
+			}
+			// A variant met again on the route it is reached by would loop: no least route passes it twice.
+			guard onRoute.insert(visit).inserted else { return nil }
+			defer { onRoute.remove(visit) }
+			let callees = world.calls(of: variant)
+			let callOffset = world.variants.callOffset(of: Int(variant))
+			let edges = world.edgeFacts(from: world.declaration(of: variant))
+			var found: Best?
+			for (index, callee) in callees.enumerated() where buildsInLine[callOffset + index] {
+				let familyBelow: SeamPlacesRouteFamily
+				if edges[edges.startIndex + index].opens.opensSendableFunction {
+					switch family {
+					case .plain:
+						continue
+					case .opensSendableFunction, .either:
+						familyBelow = .either
+					}
+				} else {
+					familyBelow = family
+				}
+				guard let below = least(from: callee, family: familyBelow) else { continue }
+				let step = SeamPlacesLevelID(variant: variant, edge: Int32(index))
+				let labels = pathLabels(of: step, in: world).joined(separator: "_")
+				let suffix = callee == owner.variant ? labels : "\(labels)_\(below.suffix)"
+				if let current = found {
+					guard suffix < current.suffix || suffix == current.suffix && current.step.map({ Dependency.DeclarationLocation.precedesInSourceOrder(declarationLocation(of: step), declarationLocation(of: $0)) }) == true else { continue }
+				}
+				found = Best(suffix: suffix, step: step)
+			}
+			best[visit] = found
+			return found
+		}
+		var route = [SeamPlacesLevelID]()
+		var variant = world.rootVariant(0)
+		var routeFamily = family
+		while variant != owner.variant {
+			guard let step = least(from: variant, family: routeFamily)?.step else { return [] }
+			route.append(step)
+			let edges = world.edgeFacts(from: world.declaration(of: variant))
+			if edges[edges.startIndex + Int(step.edge)].opens.opensSendableFunction {
+				routeFamily = .either
+			}
+			variant = world.calls(of: variant)[world.calls(of: variant).startIndex + Int(step.edge)]
+		}
+		return route + [owner]
 	}
 
 	/// Where each call builds its callee in line and where it closes a cycle, as the tree unfolds it
@@ -485,7 +586,9 @@ struct SeamPlacesDrafts: Sendable {
 				storedKeys.insert(storedKey(of: level))
 			}
 		}
-		var draftKeys = Set((levels + closingLevels).map(key(of:)))
+		var draftKeys = Set(levels.map(key(of:)))
+		let closingKeys = Set(closingLevels.map(key(of:))).subtracting(draftKeys)
+		draftKeys.formUnion(closingKeys)
 		for level in levels + closingLevels {
 			let node = world.graph.nodes[Int(world.declaration(of: level.id.variant))]
 			if node.key.isFill, let property = node.property {
@@ -494,7 +597,7 @@ struct SeamPlacesDrafts: Sendable {
 		}
 		var differences = [String]()
 		for draftKey in draftKeys.subtracting(storedKeys).sorted() {
-			differences.append("level \(draftKey): drafted, not stored")
+			differences.append("level \(draftKey): drafted\(closingKeys.contains(draftKey) ? " on a route to a closing call only" : ""), not stored")
 		}
 		for storedKey in storedKeys.subtracting(draftKeys).subtracting(passedUpKeys).sorted() {
 			differences.append("level \(storedKey): stored, not drafted")
@@ -508,27 +611,26 @@ struct SeamPlacesDrafts: Sendable {
 			let level = places.levels[placeCase.ownerLevel]
 			storedCasesByKey[caseKey(type: level.key.builtType?.asSource ?? "fill", hole: level.key.nextProperty?.label ?? "fill", isSendable: placeCase.isBuiltInSendableFunction), default: []].append(placeCase)
 		}
-		var draftCaseKeys = Set<String>()
-		for draftCase in cases {
-			let hole = world.graph.nodes[Int(draftCase.sites[0].hole)]
-			let draftKey = caseKey(type: builtType(of: draftCase.owner.variant), hole: hole.property?.label ?? "fill", isSendable: draftCase.isBuiltInSendableFunction)
-			draftCaseKeys.insert(draftKey)
+		let draftKeys = cases.map { draftCase in
+			caseKey(type: builtType(of: draftCase.owner.variant), hole: world.graph.nodes[Int(draftCase.sites[0].hole)].property?.label ?? "fill", isSendable: draftCase.isBuiltInSendableFunction)
+		}
+		var draftCountByKey = [String: Int]()
+		for draftKey in draftKeys {
+			draftCountByKey[draftKey, default: 0] += 1
+		}
+		for (draftKey, draftCount) in draftCountByKey.sorted(by: { $0.key < $1.key }) {
+			guard let storedCount = storedCasesByKey[draftKey]?.count, storedCount != draftCount else { continue }
+			differences.append("case \(draftKey): \(draftCount) drafted, \(storedCount) stored")
+		}
+		let draftCaseKeys = Set(draftKeys)
+		for (draftCase, draftKey) in zip(cases, draftKeys) {
 			guard let storedCases = storedCasesByKey[draftKey] else {
 				differences.append("case \(draftKey): drafted, not stored")
 				continue
 			}
-			guard storedCases.count == 1 else { continue }
-			let draftRoute = draftCase.namingRoute.dropLast().flatMap { level -> [String] in
-				let target = edgeTarget(of: level)
-				let declaration = world.declaration(of: level.variant)
-				guard target.key.isFill, let fill = world.fills.first(where: { Int($0.edge) == world.graph.edgeOffset(of: Int(declaration)) + Int(level.edge) }) else {
-					return [target.property?.label ?? "fill"]
-				}
-				// A fill's segment is the way to the hole it fills: the fill's stack, then the hole's property.
-				let stack = world.fillPathEntries[Int(fill.stackStart)..<Int(fill.stackStart + fill.stackCount)]
-				return stack.map { world.propertyTable[Int($0.property)].label } + [target.property?.label ?? "fill"]
-			}
-			let storedRoute = storedCases[0].namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label) }
+			guard storedCases.count == 1, draftCountByKey[draftKey] == 1 else { continue }
+			let draftRoute = draftCase.namingRoute.dropLast().flatMap { Self.pathLabels(of: $0, in: world) }
+			let storedRoute = storedCases[0].namingRoute.flatMap { places.levels[$0].pathSegment.map(\.label.spelledWithoutBackticks) }
 			if draftRoute != storedRoute {
 				differences.append("case \(draftKey): named by \(draftRoute.joined(separator: ".")) drafted, \(storedRoute.joined(separator: ".")) stored")
 			}

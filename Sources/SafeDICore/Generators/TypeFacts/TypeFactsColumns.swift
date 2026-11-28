@@ -60,6 +60,10 @@ struct TypeFactsFill: Hashable, Sendable {
 	/// The run of `TypeFactsGraph.fillPathEntries` the fill is built beneath, root first.
 	let stackStart: Int32
 	let stackCount: Int32
+	/// The run of `TypeFactsGraph.fillSitePathLabels` that a site's path inside the fill holds before the hole's
+	/// property (`SeamSignature.Hole.pathBeforePropertyInItsFill`), root first.
+	let sitePathStart: Int32
+	let sitePathCount: Int32
 }
 
 /// A hole a call passes up: the caller's declarations hold no type that fulfills it, so the seam whose tree makes the call
