@@ -7486,7 +7486,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				spelledArguments.append("\(builderCallArgument.label): \(builtClosure.spelled(dispatcherName: builtCall.dispatcherName, structNames: builtCall.carriedStructs.map(\.name)))")
 			}
 		}
-		let (text, _) = code.spelledWithoutRootFunctions()
+		// Observing a call counts none of the generator's work (`GenerationWork`): a test that counts it, such as
+		// `SafeDIToolSeamRootFunctionWorkTests`' walks for root functions, sees what generating the call does.
+		let (text, _) = GenerationWork.$observer.withValue(nil) { code.spelledWithoutRootFunctions() }
 		var record = BuiltPlaceRecord(
 			property: property,
 			isErased: erasedToConcreteExistential,
@@ -7580,9 +7582,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// The root declares the root functions the call reaches, which its text leaves out.
 		let (text, rootFunctionNames) = code.spelledWithoutRootFunctions()
-		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records.
-		if let observer = SeamCallRecordObservation.observer, reboundProperties.isEmpty, forwardedProperties.isEmpty {
-			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
+		// A member of a loop of builders makes its rebindings again in the call's body, which the loop stage records. A call
+		// that fills a place is observed apart (`observeFilledCall`).
+		if let observer = SeamCallRecordObservation.observer, !fillsAPlace, reboundProperties.isEmpty, forwardedProperties.isEmpty {
+			// Every builder argument passes a struct up (the guard above and `fillsAPlace`), in the order the seam's builders
+			// are taken.
 			let passedOn = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
 				builderCallArgument.passedUpStruct.map { passedUpStruct in
 					(
@@ -7627,14 +7631,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var record = AliasPlaceRecord(property: property, fulfillingProperty: nil, text: text, reads: reads)
 		record.declaredFunctionNames = declaredFunctionName.map { [$0] } ?? []
 		record.calledRootFunctionNames = rootFunctionNames
-		// A call that reaches no root function, outside a loop of builders, is spelled by the engine from its record where
-		// its text is written: the guard line, and a construction that hands each builder the member of the struct it
-		// passes up.
-		if let inPlaceStatements, rootFunctionNames.isEmpty, reboundProperties.isEmpty, forwardedProperties.isEmpty, let declaredFunctionName {
+		// A call that passes every place up and reaches no root function, outside a loop of builders, is spelled by the
+		// engine from its record where its text is written: the guard line, and a construction that hands each builder the
+		// member of the struct it passes up. A call that fills a place keeps its text, whose dispatchers the record does not
+		// hold.
+		if let inPlaceStatements, !fillsAPlace, rootFunctionNames.isEmpty, reboundProperties.isEmpty, forwardedProperties.isEmpty, let declaredFunctionName {
 			var arguments = argumentReads
 			var argumentValues = [Int: ValuePath]()
 			var closureArguments = [ClosureArgumentEntry]()
-			// Every builder argument passes a struct up (the guard above), in the order the seam's builders are taken.
+			// Every builder argument passes a struct up (the guard above and `fillsAPlace`), in the order the seam's builders
+			// are taken.
 			let passedUpStructs = zip(seamCall.calledBuilders.builders, builderCallArguments).compactMap { builder, builderCallArgument in
 				builderCallArgument.passedUpStruct.map { (builder: builder, label: builderCallArgument.label, passedUpStruct: $0) }
 			}
