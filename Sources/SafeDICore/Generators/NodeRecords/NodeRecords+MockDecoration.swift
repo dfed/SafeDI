@@ -111,7 +111,7 @@ extension NodeRecords {
 	/// fields of its configuration its construction reads; the receives the node binds again before its children), and
 	/// then sets the override's fields (`mockConstructionRecord`). An erased node's override returns the property's type
 	/// (`mockErasedDecoration(of:)`). The local a `@Sendable` function reads its override from is a place before the node's,
-	/// which the walk of the records puts there (`mockOverridesBindingPlace(of:record:in:)`).
+	/// which the walk of the records puts there (`mockOverridesBindingPlace(of:record:in:slots:)`).
 	static func mockDecoratedRecord(
 		of declaration: DeclarationID,
 		variant: VariantID,

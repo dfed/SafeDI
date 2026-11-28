@@ -81,8 +81,8 @@ extension NodeRecords {
 ///
 /// Cost: two passes over the declarations, one walk up from the slots, one walk down from the declarations off every
 /// cycle that enter a place, one walk down from the declarations that take the places, one walk down from the edges
-/// the configurations leave out and one up from the declarations that read a field of their configuration, each
-/// following an edge once (`walkStepCount`). No walk is made per configuration, which would cost the configurations
+/// the configurations leave out, one down from the root along the edges they keep, and one up from the declarations
+/// that read a field of their configuration, each following an edge once (`walkStepCount`). No walk is made per configuration, which would cost the configurations
 /// times the declarations. Memory: a few entries per declaration and one per slot, for as long as a caller holds it.
 struct MockEnteredSlots: Sendable {
 	init(world: some NodeRecordSources) {
@@ -176,8 +176,32 @@ struct MockEnteredSlots: Sendable {
 			isBuiltBeneathEdgeLeftOut[Int(declaration)] = true
 			pendingLeftOut.append(contentsOf: world.edges(from: declaration))
 		}
+		// A declaration is configured where some path from the root reaches it along no edge the configurations leave
+		// out. One reached only beneath such an edge can still read a configuration: the nearest place of its type on the
+		// path, which a configured declaration of its configuration enters. It has none where no declaration built as a
+		// property is configured with its configuration: the walk then builds it with no override, which leaves each of
+		// its construction's default-valued parameters to its default.
+		var isReachedAlongKeptEdges = [Bool](repeating: false, count: world.declarationCount)
+		isReachedAlongKeptEdges[0] = true
+		var pendingConfigured: [DeclarationID] = [0]
+		while let declaration = pendingConfigured.popLast() {
+			walkStepCount += 1
+			for child in world.edges(from: declaration) where !isReachedAlongKeptEdges[Int(child)] && !NodeRecords.mockConfigurationLeavesOut(child, builtBy: declaration, in: world) {
+				isReachedAlongKeptEdges[Int(child)] = true
+				pendingConfigured.append(child)
+			}
+		}
+		var configuredConfigurations = Set<Configuration>()
+		for (declaration, _) in declarationsBuiltAsProperties where isReachedAlongKeptEdges[Int(declaration)] {
+			configuredConfigurations.insert(configurationBuilt(by: declaration))
+		}
+		let hasConfiguration = declarations.map { declaration in
+			isReachedAlongKeptEdges[Int(declaration)] || configuredConfigurations.contains(configurationBuilt(by: declaration))
+		}
+		hasConfigurationByDeclaration = hasConfiguration
+		// Only a declaration with a configuration reads a field of it.
 		var mayBeEnteredLeftOut = [Bool](repeating: false, count: world.declarationCount)
-		var pendingFieldReaders = declarations.filter { isBuiltBeneathEdgeLeftOut[Int($0)] && !NodeRecords.mockConfigurationFieldArguments(of: $0, in: world).isEmpty }
+		var pendingFieldReaders = declarations.filter { isBuiltBeneathEdgeLeftOut[Int($0)] && hasConfiguration[Int($0)] && !NodeRecords.mockConfigurationFieldArguments(of: $0, in: world).isEmpty }
 		while let declaration = pendingFieldReaders.popLast() {
 			walkStepCount += 1
 			guard !mayBeEnteredLeftOut[Int(declaration)] else { continue }
@@ -222,7 +246,7 @@ struct MockEnteredSlots: Sendable {
 	let nearestEnteredByDeclaration: [String?]
 	/// By declaration: whether its function takes and hands on the entered places.
 	let takesEnteredPlacesByDeclaration: [Bool]
-	/// The declarations the five walks that made this took from their work lists, summed: at most five times the
+	/// The declarations the six walks that made this took from their work lists, summed: at most six times the
 	/// world's declarations and edges, which a test holds it to.
 	let walkStepCount: Int
 	/// By declaration: whether its place may be entered along an edge the configurations leave out, or beneath one, and
@@ -231,6 +255,11 @@ struct MockEnteredSlots: Sendable {
 	/// from a place entered so hands a new configuration (`NodeRecords.mockArgumentsHanded(to:labeled:by:in:slots:)`).
 	/// Such a declaration takes the places, which carry whether its place was.
 	let mayBeEnteredLeftOutByDeclaration: [Bool]
+	/// Whether each declaration has a configuration: a path from the root reaches it along no edge the configurations
+	/// leave out, or another declaration of its configuration is so reached, whose place it may read as the nearest of its
+	/// type. The walk builds one with none with no override, as its construction's defaults leave it, which its record
+	/// reads none of.
+	let hasConfigurationByDeclaration: [Bool]
 	/// Whether some `@Sendable` function takes the entered places, or hands them to a function it builds: the closure
 	/// that calls a function that takes them captures the places it hands, and a `@Sendable` function that takes none
 	/// captures `mock()`'s own, so `mock()` declares them in their `Sendable` form

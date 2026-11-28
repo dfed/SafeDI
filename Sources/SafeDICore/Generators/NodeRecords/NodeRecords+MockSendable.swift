@@ -37,7 +37,7 @@
 ///
 /// The node's record is `mockConstruction`'s, marked `@Sendable` as the production kind's is
 /// (`NodeRecords+Sendable.swift`); the local is a place of its parent's body, built in place before the node's
-/// (`mockOverridesBindingPlace(of:record:in:)`).
+/// (`mockOverridesBindingPlace(of:record:in:slots:)`).
 extension NodeRecords {
 	/// The refusals of stage 1 a mock root's node built in a `@Sendable` function of its own discharges: `sendable`.
 	static func mockSendableDischarges(of declaration: DeclarationID, in world: some NodeRecordSources) -> Set<NodeRecordRefusal> {
@@ -147,13 +147,13 @@ extension NodeRecords {
 	/// root's node built in one (`mockOverrideSlot(of:labeled:typed:in:hasFunction:handsOverridesToChildren:isSendable:)`),
 	/// and `nil` for any other record: the field of its parent's overrides under its label, built in place.
 	static func mockOverridesBindingPlace(of declaration: DeclarationID, record: PlaceRecord, in world: some NodeRecordSources, slots: MockEnteredSlots?) -> BuiltPlaceRecord? {
-		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world) else { return nil }
+		guard world.isMockWorld, case let .built(built) = record, built.isSendable || isWrapperSentToActor(declaration, in: world), slots?.hasConfigurationByDeclaration[Int(declaration)] ?? true else { return nil }
 		let instantiable = world.scope(of: declaration).instantiable
 		let isConfigured = isConfigured(declaration, in: world)
 		let usesHandWrittenMock = world.construction(of: declaration) == .handWrittenMock && instantiable.mockInitializer != nil
 		let type = mockOverrideType(of: built, usesHandWrittenMock: usesHandWrittenMock, isConfigured: isConfigured, isSendable: built.isSendable, instantiable: instantiable)
 		let local = mockOverridesLocal(ofNodeLabeled: built.property.label, typed: type, isConfigured: isConfigured)
-		return mockOverridesBinding(of: local, to: mockConfigurationField(of: declaration, named: built.property.label, in: world, slots: slots))
+		return mockOverridesBinding(of: local, to: mockConfigurationField(named: built.property.label))
 	}
 
 	/// The place that binds `local`, a local a mock's `@Sendable` function reads its override of, to `value`, built in

@@ -393,7 +393,7 @@ struct SafeDIToolNodeRecordsMockActorTests: ~Copyable {
 		        }
 		        func __safeDI_storeBuilder(__safeDI_entered: __safeDI_Entered<Store.SafeDIMockConfiguration>) -> Store {
 		            let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.worker))
-		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(worker) } else { Store(worker: worker) }
+		            return Store(worker: worker)
 		        }
 		        let worker: Worker = __safeDI_worker(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.worker))
 		        return Store(worker: worker)

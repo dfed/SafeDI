@@ -167,7 +167,7 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		        }
 		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
 		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.parentBuilder)) }
-		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder) } else { Child(parentBuilder: parentBuilder) }
+		            return Child(parentBuilder: parentBuilder)
 		        }
 		        let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.parentBuilder)) }
 		        return Root(parentBuilder: parentBuilder)
@@ -1236,11 +1236,10 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_entersPlaceLeftOutAndHandsItNewConfigurationAtEachCall_whenTypeBuiltAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
-		// A parent’s configuration has no field for its child, so the walk builds each child of the ring with its
-		// initializer’s own default, a new `State` each time. An empty configuration kept with the child’s place would
-		// hold one `State`, which every child built of that place would share: the child’s place is entered left out,
-		// and each call that returns to it hands a new configuration.
+	mutating func mock_leavesDefaultValuedParameterToItsDefault_whenTypeBuiltOnlyAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
+		// A parent’s configuration has no field for its child, and no other place builds `Child`, so the child has no
+		// configuration: the walk builds each child of the ring with its initializer’s own default, a new `State` each
+		// time, and the records pass no argument for it, so no place is entered left out.
 		let fixture = Self.ringFixture.merging([
 			"Child.swift": """
 			public final class State {
@@ -1314,14 +1313,12 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		            let configuredType: ObjectIdentifier
 		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
 		            let depth: Int
-		            let isLeftOut: Bool
 		            let entered0: UInt64
-		            init(slot: Int?, isNearestOfType: Bool, configured: Any, isLeftOut: Bool, above: __safeDI_Place?) {
+		            init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
 		                self.slot = slot
 		                self.isNearestOfType = isNearestOfType
 		                self.configured = configured
 		                self.above = above
-		                self.isLeftOut = isLeftOut
 		                let depthAbove = above?.depth ?? 0
 		                let near = above?.jump
 		                let nearDepth = near?.depth ?? 0
@@ -1352,15 +1349,13 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		        struct __safeDI_Entered<Configuration> {
 		            let configuration: Configuration
 		            var top: __safeDI_Place?
-		            var isLeftOut = false
-		            var leavingOut: __safeDI_Entered<Configuration> { .init(configuration: configuration, top: top, isLeftOut: true) }
 		            func nearest<Handed>(_: Handed.Type) -> Handed? {
 		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
 		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
 		                if let candidate = place, candidate.configuredType != type {
 		                    place = candidate.nearestOfEachTypeAbove[type]
 		                }
-		                guard let place, let found = place.configured as? __safeDI_Configured<Handed>, !place.isLeftOut else { return nil }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
 		                return found.configuration
 		            }
 		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
@@ -1369,24 +1364,24 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		                        place = next
 		                    }
 		                    if let found = place.configured as? __safeDI_Configured<Handed> {
-		                        return .init(configuration: place.isLeftOut ? handed() : found.configuration, top: place, isLeftOut: place.isLeftOut)
+		                        return .init(configuration: found.configuration, top: place)
 		                    }
 		                }
 		                if nearestOfType, let nearest = nearest(Handed.self) {
-		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), isLeftOut: false, above: top))
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
 		                }
 		                let configuration = handed()
-		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), isLeftOut: isLeftOut, above: top), isLeftOut: isLeftOut)
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
 		            }
 		        }
 		        let __safeDI_entered = __safeDI_Entered(configuration: ())
 		        func __safeDI_parentBuilder(__safeDI_entered: __safeDI_Entered<Parent.SafeDIMockConfiguration>) -> Parent {
-		            let childBuilder = Instantiator<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.leavingOut.entering(1, Child.SafeDIMockConfiguration())) }
+		            let childBuilder = Instantiator<Child> { __safeDI_childBuilder(__safeDI_entered: __safeDI_entered.entering(1, Child.SafeDIMockConfiguration())) }
 		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(childBuilder) } else { Parent(childBuilder: childBuilder) }
 		        }
 		        func __safeDI_childBuilder(__safeDI_entered: __safeDI_Entered<Child.SafeDIMockConfiguration>) -> Child {
-		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.isLeftOut ? Parent.SafeDIMockConfiguration() : __safeDI_entered.configuration.parentBuilder)) }
-		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(parentBuilder, __safeDI_entered.configuration.state) } else { Child(parentBuilder: parentBuilder, state: __safeDI_entered.configuration.state) }
+		            let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.parentBuilder)) }
+		            return Child(parentBuilder: parentBuilder)
 		        }
 		        let parentBuilder = Instantiator<Parent> { __safeDI_parentBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.parentBuilder)) }
 		        return Root(parentBuilder: parentBuilder)
@@ -1456,6 +1451,222 @@ struct SafeDIToolNodeRecordsMockCycleTests: ~Copyable {
 		for marker in ["parent", "settings"] {
 			#expect(comparison.featureDescription.contains("\"\(marker)\""), "No value is marked \(marker):\n\(comparison.featureDescription)")
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_leavesDefaultValuedParameterToItsDefault_whenFunctionIsReachedOnlyBeneathEdgeConfigurationsLeaveOut() async throws {
+		// `B`’s configuration has no field for the `A` it builds, so the `A` built beneath it has no configuration: the walk
+		// leaves `label` to its default, and the records read no field of an empty configuration.
+		let fixture = [
+			"A.swift": """
+			@Instantiable(generateMock: true)
+			public struct A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, label: String = "default") {
+			        self.bBuilder = bBuilder
+			        self.label = label
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    let label: String
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public struct B: Instantiable {
+			    public init(aBuilder: Instantiator<A>) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true])
+		// `A`’s function beneath `B` builds `A(bBuilder:)`, as the walk’s does, and reads no override.
+		#expect(output.mockFiles["A+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension A {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            bBuilder: B.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder
+		            )
+		        }
+
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration
+		            ) {
+		                self.bBuilder = bBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        label: String = "default",
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> A {
+		        struct __safeDI_Configured<Configuration> {
+		            let configuration: Configuration
+		        }
+		        final class __safeDI_Place {
+		            let slot: Int?
+		            let isNearestOfType: Bool
+		            let configured: Any
+		            let above: __safeDI_Place?
+		            let jump: __safeDI_Place?
+		            let nearestOfTypeAbove: __safeDI_Place?
+		            let configuredType: ObjectIdentifier
+		            let nearestOfEachTypeAbove: [ObjectIdentifier: __safeDI_Place]
+		            let depth: Int
+		            let entered0: UInt64
+		            init(slot: Int?, isNearestOfType: Bool, configured: Any, above: __safeDI_Place?) {
+		                self.slot = slot
+		                self.isNearestOfType = isNearestOfType
+		                self.configured = configured
+		                self.above = above
+		                let depthAbove = above?.depth ?? 0
+		                let near = above?.jump
+		                let nearDepth = near?.depth ?? 0
+		                depth = depthAbove + 1
+		                jump = depthAbove - nearDepth == nearDepth - (near?.jump?.depth ?? 0) ? near?.jump : above
+		                let nearestAbove = above.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                nearestOfTypeAbove = nearestAbove
+		                configuredType = ObjectIdentifier(type(of: configured))
+		                if isNearestOfType, let nearestAbove {
+		                    var nearestOfEachType = nearestAbove.nearestOfEachTypeAbove
+		                    nearestOfEachType[nearestAbove.configuredType] = nearestAbove
+		                    nearestOfEachTypeAbove = nearestOfEachType
+		                } else {
+		                    nearestOfEachTypeAbove = [:]
+		                }
+		                let word = slot.map { $0 >> 6 } ?? -1
+		                let bit: UInt64 = slot.map { 1 << UInt64($0 & 63) } ?? 0
+		                entered0 = (above?.entered0 ?? 0) | (word == 0 ? bit : 0)
+		            }
+		            func has(_ slot: Int) -> Bool {
+		                let bit: UInt64 = 1 << UInt64(slot & 63)
+		                switch slot >> 6 {
+		                case 0: return entered0 & bit != 0
+		                default: return false
+		                }
+		            }
+		        }
+		        struct __safeDI_Entered<Configuration> {
+		            let configuration: Configuration
+		            var top: __safeDI_Place?
+		            func nearest<Handed>(_: Handed.Type) -> Handed? {
+		                let type = ObjectIdentifier(__safeDI_Configured<Handed>.self)
+		                var place = top.flatMap { $0.isNearestOfType ? $0 : $0.nearestOfTypeAbove }
+		                if let candidate = place, candidate.configuredType != type {
+		                    place = candidate.nearestOfEachTypeAbove[type]
+		                }
+		                guard let place, let found = place.configured as? __safeDI_Configured<Handed> else { return nil }
+		                return found.configuration
+		            }
+		            func entering<Handed>(_ slot: Int, _ handed: @autoclosure () -> Handed, nearestOfType: Bool = false) -> __safeDI_Entered<Handed> {
+		                if var place = top, place.has(slot) {
+		                    while place.slot != slot, let next = place.jump.flatMap({ $0.has(slot) ? $0 : nil }) ?? place.above {
+		                        place = next
+		                    }
+		                    if let found = place.configured as? __safeDI_Configured<Handed> {
+		                        return .init(configuration: found.configuration, top: place)
+		                    }
+		                }
+		                if nearestOfType, let nearest = nearest(Handed.self) {
+		                    return .init(configuration: nearest, top: __safeDI_Place(slot: slot, isNearestOfType: true, configured: __safeDI_Configured(configuration: nearest), above: top))
+		                }
+		                let configuration = handed()
+		                return .init(configuration: configuration, top: __safeDI_Place(slot: slot, isNearestOfType: nearestOfType, configured: __safeDI_Configured(configuration: configuration), above: top))
+		            }
+		        }
+		        let __safeDI_entered = __safeDI_Entered(configuration: ())
+		        func __safeDI_bBuilder(__safeDI_entered: __safeDI_Entered<B.SafeDIMockConfiguration>) -> B {
+		            let aBuilder = Instantiator<A> { __safeDI_aBuilder(__safeDI_entered: __safeDI_entered.entering(1, A.SafeDIMockConfiguration())) }
+		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+		        }
+		        func __safeDI_aBuilder(__safeDI_entered: __safeDI_Entered<A.SafeDIMockConfiguration>) -> A {
+		            let bBuilder = Instantiator<B> { __safeDI_bBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.bBuilder)) }
+		            return A(bBuilder: bBuilder)
+		        }
+		        let bBuilder = Instantiator<B> { __safeDI_bBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.bBuilder)) }
+		        return A(bBuilder: bBuilder, label: label)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension A {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            bBuilder: B.SafeDIMockConfiguration = .init(),
+		            label: String = "default",
+		            _ safeDIBuilder: ((Instantiator<B>, String) -> A)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                bBuilder: bBuilder,
+		                label: label,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var bBuilder: B.SafeDIMockConfiguration { __safeDI_storage.bBuilder }
+		        var label: String { __safeDI_storage.label }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Instantiator<B>, String) -> A)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                bBuilder: B.SafeDIMockConfiguration,
+		                label: String,
+		                safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		            ) {
+		                self.bBuilder = bBuilder
+		                self.label = label
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let bBuilder: B.SafeDIMockConfiguration
+		            let label: String
+		            let safeDIBuilder: ((Instantiator<B>, String) -> A)?
+		        }
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["A+SafeDIMock.swift"] ?? "")")
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe(name: "beneath", expression: "A.mock().bBuilder.instantiate().aBuilder.instantiate().label"),
+				DifferentialValueProbe(name: "beneath, overridden", expression: #"A.mock(label: "top", safeDIOverrides: .init(bBuilder: .init({ B(aBuilder: $0) }))).bBuilder.instantiate().aBuilder.instantiate().label"#),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
 	}
 
 	// MARK: Private

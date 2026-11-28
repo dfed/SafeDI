@@ -317,6 +317,11 @@ indirect enum ValuePath: Hashable, Sendable {
 	/// otherwise model: each value a read the engine checks, each text as written, and each function one a statement
 	/// before the value's in the same body declares (`ValueSegment.declaredFunction`).
 	case spliced([ValueSegment])
+	/// The overrides the body that builds a record's node hands its children, before the body is known: a record reads
+	/// its own configuration as a member of it, so that its text is the same under every body that places it. The body
+	/// that places the record resolves it (`resolvingHandedToChildrenByPlacingBody(to:)`) before any of it is spelled, and
+	/// no path the writer is handed holds it.
+	case handedToChildrenByPlacingBody
 }
 
 extension ValuePath {

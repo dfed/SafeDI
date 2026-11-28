@@ -367,16 +367,27 @@ struct NodeRecords: Sendable {
 				built.declaresOnlyItsFunction = true
 				record = .built(built)
 			}
-			let place: GeneratedCode = switch record {
+			// The record reads its configuration of the overrides the body that places it hands its children, which each
+			// body resolves (`mockPlace(_:record:of:builtBy:in:slots:)`); its place stands for it in its first parent's body.
+			let firstParentsOverrides = world.isMockWorld ? Self.mockOverridesOfChildren(of: world.parents(of: declaration).first?.parent ?? 0, in: world, slots: enteredSlots) : nil
+			let placedRecord: PlaceRecord = if let firstParentsOverrides, case let .built(built) = record {
+				.built(built.resolvingHandedToChildrenByPlacingBody(to: firstParentsOverrides))
+			} else {
+				record
+			}
+			let place: GeneratedCode = switch placedRecord {
 			case let .alias(aliasRecord):
 				// A place written as text: the engine copies it as written. A property nothing fulfills that `mock()` binds
 				// before its nodes is no place.
 				Self.isBoundBeforeMockNodes(declaration, in: world) ? .sequence([]) : .place(PlacePlan(code: .text(aliasRecord.text), record: record))
 			case .built, .closer:
-				.place(PlacePlan(code: .empty, record: record))
+				.place(PlacePlan(code: .empty, record: placedRecord))
 			}
-			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it.
-			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots).map { GeneratedCode.place(PlacePlan(code: .empty, record: .built($0))) }
+			// A mock's `@Sendable` function captures its override from a local its parent's body binds just before it, which
+			// a node with one parent has, or with the root alone as its parents (`mockSendableRefusals(of:in:)`).
+			let binding = Self.mockOverridesBindingPlace(of: declaration, record: record, in: world, slots: enteredSlots).map { binding in
+				GeneratedCode.place(PlacePlan(code: .empty, record: .built(firstParentsOverrides.map(binding.resolvingHandedToChildrenByPlacingBody(to:)) ?? binding)))
+			}
 			// A member of a loop of builders calls the functions of the others, which capture their locals, so its level
 			// binds every member's local before the first member (`mockLoopOverridesBindings`).
 			let loopOverridesBinding = Self.isMockLoopMember(declaration, in: world) ? binding : nil

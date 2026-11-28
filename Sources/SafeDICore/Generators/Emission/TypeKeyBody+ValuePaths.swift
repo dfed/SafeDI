@@ -95,7 +95,8 @@ extension ValuePath {
 		switch self {
 		case .rootDeclaration,
 		     .passedArgument,
-		     .emptyInitialization:
+		     .emptyInitialization,
+		     .handedToChildrenByPlacingBody:
 			[]
 		case let .read(read):
 			[read]
@@ -119,7 +120,8 @@ extension ValuePath {
 		     .read,
 		     .passedArgument,
 		     .emptyInitialization,
-		     .implicitMemberCall:
+		     .implicitMemberCall,
+		     .handedToChildrenByPlacingBody:
 			[]
 		case let .memberRead(_, base),
 		     let .optionalMemberRead(_, base):
@@ -146,7 +148,8 @@ extension ValuePath {
 		case .rootDeclaration,
 		     .read,
 		     .emptyInitialization,
-		     .implicitMemberCall:
+		     .implicitMemberCall,
+		     .handedToChildrenByPlacingBody:
 			[]
 		case let .passedArgument(name):
 			[name]
@@ -211,7 +214,8 @@ extension PassedArgument {
 		     .call,
 		     .implicitMemberCall,
 		     .emptyInitialization,
-		     .spliced:
+		     .spliced,
+		     .handedToChildrenByPlacingBody:
 			part(parts: &parts)
 		}
 	}
@@ -319,6 +323,11 @@ extension TypeKeyLayout {
 			return spelledValue(of: read, inClass: owner, before: index)
 		case let .emptyInitialization(type):
 			return "\(type.asSource)()"
+		case .handedToChildrenByPlacingBody:
+			// The body that places a record resolves it before any of the record is spelled
+			// (`resolvingHandedToChildrenByPlacingBody(to:)`): a path that still holds it spells nothing, and its root keeps the
+			// path key's body.
+			return nil
 		case let .memberRead(name, base):
 			return spelledValuePath(base.value, inClass: owner, before: index).map { "\($0).\(name)" }
 		case let .optionalMemberRead(name, base):
@@ -463,6 +472,7 @@ struct StructuralKeyParts {
 		case implicitMemberCall(name: String, arguments: [String])
 		case emptyInitialization(String)
 		case spliced([Segment])
+		case handedToChildrenByPlacingBody
 	}
 
 	/// A segment of a spliced path: its text, its value's id, or the function's name, each a case of its own so no two
@@ -512,6 +522,9 @@ struct StructuralKeyParts {
 				break reading
 			case let .emptyInitialization(type):
 				node = .emptyInitialization(type.asSource)
+				break reading
+			case .handedToChildrenByPlacingBody:
+				node = .handedToChildrenByPlacingBody
 				break reading
 			case let .spliced(segments):
 				var spliced = [Segment]()

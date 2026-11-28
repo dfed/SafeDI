@@ -251,7 +251,7 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 		let declarations = 0..<Int32(graph.declarationCount)
 		try #require(declarations.filter { NodeRecords.mockNearestOfTypeEntered(by: $0, in: slots) != nil }.count == count, "\(graph.description)")
 		let edgeCount = declarations.reduce(0) { $0 + graph.edges(from: $1).count }
-		#expect(slots.walkStepCount <= 5 * (graph.declarationCount + edgeCount), "\(slots.walkStepCount) steps over \(graph.declarationCount) declarations and \(edgeCount) edges")
+		#expect(slots.walkStepCount <= 6 * (graph.declarationCount + edgeCount), "\(slots.walkStepCount) steps over \(graph.declarationCount) declarations and \(edgeCount) edges")
 	}
 
 	// MARK: Private

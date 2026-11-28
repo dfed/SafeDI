@@ -560,7 +560,7 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 		        }
 		        func __safeDI_alphaBuilder(__safeDI_entered: __safeDI_Entered<Alpha.SafeDIMockConfiguration>) -> Alpha {
 		            let bravoBuilder = Instantiator<Bravo> { __safeDI_bravoBuilder(__safeDI_entered: __safeDI_entered.entering(0, __safeDI_entered.configuration.bravoBuilder)) }
-		            return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(bravoBuilder) } else { Alpha(bravoBuilder: bravoBuilder) }
+		            return Alpha(bravoBuilder: bravoBuilder)
 		        }
 		        let bravoBuilder = Instantiator<Bravo> { __safeDI_bravoBuilder(__safeDI_entered: __safeDI_entered.entering(0, safeDIOverrides.bravoBuilder)) }
 		        return Alpha(bravoBuilder: bravoBuilder)

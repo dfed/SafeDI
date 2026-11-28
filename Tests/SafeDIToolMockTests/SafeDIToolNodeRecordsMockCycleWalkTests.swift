@@ -1850,6 +1850,9 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	/// The value cell of approved difference 27: `Child`’s one function serves the root’s call, which hands it a
+	/// configuration, and `Parent`’s along an edge the configurations leave out, which the walk hands none and the records
+	/// hand an empty one, whose fields hold the initializer’s defaults.
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsTheWalksValues_whenTypeBuiltAlongEdgeConfigurationsLeaveOutAndByRootTakesDefaultValuedParameter() async throws {
