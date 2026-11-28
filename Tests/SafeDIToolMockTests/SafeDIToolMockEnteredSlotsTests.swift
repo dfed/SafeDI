@@ -237,11 +237,17 @@ struct SafeDIToolMockEnteredSlotsTests: ~Copyable {
 			try await executeSafeDIToolTest(swiftFileContent: types, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
 		continuation.finish()
-		var graphs = [TypeFactsGraph]()
+		var reports = [TypeFactsReport]()
 		for await report in stream where report.root == "Root" && report.forMockGeneration {
-			graphs.append(report.graph)
+			reports.append(report)
 		}
-		return try #require(graphs.last)
+		// Where a root’s cycles are planned per type, the tree is built in pieces, each observed as a world of its own: the
+		// last piece with the most places is the root’s whole world.
+		var largest = try #require(reports.last)
+		for report in reports.reversed() where report.places.count > largest.places.count {
+			largest = report
+		}
+		return largest.graph
 	}
 
 	private func declaration(described prefix: String, in graph: TypeFactsGraph) throws -> DeclarationID {
