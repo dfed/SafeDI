@@ -80,18 +80,23 @@ extension DependencyTreeGenerator {
 	/// `nodeRecordsLayout`, every run makes the records of such a root, since the seam world built every root's tree before,
 	/// except where a seam call of the world passes a fill (`SeamCallCheck.passesFill`): node records refuse every such
 	/// world (`NodeRecordRefusal.fill`), so the root goes to its tree without them. That walk only narrows: the records'
-	/// own refusal still judges every other world.
+	/// own refusal still judges every other world. Where records of filled calls are on
+	/// (`NodeRecordsObservation.recordsFilledCalls`), records judge a world that passes a fill too, and `validatesFillsOnTree`
+	/// says the root laid out from them still needs its tree, for `validateFills` alone, until node records refuse every fill
+	/// it reports.
 	/// - Throws: What an initializer's arguments throw, as the tree's construction of the same place throws it.
 	static func seamWorldRootLayout(
 		of instantiable: Instantiable,
 		constructionScope: ConstructionScope,
 		declaredTypeNames: DeclaredTypeNames,
 		readersOfEveryTree: [TreeForcer],
-	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer]) {
+	) throws -> (layout: NodeRecordsLayout?, treeForcers: [TreeForcer], validatesFillsOnTree: Bool) {
 		let world = TypeFactsGraph(root: constructionScope, forMockGeneration: false)
 		let checks = seamCallChecks(in: world)
-		guard !checks.contains(.seamCallCheck(.passesFill)) else { return (nil, checks + readersOfEveryTree) }
-		return try acceptedLayout(of: instantiable, world: world, declaredTypeNames: declaredTypeNames, forcers: checks + readersOfEveryTree)
+		let passesFill = checks.contains(.seamCallCheck(.passesFill))
+		guard !passesFill || NodeRecordsObservation.recordsFilledCalls else { return (nil, checks + readersOfEveryTree, false) }
+		let (layout, treeForcers) = try acceptedLayout(of: instantiable, world: world, declaredTypeNames: declaredTypeNames, forcers: checks.filter { $0 != .seamCallCheck(.passesFill) } + readersOfEveryTree)
+		return (layout, treeForcers, passesFill)
 	}
 
 	/// The layout of `instantiable`'s code from the node records of `world` where `forcers` is empty and the records lay

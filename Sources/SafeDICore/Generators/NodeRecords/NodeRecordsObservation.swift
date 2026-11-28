@@ -59,6 +59,11 @@ public enum NodeRecordsObservation {
 	/// threaded through the mock roots' construction raised the peak memory of a run that sets none by a fifth on Linux.
 	@TaskLocal static var recordsMockWorldRoot: TaskLocalFunction<@Sendable (TypeDescription, MockWorldRoot) -> Void>?
 
+	/// Handed the name of each root laid out from its node records whose fills `validateFills` reports on its tree
+	/// (`RootScopeInfo.fillValidationTree`): node records accepted a world whose code the tree's checks reject. Only a test
+	/// sets it.
+	@TaskLocal public static var acceptedRootWithFillFindings: TaskLocalFunction<@Sendable (String) -> Void>?
+
 	/// Handed each root's report, where set. Only a test sets it.
 	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (NodeRecordsReport) -> Void>?
 

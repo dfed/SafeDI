@@ -187,6 +187,14 @@ enum NodeRecordsChecks {
 		return try await NodeRecordsObservation.$laysOutRoots.withValue(laysOutRoots) {
 			try await NodeRecordsObservation.$laysOutMockRoots.withValue(laysOutMockRoots) {
 				try await NodeRecordsObservation.$recordsFilledCalls.withValue(recordsFilledCalls) {
+					// Node records never accept a root whose fills `validateFills` reports: that root's tree is built only for the check,
+					// until records refuse every such fill.
+					try await NodeRecordsObservation.$acceptedRootWithFillFindings.withValue(TaskLocalFunction { root in
+						Issue.record(Comment(rawValue: "Node records laid out root \(root), whose fills validateFills reports on its tree"))
+						if let reportPath {
+							append("\(testName)\t\(root)\tfill findings accepted\t1\t\t\t\n", toFileAt: reportPath)
+						}
+					}) {
 					try await NodeRecordsObservation.$observer.withValue(TaskLocalFunction { report in
 						let outcome = Self.outcome(of: report)
 						for difference in outcome.differences {
@@ -199,6 +207,7 @@ enum NodeRecordsChecks {
 						enclosingObserver?(report)
 					}) {
 						try await body()
+					}
 					}
 				}
 			}

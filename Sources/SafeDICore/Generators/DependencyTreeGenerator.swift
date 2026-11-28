@@ -431,11 +431,27 @@ public actor DependencyTreeGenerator {
 		// A root laid out from its node records has no tree, and needs none of these checks: node records refuse a world
 		// with a fill (`fill`) and one whose `@Sendable` function captures a wrapper that is not `Sendable`
 		// (`sendableFunctionCapturesWrapper`), and a world with a seam call that omits a parameter or defers one
-		// `@Sendable` keeps its tree (`SeamCallCheck`), so each root these checks could report keeps its tree.
-		try Self.validateFills(
-			inTreesRootedAt: roots.compactMap(\.scopeGenerator),
-			callerModule: seams.currentModule,
-		)
+		// `@Sendable` keeps its tree (`SeamCallCheck`), so each root these checks could report keeps its tree. A root whose
+		// seam call passes a fill keeps it for `validateFills` alone where records of filled calls lay it out
+		// (`RootScopeInfo.fillValidationTree`).
+		do {
+			try Self.validateFills(
+				inTreesRootedAt: roots.compactMap { $0.scopeGenerator ?? $0.fillValidationTree },
+				callerModule: seams.currentModule,
+			)
+		} catch {
+			// A test names each root records laid out whose own fills the check reports.
+			if let observer = NodeRecordsObservation.acceptedRootWithFillFindings {
+				for (root, fillValidationTree) in roots.compactMap({ root in root.fillValidationTree.map { (root, $0) } }) {
+					do {
+						try Self.validateFills(inTreesRootedAt: [fillValidationTree], callerModule: seams.currentModule)
+					} catch {
+						observer(root.instantiable.concreteInstantiable.asSource)
+					}
+				}
+			}
+			throw error
+		}
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.compactMap(\.tree))
 		await observePlanCaptures(of: roots)
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
@@ -744,6 +760,9 @@ public actor DependencyTreeGenerator {
 		var treeForcers: [TreeForcer] = [.seamWorld]
 		/// The root's tree per path where its code is laid out from its plan by type and the caller draws the trees.
 		var drawnTree: ScopeGenerator?
+		/// The tree of a root laid out from its node records whose seam call passes a fill, which `validateFills` alone reads
+		/// (`seamWorldRootLayout`); `nil` for every other root.
+		var fillValidationTree: ScopeGenerator?
 
 		init(typeDescription: TypeDescription, instantiable: Instantiable, sourceFilePath: String?, built: Built, fulfillers: Set<FulfillerImports.Fulfiller>, receivedValueSupplies: ReceivedValueSupplies?, rootScope: ConstructionScope?, ownSeamRoot: ScopeGenerator.SeamRoot? = nil, treeForcers: [TreeForcer] = [.seamWorld], drawnTree: ScopeGenerator? = nil) {
 			self.typeDescription = typeDescription

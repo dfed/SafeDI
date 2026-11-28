@@ -515,7 +515,7 @@ extension DependencyTreeGenerator {
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
 			let constructionScope = ConstructionScope(table: table, record: record)
-			let (layout, treeForcers) = try Self.seamWorldRootLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
+			let (layout, treeForcers, validatesFillsOnTree) = try Self.seamWorldRootLayout(of: scope.instantiable, constructionScope: constructionScope, declaredTypeNames: declaredTypeNames, readersOfEveryTree: readersOfEveryTree)
 			guard let layout else {
 				rootsBuiltAsTrees.append((index: roots.count, typeDescription: typeDescription, scope: scope, treeForcers: treeForcers))
 				roots.append(nil)
@@ -532,7 +532,9 @@ extension DependencyTreeGenerator {
 			}
 			// The work of building it is no run's, so the tests that count a run's work count none of it.
 			let comparisonTree = try NodeRecordsObservation.observer == nil ? nil : GenerationWork.$observer.withValue(nil) { try tree(memo: &comparisonMemo) }
-			roots.append(RootScopeInfo(
+			// A root whose seam call passes a fill, laid out from records, still builds its tree, which `validateFills` alone reads.
+			let fillValidationTree = try validatesFillsOnTree ? comparisonTree ?? tree(memo: &constructionMemo) : nil
+			var rootInfo = RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
@@ -541,7 +543,9 @@ extension DependencyTreeGenerator {
 				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: constructionScope),
 				rootScope: RootScopeInfo.kept(constructionScope),
 				treeForcers: treeForcers,
-			))
+			)
+			rootInfo.fillValidationTree = fillValidationTree
+			roots.append(rootInfo)
 		}
 		let trees = try await rootTrees(
 			of: rootsBuiltAsTrees.map { (typeDescription: $0.typeDescription, scope: $0.scope) },
