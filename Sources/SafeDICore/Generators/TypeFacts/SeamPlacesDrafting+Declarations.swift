@@ -113,7 +113,7 @@ struct SeamPlacesDeclarationDrafter {
 		// The siblings that start as carriers and that the child's tree requires, the first two in build order.
 		let required = Set(world.receives.required.columns(inRow: Int(child)).map { world.propertyTable[Int($0)] })
 		let carriers = zip(targets, edgeFacts).compactMap { target, siblingFacts -> (position: Int32, property: Property)? in
-			guard siblingFacts.isCarrier, let siblingProperty = world.graph.nodes[Int(target)].property, required.contains(siblingProperty) else { return nil }
+			guard siblingFacts.isCarrier, !siblingFacts.isFill, let siblingProperty = world.graph.nodes[Int(target)].property, required.contains(siblingProperty) else { return nil }
 			return (siblingFacts.buildPosition, siblingProperty)
 		}
 		return SeamSignature.Places.ChildFacts(
