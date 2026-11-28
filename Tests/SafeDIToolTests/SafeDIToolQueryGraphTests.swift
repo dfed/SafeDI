@@ -3488,7 +3488,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		var visits = [Int]()
 		for (parentCount, linkCount) in [(4, 8), (8, 16)] {
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				var types = [Self.fixtureType(named: "Theme", properties: [])]
 				types.append(Self.fixtureType(named: "Root", isRoot: true, properties: (0..<parentCount).map { FixtureProperty("@Instantiated", "parent\($0)", "Parent\($0)") }))
 				for parent in 0..<parentCount {
@@ -3724,7 +3724,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		var visitsByLayerCount = [Int]()
 		for layerCount in [4, 6] {
 			let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
-			try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await GenerationWork.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await graphOfLayersOfScreens(layerCount: layerCount, rootDeclarations: rootDeclarations, screenDeclarations: screenDeclarations, otherTypes: otherTypes)
 			}
 			continuation.finish()

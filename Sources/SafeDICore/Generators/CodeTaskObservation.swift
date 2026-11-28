@@ -24,7 +24,7 @@
 public enum HeldCodeTasks {
 	/// Called with the count for each root’s tree, in the order of the roots, once every root’s code is generated, when
 	/// set: by the tests, never by the tool.
-	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (Int) -> Void>?
 }
 
 /// The children a root's body plans at once, each on a task of its own
@@ -48,7 +48,7 @@ public enum ConcurrentChildCode {
 
 	/// Called with the number of children of each body that plans more than one at once, when set: by the tests, never by
 	/// the tool.
-	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+	@TaskLocal public static var observer: TaskLocalFunction<@Sendable (Int) -> Void>?
 
 	/// Tells `observer`, when set, that a body plans `childCount` children at once.
 	static func record(childCount: Int) {

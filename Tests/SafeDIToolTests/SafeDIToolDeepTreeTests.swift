@@ -248,7 +248,7 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		var elementCounts = [Int]()
 		for depth in [100, 200, 400] {
 			let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-			try await ConstructionLogStorage.$observer.withValue({ continuation.yield($0) }) {
+			try await ConstructionLogStorage.$observer.withValue(TaskLocalFunction { continuation.yield($0) }) {
 				_ = try await executeSafeDIToolTest(
 					swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
 					buildSwiftOutputDirectory: true,

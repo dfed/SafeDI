@@ -29,9 +29,9 @@ import Testing
 enum TypeFactsReceivedValueSuppliesChecks {
 	/// Runs `operation` while comparing the supplies of every root it plans, handing each comparison to
 	/// `enclosingObserver` too, and records an issue for each root whose fold and walk differ.
-	static func comparing<Result>(handingOn enclosingObserver: (@Sendable (TypeFactsReceivedValueSuppliesComparison) -> Void)?, _ operation: () async throws -> Result) async throws -> Result {
+	static func comparing<Result>(handingOn enclosingObserver: TaskLocalFunction<@Sendable (TypeFactsReceivedValueSuppliesComparison) -> Void>?, _ operation: () async throws -> Result) async throws -> Result {
 		let (comparisons, continuation) = AsyncStream.makeStream(of: TypeFactsReceivedValueSuppliesComparison.self)
-		let result = try await TypeFactsReceivedValueSuppliesObservation.$comparesWalk.withValue({ comparison in
+		let result = try await TypeFactsReceivedValueSuppliesObservation.$comparesWalk.withValue(TaskLocalFunction { comparison in
 			continuation.yield(comparison)
 			enclosingObserver?(comparison)
 		}) {
