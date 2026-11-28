@@ -107,30 +107,64 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		}
 	}
 
-	// MARK: Inline tree
+	// MARK: Inline world
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsNoInlineTreeOfSeam_whenSeamsTreeReceivesEachLabelItDeclaresInOneForm() async throws {
+	mutating func generate_buildsNoInlineWorldOfSeam_whenSeamsTreeReceivesEachLabelItDeclaresInOneForm() async throws {
 		// `Reader` and `LiveApi` receive `tag` in one form, which one parameter always carries, so `App` learns from the
-		// scopes alone that `Hub`'s tree holds no label to report, and builds no generator of it.
-		let inlineTrees = try await inlineTreesOfForeignSeams(
+		// scopes alone that `Hub`'s inline world holds no label to report, and builds no world of it.
+		let inlineWorlds = try await inlineWorldsOfForeignSeams(
 			readerReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?",
 		)
-		#expect(inlineTrees == [])
+		#expect(inlineWorlds == [])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsInlineTreeOfSeam_whenSeamsTreeReceivesLabelItDeclaresInTwoForms() async throws {
+	mutating func generate_buildsInlineWorldOfSeam_whenSeamsTreeReceivesLabelItDeclaresInTwoForms() async throws {
 		// `Reader` requires `tag: LazilyInstantiated<Tag>` and `LiveApi` receives `tag: Tag?`: two forms of a label `B`
-		// declares, which only the tree's generators can judge, so `App` builds `Hub`'s tree, once.
-		let inlineTrees = try await inlineTreesOfForeignSeams(
+		// declares, which only the facts of `Hub`'s inline world can judge, so `App` builds that world, once.
+		let inlineWorlds = try await inlineWorldsOfForeignSeams(
 			readerReceive: "@Received public let tag: LazilyInstantiated<Tag>",
 			liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: Tag?",
 		)
-		#expect(inlineTrees == ["App: Hub"])
+		#expect(inlineWorlds == ["App: Hub"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_findsFromFactsTheLabelTheInlineTreeReports_whenFillReceivesFormTheRequiredParameterCannotCarry() async {
+		// `Reader` requires `tag: Tag` and `LiveApi` receives `tag: LazilyInstantiated<Tag>?`: the facts of `Hub`'s inline
+		// world in `App` find the label with the receive, forms and declaration its inline tree reports.
+		let (stream, continuation) = AsyncStream.makeStream(of: (factsLabels: [String], todaysTreeLabels: [String]).self)
+		let modules = Self.modules(readerReceive: "@Received public let tag: Tag", liveApiReceive: "@Received(onlyIfAvailable: true) public let tag: LazilyInstantiated<Tag>?")
+		var filesToDelete = filesToDelete
+		let threw = await UnpassableCycleLabelObservation.$factsObserver.withValue(TaskLocalFunction { root, factsLabels, todaysTreeLabels in
+			if root == "Hub inline in App" {
+				continuation.yield((factsLabels, todaysTreeLabels))
+			}
+		}) {
+			do {
+				_ = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+				return false
+			} catch {
+				return true
+			}
+		}
+		#expect(threw)
+		self.filesToDelete = filesToDelete
+		continuation.finish()
+		var observations = [(factsLabels: [String], todaysTreeLabels: [String])]()
+		for await observation in stream {
+			observations.append(observation)
+		}
+		#expect(!observations.isEmpty)
+		for observation in observations {
+			#expect(observation.factsLabels.count == 1)
+			#expect(observation.factsLabels == observation.todaysTreeLabels)
+		}
 	}
 
 	// MARK: Accepted
@@ -397,16 +431,16 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		)
 	}
 
-	/// The inline trees of other modules' seams that the runs of the build with `LiveApi` in `App` build, each as the
+	/// The inline worlds of other modules' seams that the runs of the build with `LiveApi` in `App` build, each as the
 	/// run's module and the seam's type, in order.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func inlineTreesOfForeignSeams(readerReceive: String, liveApiReceive: String) async throws -> [String] {
+	private mutating func inlineWorldsOfForeignSeams(readerReceive: String, liveApiReceive: String) async throws -> [String] {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let modules = Self.modules(readerReceive: readerReceive, liveApiReceive: liveApiReceive)
 		var filesToDelete = filesToDelete
 		try await GenerationLayerObservation.$observer.withValue(TaskLocalFunction { runModuleName, layer in
 			switch layer {
-			case let .inlineTreeOfForeignSeam(type):
+			case let .inlineWorldOfForeignSeam(type):
 				continuation.yield("\(runModuleName ?? "nil"): \(type.asSource)")
 			case .seamSignatures, .accessProof, .dependencyTree, .mockScopes:
 				break
@@ -416,11 +450,11 @@ struct SafeDIToolSeamHoleCycleParameterFormsTests: ~Copyable {
 		}
 		self.filesToDelete = filesToDelete
 		continuation.finish()
-		var inlineTrees = [String]()
-		for await inlineTree in stream {
-			inlineTrees.append(inlineTree)
+		var inlineWorlds = [String]()
+		for await inlineWorld in stream {
+			inlineWorlds.append(inlineWorld)
 		}
-		return inlineTrees
+		return inlineWorlds
 	}
 
 	/// Expects the build with `LiveApi` in `App` to throw `diagnostics` in `App`, and the same graph with `LiveApi` in

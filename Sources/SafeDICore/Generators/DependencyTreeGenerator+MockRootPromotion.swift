@@ -535,8 +535,8 @@ extension DependencyTreeGenerator {
 			let world = TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true)
 			observer(
 				"mock of \(instantiable.concreteInstantiable.asSource)",
-				Set(world.unpassableCycleLabels().map { "\(world.graph.nodes[Int($0.declaration)].scope.instantiable.concreteInstantiable.asSource).\($0.label)" }).sorted(),
-				Set(generator.unpassableCycleLabelsInTree.map { "\($0.builtType.asSource).\($0.forms.first?.label ?? "")" }).sorted(),
+				Set(world.unpassableCycleLabelValues().map(\.observedDescription)).sorted(),
+				Set(generator.unpassableCycleLabelsInTree.map(\.observedDescription)).sorted(),
 			)
 		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])

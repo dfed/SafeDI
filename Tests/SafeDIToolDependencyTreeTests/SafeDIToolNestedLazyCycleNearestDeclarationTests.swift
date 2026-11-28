@@ -1023,6 +1023,30 @@ struct SafeDIToolNestedLazyCycleNearestDeclarationTests: ~Copyable {
 		}
 	}
 
+	/// `U` also builds `Y` after `W` again, and `Y` receives `l` only if available as a `LazilyInstantiated`. The walk of
+	/// the function that builds `W` meets no receive of `l` before the call `P` makes of the function that builds `U`,
+	/// which hands that function its parameter: the first receive is `Y`'s, reached through that call, and its chain runs
+	/// through it.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnpassableCycleLabelAtReceiveReachedThroughCallOfAnotherCycle_whenWalkMeetsNoReceiveBeforeIt() async {
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Y.swift"]):7:5: error: @Received property `l: LazilyInstantiated<L>?` is received in chain: W -> U -> P -> U -> Y. A dependency cycle builds `W` again beneath `P`, which declares `l: L` with the same label, and SafeDI hands each `W` one value of `l`. `W` and the types it builds receive `l` as `l: L` and `l: LazilyInstantiated<L>?`, which one value cannot carry together. Receive `l: L` and `l: LazilyInstantiated<L>?` under different labels to fix.
+			\(fixtures["P.swift"]):8:5: note: `l: L` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.fixture(
+					uDeclares: ["@Instantiated let pBuilder: Instantiator<P>", "@Instantiated let wBuilder: Instantiator<W>", "@Instantiated let yBuilder: Instantiator<Y>"],
+					otherTypes: [seamFixtureType(named: "Y", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let l: LazilyInstantiated<L>?"])],
+				),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

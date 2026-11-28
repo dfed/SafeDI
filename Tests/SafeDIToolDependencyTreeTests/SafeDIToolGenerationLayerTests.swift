@@ -367,8 +367,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 				"access proof of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"
 			case let .dependencyTree(type):
 				"tree of \(type.asSource)"
-			case let .inlineTreeOfForeignSeam(type):
-				"inline tree of seam \(type.asSource)"
+			case let .inlineWorldOfForeignSeam(type):
+				"inline world of seam \(type.asSource)"
 			case let .mockScopes(moduleName):
 				"mock scopes of \(moduleName ?? "nil")"
 			}
