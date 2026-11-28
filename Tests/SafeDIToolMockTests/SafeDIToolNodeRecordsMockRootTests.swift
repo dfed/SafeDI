@@ -197,9 +197,9 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		}
 		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains, the parts of their keys,
 		// their bodies' statements and their views' reads are worked out once for the three roots, where each root's layout
-		// worked out each. Their reads settle in three computations, `clockBuilder`'s and then `storeBuilder`'s twice, since
-		// `clockBuilder`'s changed on the first pass; no root computes them again.
-		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2, .declaringPlanNodeStatements: 2, .computingViewReads: 3])
+		// worked out each. Their reads are computed once each, `storeBuilder`'s tree laid out alone once, and no root
+		// computes them again.
+		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2, .declaringPlanNodeStatements: 2, .computingViewReads: 2])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true, true])
 	}
 

@@ -76,29 +76,46 @@ final class NodeLayoutFacts: Sendable {
 		readsByNode = Self.readsByNode(of: records, facts: facts)
 	}
 
-	/// The reads of the views of `records`' nodes whose trees are closed, each node's laid out once: `records` holds each
-	/// record after the records beneath it, so a walk from the last lays out the highest node of each closed tree, whose
-	/// layout holds every node beneath it, and lays out no node beneath it again. A node beneath one the type key cannot lay
-	/// out is left to each root, as that node is.
+	/// The reads of the views of `records`' nodes whose trees are closed, each node's laid out once: a walk from the records
+	/// no other record holds, each record before the records beneath it, lays out the highest node of each closed tree,
+	/// whose layout holds every closed node beneath it, and lays out no node it holds again. A node beneath one the type key
+	/// cannot lay out is left to each root, as that node is.
 	private static func readsByNode(of records: [BuiltPlaceRecord], facts: NodeLayoutFacts) -> [PlanNode: NodeReads] {
-		var readsByNode = [PlanNode: NodeReads]()
-		// The nodes laid out, or beneath one laid out or left to each root, whose children are marked when they are reached.
-		var isMarked = Set<PlanNode>()
-		for record in records.reversed() where record.hasFunction {
-			let beneath = TypeKeyLayout.statementCodes(of: record.children).compactMap { code -> PlanNode? in
+		func childRecords(of record: BuiltPlaceRecord) -> [BuiltPlaceRecord] {
+			TypeKeyLayout.statementCodes(of: record.children).compactMap { code -> BuiltPlaceRecord? in
 				guard case let .built(child) = TypeKeyLayout.record(of: code), child.hasFunction else { return nil }
-				return child.node
+				return child
 			}
-			guard !isMarked.contains(record.node) else {
-				isMarked.formUnion(beneath)
-				continue
+		}
+		var heldByAnother = Set<PlanNode>()
+		for record in records where record.hasFunction {
+			heldByAnother.formUnion(childRecords(of: record).map(\.node))
+		}
+		var readsByNode = [PlanNode: NodeReads]()
+		// The nodes beneath one the type key could not lay out.
+		var isLeftToEachRoot = Set<PlanNode>()
+		var isReached = Set<PlanNode>()
+		var queue = records.filter { $0.hasFunction && !heldByAnother.contains($0.node) }
+		var next = 0
+		isReached.formUnion(queue.map(\.node))
+		while next < queue.count {
+			let record = queue[next]
+			next += 1
+			let children = childRecords(of: record)
+			if isLeftToEachRoot.contains(record.node) {
+				isLeftToEachRoot.formUnion(children.map(\.node))
+			} else if readsByNode[record.node] == nil, facts.domainsByNode[record.node]?.isClosed == true {
+				// A node whose tree closes on a function outside it reads what its context reads; a node beneath it may be closed.
+				if let views = TypeKeyLayout.readsOfClosedViews(ofNode: record, nodeFacts: facts) {
+					for view in views where readsByNode[view.node] == nil {
+						readsByNode[view.node] = view.reads
+					}
+				} else {
+					isLeftToEachRoot.formUnion(children.map(\.node))
+				}
 			}
-			// A node whose tree closes on a function outside it reads what its context reads; a node beneath it may be closed.
-			guard facts.domainsByNode[record.node]?.isClosed == true else { continue }
-			isMarked.insert(record.node)
-			isMarked.formUnion(beneath)
-			for view in TypeKeyLayout.readsOfClosedViews(ofNode: record, nodeFacts: facts) ?? [] where readsByNode[view.node] == nil {
-				readsByNode[view.node] = view.reads
+			for child in children where isReached.insert(child.node).inserted {
+				queue.append(child)
 			}
 		}
 		return readsByNode
