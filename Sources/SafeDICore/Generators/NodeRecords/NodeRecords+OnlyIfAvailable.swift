@@ -85,10 +85,10 @@ extension NodeRecords {
 /// Holds, per variant, the set of the properties it is passed `nil` for, for as long as the world's records are made.
 ///
 /// A bridge: a private copy of the facts' rule of which declaration answers a read (the nearest above, bound before the
-/// edge), which the facts already apply but do not hand on for a read only if available, whose answer rule 1 keys alike
-/// whether it is `nil` or a value. It goes in the change that has the facts hand each call whether a read only if
-/// available finds a value there, beside the call's sources (`TypeFactsWorld.sources(ofCall:of:)`), which records then
-/// read instead.
+/// edge). Rule 1 keys a read only if available alike whether it is `nil` or a value, but the facts hand each call
+/// whether it finds a value there: the call's source of the read (`TypeFactsWorld.sources(ofCall:of:)`) is none exactly
+/// where this finds the receive unavailable (type facts check 34). It goes in the change that has records read those
+/// sources instead.
 struct OnlyIfAvailableAnswers: Sendable {
 	/// - Parameters:
 	///   - world: A world each of whose nodes is of a kind `NodeRecords` makes, off every cycle.

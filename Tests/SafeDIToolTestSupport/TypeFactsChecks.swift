@@ -43,6 +43,8 @@ import Testing
 ///     what the tree's construction log records), never from the variant's key; and whether a wrapper is still being
 ///     built (rule 2) is left out. Two places of one variant that pass two classes are a finding: the key merged two
 ///     parameter types.
+/// 34. Each read only if available a place's subtree makes of the context above it is answered none by the facts wherever
+///     the tree passes it `nil` (`onlyIfAvailableComparisons(of:)`); a value the facts answer none is counted apart.
 ///
 /// Findings are recorded as issues only where `SAFEDI_TYPE_FACTS_STRICT` is set, until every graph passes; a run that
 /// sets `SAFEDI_TYPE_FACTS_LOG` to a file appends a line per tree to it, with each check's count of findings and its
@@ -94,6 +96,12 @@ enum TypeFactsChecks {
 		/// reached inside a `@Sendable` function, which the report does not say.
 		var sendableGapProxyNodes = 0
 		var line = ""
+		/// Check 34's reads whose label the tree passes `nil` in one form and a value in another at one place: rule 1's one
+		/// answer per label cannot be both, and the comparison leaves them out.
+		var check34PassesBoth = 0
+		/// Check 34's reads the tree passes a value the facts answer none, which no finding counts (`valueAnsweredNone`).
+		var check34ValueAnsweredNone = 0
+		var check34FirstValueAnsweredNone: String?
 	}
 
 	static func findings(of report: TypeFactsReport) -> Result {
@@ -410,6 +418,21 @@ enum TypeFactsChecks {
 				}
 			}
 		}
+		// Check 34.
+		for comparison in onlyIfAvailableComparisons(of: report) {
+			result.comparedByCheck[34, default: 0] += 1
+			switch comparison.agreement {
+			case .agrees:
+				break
+			case .treePassesBoth:
+				result.check34PassesBoth += 1
+			case .nilAnsweredByValue:
+				add(34, comparison.description)
+			case .valueAnsweredNone:
+				result.check34ValueAnsweredNone += 1
+				result.check34FirstValueAnsweredNone = result.check34FirstValueAnsweredNone ?? comparison.description
+			}
+		}
 		// Check 33.
 		if !report.forMockGeneration {
 			for line in report.world.split(separator: "\n") where line.hasPrefix("v") && line.contains(" sendable keys ") {
@@ -463,7 +486,7 @@ enum TypeFactsChecks {
 		}
 		var compared = [Int: Int]()
 		columnChecks(of: report, subtreeClosesCycle: subtreeClosesCycle, closedOnPlace: closedOnPlace, childrenByPlace: childrenByPlace, add: add, compared: &compared)
-		result.comparedByCheck = compared
+		result.comparedByCheck.merge(compared) { $0 + $1 }
 		let unwalkedNodes = report.nodes.count - nodesSeen.count - report.nodes.count(where: \.isLeaf)
 		let twinNodes = report.nodes.count { $0.twin >= 0 }
 		var line = "root=\(report.root) mock=\(report.forMockGeneration) nodes=\(report.nodes.count) unwalkedNodes=\(unwalkedNodes) places=\(places.count) variants=\(result.variantCount) factsVariants=\(result.factsVariantCount) worst=\(result.worstNodeVariantCount) twins=\(twinNodes)"
@@ -471,7 +494,7 @@ enum TypeFactsChecks {
 			line.append(" check\(check)=\(result.findingsByCheck[check]?.count ?? 0)")
 		}
 		line.append(" check10Exempted=\(result.check10ExemptedPairs) check10SilentNil=\(result.check10SilentNilReads) nilOrderReads=\(result.nilOrderReads) nilOrderFewerFunctions=\(result.nilOrderFewerFunctions) nilOrderPlaces=\(result.nilOrderPlaces) sendableGapProxy=\(result.sendableGapProxyNodes)")
-		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) test=\(Test.current?.name ?? "")")
+		line.append(" check10Owed=\(result.check10OwedByFact.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) check10OwedUncovered=\(result.check10OwedUncovered.count) check34PassesBoth=\(result.check34PassesBoth) check34ValueAnsweredNone=\(result.check34ValueAnsweredNone) test=\(Test.current?.name ?? "")")
 		for check in 11...lastCheck {
 			line.append(" compared\(check)=\(result.comparedByCheck[check] ?? 0)")
 		}
@@ -479,6 +502,9 @@ enum TypeFactsChecks {
 			if let first = result.findingsByCheck[check]?.first {
 				line.append(" first\(check)=«\(first.replacingOccurrences(of: "\n", with: " "))»")
 			}
+		}
+		if let first = result.check34FirstValueAnsweredNone {
+			line.append(" firstValueAnsweredNone34=«\(first)»")
 		}
 		result.line = line + "\n"
 		return result
@@ -615,7 +641,135 @@ enum TypeFactsChecks {
 		return reads
 	}
 
-	static let lastCheck = 33
+	static let lastCheck = 34
+
+	/// One read only if available at one place, as check 34 compares it: what the tree passes it there (`nil` or the
+	/// declaration's binding, each form the place's subtree reads in, from the place's construction log), and the facts'
+	/// answer, the source of the call that builds the place resolved through the calls above it: `none`, or `bound` with
+	/// the answer's form.
+	struct OnlyIfAvailableComparison: Equatable, CustomStringConvertible {
+		enum Agreement: Equatable {
+			case agrees
+			/// The tree passes `nil` in one form and a value in another.
+			case treePassesBoth
+			/// The tree passes `nil` and the facts answer a declaration: the finding.
+			case nilAnsweredByValue
+			/// The tree passes a value the facts answer none: what a root is handed that the facts do not seed yet, a seam's
+			/// parameter or a mock root's binding (`TypeFactsGraph`'s `rootAnswer`).
+			case valueAnsweredNone
+		}
+
+		let place: Int
+		let declaration: String
+		let read: String
+		/// What the tree passes, each form's answer sorted: `nil` or the binding.
+		let tree: [String]
+		let facts: String
+
+		var agreement: Agreement {
+			let treePassesNil = tree.allSatisfy { $0 == "nil" }
+			let treePassesValue = tree.allSatisfy { $0 != "nil" }
+			guard treePassesNil || treePassesValue else { return .treePassesBoth }
+			switch (treePassesNil, facts == "none") {
+			case (true, true), (false, false):
+				return .agrees
+			case (true, false):
+				return .nilAnsweredByValue
+			case (false, true):
+				return .valueAnsweredNone
+			}
+		}
+
+		var description: String {
+			"place \(place) \(declaration) \(read): tree \(tree.joined(separator: ", ")), facts \(facts)"
+		}
+	}
+
+	/// Check 34's comparisons, in place order, then in the order of each place's node's reads: every read only if
+	/// available a place's node reads from above it that the place's construction log answers, but those a mock root pins
+	/// to `nil` (`mock(<label>) = true`), which the facts answer on the `mock` channel. What the tree passes is the logged
+	/// binding, or `nil` where the declaration is generated after the place's branch (`isGeneratedLater`). Where the tree passes `nil`, the
+	/// facts must answer none: the label's nearest declaration provides no form the read reads, a form it reads is being
+	/// built there, or it is built after the branch that leads to the place.
+	static func onlyIfAvailableComparisons(of report: TypeFactsReport) -> [OnlyIfAvailableComparison] {
+		let places = report.places
+		var factsVariantByPlace = [Int?](repeating: nil, count: places.count)
+		var edgeByPlace = [Int?](repeating: nil, count: places.count)
+		var childrenByPlace = [[Int]](repeating: [], count: places.count)
+		for (index, place) in places.enumerated() {
+			if let parent = place.parent {
+				childrenByPlace[parent].append(index)
+			}
+		}
+		if let root = places.first, root.node == 0, !report.variantNodes.isEmpty {
+			factsVariantByPlace[0] = 0
+		}
+		for (index, children) in childrenByPlace.enumerated() {
+			guard let variant = factsVariantByPlace[index], let node = places[index].node else { continue }
+			let edges = report.nodes[node].edges
+			var cursor = 0
+			for child in children {
+				guard let childNode = places[child].node, let edge = edges[cursor...].firstIndex(of: childNode) else { continue }
+				factsVariantByPlace[child] = report.variantCalls[variant][edge]
+				edgeByPlace[child] = edge
+				cursor = edge + 1
+			}
+		}
+		return onlyIfAvailableComparisons(of: report, factsVariantByPlace: factsVariantByPlace, edgeByPlace: edgeByPlace)
+	}
+
+	private static func onlyIfAvailableComparisons(of report: TypeFactsReport, factsVariantByPlace: [Int?], edgeByPlace: [Int?]) -> [OnlyIfAvailableComparison] {
+		let places = report.places
+		/// The facts' answer to `read` at the place, followed up through each call that passes its caller's answer through.
+		func factsAnswer(to read: String, at index: Int) -> String? {
+			var current = index
+			while true {
+				guard let node = places[current].node, let position = report.nodes[node].readsFromAbove.firstIndex(of: read) else { return nil }
+				guard let parent = places[current].parent else {
+					return position < report.rootSources.count ? report.rootSources[position] : nil
+				}
+				guard let parentVariant = factsVariantByPlace[parent], let edge = edgeByPlace[current] else { return nil }
+				let source = report.variantCallSources[parentVariant][edge][position]
+				guard source == "passedThrough" else { return source }
+				current = parent
+			}
+		}
+		/// Whether the nearest declaration of `label` above the place is a child its scope generates after the child the place
+		/// is on the path of, which the tree passes `nil` for (`propertiesGeneratedLater`), though the place's construction
+		/// log, which reads declarations whatever their order, names it. A scope's forwarded properties are bound before
+		/// its children, and a child the place is built inside is being built, which the log answers.
+		func isGeneratedLater(_ label: String, above index: Int) -> Bool {
+			var current = index
+			while let parent = places[current].parent {
+				guard let currentNode = places[current].node, let parentNode = places[parent].node, let generator = places[parent].generator else { return false }
+				let currentLabel = report.nodes[currentNode].label
+				if let declaring = generator.childLabels.firstIndex(of: label) {
+					guard currentLabel != label,
+					      let current = generator.childLabels.firstIndex(of: currentLabel),
+					      let declaringPosition = generator.orderedIndices.firstIndex(of: declaring),
+					      let currentPosition = generator.orderedIndices.firstIndex(of: current)
+					else { return false }
+					return declaringPosition > currentPosition
+				}
+				guard !report.nodes[parentNode].bindings.contains(where: { $0.hasPrefix("\(label): ") }) else { return false }
+				current = parent
+			}
+			return false
+		}
+		var comparisons = [OnlyIfAvailableComparison]()
+		for (index, place) in places.enumerated() {
+			guard let node = place.node, factsVariantByPlace[index] != nil else { continue }
+			for read in report.nodes[node].readsFromAbove where read.hasPrefix("optional(") {
+				let label = String(read.dropFirst("optional(".count).dropLast())
+				guard !place.answeredReads.contains("mock(\(label)) = true") else { continue }
+				let logged = place.answeredReads.filter { $0.hasPrefix("\(read) = ") }.map { String($0.dropFirst("\(read) = ".count)) }.sorted()
+				let tree = !logged.isEmpty && isGeneratedLater(label, above: index) ? logged.map { _ in "nil" } : logged
+				guard !tree.isEmpty, let facts = factsAnswer(to: read, at: index) else { continue }
+				comparisons.append(OnlyIfAvailableComparison(place: index, declaration: place.declaration, read: read, tree: tree, facts: facts))
+			}
+		}
+		return comparisons
+	}
 
 	/// Checks 11 to 31: each column of the graph against what the generator decided at each place.
 	///

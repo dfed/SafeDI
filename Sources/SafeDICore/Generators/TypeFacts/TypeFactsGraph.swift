@@ -777,6 +777,34 @@ struct TypeFactsGraph: Sendable {
 		declarationLocations = locations.values
 		let reads = ReadsFromAbove(graph: graph, own: readsOwn, hidden: readsHidden, madeAgain: madeAgain)
 		self.reads = reads
+		// The receives only if available each node's subtree reads from above it, by label: the property each receives, or
+		// an alias only if available is fulfilled by. A node's bindings hide every property of their labels, as they hide the
+		// reads, so these are the receives a declaration answering a read of the label at an edge is read by.
+		var propertiesByLabel = [[Int32]](repeating: [], count: labels.values.count)
+		for (property, label) in propertyFacts.labels.enumerated() {
+			propertiesByLabel[Int(label)].append(Int32(property))
+		}
+		let onlyIfAvailableReceives = ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: nodes.count, columnCount: propertyFacts.labels.count) { index, insert in
+				ownOnlyIfAvailable[index].forEach(insert)
+			},
+			hidden: BitRows(rowCount: nodes.count, columnCount: propertyFacts.labels.count) { index, insert in
+				for binding in bindings[Int(bindingOffsets[index])..<Int(bindingOffsets[index + 1])] {
+					propertiesByLabel[Int(binding.label)].forEach(insert)
+				}
+				for target in madeAgainByNode.isEmpty ? [] : madeAgainByNode[index] {
+					propertiesByLabel[Int(target.label)].forEach(insert)
+				}
+			},
+		)
+		let onlyIfAvailableReceivesByLabel = graph.nodes.indices.map { index in
+			var receivesByLabel = [Int32: [Int32]]()
+			onlyIfAvailableReceives.rows.forEachColumn(inRow: index) { property, _ in
+				receivesByLabel[propertyFacts.labels[Int(property)], default: []].append(property)
+			}
+			return receivesByLabel
+		}
 		// The forms of each label each node's subtree reads only if available from above it, the reads its variants'
 		// parameters serve, folded as the reads are.
 		var formsByLabel = [[Int32]](repeating: [], count: labels.values.count)
@@ -819,7 +847,7 @@ struct TypeFactsGraph: Sendable {
 		self.readOffsets = readOffsets
 		self.labelColumn = labelColumn
 		self.labelOffsets = labelOffsets
-		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) }, seamRootDeclarationByLabel: seamRootDeclarationByLabel)
+		let answers = Self.answers(of: graph, reads: reads, readTable: readInterner.values, labels: labels, bindings: bindings, bindingOffsets: bindingOffsets, bindingsBefore: bindingsBefore, properties: properties, forms: (table: formInterner.values, readFromAbove: formsReadFromAbove), onlyIfAvailableReceives: (byLabel: onlyIfAvailableReceivesByLabel, facts: propertyFacts), madeAgain: madeAgain.map { ($0, madeAgainByNode, loopParentByMember) }, seamRootDeclarationByLabel: seamRootDeclarationByLabel)
 		answerIsBeingBuilt = answers.isBeingBuilt
 		answerIsMadeAgain = answers.isMadeAgain
 		answerTexts = answers.texts
@@ -988,6 +1016,7 @@ struct TypeFactsGraph: Sendable {
 		bindingsBefore: [Int32],
 		properties: TypeFactsInterner<Property>,
 		forms: (table: [OnlyIfAvailableForm], readFromAbove: ReadsFromAbove),
+		onlyIfAvailableReceives: (byLabel: [[Int32: [Int32]]], facts: TypeFactsPropertyFacts),
 		madeAgain: (edges: MadeAgainEdges, targetsByNode: [[LoopTarget]], parentByMember: [Int32])?,
 		seamRootDeclarationByLabel: [Int32: Property],
 	) -> (variants: TypeFactsVariants, isBeingBuilt: [Bool], isMadeAgain: [Bool], texts: [String], keys: [Int32], properties: [Int32]) {
@@ -1112,11 +1141,25 @@ struct TypeFactsGraph: Sendable {
 				guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else {
 					return madeAgainAnswer(at: node, for: read)
 				}
+				let target = Int(edgeTargets[edge])
+				// A read only if available is answered none, where the tree passes `nil` (`NearestDeclarations.resolvingBinding(of:)`):
+				// by the declaration being built, and by a declaration that provides no form any receive of the label beneath
+				// reads, which hides every declaration farther up. A declaration bound after the edge answers nothing, and the
+				// node's bindings hide the read from above it, so it is answered none too (`TypeFactsVariants`).
+				if read.channel == .optional || read.channel == .optionalValue {
+					guard !beingBuilt else {
+						return VariantBinding(answer: -1, declaration: Int32(node))
+					}
+					if let receives = onlyIfAvailableReceives.byLabel[target][read.label],
+					   !receives.contains(where: { onlyIfAvailableReceives.facts.provides(property, aFormReadBy: $0) })
+					{
+						return VariantBinding(answer: -1, declaration: Int32(node))
+					}
+				}
 				let kind = declaration.property.propertyType
 				let declarationForms = declaration.forms
 				// Rule 1: a wrapper answering a read only if available passes through the optional parameter `nil` passes
 				// through where every form the callee's subtree reads the label in, from above it, is the wrapper's.
-				let target = Int(edgeTargets[edge])
 				var inReadForm = false
 				if kind.isLazilyInstantiated, read.channel == .optional || read.channel == .optionalValue {
 					inReadForm = true

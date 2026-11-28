@@ -291,11 +291,11 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_answersBoundButNotProvided_whenNearestDeclarationOfLabelIsAnotherType() async throws {
+	mutating func generate_answersNone_whenNearestDeclarationOfLabelIsAnotherType() async throws {
 		// `Entry0` binds `mark: OtherMark` before it builds `ring0Builder`, whose `Ring0` receives `mark: Mark?` only if
-		// available: the answer at the edge is bound, but provides no form the subtree reads, so the call passes `nil`, as
-		// the generated `Ring0(ring1Builder: ring1Builder, mark: nil)` does. A farther `mark: Mark` above `Entry0` would be
-		// rejected as hidden in the chain, so nothing farther is handed.
+		// available: the declaration at the edge provides no form the subtree reads, so the call answers both reads none, as
+		// the generated `Ring0(ring1Builder: ring1Builder, mark: nil)` passes `nil`. A farther `mark: Mark` above `Entry0`
+		// would be rejected as hidden in the chain, so nothing farther is handed.
 		let report = try await rootReport(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let entry0: Entry0"]),
 			seamFixtureType(named: "Entry0", isFinalClass: true, declarations: ["@Instantiated let mark: OtherMark", "@Instantiated let ring0Builder: Instantiator<Ring0>"]),
@@ -305,9 +305,9 @@ struct SafeDIToolTypeFactsVariantKeyTests: ~Copyable {
 			seamFixtureType(named: "OtherMark", isFinalClass: true, declarations: []),
 		])
 
-		// The call of `Ring0` answers its two reads of `mark` (only if available, and optional) by `mark: OtherMark`.
-		#expect(report.world.contains("[\"bound beingBuilt\", \"bound declared not provided\", \"bound declared not provided\"]"), "\(report.world)")
-		#expect(report.world.components(separatedBy: "not provided").count == 3, "\(report.world)")
+		// The call of `Ring0` answers its two reads of `mark` (only if available, and optional) none.
+		#expect(report.world.contains("[\"bound beingBuilt\", \"none\", \"none\"]"), "\(report.world)")
+		#expect(report.world.components(separatedBy: "not provided").count == 1, "\(report.world)")
 	}
 
 	@Test
