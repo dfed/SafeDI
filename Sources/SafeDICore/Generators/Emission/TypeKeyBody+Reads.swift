@@ -30,7 +30,21 @@ extension TypeKeyLayout {
 		let dependents = dependentsOfBodies()
 		postOrder = postOrderOfViews()
 		reads = Array(repeating: [], count: bodies.count)
-		guard settle(dependents: dependents, recompute: { layout, body in
+		requiredReads = Array(repeating: [], count: bodies.count)
+		// A view of a node several roots share whose tree closes on no function outside it reads what the node's tree reads,
+		// worked out once for every root (`NodeLayoutFacts.readsByNode`): it starts with those reads, and its body is
+		// computed again only where a view it reads changes, which gives what it holds.
+		var isComputed = [Bool](repeating: false, count: bodies.count)
+		if !nodeFacts.readsByNode.isEmpty {
+			for body in bodies.indices.dropFirst() where !variantBodies.contains(body) {
+				guard let node = bodies[body].record?.node, let shared = nodeFacts.readsByNode[node] else { continue }
+				reads[body] = shared.reads
+				requiredReads[body] = shared.requiredReads
+				isComputed[body] = true
+			}
+		}
+		guard settle(dependents: dependents, isComputed: isComputed, recompute: { layout, body in
+			GenerationWork.record(1, by: .computingViewReads)
 			let bodyReads = layout.readsOfBody(body)
 			guard bodyReads != layout.reads[body] else { return false }
 			layout.reads[body] = bodyReads
@@ -40,8 +54,7 @@ extension TypeKeyLayout {
 		for body in postOrder {
 			escapingReads[body] = escapingReadsOfBody(body)
 		}
-		requiredReads = Array(repeating: [], count: bodies.count)
-		return settle(dependents: dependents, recompute: { layout, body in
+		return settle(dependents: dependents, isComputed: isComputed, recompute: { layout, body in
 			let required = layout.requiredReadsOfBody(body)
 			guard required != layout.requiredReads[body] else { return false }
 			layout.requiredReads[body] = required
@@ -144,10 +157,11 @@ extension TypeKeyLayout {
 	}
 
 	/// Runs passes over the views in post-order until no view changes, recomputing a view only where it is dirty: never
-	/// computed, or a view it reads changed since. `recompute` returns whether the view changed. `false` where the passes
-	/// do not settle within one pass per place, as many as the path key's per-place passes could take.
-	mutating func settle(dependents: [[Int]], recompute: (inout TypeKeyLayout, Int) -> Bool) -> Bool {
-		var dirty = [Bool](repeating: true, count: bodies.count)
+	/// computed (`isComputed` says which start computed), or a view it reads changed since. `recompute` returns whether the
+	/// view changed. `false` where the passes do not settle within one pass per place, as many as the path key's per-place
+	/// passes could take.
+	mutating func settle(dependents: [[Int]], isComputed: [Bool], recompute: (inout TypeKeyLayout, Int) -> Bool) -> Bool {
+		var dirty = isComputed.map { !$0 }
 		var anyDirty = true
 		var passes = 0
 		let (bound, overflow) = placeCount().addingReportingOverflow(2)
@@ -306,4 +320,28 @@ extension TypeKeyLayout {
 		}
 		return escaping.filter { !bodies[body].forwardedLabels.contains($0.key) && !bodies[body].cycleParameterLabels.contains($0.key) }
 	}
+
+	/// The reads of each view of `built`'s body and the bodies beneath it, laid out as the one statement of a root's body
+	/// with nothing declared around it, for each view whose node's tree is closed (`Domain.isClosed`): what any root's view
+	/// of the node reads, wherever it is. `nil` where the type key cannot lay the body out.
+	static func readsOfClosedViews(ofNode built: BuiltPlaceRecord, nodeFacts: NodeLayoutFacts) -> [(node: PlanNode, reads: NodeReads)]? {
+		var layout = TypeKeyLayout()
+		layout.nodeFacts = nodeFacts
+		layout.declareOuter([])
+		guard layout.read([.place(PlacePlan(code: .text(""), record: .built(built)))]), layout.computeReads() else { return nil }
+		var closedViews = [(node: PlanNode, reads: NodeReads)]()
+		for body in layout.bodies.indices.dropFirst() {
+			guard let node = layout.bodies[body].record?.node, layout.domainsByNode[node]?.isClosed == true else { continue }
+			closedViews.append((node: node, reads: NodeReads(reads: layout.reads[body], requiredReads: layout.requiredReads[body])))
+		}
+		return closedViews
+	}
+}
+
+/// What a view of a plan node whose tree is closed reads (`TypeKeyLayout.computeReads()`), whatever root holds it.
+struct NodeReads: Sendable {
+	/// The labels the view's function reads and does not bind, in the order it first reads them.
+	let reads: [String]
+	/// The labels of `reads` that some read inside it requires a value of.
+	let requiredReads: Set<String>
 }

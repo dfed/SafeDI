@@ -71,6 +71,10 @@ public struct GenerationWork: Sendable {
 		/// Reading the statements of a plan node's body and what they declare (`TypeKeyLayout.DeclaredChildren`): each node's
 		/// view once per root, but a node several mock roots share, read once for all of them (`NodeLayoutFacts`).
 		case declaringPlanNodeStatements
+		/// Computing what a view of a root's body reads (`TypeKeyLayout.computeReads()`): each view once per pass that finds
+		/// it dirty, but a view of a closed node several mock roots share, whose reads are worked out once for all of them
+		/// (`NodeLayoutFacts.readsByNode`).
+		case computingViewReads
 		/// Finding the root functions a root's body holds (`RootFunctionHoisting`): each level of the plan the walk reads.
 		/// A place records whether a root function is beneath it, so the walk reads no tree of a place that holds none,
 		/// and its levels do not grow with the paths through the tree.

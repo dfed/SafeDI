@@ -455,6 +455,7 @@ extension TypeKeyLayout {
 						for name in childDomain.closedOnFunctionNames {
 							close(name, beneathTheBody: true)
 						}
+						domain.callsVariant = domain.callsVariant || childDomain.callsVariant
 					} else {
 						childBuilt.constructionReads.forEach(lookUp)
 					}
@@ -464,6 +465,8 @@ extension TypeKeyLayout {
 					// A call of a variant passes what the variant reads as its cycle arguments, which the call site's reads hold.
 					if closer.targetVariant == nil {
 						close(closer.closedOnFunctionName, beneathTheBody: false)
+					} else {
+						domain.callsVariant = true
 					}
 					boundBefore.insert(closer.property.label)
 				case let .alias(alias):
