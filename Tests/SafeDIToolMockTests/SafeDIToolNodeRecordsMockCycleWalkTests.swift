@@ -1695,6 +1695,552 @@ struct SafeDIToolNodeRecordsMockCycleWalkTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeBuiltAlongEdgeConfigurationsLeaveOutTakesDefaultValuedParameter() async throws {
+		// `Parent`’s configuration has no field for its child, so the walk builds each `Child` of the ring with its
+		// initializer’s own default, a new `State` each time, and no override reaches one.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, state: State = State()) {
+				        self.parentBuilder = parentBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "each child takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate()].map { $0.childBuilder.instantiate().state === $0.childBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "each lap takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate()].map { $0.state === $0.parentBuilder.instantiate().childBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") })))"#),
+			],
+			markers: ["parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypesBeneathEdgeConfigurationsLeaveOutTakeDefaultValuedParameters() async throws {
+		// `Leaf`, `Bud` and `Twig` are off the cycle and built only beneath `Child`, which the configurations leave out: the
+		// walk builds each with its initializer’s own default, a new `State` for each one an instantiator builds.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, leafBuilder: Instantiator<Leaf>, twig: Twig) {
+				        self.parentBuilder = parentBuilder
+				        self.leafBuilder = leafBuilder
+				        self.twig = twig
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let leafBuilder: Instantiator<Leaf>
+				    @Instantiated let twig: Twig
+				    public var marker = ""
+				}
+				""",
+				"Leaf.swift": """
+				@Instantiable
+				public final class Leaf: Instantiable, Marked {
+				    public init(budBuilder: Instantiator<Bud>, state: State = State()) {
+				        self.budBuilder = budBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let budBuilder: Instantiator<Bud>
+				    let state: State
+				    public var marker = ""
+				}
+
+				@Instantiable
+				public final class Bud: Instantiable, Marked {
+				    public init(state: State = State()) {
+				        self.state = state
+				    }
+
+				    let state: State
+				    public var marker = ""
+				}
+
+				@Instantiable
+				public final class Twig: Instantiable, Marked {
+				    public init(state: State = State()) {
+				        self.state = state
+				    }
+
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "each leaf takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate()].map { $0.leafBuilder.instantiate().state === $0.leafBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "each bud takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate().leafBuilder.instantiate()].map { $0.budBuilder.instantiate().state === $0.budBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") })))"#),
+			],
+			markers: ["parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeBuiltAlongEdgeConfigurationsLeaveOutAndByRootTakesDefaultValuedParameter() async throws {
+		// `Root` and `Parent` build one `childBuilder`. The root’s is built of the root’s configuration, whose one `State` every
+		// `Child` a path from it closes on shares; the one `Parent` builds beneath the root’s `parentBuilder` is left out, and
+		// takes a `State` of its own.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>, childBuilder: Instantiator<Child>) {
+				        self.parentBuilder = parentBuilder
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, state: State = State()) {
+				        self.parentBuilder = parentBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the root’s state", expression: "{ let state = State(); let root = Root.mock(safeDIOverrides: .init(childBuilder: .init(state: state))); return [root.childBuilder.instantiate().state === state, root.childBuilder.instantiate().parentBuilder.instantiate().childBuilder.instantiate().state === state, root.parentBuilder.instantiate().childBuilder.instantiate().state === state] }()"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") }), childBuilder: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "child.parent") }))))"#),
+			],
+			markers: ["parent", "child.parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenCycleClosesOnTypeBuiltAlongEdgeConfigurationsLeaveOut() async throws {
+		// `Child` and `Bridge` build each other beneath `Parent`, whose configuration has no field for its child, and
+		// `Child`’s has none for its bridge. The `Child` a `Bridge` builds closes the cycle on the place of the `Child` above
+		// it, which was entered with no configuration: the walk builds it with a new `State` too.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, bridgeBuilder: Instantiator<Bridge>, state: State = State()) {
+				        self.parentBuilder = parentBuilder
+				        self.bridgeBuilder = bridgeBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let bridgeBuilder: Instantiator<Bridge>
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+				"Bridge.swift": """
+				@Instantiable
+				public final class Bridge: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the child a bridge builds takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate()].map { $0.state === $0.bridgeBuilder.instantiate().childBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") })))"#),
+			],
+			markers: ["parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenRootBuildsTypeEdgeConfigurationsLeaveOutClosesOn() async throws {
+		// `Root` builds the `Child` that `Parent`’s configuration has no field for, so the edge the configurations leave out
+		// only ever closes the cycle on the root’s place: every `Child` reads the root’s configuration, and its one `State`.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, state: State = State()) {
+				        self.parentBuilder = parentBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the root’s state", expression: "{ let state = State(); let child = Root.mock(safeDIOverrides: .init(childBuilder: .init(state: state))).childBuilder.instantiate(); return [child.state === state, child.parentBuilder.instantiate().childBuilder.instantiate().state === state] }()"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(childBuilder: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "child.parent") }))))"#),
+			],
+			markers: ["child.parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeBeneathEdgeConfigurationsLeaveOutBuildsCyclesTypeThroughAnotherProperty() async throws {
+		// `Child`, which the configurations leave out, builds `Parent` through `spareBuilder` too, a second property of the
+		// type `Root`’s `parentBuilder` builds: the walk’s function for the spare `Parent` reads the overrides of the
+		// `Parent` above it, so both hold that configuration’s `state` and its override builds both.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>, state: State = State()) {
+				        self.childBuilder = childBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, spareBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				        self.spareBuilder = spareBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let spareBuilder: Instantiator<Parent>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the spare parent holds the state of the parent above it", expression: "[Root.mock().parentBuilder.instantiate()].map { parent in parent.childBuilder.instantiate().spareBuilder.instantiate().state === parent.state }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0, state: $1), "parent") })))"#),
+				DifferentialValueProbe(name: "the spare parent is the overridden one too", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0, state: $1), "parent") }))).parentBuilder.instantiate().childBuilder.instantiate().spareBuilder.instantiate()"#),
+			],
+			markers: ["parent"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeBeneathEdgeConfigurationsLeaveOutHoldsCyclesTypeByValue() async throws {
+		// `Holder`, beneath the `Child` the configurations leave out, holds a `Parent` by value, of the type `Root`’s
+		// `parentBuilder` builds: the walk builds `Holder` with no override, and its `Parent` and that `Parent`’s `Twig`s
+		// with the overrides of the `Parent` above, so every `Twig` holds that configuration’s one `State`.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>, twigBuilder: Instantiator<Twig>) {
+				        self.childBuilder = childBuilder
+				        self.twigBuilder = twigBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    @Instantiated let twigBuilder: Instantiator<Twig>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, holder: Holder) {
+				        self.parentBuilder = parentBuilder
+				        self.holder = holder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let holder: Holder
+				    public var marker = ""
+				}
+
+				@Instantiable
+				public final class Holder: Instantiable, Marked {
+				    public init(parent: Parent) {
+				        self.parent = parent
+				    }
+
+				    @Instantiated let parent: Parent
+				    public var marker = ""
+				}
+
+				@Instantiable
+				public final class Twig: Instantiable, Marked {
+				    public init(state: State = State()) {
+				        self.state = state
+				    }
+
+				    let state: State
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "the twigs of the held parent hold one state", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate().holder.parent].map { $0.twigBuilder.instantiate().state === $0.twigBuilder.instantiate().state }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init(twigBuilder: .init({ marked(Twig(state: $0), "twig") }), { marked(Parent(childBuilder: $0, twigBuilder: $1), "parent") })))"#),
+				DifferentialValueProbe(name: "the held parent is the overridden one too", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init(twigBuilder: .init({ marked(Twig(state: $0), "twig") }), { marked(Parent(childBuilder: $0, twigBuilder: $1), "parent") }))).parentBuilder.instantiate().childBuilder.instantiate().holder"#),
+			],
+			markers: ["parent", "twig"],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsTheWalksValues_whenTypeBeneathEdgeConfigurationsLeaveOutEntersAnotherCycle() async throws {
+		// `Child`, which the configurations leave out, holds a `Ring` by value, and `Ring` and `Link` are a cycle of their
+		// own beneath it: no `Ring` above was entered with a configuration, so the walk builds each `Ring` a `Link`
+		// instantiates with its initializer’s own default, a new `State` each time.
+		try await expectWalksValues(
+			fixture: [
+				"Root.swift": """
+				public final class State {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"Parent.swift": """
+				@Instantiable
+				public final class Parent: Instantiable, Marked {
+				    public init(childBuilder: Instantiator<Child>) {
+				        self.childBuilder = childBuilder
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				    public var marker = ""
+				}
+				""",
+				"Child.swift": """
+				@Instantiable
+				public final class Child: Instantiable, Marked {
+				    public init(parentBuilder: Instantiator<Parent>, ring: Ring) {
+				        self.parentBuilder = parentBuilder
+				        self.ring = ring
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				    @Instantiated let ring: Ring
+				    public var marker = ""
+				}
+				""",
+				"Ring.swift": """
+				@Instantiable
+				public final class Ring: Instantiable, Marked {
+				    public init(linkBuilder: Instantiator<Link>, state: State = State()) {
+				        self.linkBuilder = linkBuilder
+				        self.state = state
+				    }
+
+				    @Instantiated let linkBuilder: Instantiator<Link>
+				    let state: State
+				    public var marker = ""
+				}
+
+				@Instantiable
+				public final class Link: Instantiable, Marked {
+				    public init(ringBuilder: Instantiator<Ring>) {
+				        self.ringBuilder = ringBuilder
+				    }
+
+				    @Instantiated let ringBuilder: Instantiator<Ring>
+				    public var marker = ""
+				}
+				""",
+			],
+			probes: [
+				DifferentialValueProbe("Root.mock()"),
+				DifferentialValueProbe(name: "each ring a link builds takes a state of its own", expression: "[Root.mock().parentBuilder.instantiate().childBuilder.instantiate().ring].map { ring in [ring.linkBuilder.instantiate()].map { [$0.ringBuilder.instantiate().state === ring.state, $0.ringBuilder.instantiate().state === $0.ringBuilder.instantiate().state] } }"),
+				DifferentialValueProbe(name: "overridden", expression: #"Root.mock(safeDIOverrides: .init(parentBuilder: .init({ marked(Parent(childBuilder: $0), "parent") })))"#),
+			],
+			markers: ["parent"],
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
