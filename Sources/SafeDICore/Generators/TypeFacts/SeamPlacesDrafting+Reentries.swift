@@ -129,8 +129,54 @@ extension SeamPlacesDrafts {
 		// Each declaration's field where a level's list is alike, projected to what the facts give it: its property with its
 		// type, its declaring type and location, and whether it is received only if available. The root's parameters are
 		// the signature's, so its lists are left out.
-		func projected(property: Property, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool) -> String {
-			"\(property.label): \(property.typeDescription.asSource) declared by \(declaringType.asSource) at \(location.map { "\($0.order) \($0.placement)" } ?? "none")\(isReceivedOnlyIfAvailable ? " only if available" : "")"
+		func projected(property: Property, declaringType: TypeDescription, location: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool, labelsHeldAboveSeam: [String]?) -> String {
+			"\(property.label): \(property.typeDescription.asSource) declared by \(declaringType.asSource) at \(location.map { "\($0.order) \($0.placement)" } ?? "none")\(isReceivedOnlyIfAvailable ? " only if available" : "") buildable \(labelsHeldAboveSeam?.joined(separator: " ") ?? "none")"
+		}
+		// The labels the seam's caller holds: its parameters but the ones the seam forwards. A child that is no alias is
+		// buildable above the seam where its tree receives only those labels or its own.
+		let rootForwardedLabels = world.worldBindings(of: Int(world.declaration(of: rootVariant))).filter(\.isForwarded).map { world.propertyTable[Int($0.property)].label }
+		let receivedLabels = Set(parameters.map(\.property.label)).subtracting(rootForwardedLabels)
+		func labelsHeldAboveSeam(ofBinding property: Property, atVariant variant: VariantID) -> [String]? {
+			let targets = world.edges(from: world.declaration(of: variant))
+			guard let edge = targets.firstIndex(where: { world.graph.nodes[Int($0)].property == property }) else { return nil }
+			let child = targets[edge]
+			let node = world.graph.nodes[Int(child)]
+			guard node.alias == nil, !node.key.isFill else { return nil }
+			let receivedByTree = world.receives.received.columns(inRow: Int(child)).map { world.propertyTable[Int($0)].label }
+			guard receivedByTree.allSatisfy({ receivedLabels.contains($0) || $0 == property.label }) else { return nil }
+			return receivedLabels.union([property.label]).sorted() + ["in tree:"] + placesInTree(of: SeamPlacesLevelID(variant: variant, edge: Int32(edge - targets.startIndex)))
+		}
+		// The places the tree a level's next edge builds holds or passes up, in the order a last-in-first-out walk of it
+		// reaches them: each hole as its declaring type and label, each passed-up hole as the call's type. The walk follows
+		// the calls that build in line, so a call that closes a cycle adds nothing.
+		func placesInTree(of start: SeamPlacesLevelID) -> [String] {
+			var places = [String]()
+			var levelsToVisit = [start]
+			var visitedVariants = Set<VariantID>()
+			while let visited = levelsToVisit.popLast() {
+				let targets = world.edges(from: world.declaration(of: visited.variant))
+				let target = targets[targets.startIndex + Int(visited.edge)]
+				let node = world.graph.nodes[Int(target)]
+				for passUp in world.passUps(of: Int(target)) where passUp.calledCaseIndex >= 0 {
+					places.append("passed up by \(world.typeTable[Int(world.builtTypes[Int(target)])].asSource)")
+				}
+				if node.key.leaf == .hole {
+					places.append("\(world.graph.nodes[Int(world.declaration(of: visited.variant))].scope.instantiable.concreteInstantiable.asSource) \(node.property?.label ?? "fill")")
+				}
+				guard node.key.leaf == .none, buildsInLine(visited) else { continue }
+				let callee = world.calls(of: visited.variant)[world.calls(of: visited.variant).startIndex + Int(visited.edge)]
+				guard visitedVariants.insert(callee).inserted else { continue }
+				for edge in 0..<Int32(world.edges(from: world.declaration(of: callee)).count) {
+					levelsToVisit.append(SeamPlacesLevelID(variant: callee, edge: edge))
+				}
+			}
+			return places.uniqued()
+		}
+		func spelledPlaces(inTree cases: [Int]) -> [String] {
+			cases.map { index in
+				let level = places.levels[places.cases[index].ownerLevel]
+				return places.cases[index].passedUp == nil ? "\(level.key.builtType?.asSource ?? "fill") \(level.key.nextProperty?.label ?? "fill")" : "passed up by \(level.key.builtType?.asSource ?? "fill")"
+			}.uniqued()
 		}
 		var factsFieldsByList = [String: Set<[String]>]()
 		for level in levels + closingLevels where level.id.variant != rootVariant {
@@ -139,7 +185,7 @@ extension SeamPlacesDrafts {
 			let next = world.graph.nodes[Int(targets[targets.startIndex + Int(level.id.edge)])]
 			let key = "\(builtType(of: level.id.variant)) before \(next.key.isFill ? "fill" : next.property?.label ?? "fill"): \(list(of: level.id.variant))"
 			let fields = world.worldBindings(of: Int(declaration)).map { binding in
-				projected(property: world.propertyTable[Int(binding.property)], declaringType: world.typeTable[Int(binding.declaringType)], location: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)], isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable)
+				projected(property: world.propertyTable[Int(binding.property)], declaringType: world.typeTable[Int(binding.declaringType)], location: binding.declarationLocation < 0 ? nil : world.declarationLocations[Int(binding.declarationLocation)], isReceivedOnlyIfAvailable: binding.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: labelsHeldAboveSeam(ofBinding: world.propertyTable[Int(binding.property)], atVariant: level.id.variant))
 			}
 			factsFieldsByList[key, default: []].insert(fields)
 		}
@@ -149,7 +195,7 @@ extension SeamPlacesDrafts {
 			let list = places.declarationLists[level.declarationList]
 			let key = "\(level.key.builtType?.asSource ?? "fill") before \(level.key.nextProperty?.label ?? "fill"): \(list.map { spelled(label: $0.field.property.label, isCycleParameter: $0.isCycleParameter, isRebound: $0.isReboundByBuilderFunction, isForwarded: $0.isForwarded) }.joined(separator: ", "))"
 			guard let factsFields = factsFieldsByList[key] else { continue }
-			let storedFields = list.map { projected(property: $0.field.property, declaringType: $0.field.declaringType, location: $0.field.declarationLocation, isReceivedOnlyIfAvailable: $0.field.isReceivedOnlyIfAvailable) }
+			let storedFields = list.map { projected(property: $0.field.property, declaringType: $0.field.declaringType, location: $0.field.declarationLocation, isReceivedOnlyIfAvailable: $0.field.isReceivedOnlyIfAvailable, labelsHeldAboveSeam: $0.buildability.map { $0.labelsHeldAboveSeam + ["in tree:"] + spelledPlaces(inTree: $0.placesInTree) }) }
 			comparedFieldCount += storedFields.count
 			guard !factsFields.contains(storedFields) else { continue }
 			let nearest = factsFields.sorted { $0.lexicographicallyPrecedes($1) }[0]
@@ -157,6 +203,20 @@ extension SeamPlacesDrafts {
 				fieldDifferences.insert("fields: \(key): facts \(factsField), stored \(storedField)")
 			}
 		}
+		// How many stored declarations carry each fact the facts do not yet give, so the rows to do go by count.
+		let storedDeclarations = places.declarationLists.flatMap(\.self)
+		let rowCounts = [
+			("alias", storedDeclarations.count { $0.alias != nil }),
+			("callersArgument", storedDeclarations.count(where: \.isBoundFromCallersArgument)),
+			("fieldOfSeamParameter", storedDeclarations.count(where: \.isFieldOfSeamParameter)),
+			("fillFieldHiding", storedDeclarations.count { $0.fillFieldHiding != nil }),
+			("buildability", storedDeclarations.count { $0.buildability != nil }),
+			("builtAfter", storedDeclarations.count { $0.builtAfter != nil }),
+			("cycleParameterOrigin", storedDeclarations.count { $0.cycleParameterOrigin != nil }),
+			("child", storedDeclarations.count { $0.child != nil }),
+			("boundLater", storedDeclarations.count { !$0.isBoundBeforeNextProperty }),
+			("all", storedDeclarations.count),
+		]
 		// The rows the facts hold no column for yet, left out of the second count: rebindings and cycle parameters.
 		func withoutRowsToCome(_ entry: String) -> String {
 			let parts = entry.components(separatedBy: ": ")
@@ -165,7 +225,7 @@ extension SeamPlacesDrafts {
 		}
 		let storedWithoutRowsToCome = Set(fromStored.map(withoutRowsToCome))
 		let alikeWithoutRowsToCome = fromFacts.count(where: { storedWithoutRowsToCome.contains(withoutRowsToCome($0)) })
-		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters", "report: declaration fields: \(comparedFieldCount) compared, \(fieldDifferences.count) differences"] + fieldDifferences.sorted()
+		return ["report: declaration lists: \(fromFacts.count) facts, \(fromStored.count) stored, \(fromFacts.intersection(fromStored).count) alike, \(alikeWithoutRowsToCome) alike but rebindings and cycle parameters", "report: declaration fields: \(comparedFieldCount) compared, \(fieldDifferences.count) differences", "report: stored declaration rows: \(rowCounts.map { "\($0.0) \($0.1)" }.joined(separator: ", "))"] + fieldDifferences.sorted()
 			+ fromFacts.subtracting(fromStored).sorted().map { "declarations: only from facts: \($0)" }
 			+ fromStored.subtracting(fromFacts).sorted().map { "declarations: only stored: \($0)" }
 	}
