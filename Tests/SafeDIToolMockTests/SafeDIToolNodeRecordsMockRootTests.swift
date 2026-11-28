@@ -135,6 +135,74 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_worksOutEachSharedNodesLayoutFactsOnce_whenThreeMockRootsShareSubtree() async throws {
+		let fixture = [
+			"""
+			@Instantiable(generateMock: true)
+			public struct AlphaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct BetaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public struct GammaScreen: Instantiable {
+			    public init(storeBuilder: Instantiator<SessionStore>) {
+			        self.storeBuilder = storeBuilder
+			    }
+
+			    @Instantiated let storeBuilder: Instantiator<SessionStore>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct SessionStore: Instantiable {
+			    public init(clockBuilder: Instantiator<Clock>) {
+			        self.clockBuilder = clockBuilder
+			    }
+
+			    @Instantiated let clockBuilder: Instantiator<Clock>
+			}
+			""",
+			"""
+			@Instantiable
+			public struct Clock: Instantiable {
+			    public init() {}
+			}
+			""",
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: GenerationWork.self)
+		let (_, reports) = try await GenerationWork.$observer.withValue({ continuation.yield($0) }) {
+			try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		continuation.finish()
+		var countsByStep = [GenerationWork.Step: Int]()
+		for await work in stream where [.computingPlanNodeDomains, .spellingStructuralKeyFacts].contains(work.step) {
+			countsByStep[work.step, default: 0] += work.elementCount
+		}
+		// `storeBuilder` and `clockBuilder` are the same two nodes in every world: their domains and the parts of their keys
+		// are worked out once for the three roots, where each root's layout worked out both.
+		#expect(countsByStep == [.computingPlanNodeDomains: 2, .spellingStructuralKeyFacts: 2])
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true, true])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_handsOneFunctionEachParentsOverrides_whenConfiguredTypeIsBuiltUnderTwoParents() async throws {
 		let fixture = [
 			"""
@@ -363,16 +431,12 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 		        func __safeDI_childBuilder(name: String, safeDIOverrides: ((String, Shared) -> Child)?) -> Child {
 		            if let safeDIBuilder = safeDIOverrides { safeDIBuilder(name, shared) } else { Child(name: name, shared: shared) }
 		        }
-		        let childBuilder = Instantiator<Child> {
-		            __safeDI_childBuilder(name: $0, safeDIOverrides: safeDIOverrides.childBuilder)
-		        }
+		        let childBuilder = Instantiator<Child> { __safeDI_childBuilder(name: $0, safeDIOverrides: safeDIOverrides.childBuilder) }
 		        func __safeDI_panelBuilder(safeDIOverrides: Panel.SafeDIMockConfiguration) -> Panel {
 		            let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		            return if let safeDIBuilder = safeDIOverrides.safeDIBuilder { safeDIBuilder(leaf) } else { Panel(leaf: leaf) }
 		        }
-		        let panelBuilder = Instantiator<Panel> {
-		            __safeDI_panelBuilder(safeDIOverrides: safeDIOverrides.panelBuilder)
-		        }
+		        let panelBuilder = Instantiator<Panel> { __safeDI_panelBuilder(safeDIOverrides: safeDIOverrides.panelBuilder) }
 		        return Root(shared: shared, childBuilder: childBuilder, panelBuilder: panelBuilder)
 		    }
 		}

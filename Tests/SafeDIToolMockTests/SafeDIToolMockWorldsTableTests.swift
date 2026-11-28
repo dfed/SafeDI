@@ -532,20 +532,21 @@ struct SafeDIToolMockWorldsTableTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-		// The table sees no cycle, so `alphaBuilder` and `betaBuilder` are shareable, but each is a member of `Root`'s world's
-		// loop of builders, so neither is a row; `clock`, beneath `alphaBuilder`, is the row `Other`'s world's `clock` is.
-		// The loop refuses `Root`'s world's records, so only `Other`'s world takes rows: `helper`'s, holding `clock`'s.
+		// The table sees no cycle, but `alphaBuilder` and `betaBuilder` are a loop of builders beneath `Root`, so neither is
+		// shareable and `Root`'s world's top graph holds both; `clock`, beneath `alphaBuilder`, is the row `Other`'s world's
+		// `clock` is. The loop refuses `Root`'s world's records, so only `Other`'s world takes rows: `helper`'s, holding
+		// `clock`'s.
 		#expect(reports == [
 			MockWorldsTableReport(
 				declarationCount: 6,
-				shareableDeclarationCount: 4,
-				sharedGraphDeclarations: [1, 2, 4, 5], sharedVariantCount: 4, graphDeclarationCounts: [2, 3],
+				shareableDeclarationCount: 2,
+				sharedGraphDeclarations: [1, 2], sharedVariantCount: 2, graphDeclarationCounts: [2, 4],
 				sharedRecordCount: 2,
 				rows: ["1: helper: Helper, every parent the root", "2: clock: Clock"],
 				differences: [],
 				worlds: [
 					.init(mockedType: "Other", rootDeclaration: 0, declarationCount: 3, shareableDeclarationCount: 2, recordCount: 1, sharedRecordCount: 1, recordCountWithoutTable: 2, declarationKeys: [1, 3, 4]),
-					.init(mockedType: "Root", rootDeclaration: 3, declarationCount: 4, shareableDeclarationCount: 3, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [7, 9, 11, 4]),
+					.init(mockedType: "Root", rootDeclaration: 3, declarationCount: 4, shareableDeclarationCount: 1, recordCount: 0, sharedRecordCount: 0, recordCountWithoutTable: 0, declarationKeys: [7, 9, 11, 4]),
 				],
 			),
 		])

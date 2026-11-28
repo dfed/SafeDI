@@ -25,7 +25,8 @@
 /// before the lowerings run, and never changed, so the parallel lowerings only read it. One walk, depth first from each
 /// root in turn, taking each declaration's edges in the order a world's graph takes them (`TypeFactsDeclaration.edges`),
 /// gives each declaration its ID (`RunFactsInterning`) and records its edges once. A declaration is shareable only if no
-/// declaration it reaches, itself included, lies on a cycle of that graph, is a hole or is a fill: a hole of a public mock's
+/// declaration it reaches, itself included, lies on a cycle of that graph, may take part in a loop of builders
+/// (`loopDeclarations(of:nodesByComponent:)`), is a hole or is a fill: a hole of a public mock's
 /// world is a place, bound from the builder that world's mock takes, and a fill, what a call of another module's public
 /// mock is passed, reads the values of the scope that makes the call (`FillCallerReads`), so whatever holds either is
 /// built per world. A mock root's own
@@ -68,12 +69,13 @@ struct MockWorldsTable: Sendable {
 		for node in graph.nodes.indices {
 			nodesByComponent[Int(graph.componentByNode[node])].append(node)
 		}
+		let isOnLoopOfBuilders = Self.loopDeclarations(of: graph, nodesByComponent: nodesByComponent)
 		var reachesExclusionByComponent = [Bool](repeating: false, count: graph.componentCount)
 		for (component, nodes) in nodesByComponent.enumerated() {
 			var reachesExclusion = false
 			for node in nodes {
 				let declarationKey = graph.nodes[node].declaration?.key
-				reachesExclusion = reachesExclusion || graph.isOnCycle(node) || declarationKey?.leaf == .hole || declarationKey?.isFill == true
+				reachesExclusion = reachesExclusion || graph.isOnCycle(node) || declarationKey?.leaf == .hole || declarationKey?.isFill == true || isOnLoopOfBuilders[node]
 				for target in graph.edges(from: node) where Int(graph.componentByNode[Int(target)]) != component {
 					reachesExclusion = reachesExclusion || reachesExclusionByComponent[Int(graph.componentByNode[Int(target)])]
 				}
@@ -95,6 +97,77 @@ struct MockWorldsTable: Sendable {
 		sharedRecordIDByNode = [:]
 	}
 
+	/// Whether each node of the run’s graph may take part in a loop of builders (`SiblingOrder.loops(of:graph:facts:)`) in
+	/// some world: a scope with a child built as a builder whose subtree receives the label of a builder child of that
+	/// scope, which may be a loop’s parent; each such child, which may be a member, made again and shared apart; and each
+	/// declaration beneath such a child that receives one of those labels itself, whose read a member’s rebinding may
+	/// answer. A loop needs a member whose tree receives a sibling builder’s label, or its own, so this holds of every
+	/// declaration of every loop and of every read a rebinding answers, and of more: labels are compared without the
+	/// declarations that hide them. The shared graph knows nothing of loops, so none of these is shareable.
+	private static func loopDeclarations(of graph: OrderedGraph<Node>, nodesByComponent: [[Int]]) -> [Bool] {
+		let ownReceivedLabels = graph.nodes.map { node in node.declaration.map(Self.labelsReceived(by:)) ?? [] }
+		// A component's number is lower than that of every other component that reaches it.
+		var subtreeLabelsByComponent = [Set<String>](repeating: [], count: graph.componentCount)
+		for (component, nodes) in nodesByComponent.enumerated() {
+			var labels = Set<String>()
+			for node in nodes {
+				labels.formUnion(ownReceivedLabels[node])
+				for target in graph.edges(from: node) where Int(graph.componentByNode[Int(target)]) != component {
+					labels.formUnion(subtreeLabelsByComponent[Int(graph.componentByNode[Int(target)])])
+				}
+			}
+			subtreeLabelsByComponent[component] = labels
+		}
+		func subtreeLabels(of node: Int) -> Set<String> {
+			subtreeLabelsByComponent[Int(graph.componentByNode[node])]
+		}
+		func builderLabel(of node: Int) -> String? {
+			graph.nodes[node].declaration?.property.flatMap { ScopeGenerator.isBuilder($0) ? $0.label : nil }
+		}
+		var isOnLoop = [Bool](repeating: false, count: graph.nodes.count)
+		for parent in graph.nodes.indices where graph.nodes[parent].declaration?.key.leaf == TypeFactsDeclaration.Leaf.none {
+			let children = graph.edges(from: parent).map(Int.init)
+			let builderLabels = Set(children.compactMap(builderLabel(of:)))
+			for child in children where builderLabel(of: child) != nil && !subtreeLabels(of: child).isDisjoint(with: builderLabels) {
+				isOnLoop[parent] = true
+				isOnLoop[child] = true
+				var visited = Set<Int>()
+				var pending = [child]
+				while let current = pending.popLast() {
+					guard visited.insert(current).inserted else { continue }
+					if !ownReceivedLabels[current].isDisjoint(with: builderLabels) {
+						isOnLoop[current] = true
+					}
+					pending.append(contentsOf: graph.edges(from: current).map(Int.init).filter { !subtreeLabels(of: $0).isDisjoint(with: builderLabels) })
+				}
+			}
+		}
+		return isOnLoop
+	}
+
+	/// The labels `declaration` receives itself: its received dependencies’ and the property an alias renames.
+	private static func labelsReceived(by declaration: TypeFactsDeclaration) -> Set<String> {
+		switch declaration.key.leaf {
+		case .none:
+			var labels = Set<String>()
+			for dependency in declaration.scope.instantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					labels.insert(dependency.property.label)
+				case let .aliased(fulfillingProperty, _, _):
+					labels.insert(fulfillingProperty.label)
+				case .instantiated, .forwarded:
+					break
+				}
+			}
+			return labels
+		case .alias:
+			return declaration.aliasFulfillingProperty.map { [$0.label] } ?? []
+		case .hole:
+			return []
+		}
+	}
+
 	/// The ID of the declaration whose key equals `declaration`'s, or `nil` where no world holds one.
 	func declarationID(of declaration: TypeFactsDeclaration) -> Int32? {
 		interning.declarationID(of: declaration)
@@ -111,7 +184,7 @@ struct MockWorldsTable: Sendable {
 	}
 
 	/// Whether the declaration `declaration`, an ID of this table, is shareable: neither a mock root's own nor one that
-	/// reaches a cycle, a hole or a fill.
+	/// reaches a cycle, a loop of builders, a hole or a fill.
 	func isShareable(_ declaration: Int32) -> Bool {
 		shareableByDeclaration[Int(declaration)]
 	}

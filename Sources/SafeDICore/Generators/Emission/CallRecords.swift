@@ -18,20 +18,89 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// What a place that calls another module's seam records beyond a built place (`BuiltPlaceRecord.callFields`): the
-/// statement its builder function begins with, and what it hands each of the seam's builders after its arguments. The
-/// engine writes both. Kept out of `PlaceRecord.swift`, whose words name no seam, hole or fill.
+/// What a place whose builder function begins with a statement of its kind's records beyond a built place
+/// (`BuiltPlaceRecord.callFields`): that statement, and, for a place that calls another module's seam, what it hands
+/// each of the seam's builders after its arguments. The engine writes both. Kept out of `PlaceRecord.swift`, whose words
+/// name no seam, hole or fill.
 final class CallFields: Sendable {
 	/// The statement the place's builder function begins with.
-	let leadingStatement: CallGuard?
+	let leadingStatement: LeadingStatement?
 	/// What the call hands each builder the seam takes, after `BuiltPlaceRecord.arguments`, in the signature's builder
 	/// order.
 	let closureArguments: [ClosureArgumentEntry]
+	/// The builders the call builds, which a `.built` closure argument names by index (`BuiltClosure`).
+	let builtClosures: [BuiltClosure]
 
-	init(leadingStatement: CallGuard?, closureArguments: [ClosureArgumentEntry]) {
+	init(leadingStatement: LeadingStatement?, closureArguments: [ClosureArgumentEntry], builtClosures: [BuiltClosure] = []) {
 		self.leadingStatement = leadingStatement
 		self.closureArguments = closureArguments
+		self.builtClosures = builtClosures
 	}
+}
+
+/// The statement a place's builder function begins with, before its children: structure a kind supplies, which the
+/// engine spells, so that no record holds text. Two functions whose leading statements differ are two functions
+/// (`TypeKeyLayout.structuralKey(of:isInSendableFamily:parts:)`).
+enum LeadingStatement: Hashable, Sendable {
+	/// The guard line of a call of another module's seam.
+	case callGuard(CallGuard)
+	/// The lines with which a function on a cycle of a mock's tree finds the place it builds (`EnteredPlace`).
+	case enteredPlace(EnteredPlace)
+
+	/// The statement's lines, in order, unindented.
+	var spelledLines: [String] {
+		switch self {
+		case let .callGuard(callGuard):
+			[callGuard.spelled]
+		case let .enteredPlace(enteredPlace):
+			enteredPlace.spelledLines
+		}
+	}
+}
+
+/// How a function on a cycle of a mock's tree finds the place it builds, in the three lines its body begins with. A
+/// call of the function either enters a new place or returns to one a function above it entered, and only the mock's
+/// run tells which, so the function reads its slot of the entered places it was handed
+/// (`ReservedName.mockEnteredPlacesParameterName`): a place found there is the one entered before, with its
+/// configuration and the places as they were above it; otherwise the function enters a new place, whose configuration
+/// is the nearest one of its type among the entered places, else the one it was handed. The second and third lines bind
+/// that configuration and the places beneath this one under the names of the function's own parameters, so every
+/// statement after them reads as in a function off every cycle. A function off every cycle that a function on one reads
+/// the nearest configuration of its type from has no slot: it enters only the nearest place of its type, in one line,
+/// and reads the configuration it was handed.
+struct EnteredPlace: Hashable, Sendable {
+	/// The member of the entered places that holds this function's place: its property's slot; `nil` for a function off
+	/// every cycle, which only enters the nearest place of its type.
+	let slot: String?
+	/// The member of the entered places that holds the nearest place of this function's configuration's type, where the
+	/// type is reached under several properties; `nil` where this function's property is the only one of its type. Set
+	/// wherever `slot` is `nil`.
+	let nearestOfTypeSlot: String?
+
+	/// The lines.
+	var spelledLines: [String] {
+		let enteredPlaces = ReservedName.mockEnteredPlacesParameterName
+		let place = ReservedName.mockEnteredPlaceName
+		let handedConfiguration = ReservedName.mockOverridesParameterName
+		guard let slot else {
+			return nearestOfTypeSlot.map { ["let \(enteredPlaces) = \(enteredPlaces).\(Self.enteringFunctionName)(\($0.spelledAsArgumentLabel): .init(\(handedConfiguration), \(Self.enteredAboveArgumentLabel): \(enteredPlaces)))"] } ?? []
+		}
+		let newConfiguration = nearestOfTypeSlot.map { "\(enteredPlaces).\($0)?.\(Self.configurationMemberName) ?? \(handedConfiguration)" } ?? handedConfiguration
+		return [
+			"let \(place) = \(enteredPlaces).\(slot) ?? .init(\(newConfiguration), \(Self.enteredAboveArgumentLabel): \(enteredPlaces))",
+			"let \(handedConfiguration) = \(place).\(Self.configurationMemberName)",
+			"let \(enteredPlaces) = \(place).\(Self.enteredAboveMemberName).\(Self.enteringFunctionName)(\(slot.spelledAsArgumentLabel): \(place))",
+		]
+	}
+
+	/// The member of a place that holds its configuration.
+	static let configurationMemberName = "configuration"
+	/// The member of a place that holds the places entered above it.
+	static let enteredAboveMemberName = "enteredAbove"
+	/// The label under which a new place takes the places entered above it.
+	static let enteredAboveArgumentLabel = "above"
+	/// The function of the entered places that returns them with one more place entered, labeled by its slot.
+	static let enteringFunctionName = "entering"
 }
 
 /// The line before a call of a seam's generated initializer: `_ = <calledType>.<guardTypeName>.self`, with the call's
@@ -60,10 +129,11 @@ public struct SeamCallRecordObservation: Sendable {
 	/// The call's code.
 	public let text: String
 	/// The names the record says the text reads: its arguments' reads, and each struct it passes a builder up from, by
-	/// the name the tree binds it under.
-	public let readNames: [String]
-	/// The names the record says the text binds, and the functions it declares.
-	public let boundNames: [String]
+	/// the name the tree binds it under. `nil` for a call that fills a builder, whose record does not hold yet what its
+	/// dispatchers and fills read.
+	public let readNames: [String]?
+	/// The names the record says the text binds, and the functions it declares; `nil` where `readNames` is.
+	public let boundNames: [String]?
 	/// The record's guard line and builder arguments, spelled as the engine is to spell them.
 	public let spelledFromRecord: [String]
 	/// The guard line and builder arguments the text writes, in the same order.
@@ -118,6 +188,18 @@ enum PassedOnMember: Hashable, Sendable {
 	case carrierMember
 	/// A member handed its case's values, which hold nothing for the call's own case: `<struct>.<case>(<values>())`.
 	case member(valuesType: TypeDescription)
+
+	/// The read, as a value of the construction whose argument reads `structRead`, the struct the member is called on.
+	func value(reading structRead: PlaceRead, caseName: String) -> ValuePath {
+		switch self {
+		case .carrierChild:
+			.member(caseName, of: .read(structRead))
+		case .carrierMember:
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: nil)
+		case let .member(valuesType):
+			.call(caseName, of: .read(structRead), arguments: [], argumentsWrapper: valuesType)
+		}
+	}
 
 	/// The read, of the struct bound as `structName`.
 	func spelled(on structName: String, caseName: String) -> String {

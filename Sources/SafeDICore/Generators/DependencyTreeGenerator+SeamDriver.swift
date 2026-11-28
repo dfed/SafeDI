@@ -452,6 +452,8 @@ extension DependencyTreeGenerator {
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
+		plansCyclesPerType: Bool,
+		drawsTrees: Bool,
 	) async throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
 		var (seamRoots, firstPassTrees) = try await computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
@@ -498,28 +500,18 @@ extension DependencyTreeGenerator {
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
 		var constructionMemo = ConstructionMemo()
-		var rootScopeGenerators = [RootScopeInfo]()
-		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
-			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			let rootScope = ConstructionScope(table: table, record: record)
-			try rootScopeGenerators.append(RootScopeInfo(
-				typeDescription: typeDescription,
-				instantiable: scope.instantiable,
-				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				built: .tree(record.createScopeGenerator(
-					in: table,
-					lazilyInstantiatedInstanceProperties: [],
-					erasedToConcreteExistential: false,
-					declaredTypeNames: declaredTypeNames,
-					constructionMemo: &constructionMemo,
-				)),
-				fulfillers: TypeFactsImports(root: rootScope).fulfillers,
-				receivedValueSupplies: TypeFactsReceivedValueSupplies.whereRead(root: rootScope),
-				// A test compares the records of a seam world's production root with its tree's places, and no run lays it
-				// out from them until node records make a seam call (`NodeRecords`).
-				rootScope: RootScopeInfo.kept(rootScope),
-			))
-		}
+		// A root is built as in a module without seams: today's tree per path, or its per-type plan past the limit, where
+		// each seam its tree calls is a leaf. What a scope of the seam world receives is collected apart from the
+		// validated scopes'.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		var rootScopeGenerators = try await rootTrees(
+			of: rootScopesToGenerate.rootScopes,
+			frozenScopeMap: seamWorld.frozenScopeMap,
+			plansCyclesPerType: plansCyclesPerType,
+			drawsTrees: drawsTrees,
+			constructionMemo: &constructionMemo,
+			cache: &receivedPropertiesCache,
+		)
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
@@ -568,7 +560,7 @@ extension DependencyTreeGenerator {
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				built: .tree(scopeGenerator),
+				built: .tree(.perPath(scopeGenerator)),
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
 				rootScope: rootScope,
@@ -1665,7 +1657,7 @@ extension DependencyTreeGenerator {
 		seamRoot: ScopeGenerator.SeamRoot,
 		declaredTypeNames: DeclaredTypeNames,
 	) throws -> (generator: ScopeGenerator, rootScope: ConstructionScope) {
-		let (nearestDeclarations, lazilyInstantiatedInstanceProperties) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
+		let (nearestDeclarations, lazilyInstantiatedInstanceProperties, _) = seamRootDeclarations(of: rootScope.instantiable, seamRoot: seamRoot)
 		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
 		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
 		var constructionMemo = ConstructionMemo()
@@ -1685,10 +1677,15 @@ extension DependencyTreeGenerator {
 	}
 
 	/// What a seam's root is handed (`seamRootGenerator`): its parameters, as the nearest declarations of their labels, and
-	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included.
-	static func seamRootDeclarations(of seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) {
+	/// the instances of `LazilyInstantiated` properties among them, a deferred parameter's memo included; and, for the
+	/// seam's node records, the labels of those held in a wrapper that is not `Sendable`.
+	static func seamRootDeclarations(
+		of seam: Instantiable,
+		seamRoot: ScopeGenerator.SeamRoot,
+	) -> (nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>, nonSendableWrapperLabels: Set<String>) {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
+		var nonSendableWrapperLabels = Set<String>()
 		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seam)
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
@@ -1707,8 +1704,19 @@ extension DependencyTreeGenerator {
 			if parameter.isDeferred, autoclosureCallByLabel[property.label] == nil {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
+			// A `@Sendable` function of the tree that reads a parameter held in a wrapper that is not `Sendable` captures
+			// it, as `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)` declares them: a wrapper parameter, or
+			// the memo of a deferred one that no `@Sendable` function was found to read.
+			let isHeldInNonSendableWrapper = if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[property.label] == nil {
+				!isSendable
+			} else {
+				!property.propertyType.isConstant && !property.propertyType.isSendable
+			}
+			if isHeldInNonSendableWrapper {
+				nonSendableWrapperLabels.insert(property.label)
+			}
 		}
-		return (nearestDeclarations, lazilyInstantiatedInstanceProperties)
+		return (nearestDeclarations, lazilyInstantiatedInstanceProperties, nonSendableWrapperLabels)
 	}
 
 	/// A seam's tree kept for emission, with the modules its file imports for the types it builds, read from the

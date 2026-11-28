@@ -76,6 +76,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// The name of the property, and initializer parameter, of each generated `SafeDIMockConfiguration` that
 	/// overrides how its type is built, and of the binding of that override in a construction expression.
 	public static let configurationBuilderPropertyName = "safeDIBuilder"
+	/// The name of the argument through which a function on a cycle of a generated mock's tree takes the places the
+	/// functions above it entered, and hands on its own.
+	public static let mockEnteredPlacesParameterName = "__safeDI_entered"
+	/// The name such a function binds the place it builds under, in the first line of its body.
+	public static let mockEnteredPlaceName = "__safeDI_place"
 
 	/// `name`, which must begin with `builderFunctionNamePrefix`, without the prefix.
 	public static func removingBuilderFunctionNamePrefix(from name: String) -> String {

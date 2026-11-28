@@ -60,7 +60,7 @@ struct MockWorldsSharedGraph: Sendable {
 			return edges.map(\.target)
 		}
 		let facts = TypeFactsGraph.declarationFacts(of: graph, edgeEntries: edgeEntries, edgeIsFill: edgeIsFill, fillHoles: fillHoles, forMockGeneration: true)
-		let reads = ReadsFromAbove(graph: graph, own: facts.own, hidden: facts.hidden)
+		let reads = ReadsFromAbove(graph: graph, own: facts.own, hidden: facts.hidden, madeAgain: facts.madeAgain)
 		var nodeByDeclaration = [Int32](repeating: -1, count: table.declarationCount)
 		var declarations = [Int32]()
 		for (index, node) in graph.nodes.enumerated() {
@@ -145,7 +145,7 @@ struct MockWorldsSharedGraph: Sendable {
 				}
 			})
 		}
-		let answered = TypeFactsGraph.answers(
+		let answered = TypeFactsGraph.seededAnswers(
 			of: graph,
 			reads: reads,
 			readTable: facts.readInterner.values,

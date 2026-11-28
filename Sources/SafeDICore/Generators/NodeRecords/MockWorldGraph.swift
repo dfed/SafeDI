@@ -82,6 +82,19 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 			return table.declarationID(of: top.graph.nodes[Int(origin.node)]) ?? -1
 		}
 		edgeFacts = Self.edgeFacts(of: graph, top: top, shared: shared)
+		// A declaration of a loop of builders is never shareable (`MockWorldsTable.isShareable`), so every loop is the top
+		// graph's, its members and the declarations that make them again among its own declarations.
+		var madeAgainOffsets: [Int32] = [0]
+		var madeAgainTargets = [Int32]()
+		for node in graph.nodes {
+			if !node.isShared {
+				madeAgainTargets += top.madeAgain(from: DeclarationID(node.node)).map { denseByOrigin[origin(ofTopNode: $0)] ?? -1 }
+			}
+			madeAgainOffsets.append(Int32(madeAgainTargets.count))
+		}
+		self.madeAgainOffsets = madeAgainOffsets
+		self.madeAgainTargets = madeAgainTargets
+		loopMembersSharedApart = top.loopMembersSharedApart.map { denseByOrigin[origin(ofTopNode: $0)] ?? -1 }
 		parentOffsetsAndParents = Self.parents(of: graph, edgeFacts: edgeFacts, top: top, shared: shared)
 		let reads = Self.reads(of: graph, top: top, shared: shared)
 		readTable = reads.readTable
@@ -135,12 +148,17 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 		return parentOffsetsAndParents.parents[Int(offsets[Int(declaration)])..<Int(offsets[Int(declaration) + 1])]
 	}
 
+	func madeAgain(from declaration: DeclarationID) -> ArraySlice<Int32> {
+		madeAgainTargets[Int(madeAgainOffsets[Int(declaration)])..<Int(madeAgainOffsets[Int(declaration) + 1])]
+	}
+
+	let loopMembersSharedApart: [Int32]
+
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts {
 		TypeFactsGraph.owedFacts(
 			of: declaration,
 			isMockWorld: true,
 			parents: parents(of:),
-			edgeFacts: edgeFacts(from:),
 			isFill: { declarations[Int($0)].key.isFill },
 		)
 	}
@@ -211,6 +229,9 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 	/// Each edge's facts, parallel to `graph.edgeTargets`, its child by dense position.
 	private let edgeFacts: [TypeFactsEdge]
 	private let parentOffsetsAndParents: (offsets: [Int32], parents: [TypeFactsParent])
+	/// The members each declaration makes again, by dense position, one run per declaration.
+	private let madeAgainOffsets: [Int32]
+	private let madeAgainTargets: [Int32]
 	private let readTable: [Read]
 	private let labelTexts: [String]
 	/// Each declaration's reads from above, by dense read ID in increasing order, one run per declaration.
@@ -336,7 +357,9 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 	}
 
 	/// The variants in the order the world's own worklist makes them: from the root's, each variant's calls in edge order,
-	/// a callee met first made next. A top variant whose declaration is a frontier is its shared variant.
+	/// then its made-again calls, a callee met first made next. A top variant whose declaration is a frontier is its shared
+	/// variant. Only the top graph's variants make calls again: every loop is the top graph's. The view keeps no made-again
+	/// call, which no record reads, but makes its callee where the worklist makes it.
 	private static func variants(top: TypeFactsGraph, shared: Shared?, denseByOrigin: [Origin: Int32], origin: (Int32) -> Origin, reads: Reads) -> Variants {
 		var variants = Variants()
 		var origins: [(isShared: Bool, variant: Int32)] = [(false, 0)]
@@ -411,6 +434,9 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 						readsFromAbove(of: Origin(isShared: false, node: calleeNode), top: top, shared: shared),
 						denseByOrigin[calleeOrigin] ?? -1,
 					))
+				}
+				for callee in top.madeAgainCalls(of: variant) {
+					_ = viewVariant(isShared: false, variant: callee)
 				}
 				variants.sharedVariants.append(-1)
 			}
