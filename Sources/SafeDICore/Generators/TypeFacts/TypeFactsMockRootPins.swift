@@ -249,9 +249,11 @@ extension TypeFactsMockRootPins {
 			self.pinnedAbove = pinnedAbove
 		}
 
-		/// The context the answer stands for, or `nil` for an answer of no mock read. Every answer ID is one of
-		/// `0..<answerCount`, as every key and answer of the world is.
+		/// The context the answer stands for, or `nil` for an answer of no mock read and for -1, the key of a read nothing
+		/// answers (a mock read whose label no declaration above binds). Every other answer ID is one of `0..<answerCount`,
+		/// as every key and answer of the world is.
 		func context(ofAnswer answer: Int32) -> Context? {
+			guard answer >= 0 else { return nil }
 			let index = Int(answer)
 			switch kinds[index] {
 			case .none:
