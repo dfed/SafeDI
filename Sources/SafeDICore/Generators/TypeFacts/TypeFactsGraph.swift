@@ -1104,14 +1104,11 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		/// The answer `node` binds at its top for a read of a label it rebinds, or `nil` for any other read. A member is a
-		/// builder, so the answer keys as the wrapper alone (rule 2).
+		/// builder, so the answer keys as the wrapper alone (rule 2). A mock read's answer holds no pin context: the member's
+		/// binding is nearer than the mock root's declaration, which pins nothing there.
 		func madeAgainAnswer(at node: Int, for read: Read) -> VariantBinding? {
 			guard read.channel.asksAboutLabel, !reboundByLabelByNode.isEmpty, let declaration = reboundByLabelByNode[node][read.label] else {
 				return nil
-			}
-			// A label a member rebinds at its top is declared nearer than the mock root's declaration, which pins nothing there.
-			guard read.channel != .mock else {
-				return mockRootPins?.isPinnable(read.label) == true ? mockAnswer(.nearer, declaration: node) : nil
 			}
 			let keyText = "\(read.channel.name) \(declaration.forms)"
 			return VariantBinding(answer: answer(text: "\(keyText) made again", beingBuilt: false, madeAgain: true, keyText: keyText, kind: declaration.kind, property: declaration.property), declaration: Int32(node))
@@ -1121,18 +1118,9 @@ struct TypeFactsGraph: Sendable {
 			let read = readTable[Int(readID)]
 			let node = Int(sourceByEdge[edge])
 			let child = graph.nodes[Int(edgeTargets[edge])]
-			if read.channel == .mock {
-				// The root's edges hand its own context; a node that declares the label hides the root's declaration from
-				// every place beneath it, as `NearestDeclarations.replaceLabels(of:)` does; any other node hands on its
-				// caller's, which `refine` adds its required receives to.
-				guard let mockRootPins, mockRootPins.isPinnable(read.label) else { return nil }
-				if node == 0 {
-					return mockAnswer(mockRootPins.rootContext(atEdge: edge - graph.edgeOffset(of: 0), label: read.label), declaration: 0)
-				} else if declarationsByLabelByNode[node][read.label] != nil {
-					return mockAnswer(.nearer, declaration: node)
-				} else {
-					return nil
-				}
+			// The root's edges hand a pinnable mock read the root's own context.
+			if node == 0, read.channel == .mock, let mockRootPins, mockRootPins.isPinnable(read.label) {
+				return mockAnswer(mockRootPins.rootContext(atEdge: edge - graph.edgeOffset(of: 0), label: read.label), declaration: 0)
 			}
 			// A child answers its own label's read as the declaration being built, by the property it is built as; any
 			// other label by the last of its parent's bindings bound before the edge, so a declaration bound after the
@@ -1150,7 +1138,17 @@ struct TypeFactsGraph: Sendable {
 				beingBuilt = false
 			}
 			guard let bound, let declaration = declarationsByLabelByNode[node][read.label]?.first(where: { $0.property == bound }), let property = properties.existingID(of: bound) else {
-				return madeAgainAnswer(at: node, for: read)
+				if let madeAgainAnswer = madeAgainAnswer(at: node, for: read) {
+					return madeAgainAnswer
+				} else if read.channel == .mock, declarationsByLabelByNode[node][read.label] != nil, let mockRootPins, mockRootPins.isPinnable(read.label) {
+					// A declaration of the node's not bound before the edge still hides the root's from every place beneath it, as
+					// `NearestDeclarations.replaceLabels(of:)` does, so it pins nothing there. A declaration bound before the edge
+					// answers the read as any channel's does, and its answer holds no context, which pins nothing either. Any
+					// other node hands on its caller's context, which `refine` adds its required receives to.
+					return mockAnswer(.nearer, declaration: node)
+				} else {
+					return nil
+				}
 			}
 			let kind = declaration.property.propertyType
 			let declarationForms = declaration.forms
