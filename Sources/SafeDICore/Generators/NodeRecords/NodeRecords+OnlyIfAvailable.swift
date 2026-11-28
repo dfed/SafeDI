@@ -163,9 +163,16 @@ struct OnlyIfAvailableAnswers: Sendable {
 				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
 			}
 			// So is each dependency its type instantiates that its scope does not build, which a mock is passed as a parameter
-			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none.
+			// of `mock()` before any node is built (`Scope.propertiesToDeclare`); a production root's world holds none. A
+			// mock root's own is one more value `mock()` binds beside the others of its label, each under a name of its own,
+			// so it hides none of them: an override of another form of the label is still read beneath it.
 			for dependency in scope.instantiatedDependenciesNotGenerated where labels.contains(dependency.property.label) {
-				contextInside[dependency.property.label] = [Binding(property: dependency.property, state: .available)]
+				let binding = Binding(property: dependency.property, state: .available)
+				if bindsLevelBesideParameters {
+					contextInside[dependency.property.label] = (contextInside[dependency.property.label] ?? []).filter { $0 != binding } + [binding]
+				} else {
+					contextInside[dependency.property.label] = [binding]
+				}
 			}
 			// A variant is read again where a later call answers a label its first call did not.
 			unavailablePropertiesByVariant[Int(variant)] = []
