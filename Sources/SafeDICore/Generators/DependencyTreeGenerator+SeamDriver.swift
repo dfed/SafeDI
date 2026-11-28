@@ -203,7 +203,6 @@ extension DependencyTreeGenerator {
 				construction: .foreignModule,
 				in: visible.instantiables,
 				plainTypeDeclarations: visible.plainTypeDeclarations,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
 				seams: seams.resolution(seenByModuleNamed: module.moduleName),
@@ -249,7 +248,6 @@ extension DependencyTreeGenerator {
 			construction: .ownSeams(validatedWorld.passed),
 			in: typeDescriptionToFulfillingInstantiableMap,
 			plainTypeDeclarations: plainTypeDeclarations,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			fixedSignatures: seamRoots.compactMapValues(\.self),
 			callerModule: seams.currentModule,
 			seams: seams,
@@ -278,7 +276,6 @@ extension DependencyTreeGenerator {
 				construction: .ownSeams(validatedWorld.passed),
 				in: callersVisibleInstantiables,
 				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: seams.currentModule,
 				seams: seams,
@@ -478,7 +475,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: generatedSeamTypes,
 			callerModule: seams.currentModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: emittingModuleToCheck,
 			builtInlineSeamComment: { self.builtInlineSeamComment(for: $0) },
 		)
@@ -501,7 +497,7 @@ extension DependencyTreeGenerator {
 			guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
 			      let seamRoot = seamRoots[seamType] ?? nil
 			else { continue }
-			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, callerModule: seams.currentModule, aliasDeclarationReferences: aliasDeclarationReferences)))
+			generatedSeams.append((seam, seamRoot, Self.seamRootScope(of: seam, in: seamScopeMap, instantiables: seamScopeInstantiables, callerModule: seams.currentModule)))
 		}
 		// Creating a generator starts generating its code, so every construction must be known to compile first: a
 		// root's tree constructs a seam with the tier of its generated initializer the root's module can reach, and a
@@ -758,7 +754,6 @@ extension DependencyTreeGenerator {
 		construction: SignatureConstruction,
 		in instantiables: [TypeDescription: Instantiable],
 		plainTypeDeclarations: [PlainTypeDeclaration],
-		aliasDeclarationReferences: AliasDeclarationReferences,
 		fixedSignatures: [TypeDescription: ScopeGenerator.SeamRoot],
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
@@ -789,7 +784,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: ownSeamTypes,
 			callerModule: callerModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 			builtInlineSeamComment: builtInlineSeamComment,
 		)
@@ -870,7 +864,6 @@ extension DependencyTreeGenerator {
 			ownSeamTypes: ownSeamTypes,
 			callerModule: callerModule,
 			seams: seams,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 			builtInlineSeamComment: builtInlineSeamComment,
 			proof: proof,
@@ -988,7 +981,6 @@ extension DependencyTreeGenerator {
 		let ownSeamTypes: Set<TypeDescription>
 		let callerModule: ModuleIdentity
 		let seams: SeamResolution
-		let aliasDeclarationReferences: AliasDeclarationReferences
 		let checkingModule: EmittingModule?
 		let builtInlineSeamComment: @Sendable (Instantiable) -> String?
 		let proof: TypeAccessProof
@@ -1029,7 +1021,6 @@ extension DependencyTreeGenerator {
 		let ownSeamTypes = context.ownSeamTypes
 		let callerModule = context.callerModule
 		let seams = context.seams
-		let aliasDeclarationReferences = context.aliasDeclarationReferences
 		let checkingModule = context.checkingModule
 		let builtInlineSeamComment = context.builtInlineSeamComment
 		let construction = context.construction
@@ -1089,13 +1080,12 @@ extension DependencyTreeGenerator {
 				ownSeamTypes: ownSeamTypes,
 				callerModule: callerModule,
 				seams: seams,
-				aliasDeclarationReferences: aliasDeclarationReferences,
 				checkingModule: checkingModule,
 				builtInlineSeamComment: builtInlineSeamComment,
 			)
 			let scopeInstantiables = scopeMap.mapValues(\.instantiable)
 			let rootScopes = componentSeams.map { seam in
-				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, callerModule: callerModule)
 			}
 			let fulfillingKey = { (hole: SeamSignature.Hole) in
 				Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
@@ -1501,7 +1491,6 @@ extension DependencyTreeGenerator {
 		ownSeamTypes: Set<TypeDescription>,
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 		checkingModule: EmittingModule?,
 		builtInlineSeamComment: (Instantiable) -> String?,
 	) -> [TypeDescription: Scope] {
@@ -1600,7 +1589,7 @@ extension DependencyTreeGenerator {
 					}
 				}
 			} else {
-				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, callerModule: callerModule, aliasDeclarationReferences: aliasDeclarationReferences)
+				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, callerModule: callerModule)
 			}
 		}
 		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
@@ -1650,7 +1639,6 @@ extension DependencyTreeGenerator {
 		from typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
 		callerModule: ModuleIdentity,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 	) {
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -1676,12 +1664,12 @@ extension DependencyTreeGenerator {
 					))
 				}
 			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-				scope.propertiesToGenerate.append(.aliased(
-					dependency.property,
+				scope.propertiesToGenerate.append(Self.aliasedDependency(
+					dependency,
 					fulfilledBy: fulfillingProperty,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: onlyIfAvailable,
-					declarationReference: aliasDeclarationReferences.reference(to: dependency.declarationLocation),
+					declaredBy: scope.instantiable,
 				))
 			case .forwarded, .received:
 				continue
@@ -1697,7 +1685,6 @@ extension DependencyTreeGenerator {
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		instantiables: [TypeDescription: Instantiable],
 		callerModule: ModuleIdentity,
-		aliasDeclarationReferences: AliasDeclarationReferences,
 	) -> Scope {
 		let rootScope = Scope(instantiable: seam)
 		populatePropertiesToGenerate(
@@ -1705,7 +1692,6 @@ extension DependencyTreeGenerator {
 			from: typeDescriptionToScopeMap,
 			instantiables: instantiables,
 			callerModule: callerModule,
-			aliasDeclarationReferences: aliasDeclarationReferences,
 		)
 		return rootScope
 	}

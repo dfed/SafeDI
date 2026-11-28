@@ -199,24 +199,19 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
 		let modules = Self.modules(feature: feature, app: [root])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let fixtures = try #require(output.modules["Feature"]).fixtures
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
 		extension Flow {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        @inline(never) func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
-		            let t4BuilderAlias: Instantiator<T4> = t4Builder
-		            #sourceLocation()
+		            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 		            return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		        @inline(never) func __safeDI_t3() -> T3 {
 		            @inline(never) func __safeDI_t4() -> T4 {
-		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
-		                let t4BuilderAlias: Instantiator<T4> = t4Builder
-		                #sourceLocation()
+		                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 		                return T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil)
 		            }
 		            let t4: T4 = __safeDI_t4()
@@ -286,17 +281,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    ) -> Flow {
 		        func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
-		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
-		            let t4BuilderAlias: Instantiator<T4> = t4Builder
-		            #sourceLocation()
+		            let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 		            return if let safeDIBuilder = safeDIOverrides.t4Builder { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
 		        }
 		        let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		        func __safeDI_t3() -> T3 {
 		            func __safeDI_t4() -> T4 {
-		                #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
-		                let t4BuilderAlias: Instantiator<T4> = t4Builder
-		                #sourceLocation()
+		                let t4BuilderAlias: Instantiator<T4> = t4Builder // Declared as T4.t4BuilderAlias
 		                return if let safeDIBuilder = safeDIOverrides.t3.t4 { safeDIBuilder(t4BuilderAlias, nil) } else { T4(t4BuilderAlias: t4BuilderAlias, t2Builder: nil) }
 		            }
 		            let t4: T4 = __safeDI_t4()

@@ -353,9 +353,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token.instance
-			            #sourceLocation()
+			            let token: (any Auth)? = token.instance // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        let detail: Detail = __safeDI_detail()
@@ -375,9 +373,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token
-			            #sourceLocation()
+			            let token: (any Auth)? = token // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        func __safeDI_screen() -> Screen {
@@ -419,9 +415,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token.instance
-			            #sourceLocation()
+			            let token: (any Auth)? = token.instance // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        let detail: Detail = __safeDI_detail()
@@ -440,9 +434,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = nil
-			            #sourceLocation()
+			            let token: (any Auth)? = nil // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        func __safeDI_screen() -> Screen {
@@ -483,9 +475,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token_)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token.instance
-			            #sourceLocation()
+			            let token: (any Auth)? = token.instance // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        let detail: Detail = __safeDI_detail()
@@ -506,9 +496,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token
-			            #sourceLocation()
+			            let token: (any Auth)? = token // Declared as Detail.token
 			            return Detail(token: token)
 			        }
 			        func __safeDI_screen() -> Screen {
@@ -550,9 +538,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(__safeDI_token: @autoclosure @escaping () -> Secret?) {
 			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        @inline(never) func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let auth: (any Auth)? = token.instance
-			            #sourceLocation()
+			            let auth: (any Auth)? = token.instance // Declared as Detail.auth
 			            return Detail(auth: auth)
 			        }
 			        let detail: Detail = __safeDI_detail()
@@ -572,9 +558,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			            let auth: (any Auth)? = token
-			            #sourceLocation()
+			            let auth: (any Auth)? = token // Declared as Detail.auth
 			            return Detail(auth: auth)
 			        }
 			        func __safeDI_screen() -> Screen {
@@ -615,9 +599,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			            return Left(token: token, detail: detail)
 			        }
 			        func __safeDI_detail() -> Detail {
-			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			            let authToken: Secret? = nil
-			            #sourceLocation()
+			            let authToken: Secret? = nil // Declared as Detail.authToken
 			            let reader = Reader(authToken: authToken)
 			            return Detail(authToken: authToken, reader: reader)
 			        }

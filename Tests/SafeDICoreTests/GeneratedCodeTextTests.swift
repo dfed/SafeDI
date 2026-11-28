@@ -204,24 +204,24 @@ struct GeneratedCodeTextTests {
 	}
 
 	@Test
-	func withoutIntegrationSpellings_dropsTrailingCommentsAndSourceLocationDirectories_whenLinesHoldBoth() {
-		let text = "let a = A() // Declared at /checkout/Sources/A.swift:3\n#sourceLocation(file: \"/checkout/Sources/B.swift\", line: 9)\nb()"
-		#expect(GeneratedCodeText.withoutIntegrationSpellings(text) == "let a = A()\n#sourceLocation(file: \"B.swift\", line: 9)\nb()")
+	func withoutIntegrationSpellings_dropsTrailingComments_whenLinesEndInOne() {
+		let text = "let a = A() // Declared as Root.a\nb() // c"
+		#expect(GeneratedCodeText.withoutIntegrationSpellings(text) == "let a = A()\nb()")
 	}
 
 	@Test
 	func withoutIntegrationSpellings_returnsWhatFoundationSearchReturns_forEveryStringOfUpToFiveTokens() {
-		// Every string of up to five of these tokens: the parts the pass looks for, a path's separator, a line feed, a
-		// carriage return that forms `"\r\n"` with a line feed, and a combining mark that extends the scalar before it.
-		let tokens = [" // ", "#sourceLocation(file: \"", "\", line: ", "/", "\n", "\r", "x", "\u{301}"]
+		// Every string of up to five of these tokens: the part the pass looks for, a slash, a line feed, a carriage return
+		// that forms `"\r\n"` with a line feed, and a combining mark that extends the scalar before it.
+		let tokens = [" // ", "/", "\n", "\r", "x", "\u{301}"]
 		let texts = Self.strings(of: tokens, upToLength: 5)
-		// Foundation’s search matches whole `Character`s, so it misses a part, or a path’s last separator, whose last scalar
-		// a combining mark extends; the pass finds its bytes, which only names a body otherwise (the case below).
-		let partsBeforeCombiningMark = tokens.prefix(4).map { $0 + "\u{301}" }
+		// Foundation’s search matches whole `Character`s, so it misses the part where a combining mark extends its last
+		// scalar; the pass finds its bytes, which only names a body otherwise (the case below).
+		let partsBeforeCombiningMark = tokens.prefix(1).map { $0 + "\u{301}" }
 		let mismatches = texts.filter { text in
 			Array(GeneratedCodeText.withoutIntegrationSpellings(text).utf8) != Array(Self.withoutIntegrationSpellingsThroughFoundation(text).utf8)
 		}
-		#expect(texts.count == 37_449)
+		#expect(texts.count == 9_331)
 		#expect(mismatches.filter { text in !partsBeforeCombiningMark.contains { Array(text.utf8).firstRange(of: Array($0.utf8)) != nil } } == [])
 	}
 
@@ -236,15 +236,9 @@ struct GeneratedCodeTextTests {
 	/// The expression `GeneratedCodeText.withoutIntegrationSpellings(_:)` replaces.
 	private static func withoutIntegrationSpellingsThroughFoundation(_ text: String) -> String {
 		let trailingComment = " // "
-		let sourceLocationFile = "#sourceLocation(file: \""
-		guard text.contains(trailingComment) || text.contains(sourceLocationFile) else { return text }
+		guard text.contains(trailingComment) else { return text }
 		return text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
-			let code = line[..<(line.range(of: trailingComment)?.lowerBound ?? line.endIndex)]
-			guard let directive = code.range(of: sourceLocationFile),
-			      let closing = code.range(of: "\", line: ", range: directive.upperBound..<code.endIndex)
-			else { return String(code) }
-			let path = code[directive.upperBound..<closing.lowerBound]
-			return String(code[..<directive.upperBound] + path[(path.lastIndex(of: "/").map { path.index(after: $0) } ?? path.startIndex)...] + code[closing.lowerBound...])
+			String(line[..<(line.range(of: trailingComment)?.lowerBound ?? line.endIndex)])
 		}.joined(separator: "\n")
 	}
 

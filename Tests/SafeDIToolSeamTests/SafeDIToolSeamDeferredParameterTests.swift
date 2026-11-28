@@ -380,9 +380,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
-		        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-		        let token: any Auth = __safeDI_token_()
-		        #sourceLocation()
+		        let token: any Auth = __safeDI_token_() // Declared as Screen.token
 		        @inline(never) func __safeDI_detailBuilder() -> Detail {
 		            Detail(token: token)
 		        }
@@ -1552,9 +1550,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token: @autoclosure @escaping () -> Secret) {
 			        let token = LazilyInstantiated<Secret>(__safeDI_token)
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let auth: any Auth = token.instance
-			        #sourceLocation()
+			        let auth: any Auth = token.instance // Declared as Screen.auth
 			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(auth: auth)
 			        }
@@ -1601,9 +1597,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret) {
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let token: AnyAuth = AnyAuth(__safeDI_token_())
-			        #sourceLocation()
+			        let token: AnyAuth = AnyAuth(__safeDI_token_()) // Declared as Screen.token
 			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }
@@ -1661,9 +1655,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let token: (any Auth)? = __safeDI_token_()
-			        #sourceLocation()
+			        let token: (any Auth)? = __safeDI_token_() // Declared as Screen.token
 			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }
@@ -1713,9 +1705,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
-			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let token: \(aliasType) = \(binding)
-			        #sourceLocation()
+			        let token: \(aliasType) = \(binding) // Declared as Screen.token
 			        @inline(never) func __safeDI_detailBuilder() -> Detail {
 			            Detail(token: token)
 			        }

@@ -3107,8 +3107,6 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 			], dependencies: ["Feature"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		// `Detail`’s mock binds the renamed value under a `#sourceLocation` that names its fixture by path.
-		let detailPath = output.modules["Feature"]?.fixtures["Detail.swift"] ?? ""
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
 		import SafeDI
@@ -3148,9 +3146,7 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        mainSession: Session,
 		        apiBuilder __safeDI_apiBuilder: Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api>
 		    ) -> Detail {
-		        #sourceLocation(file: "\(detailPath)", line: 16)
-		        let session: Session = mainSession
-		        #sourceLocation()
+		        let session: Session = mainSession // Declared as Detail.session
 		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(mainSession: mainSession, session: session))
 		        return Detail(session: session, api: api)
 		    }

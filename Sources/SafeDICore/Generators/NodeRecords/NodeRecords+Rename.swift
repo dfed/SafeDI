@@ -60,7 +60,7 @@ extension NodeRecords {
 	private static func rename(
 		of declaration: DeclarationID,
 		in world: some NodeRecordSources,
-	) -> (property: Property, fulfillingProperty: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool, declarationReference: AliasDeclarationReferences.Reference?)? {
+	) -> (property: Property, fulfillingProperty: Property, erasedToConcreteExistential: Bool, onlyIfAvailable: Bool, declarationReference: String)? {
 		world.scope(of: declaration).propertiesToGenerate.lazy.compactMap { propertyToGenerate in
 			if case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = propertyToGenerate, property == world.property(of: declaration) {
 				(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference)
@@ -100,7 +100,7 @@ extension NodeRecords {
 		readsWrappersInstance: Bool,
 		erasedToConcreteExistential: Bool,
 		fulfillingBindingIsOptional: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 	) -> AliasPlaceRecord {
 		let text = ScopeGenerator.referencingDeclaration(
 			of: ScopeGenerator.aliasDeclaration(

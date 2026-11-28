@@ -1273,7 +1273,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailable: Bool,
 		fulfillingBindingIsOptional: Bool,
 		fulfillingExpression: String? = nil,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 	) {
 		self.fulfillingExpression = fulfillingExpression
 		seamAndFillFieldsStorage = nil
@@ -5133,7 +5133,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fulfillingProperty: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationReference: AliasDeclarationReferences.Reference?,
+			declarationReference: String,
 		)
 		/// A site in a seam's tree of a property the builder the seam's generated initializer takes builds. `site` is
 		/// `nil` in a tree built only to compute the seam's signature.
@@ -9299,7 +9299,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfilledBy fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 		unavailableProperties: Set<Property>,
 	) -> GeneratedCode {
 		let aliasCode = aliasCode(
@@ -9349,7 +9349,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfilledBy fulfillingProperty: Property,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		declarationReference: AliasDeclarationReferences.Reference?,
+		declarationReference: String,
 		unavailableProperties: Set<Property>,
 	) -> String {
 		if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
@@ -10797,29 +10797,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// Points `code`, an alias's assignment, at its `@Received` declaration as `declarationReference` says:
-	/// wrapped in `#sourceLocation` directives so that compiler diagnostics for it are reported at the
-	/// declaration, or followed by a comment naming the declaration, which the compiler shows in the excerpt
-	/// of a diagnostic it reports in the generated file. The trailing bare `#sourceLocation()` restores
-	/// reporting against the generated file for the lines that follow.
+	/// Follows `code`, an alias's assignment, with a comment naming its `@Received` declaration, `declarationReference`
+	/// (`Type.label`, `DependencyTreeGenerator.aliasedDependency(_:fulfilledBy:erasedToConcreteExistential:onlyIfAvailable:declaredBy:)`), which the compiler shows in the
+	/// excerpt of a diagnostic it reports at the assignment. The comment names no file or line, so the generated code
+	/// is the same whichever integration generates it and wherever the declaration sits in its file.
 	///
 	/// SafeDI does not validate that an aliased dependency’s declared type can be fulfilled by
 	/// the fulfilling dependency’s type; the Swift compiler checks the generated assignment.
 	static func referencingDeclaration(
 		of code: String,
-		by declarationReference: AliasDeclarationReferences.Reference?,
+		by declarationReference: String?,
 	) -> String {
 		guard let declarationReference else { return code }
-		return switch declarationReference {
-		case let .sourceLocationDirective(filePath, line):
-			"""
-			#sourceLocation(file: \(StringLiteralExprSyntax(content: filePath).description), line: \(line))
-			\(code)
-			#sourceLocation()
-			"""
-		case let .comment(filePath, line):
-			"\(code) // Declared at \(filePath):\(line)"
-		}
+		return "\(code) // Declared as \(declarationReference)"
 	}
 
 	// MARK: Mock Root Parameters

@@ -3103,10 +3103,6 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		]
 	}
 
-	private static func withoutSourceLocations(_ file: String) -> String {
-		file.split(separator: "\n", omittingEmptySubsequences: false).filter { !$0.contains("#sourceLocation(file:") }.joined(separator: "\n")
-	}
-
 	/// Why each root of `swiftFileContent` that reaches a cycle is kept on today's tree, `nil` for one laid out from its
 	/// plan, where every root's tree per path is abandoned at once. Records an issue unless that run, and a run with every
 	/// root kept on today's tree, each report `diagnostics`.
@@ -3236,8 +3232,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 				skipCompileVerification: skipCompileVerification,
 			)
 		}
-		// A rename's `#sourceLocation` names its fixture's file, which each run writes in a folder of its own.
-		#expect(output.dependencyTreeFiles.mapValues(Self.withoutSourceLocations) == todaysOutput.dependencyTreeFiles.mapValues(Self.withoutSourceLocations))
+		#expect(output.dependencyTreeFiles == todaysOutput.dependencyTreeFiles)
 		return (choices, output.dependencyTreeFiles)
 	}
 }

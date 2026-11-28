@@ -80,9 +80,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		    public init() {
 		        let user = User()
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let account: User = user
-		            #sourceLocation()
+		            let account: User = user // Declared as Profile.account
 		            return Profile(account: account)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -128,9 +126,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile() -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = nil
-		            #sourceLocation()
+		            let style: Theme? = nil // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -187,9 +183,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_profile(theme: Theme?) -> Profile {
-		            #sourceLocation(file: "\(output.fixtures["Profile.swift"])", line: 6)
-		            let style: Theme? = theme
-		            #sourceLocation()
+		            let style: Theme? = theme // Declared as Profile.style
 		            return Profile(style: style)
 		        }
 		        func __safeDI_screenBuilder(theme: Theme?) -> Screen {
@@ -251,9 +245,7 @@ struct SafeDIToolNodeRecordsRenameTests: ~Copyable {
 		        }
 		        let tokenBuilder = Instantiator<Token>(__safeDI_tokenBuilder)
 		        func __safeDI_detail() -> Detail {
-		            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 6)
-		            let authTokenBuilder: Instantiator<Token>? = tokenBuilder
-		            #sourceLocation()
+		            let authTokenBuilder: Instantiator<Token>? = tokenBuilder // Declared as Detail.authTokenBuilder
 		            return Detail(authTokenBuilder: authTokenBuilder)
 		        }
 		        let detail: Detail = __safeDI_detail()

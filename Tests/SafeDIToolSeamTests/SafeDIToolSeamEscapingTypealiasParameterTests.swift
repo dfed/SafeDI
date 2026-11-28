@@ -158,11 +158,6 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let fixtures = try #require(output.modules["Feature"]).fixtures
-		let tapReaderPath = switch integration {
-		case .moduleInfo: fixtures["TapReader.swift"]
-		case .swiftPackagePlugin: fixtures.compilerPath(of: "TapReader.swift")
-		}
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == generatedFileHeader + """
 		extension Screen {
@@ -171,9 +166,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    public convenience init(__safeDI_tap: @autoclosure @escaping () -> Handler) {
 		        let tap = LazilyInstantiated<Handler>(__safeDI_tap)
 		        @inline(never) func __safeDI_reader() -> TapReader {
-		            #sourceLocation(file: "\(tapReaderPath)", line: 4)
-		            let onTap: OnTap = tap.instance
-		            #sourceLocation()
+		            let onTap: OnTap = tap.instance // Declared as TapReader.onTap
 		            return TapReader(onTap: onTap)
 		        }
 		        let reader: TapReader = __safeDI_reader()

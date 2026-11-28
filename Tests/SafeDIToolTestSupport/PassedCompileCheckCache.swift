@@ -128,8 +128,8 @@ struct PassedCompileCheckCache: Sendable {
 	/// what compiles it (`CompileCheckBuild.description`, or any text that names one) and of each module's name, package, dependencies, whether it emits a module, its conditions, language mode and upcoming features,
 	/// and the name and contents of each staged file, inputs in order and generated files in name order.
 	///
-	/// A file's contents spell paths under the test process's directory, as `#sourceLocation` directives and
-	/// `// Declared at` comments do, and fixture directories are named by UUIDs, so the same check spells other text in
+	/// A file's contents can spell paths under the test process's directory, as an older release's `#sourceLocation`
+	/// directives do, and fixture directories are named by UUIDs, so the same check spells other text in
 	/// each run. The description replaces each of `fixtureRoots` with one fixed path and each distinct UUID with
 	/// `00000000-0000-0000-0000-000000000001`, `…002` and so on, in the order the description first spells it, which
 	/// keeps every path's length, distinctness and which paths are the same. Whether a check compiles does not depend

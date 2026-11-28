@@ -1230,9 +1230,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        func __safeDI_promoted() -> Promoted {
 		            let leaf: Unbuildable = leaf_Unbuildable
 		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let renamedLeaf: Leaf? = nil
-		                #sourceLocation()
+		                let renamedLeaf: Leaf? = nil // Declared as Child.renamedLeaf
 		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(renamedLeaf) } else { Child(renamedLeaf: renamedLeaf) }
 		            }
 		            let child: Child = __safeDI_child()
@@ -1331,9 +1329,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		        func __safeDI_promoted() -> Promoted {
 		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let renamedLeaf: Leaf = leaf
-		                #sourceLocation()
+		                let renamedLeaf: Leaf = leaf // Declared as Child.renamedLeaf
 		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(renamedLeaf) } else { Child(renamedLeaf: renamedLeaf) }
 		            }
 		            let child: Child = __safeDI_child()
@@ -1426,9 +1422,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
 		        func __safeDI_promoted() -> Promoted {
 		            let leaf: Unbuildable = leaf_Unbuildable
-		            #sourceLocation(file: "\(output.fixtures["Promoted.swift"])", line: 5)
-		            let renamedLeaf: Leaf? = nil
-		            #sourceLocation()
+		            let renamedLeaf: Leaf? = nil // Declared as Promoted.renamedLeaf
 		            return if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leaf, renamedLeaf) } else { Promoted(leaf: leaf, renamedLeaf: renamedLeaf) }
 		        }
 		        let promoted: Promoted = __safeDI_promoted()
@@ -2108,9 +2102,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        }
 		        let token = Instantiator<Token>(__safeDI_token)
 		        func __safeDI_child() -> Child {
-		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-		            let tokenBuilder: Instantiator<Token> = token
-		            #sourceLocation()
+		            let tokenBuilder: Instantiator<Token> = token // Declared as Child.tokenBuilder
 		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(nil, tokenBuilder) } else { Child(token: nil, tokenBuilder: tokenBuilder) }
 		        }
 		        let child: Child = __safeDI_child()
@@ -2757,9 +2749,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        let leaf = LazilyInstantiated<Leaf>(__safeDI_leaf)
 		        func __safeDI_promoted() -> Promoted {
 		            func __safeDI_child() -> Child {
-		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                let lazyLeaf: LazilyInstantiated<Leaf> = leaf
-		                #sourceLocation()
+		                let lazyLeaf: LazilyInstantiated<Leaf> = leaf // Declared as Child.lazyLeaf
 		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(lazyLeaf) } else { Child(lazyLeaf: lazyLeaf) }
 		            }
 		            let child: Child = __safeDI_child()
@@ -3056,9 +3046,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            let leaf: Unbuildable = leaf_Unbuildable
 		            func __safeDI_middle() -> Middle {
 		                let leaf = if let safeDIBuilder = safeDIOverrides.promoted.middle.leaf { safeDIBuilder() } else { Leaf() }
-		                #sourceLocation(file: "\(output.fixtures["Middle.swift"])", line: 5)
-		                let renamedLeaf: Leaf = leaf
-		                #sourceLocation()
+		                let renamedLeaf: Leaf = leaf // Declared as Middle.renamedLeaf
 		                return if let safeDIBuilder = safeDIOverrides.promoted.middle.safeDIBuilder { safeDIBuilder(leaf, renamedLeaf) } else { Middle(leaf: leaf, renamedLeaf: renamedLeaf) }
 		            }
 		            let middle: Middle = __safeDI_middle()
@@ -4243,9 +4231,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_promoted() -> Promoted {
 		            func __safeDI_middle() -> Middle {
-		                #sourceLocation(file: "\(output.fixtures["Middle.swift"])", line: 4)
-		                let currentUser: User? = user
-		                #sourceLocation()
+		                let currentUser: User? = user // Declared as Middle.currentUser
 		                return if let safeDIBuilder = safeDIOverrides.promoted.middle { safeDIBuilder(currentUser, user_Draft) } else { Middle(currentUser: currentUser, user: user_Draft) }
 		            }
 		            let middle: Middle = __safeDI_middle()
@@ -4708,9 +4694,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		            func __safeDI_middle() -> Middle {
 		                let user: Draft? = user_Draft
 		                func __safeDI_child() -> Child {
-		                    #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
-		                    let draft: Draft? = user_Draft
-		                    #sourceLocation()
+		                    let draft: Draft? = user_Draft // Declared as Child.draft
 		                    return if let safeDIBuilder = safeDIOverrides.promoted.middle.child { safeDIBuilder(draft) } else { Child(draft: draft) }
 		                }
 		                let child: Child = __safeDI_child()

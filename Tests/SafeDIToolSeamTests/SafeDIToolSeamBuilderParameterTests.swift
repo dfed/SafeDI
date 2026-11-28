@@ -6224,7 +6224,6 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let renamedAnalytics: Analytics"#])]
 		let modules = Self.modules(feature: Self.canonicalFeature, app: fulfillers + [Self.canonicalRoot])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
-		let fulfillerPath = try #require(output.modules["App"]).fixtures["DefaultUserService.swift"]
 		expectGeneratedFiles(output.modules["App"]?.generatedFiles, [
 			"App.swift": generatedFileHeader + """
 			#if canImport(Feature)
@@ -6234,13 +6233,11 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_userServiceBuilder_Service_Profile_Scope_userService(analytics: Analytics) -> any UserService {
-			            return __safeDI_fillBody_B073C70A606C2D1D(analytics: analytics)
+			            return __safeDI_fillBody_75D112299584D522(analytics: analytics)
 			        }
-			        func __safeDI_fillBody_B073C70A606C2D1D(analytics: Analytics) -> any UserService {
+			        func __safeDI_fillBody_75D112299584D522(analytics: Analytics) -> any UserService {
 			            func __safeDI_userService() -> DefaultUserService {
-			                #sourceLocation(file: "\(fulfillerPath)", line: 9)
-			                let renamedAnalytics: Analytics = analytics
-			                #sourceLocation()
+			                let renamedAnalytics: Analytics = analytics // Declared as DefaultUserService.renamedAnalytics
 			                return DefaultUserService(renamedAnalytics: renamedAnalytics)
 			            }
 			            let userService: any UserService = __safeDI_userService()
