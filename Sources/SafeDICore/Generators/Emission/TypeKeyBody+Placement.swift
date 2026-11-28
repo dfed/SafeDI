@@ -70,9 +70,10 @@ extension TypeKeyLayout {
 			let memberSet = Set(members)
 			let allSites = members.flatMap { callSitesByClass[$0] }
 			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
-			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
-			// each level of nested local functions past about twenty. Under `declaresLoopMembersAsThePathKeyDoes` the nesting
-			// is the path key's own, which the tree writes too, so the type key adds no depth.
+			// Every function is declared in the root's body, never nested in another, but under
+			// `declaresLoopMembersAsThePathKeyDoes`: Swift 6.2's compile time doubles with each level of nested local functions
+			// past about twenty. Under the flag the nesting is the path key's own, a cycle's functions included, which the tree
+			// writes too, so the type key adds no depth.
 			guard let firstSite = externalSites.first else { return false }
 			// Where the path key writes each loop once, it declares each function in the body that calls it, a loop's
 			// functions in the body that builds the loop. A component the path key writes once per calling body, which the
@@ -103,10 +104,11 @@ extension TypeKeyLayout {
 					}
 				}
 				loopMembersDeclaredAsThePathKeyDoes.append(contentsOf: members)
-			} else if isNested, members.count > 1, let nesting = nestingAsThePathKeyDoes(members, memberSet: memberSet) {
+			} else if isNested, members.count > 1 {
 				// The path key declares each function of a cycle in the body of the place that builds it, nested as deep as
 				// that place, and a call that closes the cycle names one of them: only the function a body outside the
-				// component calls is declared there.
+				// component calls is declared there. A component it would write otherwise keeps the path key's body.
+				guard let nesting = nestingAsThePathKeyDoes(members, memberSet: memberSet) else { return false }
 				hoistedFunctions[CallSite(owner: owner, index: index), default: []].append(nesting.entry)
 				for (member, site) in nesting.nested {
 					placementOwner[member] = site.owner
@@ -114,6 +116,9 @@ extension TypeKeyLayout {
 					placementDepth[member] = placementDepth[site.owner] + 1
 					attachedFunction[site] = member
 				}
+				// A member declared before its statement can be called by a closing call before a value its function captures
+				// is bound, which `keepsCapturesOfLoopMembersDeclaredAsThePathKeyDoes()` checks as for a loop's members.
+				loopMembersDeclaredAsThePathKeyDoes.append(contentsOf: nesting.nested.map(\.member))
 			} else if isAttached {
 				attachedFunction[CallSite(owner: owner, index: index)] = members[0]
 			} else {
@@ -135,29 +140,61 @@ extension TypeKeyLayout {
 
 	/// The member of `members`, a component of the calls between classes, that a body outside it calls, and each other
 	/// member with the statement of a member's body that builds it, entry first and each member after the one whose body
-	/// builds it: or `nil` where the component has several entries, or a member that no one statement of the component
-	/// builds, which the path key would write in several places. A closing call names a function and builds nothing.
+	/// builds it: or `nil` where the component has several entries, a member that no one statement of the component
+	/// builds, which the path key would write in several places, or a closing call inside it whose target the nesting
+	/// declares in a body that does not enclose the call, where Swift would not find the name. A closing call names a
+	/// function and builds nothing. The members' bodies are read from the places' nesting, so the bodies that build them
+	/// form a tree under the entry, and a walk of it reaches every member.
 	func nestingAsThePathKeyDoes(_ members: [Int], memberSet: Set<Int>) -> (entry: Int, nested: [(member: Int, site: CallSite)])? {
 		let entries = members.filter { callSitesByClass[$0].contains { !memberSet.contains($0.owner) } }
-		guard entries.count == 1, let entry = entries.first else { return nil }
 		var builtByOwner = [Int: [(member: Int, site: CallSite)]]()
-		for member in members where member != entry {
+		var isBuiltOnce = true
+		for member in members where !entries.contains(member) {
 			let buildingSites = callSitesByClass[member].filter { site in
 				guard memberSet.contains(site.owner), case .built = statements(ofClass: site.owner)[site.index] else { return false }
 				return true
 			}
-			guard buildingSites.count == 1, let site = buildingSites.first else { return nil }
-			builtByOwner[site.owner, default: []].append((member, site))
-		}
-		var nested = [(member: Int, site: CallSite)]()
-		var pending = [entry]
-		while let owner = pending.popLast() {
-			for built in builtByOwner[owner] ?? [] {
-				nested.append(built)
-				pending.append(built.member)
+			isBuiltOnce = isBuiltOnce && buildingSites.count == 1
+			if let site = buildingSites.first {
+				builtByOwner[site.owner, default: []].append((member, site))
 			}
 		}
-		guard nested.count == members.count - 1 else { return nil }
+		guard entries.count == 1, let entry = entries.first, isBuiltOnce else { return nil }
+		// Each member's place in a depth-first walk of the nesting from the entry, and the number of members nested in it,
+		// itself included, so a body encloses another exactly where the other's place falls in its span.
+		var nested = [(member: Int, site: CallSite)]()
+		var walkIndex = [Int: Int]()
+		var walkOrder = [Int]()
+		var declaringOwner = [Int: Int]()
+		var pending = [(member: entry, owner: -1)]
+		while let (member, owner) = pending.popLast() {
+			walkIndex[member] = walkOrder.count
+			walkOrder.append(member)
+			declaringOwner[member] = owner
+			for built in (builtByOwner[member] ?? []).reversed() {
+				nested.append(built)
+				pending.append((built.member, member))
+			}
+		}
+		var span = [Int](repeating: 1, count: walkOrder.count)
+		for (position, member) in walkOrder.enumerated().reversed() {
+			if let owner = declaringOwner[member], let ownerIndex = walkIndex[owner] {
+				span[ownerIndex] += span[position]
+			}
+		}
+		var enclosed = [Int: Range<Int>]()
+		for (position, member) in walkOrder.enumerated() {
+			enclosed[member] = position..<(position + span[position])
+		}
+		// The entry is declared outside the component, around every member; any other member is declared in the body that
+		// builds it, which must enclose each closing call of it.
+		let everyCloserSeesItsTarget = members.allSatisfy { caller in
+			statements(ofClass: caller).allSatisfy { statement in
+				guard case let .closer(_, target) = statement, memberSet.contains(classByBody[target]), classByBody[target] != entry else { return true }
+				return declaringOwner[classByBody[target]].flatMap { enclosed[$0] }?.contains(walkIndex[caller] ?? -1) ?? false
+			}
+		}
+		guard everyCloserSeesItsTarget else { return nil }
 		return (entry, nested)
 	}
 }
