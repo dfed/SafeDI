@@ -400,6 +400,25 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		let receives = TypeFactsReceives(received: received, required: requiredRows, onlyIfAvailableUnwrapped: onlyIfAvailableUnwrapped, requiredAliasFulfilling: requiredAliasFulfilling)
+		// A call that fills a place requires what each fill's tree requires that no field the fill binds provides: the
+		// caller's declaration, which the caller builds before the call (`Scope.callerReads(of:child:labelsHandedToReenteredFunctions:log:)`).
+		// Only the order of siblings reads it, as the tree orders a scope's children by what the call's generator receives.
+		var fillCallerRequired = [[Int32]](repeating: [], count: nodes.count)
+		for (edge, hole) in fillHoles {
+			let source = Self.source(ofEdge: Int(edge), in: graph)
+			// A fill binds each field of its place but one bound from a parameter the seam defers, which it reads from the
+			// caller's scope, as the fill channel's fields say (`fillFields`, below).
+			let bindsDeferredFields = hole.innerSeamType != nil && nodes[source].scope.publicMockCall == nil
+			let boundLabels = Set(hole.fields.filter { !$0.isDeferredParameter || bindsDeferredFields }.map { labels.id(of: $0.property.label) })
+			for property in requiredRows.columns(inRow: Int(graph.edgeTargets[Int(edge)])) where !boundLabels.contains(propertyFactsOfNodes.labels[Int(property)]) {
+				fillCallerRequired[source].append(property)
+			}
+		}
+		let siblingOrderReceives = if fillCallerRequired.allSatisfy(\.isEmpty) {
+			receives
+		} else {
+			Self.receives(addingRequired: fillCallerRequired, to: receives, ownRequired: ownRequired, onlyIfAvailableRows: onlyIfAvailableRows, graph: graph, hidden: BitRows(rowCount: nodes.count, columnCount: propertyCount) { node, insert in provided(by: node, insert) }, followsEdge: followsEdge)
+		}
 
 		// The other union facts: the types built beneath, the names declared `@escaping` beneath, and whether a hole is.
 		let noneHidden = BitRows(rowCount: nodes.count, columnCount: types.values.count) { _, _ in }
@@ -461,7 +480,7 @@ struct TypeFactsGraph: Sendable {
 					isCarrier: carrierEdges.contains(edge),
 				)
 			}
-			let order = SiblingOrder.order(of: children, receives: receives, facts: propertyFactsOfNodes)
+			let order = SiblingOrder.order(of: children, receives: siblingOrderReceives, facts: propertyFactsOfNodes)
 			for (position, child) in order.orderedIndices.enumerated() {
 				positions[childEdges[child]] = Int32(position)
 			}
@@ -1438,6 +1457,24 @@ struct TypeFactsGraph: Sendable {
 			}
 		}
 		return false
+	}
+
+	/// `receives` where each node also requires `addingRequired`'s row of it, folded up its tree again as `ownRequired` is.
+	private static func receives(addingRequired: [[Int32]], to receives: TypeFactsReceives, ownRequired: [[Int32]], onlyIfAvailableRows: BitRows, graph: OrderedGraph<TypeFactsDeclaration>, hidden: BitRows, followsEdge: (Int) -> Bool) -> TypeFactsReceives {
+		let required = ReadsFromAbove(
+			graph: graph,
+			own: BitRows(rowCount: graph.nodes.count, columnCount: hidden.columnCount) { node, insert in
+				ownRequired[node].forEach(insert)
+				addingRequired[node].forEach(insert)
+			},
+			hidden: hidden,
+			followsEdge: followsEdge,
+		).rows
+		let received = BitRows(rowCount: graph.nodes.count, columnCount: hidden.columnCount) { node, insert in
+			required.columns(inRow: node).forEach(insert)
+			onlyIfAvailableRows.columns(inRow: node).forEach(insert)
+		}
+		return TypeFactsReceives(received: received, required: required, onlyIfAvailableUnwrapped: receives.onlyIfAvailableUnwrapped, requiredAliasFulfilling: receives.requiredAliasFulfilling)
 	}
 
 	/// The node an edge leaves.
