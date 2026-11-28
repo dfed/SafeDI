@@ -22,9 +22,9 @@
 struct MockRootTree {
 	let generator: ScopeGenerator
 	let treeChecks: MockRootTreeChecks
-	/// Where a test compares the tree's checks (`MockRootTreeChecksObservation`): whether the per-type facts of the root's
-	/// world find a `Sendable` capture (`DeclarationsAnsweringReads`), resolving what `mock()` takes by label and type.
-	/// `nil` otherwise.
+	/// Where the root's scopes ask its world (`MockRootTreeChecks.asksWorldForSendableCaptures`), or a test compares the
+	/// tree's checks (`MockRootTreeChecksObservation`): whether the per-type facts of the root's world find a `Sendable`
+	/// capture (`DeclarationsAnsweringReads`), resolving what `mock()` takes by label and type. `nil` otherwise.
 	var worldFindsSendableCapture: Bool?
 }
 
@@ -292,7 +292,7 @@ extension DependencyTreeGenerator {
 			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
 		)
 		// Which of the checks of the mock root's tree can find anything in it, read from its scopes, which are complete.
-		let treeChecks = MockRootTreeChecks(mockRootScope: mockRootScope, isPublicMock: instantiable.generateMock == .public)
+		let scopeTreeChecks = MockRootTreeChecks(mockRootScope: mockRootScope, isPublicMock: instantiable.generateMock == .public)
 
 		// The mock's tree builds the type of each scope the mock root's scope reaches. Each constant or lazily instantiated
 		// `@Instantiated` dependency it builds, at any depth – beneath the mocked type's own children, beneath a promoted
@@ -541,10 +541,11 @@ extension DependencyTreeGenerator {
 				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
-		// The world's capture check, compared with the tree's where a test asks, reads what the mock root binds once the tree
-		// is final: what it binds once the values only calls of public mocks receive inside `@Sendable` functions are left
-		// out, and the wrappers a public mock takes whose instances its tree reads, which the tree declares above its root.
-		let worldFindsSendableCapture: Bool? = if MockRootTreeChecksObservation.comparesTree != nil {
+		// The world's capture check answers the tree's where the root's scopes ask it (`MockRootTreeChecks`), and is compared
+		// with the tree's on every root where a test asks. It reads what the mock root binds once the tree is final: what it
+		// binds once the values only calls of public mocks receive inside `@Sendable` functions are left out, and the
+		// wrappers a public mock takes whose instances its tree reads, which the tree declares above its root.
+		let worldFindsSendableCapture: Bool? = if scopeTreeChecks.asksWorldForSendableCaptures || MockRootTreeChecksObservation.comparesTree != nil {
 			DeclarationsAnsweringReads(
 				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
 				rootNonSendableWrapperLabels: Set((allReceived + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)).filter { !$0.propertyType.isConstant && !$0.propertyType.isSendable }.map(\.label)),
@@ -562,6 +563,7 @@ extension DependencyTreeGenerator {
 		} else {
 			nil
 		}
+		let treeChecks = worldFindsSendableCapture.map { scopeTreeChecks.answeringSendableCaptures(fromWorld: $0) } ?? scopeTreeChecks
 		// A tree whose scopes declare no label they receive in two forms holds no unpassable label (`MockRootTreeChecks`).
 		if treeChecks.needsTree(.cycleLabels) {
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
