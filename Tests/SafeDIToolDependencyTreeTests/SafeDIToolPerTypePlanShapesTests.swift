@@ -658,8 +658,9 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_laysRootOutFromItsPlanWithTodaysCode_whenTypeOnCycleHoldsBuilderOfSeamForwardedValue() async throws {
-		// A screen on a cycle holds a builder of a seam, which is forwarded a value its call binds inside its function.
+	mutating func generate_keepsRootOnTodaysTree_whenTypeOnCycleHoldsBuilderOfSeamForwardedValue() async throws {
+		// A screen on a cycle holds a builder of a seam, which is forwarded a value its call binds inside its function: the
+		// tree writes no record of such a call yet, so the root keeps today's tree.
 		let choices = try await choicesGeneratingTodaysCode(of: """
 		@Instantiable(isRoot: true) public final class Root: Instantiable {
 		    @Instantiated let service: Service
@@ -695,7 +696,7 @@ struct SafeDIToolPerTypePlanShapesTests: ~Copyable {
 		@Instantiable public final class Leaf: Instantiable { public init() {} }
 		""")
 
-		#expect(choices == ["Root": nil])
+		#expect(choices == ["Root": .callsSeamForwardedValues])
 	}
 
 	@Test
