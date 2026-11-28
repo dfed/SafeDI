@@ -664,32 +664,6 @@ extension TypeFactsGraph: TypeFactsWorld {
 		return labels
 	}
 
-	/// The labels the function a cycle closes on receives from above it, which a declaration between the function and
-	/// the closing call declares again, in forms no one parameter can pass (`UnpassableCycleLabel`), each with the
-	/// declaration whose function it is, in declaration order then label order.
-	func unpassableCycleLabels() -> [(declaration: DeclarationID, label: String)] {
-		var unpassable = [(declaration: DeclarationID, label: String)]()
-		for declaration in 0..<Int32(declarationCount) where isOnCycle(declaration) {
-			let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
-			let labelsDeclaredBetween = labelsDeclaredBetweenFunctionAndItsClosers(of: declaration)
-			var formsByLabel = [String: Set<Property>]()
-			for received in receives.received.columns(inRow: Int(declaration)) {
-				let property = propertyTable[Int(received)]
-				if property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
-					formsByLabel[property.label, default: []].insert(property)
-				}
-			}
-			var requiredForms = Set<Property>()
-			for required in receives.required.columns(inRow: Int(declaration)) {
-				requiredForms.insert(propertyTable[Int(required)])
-			}
-			for (label, forms) in formsByLabel.sorted(by: { $0.key < $1.key }) where CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) == nil {
-				unpassable.append((declaration, label))
-			}
-		}
-		return unpassable
-	}
-
 	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
 	/// `labels(of:)` order instead.
 	private func parameterOrder(of declaration: DeclarationID, walking: Set<DeclarationID>) -> [WorldLabelID] {
