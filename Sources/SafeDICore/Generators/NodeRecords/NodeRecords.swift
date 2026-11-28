@@ -408,10 +408,15 @@ struct NodeRecords: Sendable {
 			// takes a label as a parameter only where a place between it and a call that closes on it declares that label,
 			// or takes it as a parameter of its own function (`CycleParameter`).
 			cycleParametersByVariant[Int(variant)] = []
+			// Where a production function takes the wrapper that answers a read of its value, today's tree takes the value, and
+			// so do the records while they are compared with the tree's: the generator's form, as check 35 projects it in
+			// `TypeFactsChecks`. Once the tree goes, the records take the fact's wrapper unchanged.
 			let parameters = world.parameters(of: variant, arrivals: arrivals()).filter { parameter in
 				let label = parameter.property.label
 				return labelsDeclaredBetween[Int(variant)].contains(label)
 					|| variantsBetween[Int(variant)].contains { $0 != variant && cycleParameters(of: $0).contains { $0.property.label == label } }
+			}.map { parameter in
+				parameter.generatorProperty.map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) } ?? parameter
 			}
 			cycleParametersByVariant[Int(variant)] = parameters
 			return parameters

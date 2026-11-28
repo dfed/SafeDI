@@ -333,6 +333,11 @@ struct TypeFactsParameter: Hashable, Sendable {
 	/// Whether a receive by value in the body reads the parameter through its wrapper's `instance`: the parameter is a
 	/// lazily instantiated wrapper, and the body receives the instance it creates.
 	let readsInstanceOfWrapper: Bool
+	/// The form the generator's own cycle parameter takes where it is not `property`: the value, where a production
+	/// function takes the wrapper a lazily instantiated declaration answers the body's read of it with, which today's
+	/// tree takes by value (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`). `nil`
+	/// everywhere else. Node records take this form while they are compared with the tree's records.
+	var generatorProperty: Property? = nil
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -572,7 +577,8 @@ extension TypeFactsGraph: TypeFactsWorld {
 		if !forMockGeneration, key >= 0 {
 			let declared = propertyTable[Int(answerProperties[Int(key)])]
 			if let instance = declared.asLazilyInstantiatedInstancePropertyOfDeclaredBinding, forms.contains(instance) || forms.contains(instance.asOptionalProperty) {
-				return TypeFactsParameter(property: declared, readsInstanceOfWrapper: true)
+				let generatorProperty = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms))?.property
+				return TypeFactsParameter(property: declared, readsInstanceOfWrapper: true, generatorProperty: generatorProperty == declared ? nil : generatorProperty)
 			}
 		}
 		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
