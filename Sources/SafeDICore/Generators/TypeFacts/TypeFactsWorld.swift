@@ -292,6 +292,9 @@ protocol TypeFactsWorld {
 	/// For each read of the variant, parallel to `keys(of:)`: the offset of the edge that opens the `@Sendable` function a
 	/// `readBeforeSendableFunction` read is bound before (the outermost such edge), -1 for every other outcome.
 	func boundBefore(of variant: VariantID) -> ArraySlice<Int32>
+	/// What arrives at a root's reads from outside the world (`TypeFactsReadArrivals`): `nil` alone at a root nothing
+	/// calls, also an answer where a caller passes the root its reads (a seam's caller, a mock's parameters).
+	var rootReadArrivals: TypeFactsArrivals { get }
 	/// The facts producers still owe the declaration's answers (`TypeFactsOwedFacts`).
 	func owedFacts(of declaration: DeclarationID) -> TypeFactsOwedFacts
 	/// Whether the declaration an answer binds provides a form that a receive of the read's label in the declaration's
@@ -315,12 +318,14 @@ protocol TypeFactsWorld {
 	/// the declaration's subtree receives from above and those some receiver requires, as the function a lazy cycle
 	/// closes on types its parameter today. Whether the function takes the read as a parameter at all is the outcomes
 	/// fold's answer (`outcomes(of:)`), which `parameters(of:)` joins with this.
+	/// Where a lazily instantiated wrapper answers the read's unwrapped value (rule 3), the parameter is the wrapper, read
+	/// through its `instance`, and optional where some call of the variant passes `nil` (`arrivals`, built once per world).
 	/// Computed when asked, never while the world is built.
-	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter?
+	func parameterType(of variant: VariantID, _ read: ReadID, arrivals: TypeFactsReadArrivals) -> TypeFactsParameter?
 	/// Exactly the parameters the variant's function takes: each label one of whose reads comes to a parameter
 	/// (`outcomes(of:)`), in the order of `parameterOrder(of:)` for its declaration, typed by `parameterType(of:_:)`.
 	/// Computed when asked, never while the world is built.
-	func parameters(of variant: VariantID) -> [TypeFactsParameter]
+	func parameters(of variant: VariantID, arrivals: TypeFactsReadArrivals) -> [TypeFactsParameter]
 }
 
 /// A parameter of a variant's function: what it takes for one label its subtree reads from above.
@@ -331,6 +336,11 @@ struct TypeFactsParameter: Hashable, Sendable {
 	/// Whether a receive by value in the body reads the parameter through its wrapper's `instance`: the parameter is a
 	/// lazily instantiated wrapper, and the body receives the instance it creates.
 	let readsInstanceOfWrapper: Bool
+	/// The form the generator's own cycle parameter takes where it is not `property`: the value, where a production
+	/// function takes the wrapper a lazily instantiated declaration answers the body's read of it with, which today's
+	/// tree takes by value (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`). `nil`
+	/// everywhere else. Node records take this form while they are compared with the tree's records.
+	var generatorProperty: Property?
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
@@ -503,6 +513,11 @@ extension TypeFactsGraph: TypeFactsWorld {
 		outcomes.boundBefore(of: variant)
 	}
 
+	var rootReadArrivals: TypeFactsArrivals {
+		let root = graph.nodes[0].scope.instantiable
+		return forMockGeneration || root.generatesDependencyTree ? [.nil, .answer] : .nil
+	}
+
 	func providesFormRead(by answer: AnswerID, _ read: ReadID, beneath declaration: DeclarationID) -> Bool {
 		guard answer >= 0 else { return false }
 		// A declaration being built is the one its own label's reads beneath it name, around the cycle it closes.
@@ -518,7 +533,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 		parameterOrder(of: declaration, walking: [])
 	}
 
-	func parameterType(of variant: VariantID, _ read: ReadID) -> TypeFactsParameter? {
+	func parameterType(of variant: VariantID, _ read: ReadID, arrivals: TypeFactsReadArrivals) -> TypeFactsParameter? {
 		let declaration = declaration(of: variant)
 		let reads = reads(of: declaration)
 		let label = readTable[Int(read)].label
@@ -530,11 +545,17 @@ extension TypeFactsGraph: TypeFactsWorld {
 			return nil
 		}
 		let keys = keys(of: variant)
+		// The wrapper that answers the read's unwrapped value, where the variant is keyed by one.
+		let wrapperName: String?
 		switch answer(keys[keys.startIndex + (position - reads.startIndex)]).form {
 		case .none, .beingBuilt, .madeAgain:
 			return nil
-		case .declared, .optionalParameter, .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
-			break
+		case .declared, .optionalParameter:
+			wrapperName = nil
+		case .optionalLazilyInstantiatedParameter:
+			wrapperName = Dependency.lazilyInstantiatedType
+		case .optionalSendableLazilyInstantiatedParameter:
+			wrapperName = Dependency.sendableLazilyInstantiatedType
 		}
 		var forms = Set<Property>()
 		for received in receives.received.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(received)] == label {
@@ -544,6 +565,29 @@ extension TypeFactsGraph: TypeFactsWorld {
 		for required in receives.required.columns(inRow: Int(declaration)) where propertyFacts.labels[Int(required)] == label {
 			requiredForms.insert(propertyTable[Int(required)])
 		}
+		if let wrapperName {
+			// The wrapper the calls pass: the form of it the body itself receives, where it receives one, else the
+			// wrapper of the value's type. Every form of a label keyed with a wrapper is that wrapper or its value.
+			let unwrappedForms = forms.map(\.asUnwrappedProperty).sorted()
+			guard let wrapper = unwrappedForms.first(where: { $0.asLazilyInstantiatedInstanceProperty != nil })
+				?? unwrappedForms.first.map({ Property(label: $0.label, typeDescription: .simple(name: wrapperName, generics: [$0.typeDescription])) })
+			else { return nil }
+			return TypeFactsParameter(
+				property: arrivals.nilArrives(at: position - reads.startIndex, of: variant) ? wrapper.asOptionalProperty : wrapper,
+				readsInstanceOfWrapper: true,
+			)
+		}
+		// A production function takes the wrapper a lazily instantiated declaration answers a read of its value with, and
+		// its body reads the wrapper’s instance, so the instance is created at first read. A mock’s takes the value, which
+		// each call reads from its wrapper (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`).
+		let key = keys[keys.startIndex + (position - reads.startIndex)]
+		if !forMockGeneration, key >= 0 {
+			let declared = propertyTable[Int(answerProperties[Int(key)])]
+			if let instance = declared.asLazilyInstantiatedInstancePropertyOfDeclaredBinding, forms.contains(instance) || forms.contains(instance.asOptionalProperty) {
+				let generatorProperty = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms))?.property
+				return TypeFactsParameter(property: declared, readsInstanceOfWrapper: true, generatorProperty: generatorProperty == declared ? nil : generatorProperty)
+			}
+		}
 		guard let (property, passedForms) = CycleParameter.property(passing: forms, requiredForms: requiredForms.intersection(forms)) else { return nil }
 		let instance = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		return TypeFactsParameter(
@@ -552,15 +596,64 @@ extension TypeFactsGraph: TypeFactsWorld {
 		)
 	}
 
-	func parameters(of variant: VariantID) -> [TypeFactsParameter] {
+	func parameters(of variant: VariantID, arrivals: TypeFactsReadArrivals) -> [TypeFactsParameter] {
 		let declaration = declaration(of: variant)
 		let reads = reads(of: declaration)
+		let keys = keys(of: variant)
 		let outcomes = outcomes(of: variant)
-		return parameterOrder(of: declaration).compactMap { label in
-			reads.indices
-				.first { readTable[Int(reads[$0])].label == label && outcomes[outcomes.startIndex + ($0 - reads.startIndex)] == .parameter }
-				.flatMap { parameterType(of: variant, reads[$0]) }
+		// One pass over the reads: for each label, its first read that comes to a parameter, or the first of those a
+		// wrapper answers, since a function takes one parameter per label and the wrapper serves every read of it.
+		var readByLabel = [WorldLabelID: (read: ReadID, isAnsweredByWrapper: Bool)]()
+		for offset in 0..<reads.count where outcomes[outcomes.startIndex + offset] == .parameter {
+			let read = reads[reads.startIndex + offset]
+			let isAnsweredByWrapper = switch answer(keys[keys.startIndex + offset]).form {
+			case .optionalLazilyInstantiatedParameter, .optionalSendableLazilyInstantiatedParameter:
+				true
+			case .none, .declared, .beingBuilt, .madeAgain, .optionalParameter:
+				false
+			}
+			let label = readTable[Int(read)].label
+			guard readByLabel[label].map({ isAnsweredByWrapper && !$0.isAnsweredByWrapper }) ?? true else { continue }
+			readByLabel[label] = (read, isAnsweredByWrapper)
 		}
+		let madeAgainParameters = madeAgainParameters(of: declaration)
+		return parameterOrder(of: declaration).compactMap { label in
+			if let read = readByLabel[label] {
+				parameterType(of: variant, read.read, arrivals: arrivals)
+			} else {
+				madeAgainParameters[label].map { TypeFactsParameter(property: $0, readsInstanceOfWrapper: false) }
+			}
+		}
+	}
+
+	/// The loop mates the function of `declaration` takes as parameters where it would otherwise make them again at its
+	/// top, by label, each as the property its loop declares it as: a mate whose label a declaration between the
+	/// function and a call that closes a cycle on it declares. The function a cycle closes on then takes the mate, and
+	/// each call rebinds it before the call. A declaration is between where the function reaches it and it reaches the
+	/// function: one of the function's component. The member's own label is never one: a loop of one rebinds itself.
+	///
+	/// Read from the mates a declaration makes again whatever parent builds it (`madeAgain(from:)`), which is every
+	/// variant's set except for the declarations of `loopMembersSharedApart`.
+	private func madeAgainParameters(of declaration: DeclarationID) -> [WorldLabelID: Property] {
+		let mates = madeAgain(from: declaration)
+		guard !mates.isEmpty, isOnCycle(declaration) else { return [:] }
+		let mateLabels = madeAgainLabels(from: declaration)
+		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
+		var labelsDeclaredBetween = Set<String>()
+		for other in 0..<Int32(declarationCount) where other != declaration && isOnCycle(other) && component(of: other) == component(of: declaration) {
+			for child in edges(from: other) {
+				if let label = graph.nodes[Int(child)].property?.label {
+					labelsDeclaredBetween.insert(label)
+				}
+			}
+		}
+		var parameters = [WorldLabelID: Property]()
+		for (mate, label) in zip(mates, mateLabels) {
+			if let property = graph.nodes[Int(mate)].property, property.label != ownLabel, labelsDeclaredBetween.contains(property.label) {
+				parameters[label] = property
+			}
+		}
+		return parameters
 	}
 
 	/// `parameterOrder(of:)`, inside the walks of `walking`, whose orders a call that closes on one of them meets in
@@ -568,7 +661,7 @@ extension TypeFactsGraph: TypeFactsWorld {
 	private func parameterOrder(of declaration: DeclarationID, walking: Set<DeclarationID>) -> [WorldLabelID] {
 		// The declaration's own label is no parameter: every call is made where a declaration of it is being built.
 		let ownLabel = graph.nodes[Int(declaration)].property.map(\.label)
-		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel })
+		var unmet = Set(labels(of: declaration).filter { labelTexts[Int($0)] != ownLabel }).union(madeAgainParameters(of: declaration).keys)
 		var order = [WorldLabelID]()
 		func meet(_ label: WorldLabelID) {
 			if unmet.remove(label) != nil {
