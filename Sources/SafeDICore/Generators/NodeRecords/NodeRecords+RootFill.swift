@@ -162,6 +162,9 @@ struct FillFacts: Sendable {
 		var fillNodeByKey = [String: DeclarationID]()
 		for index in world.fillIndices(ofEdgesIn: edges.indices) {
 			let worldFill = world.fill(index)
+			// Neither subscript can trap: the world makes a fill of each `.fill` among this call's `holeArguments`, recording its
+			// index there as `holeIndex` (`TypeFactsGraph`), and `fillIndices(ofEdgesIn:)` returns only fills whose edge is
+			// among `edges`.
 			switch scope.holeArguments[Int(worldFill.holeIndex)] {
 			case let .fill(hole, _, _):
 				guard fillNodeByKey.updateValue(edges[Int(worldFill.edge)], forKey: ScopeGenerator.fillKey(of: hole)) == nil else { return .refused(.fill) }
