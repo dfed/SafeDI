@@ -511,6 +511,9 @@ extension DependencyTreeGenerator {
 			frozenScopeMap: seamWorld.frozenScopeMap,
 			plansCyclesPerType: plansCyclesPerType,
 			drawsTrees: drawsTrees,
+			// A test compares the records of a seam world's production root with its tree's places, and no run lays it out
+			// from them until node records make a seam call (`NodeRecords`).
+			readersOfEveryTree: nil,
 			constructionMemo: &constructionMemo,
 			cache: &receivedPropertiesCache,
 		)
@@ -589,7 +592,7 @@ extension DependencyTreeGenerator {
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				built: .tree(.perPath(scopeGenerator)),
+				built: .tree(scopeGenerator),
 				fulfillers: fulfillers,
 				receivedValueSupplies: receivedValueSupplies,
 				rootScope: rootScope,

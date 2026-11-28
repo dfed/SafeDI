@@ -248,13 +248,6 @@ extension TypeKeyLayout {
 		case text
 	}
 
-	/// A function a closer calls: the function of an enclosing place's body, or the function a statement of an enclosing
-	/// body declares, at its position in that body, which the walk may not have reached yet.
-	enum ResolvedFunction {
-		case enclosing(Int)
-		case statement(body: Int, index: Int, record: BuiltPlaceRecord)
-	}
-
 	/// The body of the nearest enclosing place, from `body` outward, whose function is named `name`, or the root's body
 	/// where none is.
 	func enclosingFunction(named name: String, from body: Int) -> Int {
@@ -263,6 +256,13 @@ extension TypeKeyLayout {
 			target = bodies[target].parent
 		}
 		return target
+	}
+
+	/// A function a closer calls: the function of an enclosing place's body, or the function a statement of an enclosing
+	/// body declares, at its position in that body, which the walk may not have reached yet.
+	enum ResolvedFunction {
+		case enclosing(Int)
+		case statement(body: Int, index: Int, record: BuiltPlaceRecord)
 	}
 
 	/// The function named `name` that code in `body` calls, as Swift resolves the name: from `body` outward, a function a

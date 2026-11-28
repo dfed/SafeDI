@@ -340,7 +340,7 @@ struct TypeKeyBodyValuePathTests {
 	}
 
 	@Test
-	func statements_handsTheClosedOnFunctionTheMember_whenACloserHandsAPassedArgumentAMember() throws {
+	func statements_handsTheClosedOnFunctionAMember_whenACloserHandsAPassedArgumentAMember() throws {
 		let statements = try #require(TypeKeyBody.statements(ofRootBody: Self.closerBody(handing: PassedArgument(parameterName: "cfg", type: .simple(name: "Cfg"), value: .member("cfg", of: .rootDeclaration("overrides")), staysOutsideSendableFunctions: false))))
 		#expect(GeneratedCode.lines(statements).spelled() == """
 		        let id = 1

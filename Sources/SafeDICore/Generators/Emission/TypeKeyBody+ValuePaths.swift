@@ -462,8 +462,8 @@ struct StructuralKeyParts {
 		case passedArgument(String)
 		case member(name: String, base: Int, throughOptional: Bool)
 		case call(name: String, value: Int, arguments: [String], argumentsWrapper: String?)
-		case emptyInitialization(String)
 		case implicitMemberCall(name: String, arguments: [String])
+		case emptyInitialization(String)
 		case spliced([Segment])
 	}
 
@@ -509,11 +509,11 @@ struct StructuralKeyParts {
 					argumentsWrapper: argumentsWrapper?.asSource,
 				)
 				break reading
-			case let .emptyInitialization(type):
-				node = .emptyInitialization(type.asSource)
-				break reading
 			case let .implicitMemberCall(name, arguments):
 				node = .implicitMemberCall(name: name, arguments: arguments.map(\.shape))
+				break reading
+			case let .emptyInitialization(type):
+				node = .emptyInitialization(type.asSource)
 				break reading
 			case let .spliced(segments):
 				var spliced = [Segment]()
