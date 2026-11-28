@@ -567,6 +567,10 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 		#expect(reports.filter { $0.refusal != nil }.map(\.root) == [])
 		#expect(reports.filter { !$0.differences.isEmpty }.map(\.root) == [])
 		#expect(reports.contains { $0.worldValue(of: "uncoveredDependencies")?.contains("hidden: true") == true })
+		// Every root’s signature is compared, and the mock of a type that instantiates the unfulfilled `Engine` takes it,
+		// named apart from the `engine: Toolbox` its tree declares.
+		#expect(reports.allSatisfy { report in Self.signatureFields.allSatisfy { report.worldValue(of: $0) != nil } })
+		#expect(reports.first { $0.root == "Orbit0" }?.worldValue(of: "uncoveredParameters") == "engine_Engine: Engine = none for engine: Engine")
 	}
 
 	@Test
@@ -584,7 +588,122 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_equalTreesSignature_whenTreeReceivesValueAndValueOnlyIfAvailableThatMockCannotBuild() async throws {
+		// `Child` requires a `Service` and receives a `Log` only if available, neither of which any declaration fulfills:
+		// `mock()` takes the one as a flat parameter and the other as an override.
+		let report = try await report(of: "Root", in: [
+			"""
+			public final class Service {}
+
+			public final class Log {}
+
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(child: Child) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let child: Child
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Child: Instantiable {
+			    public init(service: Service, log: Log?) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let service: Service
+			    @Received(onlyIfAvailable: true) let log: Log?
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences == [])
+		#expect(report.worldValue(of: "flatReceivedParameters") == "service: Service = none for service: Service")
+		#expect(report.worldValue(of: "onlyIfAvailableOverrides") == "log: Log? for log: Log?")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_spellsSignatureAsMockRootBindsValue_whenTwoReceiversSpellProtocolApart() async throws {
+		// `First` spells the protocol without `any` and `Second` with it: the mock root binds the most explicit spelling,
+		// which `mock()` takes.
+		let report = try await report(of: "Lone", in: [
+			"""
+			public protocol Service: Sendable {}
+
+			@Instantiable(generateMock: true)
+			public final class Lone: Instantiable {
+			    public init(first: First, second: Second) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let first: First
+			    @Instantiated let second: Second
+			}
+			""",
+			"""
+			@Instantiable
+			public final class First: Instantiable {
+			    public init(shared: Service) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let shared: Service
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Second: Instantiable {
+			    public init(shared: any Service) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let shared: any Service
+			}
+			""",
+		])
+		#expect(report.refusal == nil)
+		#expect(report.differences.filter { Self.signatureFields.contains($0.field) } == [])
+		#expect(report.worldValue(of: "flatReceivedParameters") == "shared: any Service = none for shared: any Service")
+	}
+
 	// MARK: Refused
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func treeNames_refuses_whenTreeReceivesValueTheMockedTypeForwards() async throws {
+		// `Child` receives the `name` `Root` forwards, which the mock root binds as `mock()`'s forwarded parameter and so
+		// never among what it binds of its tree's receives: the world has no spelling of it to hand the signature.
+		let report = try await report(of: "Root", in: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class Root: Instantiable {
+			    public init(name: String, child: Child) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Forwarded let name: String
+			    @Instantiated let child: Child
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Child: Instantiable {
+			    public init(name: String) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Received let name: String
+			}
+			""",
+		])
+		#expect(report.refusal == "spelling")
+		#expect(report.fields == [])
+	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -891,6 +1010,26 @@ struct SafeDIToolMockTreeNamesWorldTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The fields of `mock()`'s signature the report compares (`MockTreeNamesObservation.fields(of:besideThoseOf:)` over two
+	/// `MockLowering.RootSignature`s).
+	private static let signatureFields: Set<String> = [
+		"forwardedParameters",
+		"rootDefaultParameters",
+		"flatReceivedParameters",
+		"uncoveredParameters",
+		"uncoveredRootParameters",
+		"sharedValueDocumentation",
+		"onlyIfAvailableOverrides",
+		"renamesByLabelAndType",
+		"uncoveredParameterNamesByLabelAndType",
+		"signatureTypesDeclaredEscaping",
+		"lazilyInstantiatedBindings",
+		"lazilyInstantiatedBindingNamesByLabelAndType",
+		"signatureNamesDeclaredInBuilderFunctions",
+		"unavailableDependencyOverrideNames",
+		"builders",
+	]
 
 	/// A ring of `count` types, `Orbit<i>`, each mocked and building the next through an `Instantiator`; every
 	/// `declaringEngineEvery`th type declares an `engine` of its own, and every `instantiatingUnfulfilledEngineEvery`th

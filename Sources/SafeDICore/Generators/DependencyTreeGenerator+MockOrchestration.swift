@@ -39,16 +39,16 @@ extension DependencyTreeGenerator {
 				storesPublicMockPlans: storesPublicMockPlans,
 				publicMockContext: publicMockContext,
 				worldRootRecording: nil,
-				pinsRecording: nil,
+				promotionRecording: nil,
 			)
 		}
 		// The root of each mock root's world, by mocked type, where a test observes node records: handed on through a task
 		// local, so that a run no test observes threads nothing through the mock roots' construction.
 		let worldRootRecording = AsyncStream.makeStream(of: (mockedType: TypeDescription, worldRoot: ConstructionScope).self)
-		// The mocked types whose mocks pass `nil` to a receive a required one pins, which the tree names comparison refuses.
-		let pinsRecording = AsyncStream.makeStream(of: TypeDescription.self)
+		// What each mock root's promotion decides before its tree is built, which the tree names comparison reads.
+		let promotionRecording = AsyncStream.makeStream(of: MockRootPromotion.self)
 		return try await NodeRecordsObservation.$recordsMockWorldRoot.withValue({ worldRootRecording.continuation.yield(($0, $1)) }) {
-			try await MockTreeNamesObservation.$recordsMockRootPassingNilToPinnedReceives.withValue({ pinsRecording.continuation.yield($0) }) {
+			try await MockTreeNamesObservation.$recordsMockRootPromotion.withValue({ promotionRecording.continuation.yield($0) }) {
 				try await generateMockCode(
 					mockConditionalCompilation: mockConditionalCompilation,
 					currentModuleSourceFilePaths: currentModuleSourceFilePaths,
@@ -56,7 +56,7 @@ extension DependencyTreeGenerator {
 					storesPublicMockPlans: storesPublicMockPlans,
 					publicMockContext: publicMockContext,
 					worldRootRecording: worldRootRecording,
-					pinsRecording: pinsRecording,
+					promotionRecording: promotionRecording,
 				)
 			}
 		}
@@ -64,8 +64,8 @@ extension DependencyTreeGenerator {
 
 	/// - Parameter worldRootRecording: Where the root of each mock root's world arrives, by mocked type, where a test
 	///   observes node records.
-	/// - Parameter pinsRecording: Where each mocked type arrives whose mock passes `nil` to a receive a required one pins,
-	///   where a test observes node records.
+	/// - Parameter promotionRecording: Where what each mock root's promotion decides arrives, where a test compares tree
+	///   names.
 	private func generateMockCode(
 		mockConditionalCompilation: String?,
 		currentModuleSourceFilePaths: Set<String>?,
@@ -73,7 +73,7 @@ extension DependencyTreeGenerator {
 		storesPublicMockPlans: Bool,
 		publicMockContext: PublicMockContext?,
 		worldRootRecording: (stream: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>, continuation: AsyncStream<(mockedType: TypeDescription, worldRoot: ConstructionScope)>.Continuation)?,
-		pinsRecording: (stream: AsyncStream<TypeDescription>, continuation: AsyncStream<TypeDescription>.Continuation)?,
+		promotionRecording: (stream: AsyncStream<MockRootPromotion>, continuation: AsyncStream<MockRootPromotion>.Continuation)?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
@@ -276,18 +276,18 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let worldRoots = recordedWorldRoots
-		var recordedTypesPassingNilToPinnedReceives = Set<TypeDescription>()
-		if let pinsRecording {
-			pinsRecording.continuation.finish()
-			for await mockedType in pinsRecording.stream {
-				recordedTypesPassingNilToPinnedReceives.insert(mockedType)
+		var recordedPromotions = [TypeDescription: MockRootPromotion]()
+		if let promotionRecording {
+			promotionRecording.continuation.finish()
+			for await promotion in promotionRecording.stream {
+				recordedPromotions[promotion.mockedType] = promotion
 			}
 		}
-		let typesPassingNilToPinnedReceives = recordedTypesPassingNilToPinnedReceives
+		let promotions = recordedPromotions
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable], passesNilToPinnedReceives: typesPassingNilToPinnedReceives.contains(instantiable.concreteInstantiable))
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext, worldRoot: worldRoots[instantiable.concreteInstantiable], promotion: promotions[instantiable.concreteInstantiable])
 			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
