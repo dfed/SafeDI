@@ -64,9 +64,12 @@ extension NodeRecords {
 		let fillsByDeclaration = Dictionary(grouping: records.fills, by: \.facts.declaration)
 		var statements = [GeneratedCode]()
 		var inlinedFills = [String: ScopeGenerator.FillDispatcher.InlinedFill]()
+		// A fill node the call reaches on more than one of its variants is among its children once per variant, and its
+		// fills are declared once, at the first.
+		var declaredFillKeys = Set<String>()
 		for child in childPlaces {
 			if let fills = fillsByDeclaration[child.declaration] {
-				for fill in fills {
+				for fill in fills where declaredFillKeys.insert(fill.facts.key).inserted {
 					let typesEscaping = typesDeclaredEscapingOf(fill.facts.declaration)
 					if records.decisions.inlinedFillKeys.contains(fill.facts.key),
 					   let inlinedFill = try ScopeGenerator.FillDispatcher.InlinedFill(hole: fill.facts.hole, carrierUse: fill.facts.carrierUse, builtProperty: world.property(of: fill.facts.declaration), code: records.functionLines(of: fill, place: child.place, typesDeclaredEscaping: typesEscaping, namesInScope: namesInScope).map { indent + $0 }.joined(separator: "\n"), leadingMemberWhitespace: indent)
