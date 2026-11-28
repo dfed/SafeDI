@@ -347,6 +347,10 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 	mutating func mock_buildsWalksValuesFromEveryRoot_whenMockedCycleMemberCallsAnotherModulesPublicMock() async throws {
 		// `Bravo`, on the cycle, holds `Feed`'s `Screen`, which `App` cannot build, so each lap's function of `Bravo` calls
 		// `Screen`'s public mock, in whichever mock of `App` the function is written.
+		// In `Bravo`'s own mock one function of `Bravo` serves the root's call, whose configuration reaches it, and the lap's,
+		// along the edge the configurations leave out, which hands it a new one: that call hands `Screen`'s public mock the
+		// new configuration's field, where the walk hands it nothing, and both build `Screen.SafeDIOverrides()`'s values
+		// (approved difference 27, the value cell of a public mock's overrides).
 		let modules = [
 			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
 				"Screen.swift": """
@@ -403,6 +407,73 @@ struct SafeDIToolNodeRecordsMockSharedSlotTests: ~Copyable {
 				+ Self.probes(from: "Charlie", path: Self.path(aroundRing: names, from: 0, steps: 7), graph: graph),
 			filesToDelete: &filesToDelete,
 		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWalksValues_whenTypeBuiltBeneathEdgeConfigurationsLeaveOutCallsAnotherModulesPublicMock() async throws {
+		// In `Alpha`'s mock, the `Alpha` that `Bravo` builds again is built only beneath `Bravo` -> `Alpha`, the edge the
+		// configurations leave out, where the walk calls `Screen`'s public mock with no overrides. Laid out, one function of
+		// `Alpha` serves both, and that call hands the call the field of the new configuration `Bravo` hands it: both build
+		// `Screen.SafeDIOverrides()`'s values (approved difference 27).
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import SafeDI
+
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    init(analytics: Analytics) {
+				        self.analytics = analytics
+				    }
+
+				    @Instantiated let analytics: Analytics
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: [
+				"Marked.swift": Self.markedFile,
+				"Alpha.swift": """
+				import Feed
+				import SafeDI
+
+				@Instantiable(generateMock: true)
+				public final class Alpha: Instantiable, Marked {
+				    public init(screen: Screen, bravoBuilder: Instantiator<Bravo>) {
+				        self.screen = screen
+				        self.bravoBuilder = bravoBuilder
+				    }
+
+				    @Instantiated let screen: Screen
+				    @Instantiated let bravoBuilder: Instantiator<Bravo>
+				    public var marker = ""
+				}
+				""",
+				"Bravo.swift": "import SafeDI\n\n" + Self.type("Bravo", building: ["Alpha"]),
+			], dependencies: ["Feed"]),
+		]
+		let walkOutput = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		let names = ["Alpha", "Bravo"]
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(output: output, modules: modules),
+			knownRight: DifferentialValuePath(output: walkOutput, modules: modules),
+			probes: Self.probes(from: "Alpha", path: Self.path(aroundRing: names, from: 1, steps: 5))
+				+ Self.probes(from: "Bravo", path: Self.path(aroundRing: names, from: 0, steps: 5), graph: ["Bravo": ["Alpha"]]),
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [true, true])
 		// Nothing is compared where compile verification is off.
 		guard let comparison else { return }
 		#expect(comparison.differences.isEmpty, "\(comparison.report)")

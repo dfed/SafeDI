@@ -4798,6 +4798,54 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference)) == [.mockConfigurationFieldPresence])
 	}
 
+	/// Seeds 3 and 77 of the base corpus: where one naming leaves a lazy cycle's field out, a laid-out mock's function of the
+	/// field's type, and of a type only that field's configuration reaches (seed 3's `T8`, beneath `T7`), is handed only new
+	/// configurations, so it builds its node with no override, while the other naming's function reads the override the
+	/// field may set. The override goes with the field, which `computeCycleEdges` places by names; this goes once it no
+	/// longer does.
+	@Test(arguments: [3, 77] as [UInt64])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func renamedGraphFailures_nameThePresenceOfAConfigurationField_whenALaidOutMockBuildsWithNoOverrideATypeOnlyADroppedFieldConfigures(seed: UInt64) async throws {
+		let (toolRuns, mockRootReports) = try await Self.toolRunsLayingOutMockRoots(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+
+		#expect(mockRootReports.contains { $0.isLaidOutFromNodeRecords })
+		let aspects = Set(toolRuns.renamedGraphFailures.map(\.renamedGraphDifference))
+		// The renaming moves the field; no difference is the files' code.
+		#expect(aspects.contains(.mockConfigurationFieldPresence))
+		#expect(!aspects.contains(.mockCode))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMockBuildsWithNoOverrideATypeAKeptConfigurationReaches() async throws {
+		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: GraphFuzzerGenerator.fixture(forSeed: 77))
+		let fileName = "S77_T7+SafeDIMock.swift"
+		// `T8`'s function is also handed the root's own field, which both namings keep, so its override is read in both.
+		let override = "return if let safeDIBuilder = __safeDI_entered.configuration.safeDIBuilder { safeDIBuilder(t7Builder) } else { S77_T8(t7Builder: t7Builder) }"
+
+		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { code in
+			#expect(code.contains(override))
+			return code.replacingOccurrences(of: override, with: "return S77_T8(t7Builder: t7Builder)")
+		}, renamedOutcomeBy: { $0 })
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_nameNeitherReason_whenALaidOutMocksOverrideNoConfigurationReachesHandsItsBuilderOtherArguments() async throws {
+		let (toolRuns, _) = try await Self.toolRunsLayingOutMockRoots(of: GraphFuzzerGenerator.fixture(forSeed: 77))
+		let fileName = "S77_T7+SafeDIMock.swift"
+		let override = "{ safeDIBuilder(t8Builder) } else { S77_T7(t8Builder: t8Builder) }"
+
+		let differences = try Self.differencesUnderReversalOfTypeNames(of: toolRuns, editingFileNamed: fileName, outcomeBy: { $0 }, renamedOutcomeBy: { code in
+			#expect(code.contains(override))
+			return code.replacingOccurrences(of: override, with: "{ safeDIBuilder(Instantiator { fatalError() }) } else { S77_T7(t8Builder: t8Builder) }")
+		})
+
+		#expect(differences.filter { $0.fileName == fileName }.map(\.aspect) == [.mockCode])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_nameNeitherReason_whenALaidOutMockHandsAConfigurationOfAnotherTypeInADroppedFieldsPlace() async throws {
