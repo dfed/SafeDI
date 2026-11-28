@@ -496,7 +496,8 @@ struct TypeFactsGraph: Sendable {
 			},
 			hidden: BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in },
 		).rows : BitRows(rowCount: nodes.count, columnCount: 1) { _, _ in }
-		let worldHoldsHoles = holesArePlaces && holesBeneath.contains(0, inRow: 0)
+		// A hole inside a fill is a place too, whose siblings in the fill's tree start before it.
+		let worldHoldsHoles = holesArePlaces && nodes.contains { $0.key.leaf == .hole }
 		let carrierEdges = worldHoldsHoles ? Self.carrierEdges(of: graph, edgeIsFill: edgeIsFill, builtTypes: builtTypes, nodeProperties: nodeProperties) : []
 
 		// The order each scope builds its children in, and the loops of builders among them.
