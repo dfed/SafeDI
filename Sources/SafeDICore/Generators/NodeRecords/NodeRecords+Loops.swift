@@ -23,7 +23,7 @@ extension NodeRecords {
 	/// node; a member whose loop step 0 finds that makes nothing again, which the stand-in for its loops does not see; a
 	/// mock world's member, whose rebindings hand the mock's configurations, which these records do not yet; and a
 	/// `@Sendable` member that captures a member's wrapper that is not `Sendable`, which the tree reports.
-	static func loopRefusals(of declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func loopRefusals(of declaration: DeclarationID, in world: some NodeKindSources) -> [NodeRecordRefusal] {
 		guard !world.loopMembersSharedApart.contains(declaration) else { return [.builderLoopSharedApart] }
 		let isUnseenMember = zip(world.edges(from: declaration), world.edgeFacts(from: declaration)).contains { child, edge in
 			edge.loop >= 0 && world.madeAgain(from: child).isEmpty && !world.loopMembersSharedApart.contains(child)

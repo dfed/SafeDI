@@ -21,7 +21,7 @@
 extension NodeRecords {
 	/// Every kind `builtByInitializer` does not make that `declaration` is of, in the order they are checked: the refusals
 	/// another kind's claim may discharge.
-	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeRecordSources) -> [NodeRecordRefusal] {
+	static func refusalsOfBuiltByInitializer(_ declaration: DeclarationID, in world: some NodeKindSources) -> [NodeRecordRefusal] {
 		var refusals = [NodeRecordRefusal]()
 		// Every other construction is a call of another module's code, a hand-written mock or a fill, which another kind
 		// makes or node records refuse.
@@ -78,7 +78,7 @@ extension NodeRecords {
 		for dependency in scope.instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
 			refusals.append(.onlyIfAvailable)
 		}
-		if declaration != 0, scope.instantiable.initializer == nil {
+		if !world.isRoot(declaration), scope.instantiable.initializer == nil {
 			refusals.append(.noInitializer)
 		}
 		return refusals
@@ -95,7 +95,7 @@ extension NodeRecords {
 	static func builtByInitializerRecord(
 		of declaration: DeclarationID,
 		variant _: VariantID,
-		in world: some NodeRecordSources,
+		in world: some NodeKindSources,
 		unavailableProperties: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		typesDeclaredEscaping: Set<TypeDescription>,

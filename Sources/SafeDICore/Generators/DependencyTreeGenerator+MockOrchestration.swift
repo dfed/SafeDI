@@ -274,7 +274,9 @@ extension DependencyTreeGenerator {
 			// The shared graph of the table's shareable declarations, built once beside it.
 			let table = MockWorldsTable(worlds: worldRoots)
 			let mockWorlds = try await MockWorlds.build(roots: worldRoots.map(\.root), table: table, sharedGraph: MockWorldsSharedGraph(table: table))
-			MockWorldsTableObservation.observer?(mockWorlds.report)
+			if let report = mockWorlds.report {
+				MockWorldsTableObservation.observer?(report)
+			}
 			for (worldRoot, world) in zip(worldRoots, mockWorlds.worlds) {
 				builtWorlds[worldRoot.mockedType] = world
 			}

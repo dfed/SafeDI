@@ -27,9 +27,10 @@
 /// from what each declaration reads itself, so its reads, the keys its callers hand and the sources of each call are in
 /// one order, as the layout reads them.
 ///
-/// A transitional view: its columns grow with the whole world, which only the records' path reads densely today. A
-/// world built whole (a `.public` mock whose root reaches a hole) is its graph alone. It holds its columns for as long
-/// as its world is being built (`MockWorlds.build`).
+/// A transitional view: its columns grow with the whole world. It is built only for a world that is not clean
+/// (`MockWorlds`), one that reaches a shared variant that is no row, or a shared declaration or frontier in two variants,
+/// whose node records and refusals it reads, and, where a test observes the table, compared with the world's graph built
+/// whole. It holds its columns for as long as its world is being built (`MockWorlds.build`).
 struct MockWorldGraph: NodeRecordSources, Sendable {
 	/// - Parameters:
 	///   - top: The world's top graph, or its whole graph where `shared` is `nil`.
@@ -216,11 +217,6 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 	/// The table's ID of each declaration, by its dense position.
 	let tableDeclarations: [Int32]
 
-	/// The shared variant each variant is, -1 for one of the top graph's own.
-	var sharedVariants: [Int32] {
-		variants.sharedVariants
-	}
-
 	/// The dense numbering's walk, whose nodes name the graph each declaration's facts come from.
 	private let graph: OrderedGraph<Origin>
 	private let declarations: [TypeFactsDeclaration]
@@ -239,11 +235,10 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 	private let readOffsets: [Int32]
 	private let variants: Variants
 
-	/// The variants' columns: each variant's declaration and shared variant, and for each of its calls the callee and
+	/// The variants' columns: each variant's declaration, and for each of its calls the callee and
 	/// the run of sources, in the callee's dense read order.
 	private struct Variants: Sendable {
 		var declarations = [Int32]()
-		var sharedVariants = [Int32]()
 		var callOffsets = [Int32]()
 		var callees = [Int32]()
 		var sourceOffsets = [Int32]()
@@ -415,7 +410,6 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 						denseByOrigin[calleeOrigin] ?? -1,
 					))
 				}
-				variants.sharedVariants.append(variant)
 			} else {
 				let node = top.declaration(of: variant)
 				callerDeclaration = denseByOrigin[origin(node)] ?? -1
@@ -438,7 +432,6 @@ struct MockWorldGraph: NodeRecordSources, Sendable {
 				for callee in top.madeAgainCalls(of: variant) {
 					_ = viewVariant(isShared: false, variant: callee)
 				}
-				variants.sharedVariants.append(-1)
 			}
 			variants.declarations.append(callerDeclaration)
 			variants.callOffsets.append(Int32(variants.callees.count))
