@@ -547,7 +547,6 @@ extension DependencyTreeGenerator {
 		let worldFindsSendableCapture: Bool? = if MockRootTreeChecksObservation.comparesTree != nil {
 			DeclarationsAnsweringReads(
 				world: TypeFactsGraph(root: ConstructionScope(table: mockRootTable, record: mockRootRecord), forMockGeneration: true),
-				rootNonSendableWrapperLabels: Set((allReceived + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)).filter { !$0.propertyType.isConstant && !$0.propertyType.isSendable }.map(\.label)),
 				mockRoot: DeclarationsAnsweringReads.MockRoot(
 					boundLabels: Set(allReceived.map(\.label)),
 					wrapperParameters: instancesReadThroughWrapperParameters.sorted().flatMap { instanceProperty in

@@ -71,7 +71,7 @@ struct DeclarationsAnsweringReads: Sendable {
 	/// - Parameters:
 	///   - world: A root's world: a production root's, a seam's own, or a mock root's.
 	///   - rootNonSendableWrapperLabels: The labels of what the root is handed in an `Instantiator`, an
-	///     `ErasedInstantiator` or a `LazilyInstantiated`. Empty unless the root is a seam's own or a mock root.
+	///     `ErasedInstantiator` or a `LazilyInstantiated`. Empty unless the root is a seam's own.
 	///   - mockRoot: What a mock root's `mock()` binds above its tree; `nil` unless the root is a mock root, whose reads
 	///     then resolve by label and type, as its tree resolves them: each receive beneath a call reads the first
 	///     declaration of its label, in the order the tree looks declarations up, that provides its form, and itself,
@@ -125,17 +125,14 @@ struct DeclarationsAnsweringReads: Sendable {
 						}
 						let declarations = declarationsByDeclaration[declaringDeclaration]?[label]
 							?? (declaringDeclaration == root ? wrapperParametersByLabel[label] ?? [] : [])
-						let types = receiveTypes[Int(callee)][read.label] ?? []
 						if answeringDeclaration < 0, declarations.isEmpty, !mockRoot.boundLabels.contains(label) {
 							// Nothing binds the label, which the call passes `nil`.
 							readsNonSendableWrapper = false
-						} else if !types.isEmpty {
-							readsNonSendableWrapper = types.contains { Self.readsNonSendableWrapper(receiving: Property(label: label, typeDescription: $0), among: declarations) }
 						} else {
-							// A read no receive's type reaches is the callee's read of its own label, which it reads only to
-							// rebind it and is no receive; any other is read by label.
-							readsNonSendableWrapper = world.property(of: world.declaration(of: callee))?.label != label
-								&& (declarations.contains { Self.isNonSendableWrapper($0.property) } || (answeringDeclaration < 0 && rootNonSendableWrapperLabels.contains(label)))
+							// Each type a receive beneath the call reads the label in resolves among the declarations. A read no
+							// receive's type reaches is the callee's read of its own label, made only to rebind it, which captures
+							// nothing.
+							readsNonSendableWrapper = (receiveTypes[Int(callee)][read.label] ?? []).contains { Self.readsNonSendableWrapper(receiving: Property(label: label, typeDescription: $0), among: declarations) }
 						}
 					} else if answeringDeclaration >= 0 {
 						readsNonSendableWrapper = world.scope(of: answeringDeclaration).sortedDeclaredPropertyForms.contains { declared in
