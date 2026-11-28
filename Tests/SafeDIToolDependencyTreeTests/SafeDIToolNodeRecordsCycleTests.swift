@@ -314,8 +314,9 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsTheTreesLayout_whenCycleMemberIsBuiltWhereItClosesOnAnotherPlace() async throws {
-		// `C` is built beneath `B`, where it closes on `B`'s place, and beneath `A`, where it builds `B` again.
+	mutating func generate_laysRootOutAsTheTreeDoes_whenCycleMemberIsBuiltWhereItClosesOnAnotherPlace() async throws {
+		// `C` is built beneath `B`, where it closes on `B`'s place, and beneath `A`, where it builds `B` again: two places of
+		// `C`, each closing on what is above it.
 		let (output, reports) = try await Self.layingOutRoots(filesToDelete: &filesToDelete) { filesToDelete in
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -371,7 +372,7 @@ struct SafeDIToolNodeRecordsCycleTests: ~Copyable {
 			}
 			""",
 		])
-		#expect(reports.map(\.refusal) == ["cycleMemberBuiltTwoWays"])
+		#expect(reports.map(\.isLaidOutFromNodeRecords) == [true])
 	}
 
 	@Test
