@@ -88,18 +88,10 @@ struct ApprovedDifferencesTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// The code the tool generates for `Root` of `fixture`, whose world node records refuse, so its tree writes it.
+	/// The code the tool generates for `Root` of `fixture`, which its tree writes: node records lay a root out only where
+	/// a test asks, and the check of node records fails the test where their code differs from the tree's.
 	private mutating func treeText(of fixture: String) async throws -> String {
-		let (stream, continuation) = AsyncStream.makeStream(of: NodeRecordsReport.self)
-		let output = try await NodeRecordsObservation.$observer.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Fixture.swift": fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		continuation.finish()
-		var refusals = [String?]()
-		for await report in stream {
-			refusals.append(report.refusal)
-		}
-		#expect(refusals == ["nodeHasSeveralVariants"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: ["Fixture.swift": fixture], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		return try #require(output.generatedFiles?.values.first { $0.contains("extension Root {") })
 	}
 

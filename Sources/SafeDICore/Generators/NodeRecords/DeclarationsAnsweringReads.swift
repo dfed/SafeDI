@@ -38,12 +38,13 @@
 /// answered by what the root is handed: a seam's own root, by its parameters, of which a deferred one is held in a
 /// `LazilyInstantiated` under its label and a wrapper offers its instance (`rootLazilyInstantiatedInstanceProperties`),
 /// as the tree's root reads them (`DependencyTreeGenerator.seamRootDeclarations(of:seamRoot:)`); any other root is
-/// handed nothing. Each variant is resolved once, from the first call a walk from the root meets, and every other call
-/// into it is judged against that call (`callsAnswerAVariantApart`): a world in which one answers a read in another form
-/// is refused, so that which call resolves a variant never changes what is accepted. For a `value` read the calls share
-/// the variant's key, which holds the forms its declaration provides, which tell a wrapper's declaration from a value's,
-/// and one wrapper kind from another: a node built beneath a wrapper on one path and a value on another has two
-/// variants, which `NodeRecords` refuses (`NodeRecordRefusal.nodeHasSeveralVariants`). An `optionalValue` read keys
+/// handed nothing. Each variant is resolved once, from the first call a walk from the root meets. Every other call into
+/// it answers its reads in the forms that call does, so which call resolves a variant never changes what is accepted.
+/// For a `value` read the calls share the variant's key, which holds the forms its declaration provides, which tell a
+/// wrapper's declaration from a value's, and one wrapper kind from another; a rename's key holds the form its fulfilling
+/// label is read in; and every call into a declaration crosses the one edge from its type to it, so it is captured at
+/// every call or at none. A node built beneath a wrapper on one path and a value on another has two variants, which
+/// `NodeRecords` refuses (`NodeRecordRefusal.nodeHasSeveralVariants`). An `optionalValue` read keys
 /// alike whatever answers it (rule 1), and `OnlyIfAvailableAnswers`, made before this, refuses a world in which two calls
 /// of one variant see different declarations of a label some receive only if available reads.
 ///
@@ -79,21 +80,15 @@ struct DeclarationsAnsweringReads: Sendable {
 		var sendableFunctionCapturesWrapper = false
 		var renameReadsWrappersInstance = false
 		var renamesReadingWrappersInstance = Set<VariantID>()
-		var callsAnswerAVariantApart = false
 		// A world that declares no lazily instantiated property, whose root is handed none, and that opens no `@Sendable`
-		// function reads no wrapper's instance and captures nothing, so only its calls are compared.
+		// function reads no wrapper's instance and captures nothing, so only its calls are walked.
 		let readsInstancesOrCaptures = !rootLazilyInstantiatedInstanceProperties.isEmpty || (0..<Int32(world.declarationCount)).contains(where: { declaration in
 			!world.scope(of: declaration).declaredLazilyInstantiatedInstanceProperties.isEmpty
 				|| world.edgeFacts(from: declaration).contains { Self.opensSendableFunction($0) }
 		})
-		// For each variant reached, the declaration that answers each of its reads, -1 where none does, and whether the
-		// call that resolved it opens a `@Sendable` function. No node is above the root, so what the root is handed answers
-		// what its tree reads.
+		// For each variant reached, the declaration that answers each of its reads, -1 where none does. No node is above the
+		// root, so what the root is handed answers what its tree reads.
 		var answeringDeclarations = [[DeclarationID]?](repeating: nil, count: world.variantCount)
-		var resolvedInSendableFunction = [Bool](repeating: false, count: world.variantCount)
-		// For each rename reached, the form of the answer to its fulfilling label at the call that resolved it. A rename reads
-		// that label through its caller, which no read of its own lists, so its calls are compared here.
-		var renameAnswers = [VariantID: AnswerForm?]()
 		answeringDeclarations[0] = [DeclarationID](repeating: -1, count: world.reads(of: world.declaration(of: 0)).count)
 		// Each variant's caller, the call that resolved it, -1 for the root.
 		var callerByVariant = [VariantID](repeating: -1, count: world.variantCount)
@@ -123,56 +118,47 @@ struct DeclarationsAnsweringReads: Sendable {
 				// instance where the scope declares the wrapper itself, or reads the label as one from above. Matched by
 				// label, and refined below by the tree's rule. Every call of a rename is read, so that what is reported does
 				// not depend on which call resolves it.
-				if let rename = Self.rename(world.declaration(of: callee), in: world) {
-					if callerScope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == rename.fulfillingProperty.label })
-						|| lazilyInstantiatedInstancePropertiesByVariant[Int(caller)].contains(where: { $0.label == rename.fulfillingProperty.label })
-					{
-						// The tree's rule (`Scope.createScopeGenerator`'s rename): a rename that keeps its fulfilling property's
-						// label reads what is in scope above its scope, and any other reads its scope's declarations first.
-						let inheritedProperties = lazilyInstantiatedInstancePropertiesByVariant[Int(caller)]
-						let instanceProperties = rename.fulfillingProperty.label == rename.property.label
-							? inheritedProperties
-							: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
-						if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
-							renamesReadingWrappersInstance.insert(callee)
-						} else {
-							// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
-							// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
-							// wrapper optionally), which the tree reads with `?.instance`.
-							renameReadsWrappersInstance = renameReadsWrappersInstance
-								|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
-						}
-					}
-					let answer = Self.answerForm(ofLabel: rename.fulfillingProperty.label, readBy: caller, answeredBy: callerAnsweringDeclarations, in: world)
-					if let resolvedAnswer = renameAnswers[callee] {
-						callsAnswerAVariantApart = callsAnswerAVariantApart || resolvedAnswer != answer
+				if let rename = Self.rename(world.declaration(of: callee), in: world),
+				   callerScope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == rename.fulfillingProperty.label })
+				   || lazilyInstantiatedInstancePropertiesByVariant[Int(caller)].contains(where: { $0.label == rename.fulfillingProperty.label })
+				{
+					// The tree's rule (`Scope.createScopeGenerator`'s rename): a rename that keeps its fulfilling property's
+					// label reads what is in scope above its scope, and any other reads its scope's declarations first.
+					let inheritedProperties = lazilyInstantiatedInstancePropertiesByVariant[Int(caller)]
+					let instanceProperties = rename.fulfillingProperty.label == rename.property.label
+						? inheritedProperties
+						: inheritedProperties.filter { !callerScope.declaredLabels.contains($0.label) }.union(callerScope.declaredLazilyInstantiatedInstanceProperties)
+					if instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty) {
+						renamesReadingWrappersInstance.insert(callee)
 					} else {
-						renameAnswers[callee] = answer
+						// Any other form, the wrapper itself or its optional among them, is bound from its label, as the tree
+						// binds it, but for an instance read through an optional wrapper (beneath a fill that takes the
+						// wrapper optionally), which the tree reads with `?.instance`.
+						renameReadsWrappersInstance = renameReadsWrappersInstance
+							|| instanceProperties.contains(rename.fulfillingProperty.asUnwrappedProperty.asOptionalProperty)
 					}
 				}
-				// A variant's record is written from the call that resolved it, so every other call into it must answer each
-				// of its reads as that call did; any that does not refuses the world, whatever order the calls come in. A read
-				// only if available that one call answers and another does not is the exception: the variant takes it as one
-				// optional parameter (`OnlyIfAvailableAnswers`), so it is resolved as the call that answers it does, and read
-				// again, with everything it calls.
+				// A variant's record is written from the call that resolved it. Every other call into it answers its reads in
+				// the forms that call does: the variant's key holds each form a declaration provides and, for a rename, the form
+				// its fulfilling label is read in, and every call into a declaration crosses the one edge from its type to it,
+				// which opens a `@Sendable` function at every call or at none. A read only if available is the exception: rule 1
+				// keys it alike whether a call answers it or not, so the variant takes it as one optional parameter
+				// (`OnlyIfAvailableAnswers`), resolved as a call that answers it does, and read again, with everything it calls,
+				// whichever call comes first.
 				var calleeAnswers = calleeAnsweringDeclarations
 				if let resolved = answeringDeclarations[Int(callee)] {
-					guard !callsAnswerAVariantApart else { continue }
-					guard let mergedAnswers = Self.answers(
-						merging: resolved,
-						inSendableFunction: resolvedInSendableFunction[Int(callee)],
-						with: calleeAnsweringDeclarations,
-						inSendableFunction: opensSendableFunction,
-						reads: calleeReads,
-						in: world,
-					) else {
-						callsAnswerAVariantApart = true
-						continue
+					var merged = resolved
+					for (index, readID) in calleeReads.enumerated() where merged[index] < 0 && calleeAnsweringDeclarations[index] >= 0 {
+						switch world.read(readID).channel {
+						case .optional, .optionalValue:
+							merged[index] = calleeAnsweringDeclarations[index]
+						case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
+							break
+						}
 					}
-					guard mergedAnswers != resolved else { continue }
-					calleeAnswers = mergedAnswers
+					guard merged != resolved else { continue }
+					calleeAnswers = merged
 				} else {
-					resolvedInSendableFunction[Int(callee)] = opensSendableFunction
 					callerByVariant[Int(callee)] = caller
 				}
 				answeringDeclarations[Int(callee)] = calleeAnswers
@@ -211,7 +197,6 @@ struct DeclarationsAnsweringReads: Sendable {
 		self.sendableFunctionCapturesWrapper = sendableFunctionCapturesWrapper
 		self.renameReadsWrappersInstance = renameReadsWrappersInstance
 		self.renamesReadingWrappersInstance = renamesReadingWrappersInstance
-		self.callsAnswerAVariantApart = callsAnswerAVariantApart
 	}
 
 	/// The by-value properties `variant`'s body reads as a wrapper's instance, of the labels its tree reads from above.
@@ -228,11 +213,6 @@ struct DeclarationsAnsweringReads: Sendable {
 
 	/// The variants of renames that the tree binds from the instance of a wrapper, which their records read too.
 	let renamesReadingWrappersInstance: Set<VariantID>
-
-	/// Whether two calls of one variant answer one of its reads apart: one finds a declaration and the other none, or the
-	/// two declarations differ in what the variant's record assumes of the answer (`AnswerForm`). The variant's key was too
-	/// coarse to tell them apart, so its one record would be wrong at one of the calls.
-	let callsAnswerAVariantApart: Bool
 
 	/// By variant; empty in a world that declares no lazily instantiated property, whose root is handed none, and that
 	/// opens no `@Sendable` function.
@@ -264,79 +244,6 @@ struct DeclarationsAnsweringReads: Sendable {
 		case .value, .alias, .madeAgain, .mock, .carrier, .fill, .family, .override:
 			return false
 		}
-	}
-
-	/// What a variant's record assumes of the answer to one of its reads: the property the answering declaration declares
-	/// under the read's label (its form, optional or not, erased or not), whether the read is handed that declaration's
-	/// instance of a wrapper, whether the answering node itself is erased, and whether the read is made across a
-	/// `@Sendable` function, which captures the answer rather than being passed it.
-	private struct AnswerForm: Equatable {
-		let declaredProperty: Property?
-		let readsInstance: Bool
-		let isErased: Bool
-		let isCaptured: Bool
-	}
-
-	/// The declarations that answer `reads`, a variant's, where one call answers them with `answers` and another with
-	/// `otherAnswers`; `nil` where the two do not give each read the same `AnswerForm`. A call that answers a read with
-	/// the declaration the other does differs at most in whether it captures it. A read only if available that one of the
-	/// calls answers with nothing takes the other's answer.
-	private static func answers(
-		merging answers: [DeclarationID],
-		inSendableFunction isCaptured: Bool,
-		with otherAnswers: [DeclarationID],
-		inSendableFunction otherIsCaptured: Bool,
-		reads: some Collection<ReadID>,
-		in world: some NodeRecordSources,
-	) -> [DeclarationID]? {
-		var mergedAnswers = answers
-		for (index, readID) in reads.enumerated() {
-			let answer = answers[index]
-			let otherAnswer = otherAnswers[index]
-			guard answer != otherAnswer || (answer >= 0 && isCaptured != otherIsCaptured) else { continue }
-			let read = world.read(readID)
-			guard answer >= 0, otherAnswer >= 0 else {
-				// A read only if available, which a call may answer with nothing. A read of any other channel that only one
-				// call answers keeps the two apart; no world reaches here with one, since the facts key a required read's
-				// answer in full (`ReadChannel.optionalValue`), so two such calls are two variants, which
-				// `NodeRecordRefusal.nodeHasSeveralVariants` refuses first: a seam that receives a label one child declares
-				// again above a type both children build is refused so.
-				guard read.channel == .optional || read.channel == .optionalValue, isCaptured == otherIsCaptured else { return nil }
-				mergedAnswers[index] = max(answer, otherAnswer)
-				continue
-			}
-			guard read.channel.asksAboutLabel else { continue }
-			let label = world.text(ofLabel: read.label)
-			if answerForm(of: answer, label: label, channel: read.channel, isCaptured: isCaptured, in: world)
-				!= answerForm(of: otherAnswer, label: label, channel: read.channel, isCaptured: otherIsCaptured, in: world)
-			{
-				return nil
-			}
-		}
-		return mergedAnswers
-	}
-
-	/// The form of the answer to `label` that `caller` hands a rename it declares: its own declaration of the label, or the
-	/// declaration that answers its read of the label (`callerAnsweringDeclarations`); `nil` where neither does.
-	private static func answerForm(ofLabel label: String, readBy caller: VariantID, answeredBy callerAnsweringDeclarations: [DeclarationID], in world: some NodeRecordSources) -> AnswerForm? {
-		let callerDeclaration = world.declaration(of: caller)
-		guard !world.scope(of: callerDeclaration).sortedDeclaredPropertyForms.contains(where: { $0.property.label == label }) else {
-			return answerForm(of: callerDeclaration, label: label, channel: .value, isCaptured: false, in: world)
-		}
-		let answeringReads = zip(callerAnsweringDeclarations, world.reads(of: callerDeclaration)).lazy.map { (answeringDeclaration: $0, read: world.read($1)) }
-		return answeringReads.first(where: { answeringDeclaration, read in
-			answeringDeclaration >= 0 && isHandedNearestDeclaration(read.channel) && world.text(ofLabel: read.label) == label
-		}).map { answerForm(of: $0.answeringDeclaration, label: label, channel: $0.read.channel, isCaptured: false, in: world) }
-	}
-
-	private static func answerForm(of declaration: DeclarationID, label: String, channel: ReadChannel, isCaptured: Bool, in world: some NodeRecordSources) -> AnswerForm {
-		let scope = world.scope(of: declaration)
-		return AnswerForm(
-			declaredProperty: scope.sortedDeclaredPropertyForms.first(where: { $0.property.label == label })?.property,
-			readsInstance: isHandedNearestDeclaration(channel) && scope.declaredLazilyInstantiatedInstanceProperties.contains(where: { $0.label == label }),
-			isErased: world.isErased(declaration),
-			isCaptured: isCaptured,
-		)
 	}
 
 	/// Whether a read of `channel` is handed the nearest declaration of its label, in the form that declaration has: a

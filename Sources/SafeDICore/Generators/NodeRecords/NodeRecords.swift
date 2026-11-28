@@ -86,10 +86,6 @@ enum NodeRecordRefusal: String, Error, CaseIterable {
 	case builderLoop
 	/// A node has more than one variant, so its record would not be a function of the node alone.
 	case nodeHasSeveralVariants
-	/// Two calls of one variant answer one of its reads apart, in its source, its form, whether it is optional or erased,
-	/// or whether it is passed or captured (`DeclarationsAnsweringReads.callsAnswerAVariantApart`): the variant's key is
-	/// too coarse to tell the two apart, so its one record would be wrong at one of them, and the world keeps its tree.
-	case callsAnswerAVariantApart
 	/// A declaration whose answers a producer of the facts still owes (`TypeFactsWorld.owedFacts(of:)`): two places of one
 	/// of its variants can answer a read apart, which one record per variant cannot write. The whole world is refused,
 	/// whatever its kinds, until each producer lands and clears its bit.
@@ -223,10 +219,6 @@ struct NodeRecords: Sendable {
 		)
 		// The tree reports the capture as an error, which the records cannot.
 		guard !answeringDeclarations.sendableFunctionCapturesWrapper else { throw NodeRecordRefusal.sendableFunctionCapturesWrapper }
-		// A variant's one record is right only where every call into it answers its reads as the call it was written from.
-		// Checked before what the records read of the call that resolved each variant, so that which call that is does not
-		// change the refusal.
-		guard !answeringDeclarations.callsAnswerAVariantApart else { throw NodeRecordRefusal.callsAnswerAVariantApart }
 		// A rename's record binds it from its fulfilling property's label, or from a wrapper's instance as the tree's rule
 		// reads it, never from an instance read otherwise.
 		guard !answeringDeclarations.renameReadsWrappersInstance else { throw NodeRecordRefusal.lazy }
@@ -766,9 +758,6 @@ struct NodeRecords: Sendable {
 		}
 		if answeringDeclarations.renameReadsWrappersInstance {
 			refusals.insert(.lazy)
-		}
-		if answeringDeclarations.callsAnswerAVariantApart {
-			refusals.insert(.callsAnswerAVariantApart)
 		}
 		return NodeRecordRefusal.allCases.filter(refusals.contains)
 	}
