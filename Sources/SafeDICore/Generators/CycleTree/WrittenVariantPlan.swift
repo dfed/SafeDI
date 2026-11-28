@@ -43,6 +43,9 @@ public enum RootTreeChoiceObservation {
 		case receivesBuilderThatClosesLoop
 		/// The root's tree calls a seam's generated initializer or a public mock with a builder.
 		case buildsSeam
+		/// The root's tree calls a seam's generated initializer held in a wrapper that forwards the seam values, a call the
+		/// tree writes no record of yet (`ScopeGenerator`'s seam call place).
+		case callsSeamForwardedValues
 		/// A type on a cycle of the root's tree receives a label that no type of its cycle declares, and that a type other
 		/// than the root declares, or the root does not: today's function captures that declaration, and a function of
 		/// the plan captures only the root's own statements.

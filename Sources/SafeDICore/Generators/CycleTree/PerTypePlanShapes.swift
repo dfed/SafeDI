@@ -87,6 +87,10 @@ extension DependencyTreeGenerator {
 			// keeps the root on today's tree.
 			if !scope.holeArguments.isEmpty {
 				reason = .buildsSeam
+			} else if scope.seamCall != nil, scope.instantiable.dependencies.contains(where: { $0.source == .forwarded }) {
+				// A call held in a wrapper that forwards the seam values has no record yet, so the type key could lay out
+				// none of the root's plan.
+				reason = .callsSeamForwardedValues
 			}
 			// One label may be declared and received in several forms across the tree: each read takes the form its nearest
 			// declaration provides, on every path, or validation rejects the tree, and a function's body is keyed by the
