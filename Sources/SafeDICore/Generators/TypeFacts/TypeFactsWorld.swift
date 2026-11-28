@@ -225,7 +225,7 @@ protocol TypeFactsWorld {
 	func edges(from declaration: DeclarationID) -> ArraySlice<Int32>
 	func edgeFacts(from declaration: DeclarationID) -> ArraySlice<TypeFactsEdge>
 	/// Owed: the graph's bindings carry the world's IDs (`TypeFactsGraph.worldBindings(of:)`) until the snapshot looks a
-	/// value up to its run ID.
+	/// value up to its run ID. Where a receive that leaves the root is declared is `receiversLeavingRoot()`'s, by the world's IDs.
 	func bindings(of declaration: DeclarationID) -> ArraySlice<TypeFactsBinding>
 	func parents(of declaration: DeclarationID) -> ArraySlice<TypeFactsParent>
 	/// Owed by the table-side columns.
@@ -234,8 +234,14 @@ protocol TypeFactsWorld {
 	/// (`TypeFactsGraph.receives`) until the snapshot looks a value up to its run ID.
 	func received(by declaration: DeclarationID) -> ArraySlice<TypeFactsReceived>
 	/// The receives the declaration's own type makes, in declaration order; `reads(of:)` is its subtree's. Owed by the
-	/// table-side columns.
+	/// table-side columns, which name properties by the run's IDs; `receiversLeavingRoot()` names the receives that leave a
+	/// root, with where each is declared, by the world's.
 	func receives(of declaration: DeclarationID) -> ArraySlice<TypeFactsReceive>
+	/// The receives that leave the root's tree, each declaration once: its declaring type, where it is declared, its module
+	/// and, for an alias, its fulfilling property as the alias spells it, by the world's IDs, in the order of the
+	/// declarations that make them, each one's in declaration order (`TypeFactsRootReceiver`). What a seam's parameters
+	/// call their receivers.
+	func receiversLeavingRoot() -> ArraySlice<TypeFactsRootReceiver>
 
 	/// What the node's subtree reads from above it, by read ID in increasing order.
 	func reads(of declaration: DeclarationID) -> ArraySlice<ReadID>
@@ -351,6 +357,10 @@ extension TypeFactsGraph: TypeFactsWorld {
 
 	func receives(of _: DeclarationID) -> ArraySlice<TypeFactsReceive> {
 		[]
+	}
+
+	func receiversLeavingRoot() -> ArraySlice<TypeFactsRootReceiver> {
+		rootReceivers[...]
 	}
 
 	func forms(of _: AnswerID) -> ArraySlice<PropertyID> {

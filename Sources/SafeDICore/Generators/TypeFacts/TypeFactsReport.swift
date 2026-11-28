@@ -144,6 +144,10 @@ public struct TypeFactsReport: Sendable {
 		func type(_ id: Int32) -> String {
 			graph.typeTable[Int(id)].asSource
 		}
+		var receiverTextsByNode = [[String]](repeating: [], count: graph.declarationCount)
+		for receiver in graph.receiversLeavingRoot() {
+			receiverTextsByNode[Int(receiver.node)].append(graph.receiverText(of: receiver))
+		}
 		nodes = graph.graph.nodes.indices.map { index in
 			let edgeFacts = graph.edgeFacts(from: index)
 			return Node(
@@ -188,6 +192,7 @@ public struct TypeFactsReport: Sendable {
 				readsFromAbove: graph.reads.reads(of: index).map(graph.readDescription),
 				firstRoute: graph.graph.firstRoute(to: index),
 				owedFacts: Self.names(of: graph.owedFacts(of: Int32(index))),
+				receiversLeavingRoot: receiverTextsByNode[index],
 			)
 		}
 		self.places = places.places.map { place in
@@ -313,6 +318,9 @@ public struct TypeFactsReport: Sendable {
 		public let firstRoute: [Int]
 		/// The facts producers still owe the node's answers (`TypeFactsOwedFacts`), by the names of their bits.
 		public let owedFacts: Set<String>
+		/// The receives the node makes, or a seam call node passes on from inside the seam it calls, that leave the root,
+		/// each as `TypeFactsGraph.receiverText` spells it, in the world's order (`TypeFactsWorld.receiversLeavingRoot()`).
+		public let receiversLeavingRoot: [String]
 	}
 
 	private static func names(of owed: TypeFactsOwedFacts) -> Set<String> {

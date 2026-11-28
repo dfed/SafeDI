@@ -58,6 +58,11 @@ struct ConstructionScope: Sendable {
 		record.seamCall
 	}
 
+	/// The module of the type the scope map held under `key` (`ScopeTable.moduleName(ofTypeHeldUnder:)`).
+	func moduleName(ofTypeHeldUnder key: TypeDescription) -> String? {
+		table.moduleName(ofTypeHeldUnder: key)
+	}
+
 	var publicMockCall: PublicMockCall? {
 		record.publicMockCall
 	}

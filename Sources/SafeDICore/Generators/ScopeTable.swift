@@ -169,6 +169,13 @@ struct ScopeTable: Sendable {
 		}
 	}
 
+	/// The module of the type the frozen map held under `key`, reachable from the pass's roots or not, or `nil` where the
+	/// map held none or SafeDI knows no module of it: what names the module of a receive inside a seam a tree calls,
+	/// whose type the calling tree never reaches.
+	func moduleName(ofTypeHeldUnder key: TypeDescription) -> String? {
+		storage.idByKey[key].flatMap { self[$0].instantiable.moduleName }
+	}
+
 	/// The records of the map a table was frozen from, and that map's keys, each with the position of its scope: shared,
 	/// never copied, by every table made from it (a signature pass's, a root's), each of which holds only what it adds.
 	fileprivate final class Storage: Sendable {

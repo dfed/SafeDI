@@ -664,6 +664,11 @@ extension DependencyTreeGenerator {
 		/// several paths is from such a call only when every path reaches it through one.
 		var isFromReportedSeamCall: Bool
 
+		/// The receive as the facts of the seam's world spell it (`TypeFactsGraph.receiverText`), for a test to compare.
+		var factsText: String {
+			TypeFactsGraph.receiverText(declaringType: declaringType, property: property, aliasProperty: aliasProperty, location: declarationLocation, moduleName: moduleName)
+		}
+
 		init(property: Property, instantiable: Instantiable, declarationLocation: Dependency.DeclarationLocation?, access: AccessLevel, aliasProperty: Property? = nil, isFromReportedSeamCall: Bool = false) {
 			self.property = property
 			declaringType = instantiable.concreteInstantiable
@@ -1103,6 +1108,16 @@ extension DependencyTreeGenerator {
 						declaredTypeNames: declaredTypeNames,
 					)
 					let generator = tree.generator
+					// The receives that leave the seam, from the facts of its world, are compared with the walk of the tree.
+					if let observer = TypeFactsRootReceiversObservation.comparesWalk {
+						GenerationWork.$observer.withValue(nil) {
+							observer(TypeFactsRootReceiversComparison(
+								seam: seam.concreteInstantiable.asSource,
+								facts: TypeFactsGraph(root: tree.rootScope, forMockGeneration: false).rootReceiverTexts,
+								walked: Self.receivers(in: generator, of: seam, instantiables: instantiables).receivers.map(\.factsText),
+							))
+						}
+					}
 					let seamRoot = try Self.seamRoot(
 						of: seam,
 						generator: generator,

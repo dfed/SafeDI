@@ -619,7 +619,12 @@ struct TypeFactsGraph: Sendable {
 			))
 		}
 
-		// The bindings and fills intern properties no node holds, whose facts an answer's provided forms read.
+		// The receives that leave the root, with where each is declared.
+		var spellings = TypeFactsInterner<String>()
+		rootReceivers = Self.receiversLeavingRoot(of: graph, fillHoles: fillHoles, properties: &properties, types: &types, modules: &modules, locations: &locations, spellings: &spellings)
+		receiverSpellings = spellings.values
+
+		// The bindings, fills and receivers intern properties no node holds, whose facts an answer's provided forms read.
 		let propertyFacts = Self.propertyFacts(of: &properties, labels: &labels, extending: propertyFactsOfNodes)
 
 		// The reads each node makes itself, and those it hides: each read of a label it binds.
@@ -1119,6 +1124,10 @@ struct TypeFactsGraph: Sendable {
 	let fills: [TypeFactsFill]
 	/// Every fill's path, each fill's in a run.
 	let fillPathEntries: [TypeFactsFillPathEntry]
+	/// The receives that leave the root, in the order of the nodes that make them (`receiversLeavingRoot(of:…)`).
+	let rootReceivers: [TypeFactsRootReceiver]
+	/// Each receiver spelling ID's text: a receive's property as its receiver spells it, which only text reads.
+	let receiverSpellings: [String]
 	let propertyFacts: TypeFactsPropertyFacts
 
 	/// Each read ID's read.
