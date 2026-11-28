@@ -433,30 +433,6 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 			""",
 			"sendable",
 		),
-		// The `@Sendable` node's construction reads a field of its configuration, of the `Sendable` form, which the
-		// default-valued parameter kind does not make yet. Its local is named and typed as a configuration.
-		(
-			"""
-			@Instantiable(generateMock: true)
-			public struct Root: Instantiable {
-			    public init(childBuilder: SendableInstantiator<Child>) {
-			        self.childBuilder = childBuilder
-			    }
-
-			    @Instantiated let childBuilder: SendableInstantiator<Child>
-			}
-
-			@Instantiable
-			public struct Child: Instantiable {
-			    public init(flag: Bool = false) {
-			        self.flag = flag
-			    }
-
-			    let flag: Bool
-			}
-			""",
-			"mockDefaultValuedParameter",
-		),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTheWalksStatements_whenSendableNodeIsOfShapeNoRecordMakesYet(fixture: String, refusal: String) async throws {
@@ -467,6 +443,79 @@ struct SafeDIToolNodeRecordsMockSendableTests: ~Copyable {
 		#expect(reports.filter(\.isMockRoot).map(\.refusal) == [refusal])
 		#expect(reports.filter(\.isMockRoot).map(\.isLaidOutFromNodeRecords) == [false])
 		#expect(output.generatedFiles == walkOutput.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsEachFieldOfSendableConfiguration_whenNodeOfSendableFormTakesDefaultValuedParameter() async throws {
+		// `Child` is built in a `@Sendable` function, and `Leaf` in one of another root, so each configuration takes the
+		// `Sendable` form, which stores each field as a `@Sendable` closure the node's construction calls.
+		let fixture = [
+			"Root.swift": """
+			@Instantiable(generateMock: true)
+			public struct Root: Instantiable {
+			    public init(childBuilder: SendableInstantiator<Child>, leaf: Leaf) {
+			        self.childBuilder = childBuilder
+			        self.leaf = leaf
+			    }
+
+			    @Instantiated let childBuilder: SendableInstantiator<Child>
+			    @Instantiated let leaf: Leaf
+			    public var child: Child { childBuilder.instantiate() }
+			}
+
+			@Instantiable(generateMock: true)
+			public struct Other: Instantiable {
+			    public init(leafBuilder: SendableInstantiator<Leaf>) {
+			        self.leafBuilder = leafBuilder
+			    }
+
+			    @Instantiated let leafBuilder: SendableInstantiator<Leaf>
+			}
+			""",
+			"Types.swift": """
+			@Instantiable
+			public struct Child: Instantiable, Sendable {
+			    public init(flag: Bool = false) {
+			        self.flag = flag
+			    }
+
+			    let flag: Bool
+			}
+
+			@Instantiable
+			public struct Leaf: Instantiable, Sendable {
+			    public init(level: Int = 1) {
+			        self.level = level
+			    }
+
+			    let level: Int
+			}
+			""",
+		]
+		let walkOutput = try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (output, reports) = try await Self.layingOutMockRoots(filesToDelete: &filesToDelete) { filesToDelete in
+			try await executeSafeDIToolTest(swiftFileContent: [], swiftFileContentByFilePath: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		#expect(reports.filter { $0.isMockRoot && $0.root == "Root" }.map(\.isLaidOutFromNodeRecords) == [true])
+		#expect(output.generatedFiles == walkOutput.generatedFiles)
+		let overridden = "Root.mock(safeDIOverrides: .init(childBuilder: .init(flag: true), leaf: .init(level: 7)))"
+		let comparison = try await DifferentialValueOracle.compare(
+			feature: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(fixtureFiles: fixture, generatedFiles: #require(walkOutput.generatedFiles)),
+			probes: [
+				DifferentialValueProbe("Root.mock().child"),
+				DifferentialValueProbe(name: "overridden child", expression: "\(overridden).child"),
+				DifferentialValueProbe(name: "overridden leaf", expression: "\(overridden).leaf"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		// Nothing is compared where compile verification is off.
+		guard let comparison else { return }
+		#expect(comparison.differences.isEmpty, "\(comparison.report)")
+		// Each field the overrides set was read: the call of its closure passed it.
+		#expect(comparison.featureDescription.contains("flag: Bool true"), "\(comparison.featureDescription)")
+		#expect(comparison.featureDescription.contains("level: Int 7"), "\(comparison.featureDescription)")
 	}
 
 	@Test

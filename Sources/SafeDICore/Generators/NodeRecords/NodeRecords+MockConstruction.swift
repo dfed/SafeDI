@@ -151,8 +151,9 @@ extension NodeRecords {
 			)
 		}
 		record.passedArguments = slot.passedArguments
+		let storesFieldsAsClosures = world.mockRootNames.sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		for (position, argument) in fieldArguments {
-			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value)
+			record.argumentValues[position] = mockConfigurationFieldValue(of: argument, readFrom: slot.value, storesFieldsAsClosures: storesFieldsAsClosures)
 		}
 		record.alternatives = [ConstructionAlternative(
 			closure: isConfigured ? .member(ReservedName.configurationBuilderPropertyName, of: slot.value) : slot.value,

@@ -55,13 +55,15 @@ extension NodeRecords {
 	}
 
 	/// What a construction is passed for `argument`, a field of the configuration `configuration` reads
-	/// (`mockConfigurationFieldArguments(of:in:)`): the field, or, for an `@autoclosure` parameter, whose field is the
-	/// closure, a call of it, once where the node is built.
-	static func mockConfigurationFieldValue(of argument: Initializer.Argument, readFrom configuration: ValuePath) -> ValuePath {
-		if argument.typeDescription.strippingEscaping.autoclosureValueType == nil {
-			.member(argument.label, of: configuration)
+	/// (`mockConfigurationFieldArguments(of:in:)`): the field, or, where the field is a closure, a call of it, once where
+	/// the node is built. The field is a closure for an `@autoclosure` parameter, and for every value that is no function
+	/// where the configuration takes the `Sendable` form (`storesFieldsAsClosures`), as the mock's walk reads it.
+	static func mockConfigurationFieldValue(of argument: Initializer.Argument, readFrom configuration: ValuePath, storesFieldsAsClosures: Bool) -> ValuePath {
+		let typeDescription = argument.typeDescription.strippingEscaping
+		if typeDescription.autoclosureValueType == nil, !storesFieldsAsClosures || typeDescription.isClosure {
+			return .member(argument.label, of: configuration)
 		} else {
-			.call(argument.label, of: configuration, arguments: [], argumentsWrapper: nil)
+			return .call(argument.label, of: configuration, arguments: [], argumentsWrapper: nil)
 		}
 	}
 }

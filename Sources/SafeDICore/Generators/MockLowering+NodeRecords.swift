@@ -23,9 +23,9 @@ extension ScopeGenerator {
 	/// root `worldRoot` builds, or `nil` where the mock's walk writes them: node records refuse the world, as they refuse
 	/// every mock root's where no test turns `NodeRecordsObservation.laysOutMockRoots` on (the mock root's facts are
 	/// owed there), the mock binds a value that is no node of it (`bindsOnlyNodesBesideNames` is false, or a name the
-	/// mocked type is passed is none a binding gives, by `rootBindings` of the names the world's level binds), a node's configuration is
-	/// among `sendableConfigurationTypeNames` and holds a field its construction reads, or the engine cannot lay the
-	/// records out. Each node reads its override from the overrides its body's function was
+	/// mocked type is passed is none a binding gives, by `rootBindings` of the names the world's level binds), or the engine cannot lay the
+	/// records out. A node whose configuration's type is among `sendableConfigurationTypeNames` calls each field that is
+	/// no function, which that form stores as a closure. Each node reads its override from the overrides its body's function was
 	/// handed (`NodeRecords.mockConfigurationField(named:)`), which the root's body reads of `mock()`'s own parameter. The
 	/// root is reported to the test that observes node records (`NodeRecordsObservation.observer`), which alone hands a
 	/// mock root its world. The world answers its records `rootNames`, the names the root's level binds its nodes apart under.
@@ -43,6 +43,7 @@ extension ScopeGenerator {
 		// level the level names apart, which the world's edges from the root say.
 		let levelNames = NodeRecords.mockRootLevelNames(in: world, besideNamesTaken: levelNamesTaken, renamesAbove: renamesAbove)
 		world.mockRootNames.namesApart = levelNames.namesApart
+		world.mockRootNames.sendableConfigurationTypeNames = sendableConfigurationTypeNames
 		// What the root binds beside its nodes and passes the mocked type follows from those names, and its receives bound
 		// again are declarations the nodes' reads resolve to.
 		let bindings = rootBindings(levelNames)
@@ -75,17 +76,6 @@ extension ScopeGenerator {
 		// A read of a value the mock binds beside its nodes would resolve to no declaration of the records' body.
 		guard bindsOnlyNodes else {
 			report(refusal: .mockRootBindsOtherThanNodes, everyRefusal: [.mockRootBindsOtherThanNodes], isLaidOut: false, recordCount: 0)
-			return nil
-		}
-		// A configuration of the `Sendable` form stores each field that is no function as a `@Sendable` closure, which a
-		// construction calls. Which types take that form is a fact of every mock root of the module together, which a root's
-		// world does not hold, so the records read each field as a value and such a root keeps the walk's statements.
-		let readsFieldStoredAsClosure = (1..<Int32(world.declarationCount)).contains { declaration in
-			sendableConfigurationTypeNames.contains(world.scope(of: declaration).instantiable.concreteInstantiable.asSource)
-				&& !NodeRecords.mockConfigurationFieldArguments(of: declaration, in: world).isEmpty
-		}
-		guard !readsFieldStoredAsClosure else {
-			report(refusal: .mockDefaultValuedParameter, everyRefusal: [.mockDefaultValuedParameter], isLaidOut: false, recordCount: 0)
 			return nil
 		}
 		// Where the world's cycles enter places, `mock()` declares their struct and binds a value of it with none entered

@@ -112,6 +112,11 @@ struct MockRootNames: Sendable {
 	/// The name the root gives each value of its level it names apart, by label and then type.
 	var namesApart: [String: [TypeDescription: String]]
 
+	/// The types whose configurations take the `Sendable` form, which stores each field that is no function as a
+	/// `@Sendable` closure a construction calls (`ScopeGenerator.MockContext.sendableConfigurationTypeNames`). A fact of
+	/// every mock root of the module together, which no root's world holds.
+	var sendableConfigurationTypeNames: Set<String> = []
+
 	/// The name of the parameter `mock()` takes as a plain value for `property`, a dependency a type of the tree instantiates
 	/// that the mock cannot build, and `nil` where it takes none so.
 	func uncoveredParameterName(of property: Property) -> String? {

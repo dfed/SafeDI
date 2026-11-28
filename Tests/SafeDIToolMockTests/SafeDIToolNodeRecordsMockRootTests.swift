@@ -1676,30 +1676,6 @@ struct SafeDIToolNodeRecordsMockRootTests: ~Copyable {
 	}
 
 	@Test(arguments: [
-		// A configuration some root of the module builds inside a `@Sendable` function stores each field that is no function
-		// as a `@Sendable` closure, which every root's construction calls.
-		(
-			"""
-			@Instantiable
-			public struct Leaf: Instantiable, Sendable {
-			    public init(level: Int = 1) {
-			        self.level = level
-			    }
-
-			    let level: Int
-			}
-
-			@Instantiable(generateMock: true)
-			public struct Other: Instantiable {
-			    public init(leafBuilder: SendableInstantiator<Leaf>) {
-			        self.leafBuilder = leafBuilder
-			    }
-
-			    @Instantiated let leafBuilder: SendableInstantiator<Leaf>
-			}
-			""",
-			"mockDefaultValuedParameter",
-		),
 		// A `@Sendable` `@autoclosure` parameter is passed a local the node's function reads its configuration into.
 		(
 			"""
