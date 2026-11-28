@@ -340,7 +340,7 @@ struct TypeFactsParameter: Hashable, Sendable {
 	/// function takes the wrapper a lazily instantiated declaration answers the body's read of it with, which today's
 	/// tree takes by value (“Eager instances at a lazy cycle’s calls” in `.claude/rules/cycle-generation.md`). `nil`
 	/// everywhere else. Node records take this form while they are compared with the tree's records.
-	var generatorProperty: Property? = nil
+	var generatorProperty: Property?
 }
 
 extension TypeFactsGraph: TypeFactsWorld {
