@@ -197,38 +197,39 @@ extension DependencyTreeGenerator {
 	/// takes a label as a parameter whose forms include those a fill inside it receives, while the seam's own module,
 	/// which cannot see the fill, judged the parameter without them. So a fill that receives the label in a form no one
 	/// parameter carries together with the forms the seam's tree receives is rejected as its inline build is, with the
-	/// same error. A hole this module does not fill has no scope, and its world ends there.
+	/// same error. A hole this module does not fill has no scope, and its tree ends there.
 	///
-	/// The per-type facts of the seam's inline world find the labels (`TypeFactsGraph.unpassableCycleLabelValues()`), so
-	/// no tree is built. A test builds each seam's tree to compare the two (`UnpassableCycleLabelObservation.factsObserver`).
+	/// The seam's tree is built inline, and its labels read from it (`ScopeGenerator.unpassableCycleLabelsInTree`). The
+	/// per-type facts find the same labels (`TypeFactsGraph.unpassableCycleLabelValues()`), but their fold walks every
+	/// path through a cycle, so only a test computes them, to compare the two (`UnpassableCycleLabelObservation.factsObserver`).
 	func unpassableCycleLabelsOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [UnpassableCycleLabel] {
 		let factsObserver = UnpassableCycleLabelObservation.factsObserver
-		// A world no declaration of which receives, in two forms, a label a declaration of it declares holds no label to
-		// report, so it is not built (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
-		var candidates = [(scope: Scope, table: ScopeTable, record: ScopeRecord, labels: [UnpassableCycleLabel])]()
+		var constructionMemo = ConstructionMemo()
+		var labels = [UnpassableCycleLabel]()
+		// A tree no scope of which receives, in two forms, a label a scope of it declares holds no label to report, so
+		// it is not built (`canHoldUnpassableCycleLabel(inTreeRootedAt:)`).
 		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) where Self.canHoldUnpassableCycleLabel(inTreeRootedAt: scope) {
 			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
-			let world = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
 			GenerationLayerObservation.record(.inlineWorldOfForeignSeam(of: scope.instantiable.concreteInstantiable), inRunOf: seams.currentModule.moduleName)
-			candidates.append((scope, table, record, world.unpassableCycleLabelValues()))
-		}
-		var constructionMemo = ConstructionMemo()
-		for candidate in candidates where factsObserver != nil {
-			let generator = try candidate.record.createScopeGenerator(
-				in: candidate.table,
+			let generator = try record.createScopeGenerator(
+				in: table,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
 				constructionMemo: &constructionMemo,
 			)
-			factsObserver?(
-				"\(candidate.scope.instantiable.concreteInstantiable.asSource) inline in \(seams.currentModule.moduleName ?? "nil")",
-				Set(candidate.labels.map(\.observedDescription)).sorted(),
-				Set(generator.unpassableCycleLabelsInTree.map(\.observedDescription)).sorted(),
-			)
+			labels.append(contentsOf: generator.unpassableCycleLabelsInTree)
+			if let factsObserver {
+				let world = TypeFactsGraph(root: ConstructionScope(table: table, record: record), forMockGeneration: false)
+				factsObserver(
+					"\(scope.instantiable.concreteInstantiable.asSource) inline in \(seams.currentModule.moduleName ?? "nil")",
+					Set(world.unpassableCycleLabelValues().map(\.observedDescription)).sorted(),
+					Set(generator.unpassableCycleLabelsInTree.map(\.observedDescription)).sorted(),
+				)
+			}
 		}
-		return candidates.flatMap(\.labels)
+		return labels
 	}
 
 	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the

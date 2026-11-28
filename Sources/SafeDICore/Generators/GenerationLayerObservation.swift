@@ -32,8 +32,8 @@ public enum GenerationLayerObservation {
 		case accessProof(ofModule: String?, inCallersView: Bool)
 		/// The tree of a root, or of a seam this module generates, of the type `TypeDescription`.
 		case dependencyTree(of: TypeDescription)
-		/// The per-type facts of another module's seam of the type `TypeDescription`, built inline with the fills this
-		/// module generates, which only a world that can hold a label a lazy cycle cannot pass is built for
+		/// The tree of another module's seam of the type `TypeDescription`, built inline with the fills this module
+		/// generates, which only a seam whose tree can hold a label a lazy cycle cannot pass is built for
 		/// (`DependencyTreeGenerator.unpassableCycleLabelsOfForeignSeamsWithHoles(in:validatedWorld:foreignSeamRoots:)`).
 		case inlineWorldOfForeignSeam(of: TypeDescription)
 		/// The mock scopes of the module named `moduleName`, which its mocks, or the plans of its public mocks, are built
